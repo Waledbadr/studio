@@ -8,7 +8,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, UserCircle } from 'lucide-react';
+import { Building, Home, Wrench, Bot, UserCircle, ClipboardList } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -20,6 +20,7 @@ export function AppSidebar() {
     { href: '/', label: 'Dashboard', icon: Home },
     { href: '/residences', label: 'Residences', icon: Building },
     { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+    { href: '/inventory', label: 'Inventory', icon: ClipboardList },
     { href: '/tools', label: 'AI Tools', icon: Bot },
   ];
 
@@ -37,7 +38,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
                 tooltip={item.label}
               >
                 <Link href={item.href}>
