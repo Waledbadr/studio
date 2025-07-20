@@ -36,14 +36,12 @@ export default function NewOrderPage() {
             return;
         }
 
-        const selectedItemId = selectedValue;
-
-        if (orderItems.find(item => item.id === selectedItemId)) {
+        if (orderItems.find(item => item.id === selectedValue)) {
             toast({ title: "Error", description: "Item is already in the order.", variant: "destructive" });
             return;
         }
 
-        const itemToAdd = allItems.find(item => item.id === selectedItemId);
+        const itemToAdd = allItems.find(item => item.id === selectedValue);
         if (itemToAdd) {
             setOrderItems([...orderItems, { ...itemToAdd, quantity }]);
             setSelectedValue('');
@@ -74,16 +72,9 @@ export default function NewOrderPage() {
 
     const handleAddNewItem = (newItem: Omit<InventoryItem, 'id'>) => {
         addItem(newItem);
-        // We can't immediately select it because addItem is async and we don't have the ID yet
-        // User will have to find it in the list after it's added.
         setOpen(false);
     }
     
-    const filteredItems = allItems.filter(item => 
-        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
     const currentSelectedItem = allItems.find(item => item.id === selectedValue);
 
     return (
@@ -119,7 +110,7 @@ export default function NewOrderPage() {
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                    <Command>
+                                    <Command shouldFilter={false}>
                                         <CommandInput 
                                             placeholder="Search item..." 
                                             value={searchQuery}
@@ -141,10 +132,15 @@ export default function NewOrderPage() {
                                                 </div>
                                             </CommandEmpty>
                                             <CommandGroup>
-                                                {filteredItems.map((item) => (
+                                                {allItems
+                                                .filter(item => 
+                                                    item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                    item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+                                                )
+                                                .map((item) => (
                                                 <CommandItem
                                                     key={item.id}
-                                                    value={item.id} // Use ID as the value
+                                                    value={item.id}
                                                     onSelect={(currentValue) => {
                                                         setSelectedValue(currentValue === selectedValue ? "" : currentValue)
                                                         setOpen(false)
