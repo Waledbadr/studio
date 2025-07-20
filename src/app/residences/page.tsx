@@ -519,7 +519,7 @@ export default function ResidencesPage() {
                                                         <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                         <AlertDialogAction onClick={() => handleDeleteItem('room', room.id, floor.id, building.id, complex.id)}>Delete</AlertDialogAction>
-                                                        </Footer>
+                                                        </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
                                             </div>
