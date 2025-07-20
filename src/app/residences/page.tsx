@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -78,7 +79,6 @@ export default function ResidencesPage() {
   };
 
   const handleDeleteItem = (type: string, id: string) => {
-    // In a real app, this would show a confirmation and then call an API
     console.log(`Deleting ${type} with id ${id}`);
     toast({ title: "Note", description: `Deleting ${type} with ID ${id} is not yet implemented.`});
   };
@@ -189,17 +189,19 @@ export default function ResidencesPage() {
         <CardContent className="p-0">
           <Accordion type="multiple" className="w-full">
             {residences.map((complex) => (
-              <AccordionItem value={complex.id} key={complex.id} className="border-b-0">
-                 <AccordionTrigger className="flex-1 text-lg font-semibold hover:no-underline p-6 hover:bg-muted/50 rounded-t-lg">
-                    <span>{complex.name}</span>
-                 </AccordionTrigger>
-                 <div className="absolute top-4 right-4 flex items-center gap-2 pl-4">
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('building', complex.id); }}>
-                        <PlusCircle className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('complex', complex.id); }}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+              <AccordionItem value={complex.id} key={complex.id} className="border-b last-of-type:border-b-0">
+                 <div className="flex items-center p-6 hover:bg-muted/50">
+                    <AccordionTrigger className="flex-1 text-lg font-semibold hover:no-underline p-0">
+                        <span>{complex.name}</span>
+                    </AccordionTrigger>
+                    <div className="flex items-center gap-2 pl-4">
+                        <Button variant="ghost" size="icon" onClick={() => handleAddItem('building', complex.id)}>
+                            <PlusCircle className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteItem('complex', complex.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                    </div>
                 </div>
                 <AccordionContent className="bg-muted/20">
                   <div className="p-4 space-y-2">
@@ -207,7 +209,7 @@ export default function ResidencesPage() {
                       complex.buildings.map((building) => (
                         <Accordion type="multiple" key={building.id} className="bg-card rounded-md border">
                           <AccordionItem value={building.id} className="border-b-0">
-                            <div className="flex items-center px-4 py-3 rounded-md relative">
+                            <div className="flex items-center px-4 py-3 rounded-md">
                               <AccordionTrigger className="hover:no-underline p-0 flex-1">
                                  <div className="flex items-center gap-3">
                                    <Building className="h-5 w-5 text-muted-foreground" />
@@ -215,10 +217,10 @@ export default function ResidencesPage() {
                                  </div>
                               </AccordionTrigger>
                               <div className="flex items-center gap-2 pl-4">
-                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('floor', building.id); }}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleAddItem('floor', building.id)}>
                                       <PlusCircle className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('building', building.id); }}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem('building', building.id)}>
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
                               </div>
@@ -264,7 +266,6 @@ export default function ResidencesPage() {
         </CardContent>
       </Card>
 
-      {/* Add Building Dialog */}
       <Dialog open={isAddBuildingDialogOpen} onOpenChange={setIsAddBuildingDialogOpen}>
         <DialogContent>
           <form onSubmit={handleAddBuilding}>
