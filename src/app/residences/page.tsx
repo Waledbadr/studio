@@ -91,7 +91,7 @@ export default function ResidencesPage() {
 
   const { toast } = useToast();
 
-  const handleAddItem = (type: string, id: string, parentId?: string, grandParentId?: string) => {
+  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room', id: string, parentId?: string, grandParentId?: string) => {
     if (type === 'building') {
       setSelectedComplexId(id);
       setIsAddBuildingDialogOpen(true);
@@ -101,16 +101,12 @@ export default function ResidencesPage() {
     } else if (type === 'room' && parentId && grandParentId) {
         setSelectedFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id});
         setIsAddRoomDialogOpen(true);
-    } else {
-      console.log(`Adding ${type} to ${id}`);
-      toast({ title: "Note", description: `Adding ${type} is not yet implemented.`});
     }
   };
 
-  const handleDeleteItem = (type: string, id: string, parentId?: string, grandParentId?: string) => {
+  const handleDeleteItem = (type: string, id: string, parentId?: string, grandParentId?: string, greatGrandParentId?: string) => {
     let newResidences = [...residences];
     let successMessage = '';
-    let complexToUpdate;
 
     if (type === 'complex') {
         newResidences = residences.filter(c => c.id !== id);
@@ -138,18 +134,30 @@ export default function ResidencesPage() {
             return c;
          });
          successMessage = "Floor deleted successfully.";
-    } else if (type === 'room' && parentId && grandParentId) {
-        complexToUpdate = newResidences.find(c => c.buildings.some(b => b.id === grandParentId));
-        if (complexToUpdate) {
-             const buildingToUpdate = complexToUpdate.buildings.find(b => b.id === grandParentId);
-             if (buildingToUpdate) {
-                const floorToUpdate = buildingToUpdate.floors.find(f => f.id === parentId);
-                if (floorToUpdate) {
-                    floorToUpdate.rooms = floorToUpdate.rooms.filter(r => r.id !== id);
-                    successMessage = "Room deleted successfully.";
+    } else if (type === 'room' && parentId && grandParentId && greatGrandParentId) {
+        newResidences = residences.map(c => {
+            if (c.id === greatGrandParentId) {
+                return {
+                    ...c,
+                    buildings: c.buildings.map(b => {
+                        if (b.id === grandParentId) {
+                            return {
+                                ...b,
+                                floors: b.floors.map(f => {
+                                    if (f.id === parentId) {
+                                        return {...f, rooms: f.rooms.filter(r => r.id !== id)}
+                                    }
+                                    return f;
+                                })
+                            }
+                        }
+                        return b;
+                    })
                 }
-             }
-        }
+            }
+            return c;
+        });
+        successMessage = "Room deleted successfully.";
     } else {
         toast({ title: "Error", description: `Could not delete ${type}.`, variant: "destructive" });
         return;
@@ -164,7 +172,8 @@ export default function ResidencesPage() {
 
   const handleAddComplex = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newComplexName.trim() === '') {
+    const trimmedName = newComplexName.trim();
+    if (trimmedName === '') {
       toast({
         title: "Error",
         description: "Complex name cannot be empty.",
@@ -173,9 +182,19 @@ export default function ResidencesPage() {
       return;
     }
 
+    const isDuplicate = residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+    if (isDuplicate) {
+        toast({
+            title: "Error",
+            description: "A complex with this name already exists.",
+            variant: "destructive",
+        });
+        return;
+    }
+
     const newComplex = {
       id: `complex-${Date.now()}`,
-      name: newComplexName,
+      name: trimmedName,
       buildings: [],
     };
 
@@ -190,7 +209,8 @@ export default function ResidencesPage() {
 
   const handleAddBuilding = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBuildingName.trim()) {
+    const trimmedName = newBuildingName.trim();
+    if (!trimmedName) {
       toast({
         title: "Error",
         description: "Building name cannot be empty.",
@@ -200,9 +220,22 @@ export default function ResidencesPage() {
     }
     if (!selectedComplexId) return;
 
+    const complex = residences.find(c => c.id === selectedComplexId);
+    if (complex) {
+        const isDuplicate = complex.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicate) {
+            toast({
+                title: "Error",
+                description: "A building with this name already exists in this complex.",
+                variant: "destructive",
+            });
+            return;
+        }
+    }
+
     const newBuilding = {
       id: `building-${Date.now()}`,
-      name: newBuildingName,
+      name: trimmedName,
       floors: [],
     };
 
@@ -225,7 +258,8 @@ export default function ResidencesPage() {
 
   const handleAddFloor = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFloorName.trim()) {
+    const trimmedName = newFloorName.trim();
+    if (!trimmedName) {
       toast({
         title: "Error",
         description: "Floor name cannot be empty.",
@@ -236,10 +270,25 @@ export default function ResidencesPage() {
     if (!selectedBuildingInfo) return;
 
     const { complexId, buildingId } = selectedBuildingInfo;
+    
+    const complex = residences.find(c => c.id === complexId);
+    const building = complex?.buildings.find(b => b.id === buildingId);
+    if(building) {
+        const isDuplicate = building.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase());
+        if(isDuplicate) {
+            toast({
+                title: "Error",
+                description: "A floor with this name already exists in this building.",
+                variant: "destructive",
+            });
+            return;
+        }
+    }
+
 
     const newFloor = {
         id: `floor-${Date.now()}`,
-        name: newFloorName,
+        name: trimmedName,
         rooms: []
     }
 
@@ -272,7 +321,8 @@ export default function ResidencesPage() {
 
   const handleAddRoom = (e: React.FormEvent) => {
     e.preventDefault();
-     if (!newRoomName.trim()) {
+    const trimmedName = newRoomName.trim();
+     if (!trimmedName) {
       toast({
         title: "Error",
         description: "Room name cannot be empty.",
@@ -284,9 +334,25 @@ export default function ResidencesPage() {
 
     const { complexId, buildingId, floorId } = selectedFloorInfo;
 
+    const complex = residences.find(c => c.id === complexId);
+    const building = complex?.buildings.find(b => b.id === buildingId);
+    const floor = building?.floors.find(f => f.id === floorId);
+
+    if (floor) {
+        const isDuplicate = floor.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicate) {
+             toast({
+                title: "Error",
+                description: "A room with this name already exists on this floor.",
+                variant: "destructive",
+            });
+            return;
+        }
+    }
+
     const newRoom = {
         id: `room-${Date.now()}`,
-        name: newRoomName
+        name: trimmedName
     }
 
     setResidences(residences.map(complex => {
@@ -376,7 +442,7 @@ export default function ResidencesPage() {
                         <span>{complex.name}</span>
                     </AccordionTrigger>
                     <div className="flex items-center gap-2 pr-6">
-                        <Button variant="ghost" size="icon" onClick={() => handleAddItem('building', complex.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('building', complex.id)}>
                             <PlusCircle className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
@@ -414,7 +480,7 @@ export default function ResidencesPage() {
                                  </div>
                               </AccordionTrigger>
                               <div className="flex items-center gap-2 pr-4">
-                                  <Button variant="ghost" size="icon" onClick={() => handleAddItem('floor', building.id, complex.id)}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('floor', building.id, complex.id)}>
                                       <PlusCircle className="h-4 w-4" />
                                   </Button>
                                   <AlertDialog>
@@ -445,7 +511,7 @@ export default function ResidencesPage() {
                                         <div className="flex justify-between items-center">
                                             <h4 className="font-medium">{floor.name}</h4>
                                             <div className="flex items-center">
-                                                <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id, building.id, complex.id)}>
+                                                <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
                                                     <PlusCircle className="h-4 w-4" />
                                                 </Button>
                                                  <AlertDialog>
@@ -491,7 +557,7 @@ export default function ResidencesPage() {
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDeleteItem('room', room.id, floor.id, building.id)}>Delete</AlertDialogAction>
+                                                        <AlertDialogAction onClick={() => handleDeleteItem('room', room.id, floor.id, building.id, complex.id)}>Delete</AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
