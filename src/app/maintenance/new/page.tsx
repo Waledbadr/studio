@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast";
+import { useResidences } from "@/context/residences-context";
 
 const formSchema = z.object({
   complex: z.string().min(1, { message: "Please select a complex." }),
@@ -31,6 +33,8 @@ const formSchema = z.object({
 
 export default function NewMaintenanceRequestPage() {
   const { toast } = useToast();
+  const { residences } = useResidences();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,6 +46,32 @@ export default function NewMaintenanceRequestPage() {
       priority: "",
     },
   })
+
+  const selectedComplexId = form.watch("complex");
+  const selectedBuildingId = form.watch("building");
+
+  useEffect(() => {
+    form.resetField("building", { defaultValue: "" });
+    form.resetField("room", { defaultValue: "" });
+  }, [selectedComplexId, form]);
+
+  useEffect(() => {
+    form.resetField("room", { defaultValue: "" });
+  }, [selectedBuildingId, form]);
+
+  const buildings = useMemo(() => {
+    if (!selectedComplexId) return [];
+    const complex = residences.find((c) => c.id === selectedComplexId);
+    return complex ? complex.buildings : [];
+  }, [selectedComplexId, residences]);
+
+  const rooms = useMemo(() => {
+    if (!selectedBuildingId) return [];
+    const complex = residences.find((c) => c.id === selectedComplexId);
+    const building = complex?.buildings.find((b) => b.id === selectedBuildingId);
+    return building ? building.floors.flatMap(floor => floor.rooms) : [];
+  }, [selectedComplexId, selectedBuildingId, residences]);
+
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log(values);
@@ -74,8 +104,9 @@ export default function NewMaintenanceRequestPage() {
                                             <SelectTrigger><SelectValue placeholder="Select a complex" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="seaside-residences">Seaside Residences</SelectItem>
-                                            <SelectItem value="hilltop-apartments">Hilltop Apartments</SelectItem>
+                                            {residences.map(complex => (
+                                                <SelectItem key={complex.id} value={complex.id}>{complex.name}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -88,13 +119,14 @@ export default function NewMaintenanceRequestPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Building</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!form.watch('complex')}>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedComplexId}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select a building" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="building-a">Building A</SelectItem>
-                                            <SelectItem value="building-b">Building B</SelectItem>
+                                            {buildings.map(building => (
+                                                <SelectItem key={building.id} value={building.id}>{building.name}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -107,13 +139,14 @@ export default function NewMaintenanceRequestPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Room / Unit</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!form.watch('building')}>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedBuildingId}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select a room" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="room-101">Room 101</SelectItem>
-                                            <SelectItem value="room-102">Room 102</SelectItem>
+                                            {rooms.map(room => (
+                                                 <SelectItem key={room.id} value={room.id}>{room.name}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

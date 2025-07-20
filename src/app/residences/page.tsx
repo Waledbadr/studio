@@ -29,49 +29,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast";
-
-const residencesData = [
-  {
-    id: 'complex-1',
-    name: 'Seaside Residences',
-    buildings: [
-      {
-        id: 'building-a',
-        name: 'Building A',
-        floors: [
-          {
-            id: 'floor-1',
-            name: 'Floor 1',
-            rooms: [
-              { id: 'room-101', name: 'Room 101' },
-              { id: 'room-102', name: 'Room 102' },
-              { id: 'facility-bath', name: 'Main Bathroom' },
-            ],
-          },
-          {
-            id: 'floor-2',
-            name: 'Floor 2',
-            rooms: [{ id: 'room-201', name: 'Room 201' }],
-          },
-        ],
-      },
-      {
-        id: 'building-b',
-        name: 'Building B',
-        floors: [
-          {
-            id: 'floor-1b',
-            name: 'Floor 1',
-            rooms: [{ id: 'room-101b', name: 'Room 101' }],
-          },
-        ],
-      },
-    ],
-  },
-];
+import { useResidences } from '@/context/residences-context';
 
 export default function ResidencesPage() {
-  const [residences, setResidences] = useState(residencesData);
+  const { residences, setResidences } = useResidences();
   
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
@@ -558,7 +519,7 @@ export default function ResidencesPage() {
                                                         <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                         <AlertDialogAction onClick={() => handleDeleteItem('room', room.id, floor.id, building.id, complex.id)}>Delete</AlertDialogAction>
-                                                        </AlertDialogFooter>
+                                                        </Footer>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
                                             </div>
