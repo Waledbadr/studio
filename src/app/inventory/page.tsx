@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Edit } from 'lucide-react';
 import Link from 'next/link';
-import { useInventory, type ItemCategory } from '@/context/inventory-context';
+import { useInventory, type ItemCategory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 
 export default function InventoryPage() {
@@ -22,6 +22,10 @@ export default function InventoryPage() {
       toast({ title: "Success", description: "Item has been deleted." });
   }
 
+  const handleItemAdded = (newItem: Omit<InventoryItem, 'id'>) => {
+    addItem(newItem);
+  }
+
   const renderItemsTable = (category: ItemCategory | 'all') => {
     const filteredItems = category === 'all' ? items : items.filter(item => item.category === category);
 
@@ -29,7 +33,8 @@ export default function InventoryPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
+            <TableHead>Arabic Name</TableHead>
+            <TableHead>English Name</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Unit</TableHead>
             <TableHead>Stock</TableHead>
@@ -39,7 +44,8 @@ export default function InventoryPage() {
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.name}</TableCell>
+              <TableCell className="font-medium">{item.nameAr}</TableCell>
+              <TableCell className="font-medium">{item.nameEn}</TableCell>
               <TableCell>{item.category}</TableCell>
               <TableCell>{item.unit}</TableCell>
               <TableCell>{item.stock}</TableCell>
@@ -54,7 +60,7 @@ export default function InventoryPage() {
             </TableRow>
           )) : (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">No items in this category yet.</TableCell>
+              <TableCell colSpan={6} className="text-center text-muted-foreground">No items in this category yet.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -73,7 +79,7 @@ export default function InventoryPage() {
           <AddItemDialog 
             isOpen={isDialogOpen} 
             onOpenChange={setIsDialogOpen} 
-            onItemAdded={addItem}
+            onItemAdded={handleItemAdded}
             triggerButton={
               <Button>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Item

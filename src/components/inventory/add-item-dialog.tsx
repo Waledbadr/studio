@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode, useTransition } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,43 +9,62 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryItem, ItemCategory } from '@/context/inventory-context';
+import { translateItemName } from '@/ai/flows/translate-item-flow';
+import { Loader2 } from 'lucide-react';
 
 interface AddItemDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    onItemAdded: (item: InventoryItem) => void;
+    onItemAdded: (item: Omit<InventoryItem, 'id'>) => void;
     triggerButton?: ReactNode;
     initialName?: string;
 }
 
 export function AddItemDialog({ isOpen, onOpenChange, onItemAdded, triggerButton, initialName = '' }: AddItemDialogProps) {
-    const [newItem, setNewItem] = useState({ name: initialName, category: '', unit: '', stock: '' });
+    const [name, setName] = useState(initialName);
+    const [category, setCategory] = useState('');
+    const [unit, setUnit] = useState('');
+    const [stock, setStock] = useState('');
+    
     const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
         if (isOpen) {
-            setNewItem({ name: initialName, category: '', unit: '', stock: '' });
+            setName(initialName);
+            setCategory('');
+            setUnit('');
+            setStock('');
         }
     }, [isOpen, initialName]);
 
     const handleAddItem = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newItem.name || !newItem.category || !newItem.unit || !newItem.stock) {
+        if (!name || !category || !unit || !stock) {
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
 
-        const newInventoryItem: InventoryItem = {
-            id: `item-${Date.now()}`,
-            name: newItem.name,
-            category: newItem.category as ItemCategory,
-            unit: newItem.unit,
-            stock: parseInt(newItem.stock, 10),
-        };
+        startTransition(async () => {
+            try {
+                const translationResult = await translateItemName({ name: name });
 
-        onItemAdded(newInventoryItem);
-        onOpenChange(false);
-        setNewItem({ name: '', category: '', unit: '', stock: '' });
+                const newInventoryItem: Omit<InventoryItem, 'id'> = {
+                    name: name,
+                    nameAr: translationResult.arabicName,
+                    nameEn: translationResult.englishName,
+                    category: category as ItemCategory,
+                    unit: unit,
+                    stock: parseInt(stock, 10),
+                };
+
+                onItemAdded(newInventoryItem);
+                onOpenChange(false);
+            } catch (error) {
+                 toast({ title: "Translation Error", description: "Could not translate item name.", variant: "destructive" });
+                 console.error(error);
+            }
+        });
     };
 
     const dialogContent = (
@@ -53,16 +72,16 @@ export function AddItemDialog({ isOpen, onOpenChange, onItemAdded, triggerButton
             <form onSubmit={handleAddItem}>
                 <DialogHeader>
                 <DialogTitle>Add New Inventory Item</DialogTitle>
-                <DialogDescription>Fill in the details for the new item.</DialogDescription>
+                <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-name" className="text-right">Name</Label>
-                    <Input id="item-name" placeholder="e.g., Light Bulbs" className="col-span-3" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                    <Input id="item-name" placeholder="e.g., Light Bulbs or مصابيح" className="col-span-3" value={name} onChange={e => setName(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-category" className="text-right">Category</Label>
-                    <Select onValueChange={value => setNewItem({...newItem, category: value})} value={newItem.category}>
+                    <Select onValueChange={value => setCategory(value)} value={category}>
                         <SelectTrigger className="col-span-3"><SelectValue placeholder="Select a category" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="cleaning">Cleaning</SelectItem>
@@ -73,15 +92,18 @@ export function AddItemDialog({ isOpen, onOpenChange, onItemAdded, triggerButton
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-unit" className="text-right">Unit</Label>
-                    <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
+                    <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-stock" className="text-right">Stock</Label>
-                    <Input id="item-stock" type="number" placeholder="e.g., 100" className="col-span-3" value={newItem.stock} onChange={e => setNewItem({...newItem, stock: e.target.value})} />
+                    <Input id="item-stock" type="number" placeholder="e.g., 100" className="col-span-3" value={stock} onChange={e => setStock(e.target.value)} />
                 </div>
                 </div>
                 <DialogFooter>
-                <Button type="submit">Save Item</Button>
+                    <Button type="submit" disabled={isPending}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Item
+                    </Button>
                 </DialogFooter>
             </form>
         </DialogContent>

@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
 // Define types for our data structure
 interface Room {
@@ -78,7 +79,27 @@ const ResidencesContext = createContext<ResidencesContextType | undefined>(undef
 
 // Create a provider component
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
-  const [residences, setResidences] = useState<Complex[]>(initialResidencesData);
+  const [residences, setResidences] = useState<Complex[]>(() => {
+    if (typeof window === 'undefined') {
+      return initialResidencesData;
+    }
+    try {
+      const storedResidences = window.localStorage.getItem('residences');
+      return storedResidences ? JSON.parse(storedResidences) : initialResidencesData;
+    } catch (error) {
+      console.error("Error reading residences from localStorage", error);
+      return initialResidencesData;
+    }
+  });
+
+  useEffect(() => {
+    try {
+        window.localStorage.setItem('residences', JSON.stringify(residences));
+    } catch (error) {
+        console.error("Error writing residences to localStorage", error);
+    }
+  }, [residences]);
+
 
   return (
     <ResidencesContext.Provider value={{ residences, setResidences }}>

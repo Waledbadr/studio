@@ -26,7 +26,7 @@ export default function NewOrderPage() {
 
     // For ComboBox
     const [open, setOpen] = useState(false);
-    const [selectedValue, setSelectedValue] = useState('');
+    const [selectedValue, setSelectedValue] = useState(''); // This will be the item ID
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -36,12 +36,7 @@ export default function NewOrderPage() {
             return;
         }
 
-        const selectedItemId = allItems.find(item => item.name.toLowerCase() === selectedValue.toLowerCase())?.id;
-
-        if (!selectedItemId) {
-             toast({ title: "Error", description: "Selected item not found in inventory.", variant: "destructive" });
-             return;
-        }
+        const selectedItemId = selectedValue;
 
         if (orderItems.find(item => item.id === selectedItemId)) {
             toast({ title: "Error", description: "Item is already in the order.", variant: "destructive" });
@@ -53,6 +48,7 @@ export default function NewOrderPage() {
             setOrderItems([...orderItems, { ...itemToAdd, quantity }]);
             setSelectedValue('');
             setQuantity(1);
+            setSearchQuery('');
         }
     };
     
@@ -76,13 +72,19 @@ export default function NewOrderPage() {
         setOrderItems([]);
     }
 
-    const handleAddNewItem = (newItem: InventoryItem) => {
+    const handleAddNewItem = (newItem: Omit<InventoryItem, 'id'>) => {
         addItem(newItem);
-        setSelectedValue(newItem.name);
+        // We can't immediately select it because addItem is async and we don't have the ID yet
+        // User will have to find it in the list after it's added.
         setOpen(false);
     }
     
-    const filteredItems = allItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const filteredItems = allItems.filter(item => 
+        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const currentSelectedItem = allItems.find(item => item.id === selectedValue);
 
     return (
         <div className="space-y-6">
@@ -110,8 +112,8 @@ export default function NewOrderPage() {
                                     aria-expanded={open}
                                     className="w-full justify-between"
                                     >
-                                    {selectedValue
-                                        ? allItems.find((item) => item.name.toLowerCase() === selectedValue.toLowerCase())?.name
+                                    {currentSelectedItem
+                                        ? `${currentSelectedItem.nameAr} / ${currentSelectedItem.nameEn}`
                                         : "Select item..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -120,6 +122,7 @@ export default function NewOrderPage() {
                                     <Command>
                                         <CommandInput 
                                             placeholder="Search item..." 
+                                            value={searchQuery}
                                             onValueChange={setSearchQuery}
                                         />
                                         <CommandList>
@@ -141,7 +144,7 @@ export default function NewOrderPage() {
                                                 {filteredItems.map((item) => (
                                                 <CommandItem
                                                     key={item.id}
-                                                    value={item.name}
+                                                    value={item.id} // Use ID as the value
                                                     onSelect={(currentValue) => {
                                                         setSelectedValue(currentValue === selectedValue ? "" : currentValue)
                                                         setOpen(false)
@@ -150,10 +153,10 @@ export default function NewOrderPage() {
                                                     <Check
                                                     className={cn(
                                                         "mr-2 h-4 w-4",
-                                                        selectedValue === item.name.toLowerCase() ? "opacity-100" : "opacity-0"
+                                                        selectedValue === item.id ? "opacity-100" : "opacity-0"
                                                     )}
                                                     />
-                                                    {item.name}
+                                                    {item.nameAr} / {item.nameEn}
                                                 </CommandItem>
                                                 ))}
                                             </CommandGroup>
@@ -192,7 +195,7 @@ export default function NewOrderPage() {
                         <TableBody>
                             {orderItems.length > 0 ? orderItems.map(item => (
                                 <TableRow key={item.id}>
-                                    <TableCell className="font-medium">{item.name}</TableCell>
+                                    <TableCell className="font-medium">{item.nameAr} / {item.nameEn}</TableCell>
                                     <TableCell>{item.category}</TableCell>
                                     <TableCell>{item.unit}</TableCell>
                                     <TableCell>
