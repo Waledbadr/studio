@@ -15,6 +15,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast";
@@ -88,9 +99,60 @@ export default function ResidencesPage() {
     }
   };
 
-  const handleDeleteItem = (type: string, id: string) => {
-    console.log(`Deleting ${type} with id ${id}`);
-    toast({ title: "Note", description: `Deleting ${type} with ID ${id} is not yet implemented.`});
+  const handleDeleteItem = (type: string, id: string, parentId?: string, grandParentId?: string) => {
+    let newResidences = [...residences];
+    let successMessage = '';
+
+    if (type === 'complex') {
+        newResidences = residences.filter(c => c.id !== id);
+        successMessage = "Complex deleted successfully.";
+    } else if (type === 'building' && parentId) {
+        newResidences = residences.map(c => 
+            c.id === parentId 
+            ? {...c, buildings: c.buildings.filter(b => b.id !== id)}
+            : c
+        );
+        successMessage = "Building deleted successfully.";
+    } else if (type === 'floor' && parentId && grandParentId) {
+         newResidences = residences.map(c => {
+            if (c.id === grandParentId) {
+                return {
+                    ...c,
+                    buildings: c.buildings.map(b => {
+                        if (b.id === parentId) {
+                            return {...b, floors: b.floors.filter(f => f.id !== id)}
+                        }
+                        return b;
+                    })
+                }
+            }
+            return c;
+         });
+         successMessage = "Floor deleted successfully.";
+    } else if (type === 'room' && parentId && grandParentId) {
+        // Here parentId is floorId, grandParentId is buildingId. We need complexId as well.
+        // This is getting complex. Let's find the room and delete it.
+        const complex = newResidences.find(c => c.buildings.some(b => b.id === grandParentId));
+        if (complex) {
+            const building = complex.buildings.find(b => b.id === grandParentId);
+            if(building) {
+                const floor = building.floors.find(f => f.id === parentId);
+                if (floor) {
+                    floor.rooms = floor.rooms.filter(r => r.id !== id);
+                    successMessage = "Room deleted successfully.";
+                }
+            }
+        }
+    } else {
+        toast({ title: "Error", description: `Could not delete ${type}.`, variant: "destructive" });
+        return;
+    }
+    
+    setResidences(newResidences);
+    toast({
+        title: "Success",
+        description: successMessage,
+    });
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
@@ -200,6 +262,11 @@ export default function ResidencesPage() {
       description: "New floor added to the building.",
     });
   }
+  
+  const findComplexIdForBuilding = (buildingId: string) => {
+      const complex = residences.find(c => c.buildings.some(b => b.id === buildingId));
+      return complex?.id;
+  }
 
   return (
     <div className="space-y-6">
@@ -247,17 +314,33 @@ export default function ResidencesPage() {
           <Accordion type="multiple" className="w-full">
             {residences.map((complex) => (
               <AccordionItem value={complex.id} key={complex.id} className="border-b last-of-type:border-b-0">
-                 <div className="flex items-center p-6 hover:bg-muted/50">
-                    <AccordionTrigger className="flex-1 text-lg font-semibold hover:no-underline p-0">
+                 <div className="flex items-center hover:bg-muted/50">
+                    <AccordionTrigger className="flex-1 text-lg font-semibold hover:no-underline p-6">
                         <span>{complex.name}</span>
                     </AccordionTrigger>
-                    <div className="flex items-center gap-2 pl-4">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('building', complex.id); }}>
+                    <div className="flex items-center gap-2 pr-6">
+                        <Button variant="ghost" size="icon" onClick={() => handleAddItem('building', complex.id)}>
                             <PlusCircle className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('complex', complex.id); }}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the complex and all its buildings, floors, and rooms.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteItem('complex', complex.id)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                 </div>
                 <AccordionContent className="bg-muted/20">
@@ -266,20 +349,36 @@ export default function ResidencesPage() {
                       complex.buildings.map((building) => (
                         <Accordion type="multiple" key={building.id} className="bg-card rounded-md border">
                           <AccordionItem value={building.id} className="border-b-0">
-                            <div className="flex items-center px-4 py-3 rounded-md">
-                              <AccordionTrigger className="hover:no-underline p-0 flex-1">
+                            <div className="flex items-center rounded-md">
+                              <AccordionTrigger className="hover:no-underline p-4 flex-1">
                                  <div className="flex items-center gap-3">
                                    <Building className="h-5 w-5 text-muted-foreground" />
                                    <span className="font-medium">{building.name}</span>
                                  </div>
                               </AccordionTrigger>
-                              <div className="flex items-center gap-2 pl-4">
-                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('floor', building.id, complex.id); }}>
+                              <div className="flex items-center gap-2 pr-4">
+                                  <Button variant="ghost" size="icon" onClick={() => handleAddItem('floor', building.id, complex.id)}>
                                       <PlusCircle className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('building', building.id); }}>
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon">
+                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This action cannot be undone. This will permanently delete the building and all its floors and rooms.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteItem('building', building.id, complex.id)}>Delete</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                               </div>
                              </div>
                             <AccordionContent className="pt-2 pl-8 pr-4 pb-4">
@@ -292,6 +391,25 @@ export default function ResidencesPage() {
                                                 <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id)}>
                                                     <PlusCircle className="h-4 w-4" />
                                                 </Button>
+                                                 <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                                      </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                      <AlertDialogHeader>
+                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                          This action cannot be undone. This will permanently delete the floor and all its rooms.
+                                                        </AlertDialogDescription>
+                                                      </AlertDialogHeader>
+                                                      <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteItem('floor', floor.id, building.id, complex.id)}>Delete</AlertDialogAction>
+                                                      </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                  </AlertDialog>
                                             </div>
                                         </div>
                                         <div className="mt-2 space-y-1">
@@ -301,9 +419,25 @@ export default function ResidencesPage() {
                                                 <DoorOpen className="h-4 w-4 text-muted-foreground" />
                                                 <span>{room.name}</span>
                                                 </div>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteItem('room', room.id)}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            This action cannot be undone. This will permanently delete the room.
+                                                        </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteItem('room', room.id, floor.id, building.id)}>Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </div>
                                             ))}
                                             {floor.rooms.length === 0 && <div className="text-center text-muted-foreground p-2 text-sm">No rooms added yet.</div>}
@@ -385,4 +519,5 @@ export default function ResidencesPage() {
       </Dialog>
     </div>
   );
-}
+
+    
