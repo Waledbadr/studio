@@ -61,20 +61,30 @@ const residencesData = [
 
 export default function ResidencesPage() {
   const [residences, setResidences] = useState(residencesData);
+  
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
-  const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
+  
+  const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
   const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
+
+  const [isAddFloorDialogOpen, setIsAddFloorDialogOpen] = useState(false);
+  const [newFloorName, setNewFloorName] = useState('');
+  const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{complexId: string, buildingId: string} | null>(null);
+
   const { toast } = useToast();
 
-  const handleAddItem = (type: string, parentId: string) => {
+  const handleAddItem = (type: string, parentId: string, grandParentId?: string) => {
     if (type === 'building') {
       setSelectedComplexId(parentId);
       setIsAddBuildingDialogOpen(true);
+    } else if (type === 'floor' && grandParentId) {
+        setSelectedBuildingInfo({ complexId: grandParentId, buildingId: parentId });
+        setIsAddFloorDialogOpen(true);
     } else {
       console.log(`Adding ${type} to ${parentId}`);
-      toast({ title: "Note", description: `Adding ${type} to ${parentId} is not yet implemented.`});
+      toast({ title: "Note", description: `Adding ${type} is not yet implemented.`});
     }
   };
 
@@ -144,6 +154,53 @@ export default function ResidencesPage() {
     });
   };
 
+  const handleAddFloor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFloorName.trim()) {
+      toast({
+        title: "Error",
+        description: "Floor name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!selectedBuildingInfo) return;
+
+    const { complexId, buildingId } = selectedBuildingInfo;
+
+    const newFloor = {
+        id: `floor-${Date.now()}`,
+        name: newFloorName,
+        rooms: []
+    }
+
+    setResidences(residences.map(complex => {
+        if (complex.id === complexId) {
+            return {
+                ...complex,
+                buildings: complex.buildings.map(building => {
+                    if (building.id === buildingId) {
+                        return {
+                            ...building,
+                            floors: [...building.floors, newFloor]
+                        }
+                    }
+                    return building;
+                })
+            }
+        }
+        return complex;
+    }));
+
+    setNewFloorName('');
+    setIsAddFloorDialogOpen(false);
+    setSelectedBuildingInfo(null);
+    toast({
+      title: "Success",
+      description: "New floor added to the building.",
+    });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -195,10 +252,10 @@ export default function ResidencesPage() {
                         <span>{complex.name}</span>
                     </AccordionTrigger>
                     <div className="flex items-center gap-2 pl-4">
-                        <Button variant="ghost" size="icon" onClick={() => handleAddItem('building', complex.id)}>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('building', complex.id); }}>
                             <PlusCircle className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteItem('complex', complex.id)}>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('complex', complex.id); }}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                     </div>
@@ -217,40 +274,45 @@ export default function ResidencesPage() {
                                  </div>
                               </AccordionTrigger>
                               <div className="flex items-center gap-2 pl-4">
-                                  <Button variant="ghost" size="icon" onClick={() => handleAddItem('floor', building.id)}>
+                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleAddItem('floor', building.id, complex.id); }}>
                                       <PlusCircle className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem('building', building.id)}>
+                                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteItem('building', building.id); }}>
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
                               </div>
                              </div>
                             <AccordionContent className="pt-2 pl-8 pr-4 pb-4">
-                              {building.floors.map((floor) => (
-                                <div key={floor.id} className="ml-4 mt-2 p-3 border-l-2">
-                                  <div className="flex justify-between items-center">
-                                    <h4 className="font-medium">{floor.name}</h4>
-                                     <div className="flex items-center">
-                                          <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id)}>
-                                              <PlusCircle className="h-4 w-4" />
-                                          </Button>
-                                      </div>
-                                  </div>
-                                  <div className="mt-2 space-y-1">
-                                    {floor.rooms.map((room) => (
-                                      <div key={room.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted">
-                                        <div className="flex items-center gap-2">
-                                          <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                          <span>{room.name}</span>
+                                {building.floors.length > 0 ? (
+                                    building.floors.map((floor) => (
+                                        <div key={floor.id} className="ml-4 mt-2 p-3 border-l-2">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="font-medium">{floor.name}</h4>
+                                            <div className="flex items-center">
+                                                <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id)}>
+                                                    <PlusCircle className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteItem('room', room.id)}>
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
+                                        <div className="mt-2 space-y-1">
+                                            {floor.rooms.map((room) => (
+                                            <div key={room.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted">
+                                                <div className="flex items-center gap-2">
+                                                <DoorOpen className="h-4 w-4 text-muted-foreground" />
+                                                <span>{room.name}</span>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteItem('room', room.id)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                            ))}
+                                            {floor.rooms.length === 0 && <div className="text-center text-muted-foreground p-2 text-sm">No rooms added yet.</div>}
+                                        </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-muted-foreground p-4">No floors added yet.</div>
+                                )}
                             </AccordionContent>
                           </AccordionItem>
                         </Accordion>
@@ -289,6 +351,34 @@ export default function ResidencesPage() {
             </div>
             <DialogFooter>
               <Button type="submit">Save Building</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddFloorDialogOpen} onOpenChange={setIsAddFloorDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleAddFloor}>
+            <DialogHeader>
+              <DialogTitle>Add New Floor</DialogTitle>
+              <DialogDescription>
+                Enter the name for the new floor.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="floor-name" className="text-right">Name</Label>
+                <Input 
+                  id="floor-name" 
+                  placeholder="e.g., Floor 3" 
+                  className="col-span-3"
+                  value={newFloorName}
+                  onChange={(e) => setNewFloorName(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Save Floor</Button>
             </DialogFooter>
           </form>
         </DialogContent>
