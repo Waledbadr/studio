@@ -3,6 +3,7 @@ import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from '@/components/ui/toaster';
 import { ResidencesProvider } from '@/context/residences-context';
+import { InventoryProvider } from '@/context/inventory-context';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -26,7 +27,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ResidencesProvider>
-          <AppLayout>{children}</AppLayout>
+          <InventoryProvider>
+            <AppLayout>{children}</AppLayout>
+          </InventoryProvider>
         </ResidencesProvider>
         <Toaster />
       </body>

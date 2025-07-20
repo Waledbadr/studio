@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -5,54 +6,52 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2 } from 'lucide-react';
-
-type ItemCategory = 'cleaning' | 'electrical' | 'plumbing';
-
-interface InventoryItem {
-  id: string;
-  name: string;
-  category: ItemCategory;
-  unit: string;
-  stock: number;
-}
-
-const allItems: InventoryItem[] = [
-  { id: 'item-1', name: 'Floor Cleaner', category: 'cleaning', unit: 'Bottle', stock: 50 },
-  { id: 'item-2', name: 'Light Bulbs', category: 'electrical', unit: 'Pack of 4', stock: 120 },
-  { id: 'item-3', name: 'PVC Pipe (1m)', category: 'plumbing', unit: 'Piece', stock: 30 },
-  { id: 'item-4', name: 'Glass Wipes', category: 'cleaning', unit: 'Pack', stock: 75 },
-  { id: 'item-5', name: 'Wire Connector', category: 'electrical', unit: 'Box', stock: 200 },
-  { id: 'item-6', name: 'Faucet Washer', category: 'plumbing', unit: 'Bag', stock: 150 },
-];
+import { PlusCircle, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { useInventory, type InventoryItem } from '@/context/inventory-context';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { cn } from '@/lib/utils';
 
 interface OrderItem extends InventoryItem {
     quantity: number;
 }
 
 export default function NewOrderPage() {
+    const { items: allItems, addItem } = useInventory();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-    const [selectedItem, setSelectedItem] = useState<string>('');
     const [quantity, setQuantity] = useState(1);
     const { toast } = useToast();
 
+    // For ComboBox
+    const [open, setOpen] = useState(false);
+    const [selectedValue, setSelectedValue] = useState('');
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
     const handleAddItemToOrder = () => {
-        if (!selectedItem) {
+        if (!selectedValue) {
             toast({ title: "Error", description: "Please select an item.", variant: "destructive" });
             return;
         }
 
-        if (orderItems.find(item => item.id === selectedItem)) {
+        const selectedItemId = allItems.find(item => item.name.toLowerCase() === selectedValue.toLowerCase())?.id;
+
+        if (!selectedItemId) {
+             toast({ title: "Error", description: "Selected item not found in inventory.", variant: "destructive" });
+             return;
+        }
+
+        if (orderItems.find(item => item.id === selectedItemId)) {
             toast({ title: "Error", description: "Item is already in the order.", variant: "destructive" });
             return;
         }
 
-        const itemToAdd = allItems.find(item => item.id === selectedItem);
+        const itemToAdd = allItems.find(item => item.id === selectedItemId);
         if (itemToAdd) {
             setOrderItems([...orderItems, { ...itemToAdd, quantity }]);
-            setSelectedItem('');
+            setSelectedValue('');
             setQuantity(1);
         }
     };
@@ -77,26 +76,91 @@ export default function NewOrderPage() {
         setOrderItems([]);
     }
 
+    const handleAddNewItem = (newItem: InventoryItem) => {
+        addItem(newItem);
+        setSelectedValue(newItem.name);
+        setOpen(false);
+    }
+    
+    const filteredItems = allItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
         <div className="space-y-6">
+            <AddItemDialog
+                isOpen={isAddDialogOpen}
+                onOpenChange={setIsAddDialogOpen}
+                onItemAdded={handleAddNewItem}
+                initialName={searchQuery}
+            />
+
             <Card>
                 <CardHeader>
                     <CardTitle>Create New Monthly Order</CardTitle>
-                    <CardDescription>Select items from the inventory to create a new purchase order.</CardDescription>
+                    <CardDescription>Search for items from the inventory to create a new purchase order.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                    <div className="flex items-end gap-4">
                        <div className="flex-1">
                             <label className="text-sm font-medium">Item</label>
-                            <Select onValueChange={setSelectedItem} value={selectedItem}>
-                                <SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger>
-                                <SelectContent>
-                                    {allItems.map(item => (
-                                        <SelectItem key={item.id} value={item.id}>{item.name} ({item.category})</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Popover open={open} onOpenChange={setOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={open}
+                                    className="w-full justify-between"
+                                    >
+                                    {selectedValue
+                                        ? allItems.find((item) => item.name.toLowerCase() === selectedValue.toLowerCase())?.name
+                                        : "Select item..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                    <Command>
+                                        <CommandInput 
+                                            placeholder="Search item..." 
+                                            onValueChange={setSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>
+                                                 <div className='p-4 text-sm text-center'>
+                                                    No item found. <br/>
+                                                    <Button 
+                                                        variant="link"
+                                                        className="p-0 h-auto"
+                                                        onClick={() => {
+                                                            setOpen(false);
+                                                            setIsAddDialogOpen(true);
+                                                        }}>
+                                                            Add "{searchQuery}"
+                                                    </Button>
+                                                </div>
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredItems.map((item) => (
+                                                <CommandItem
+                                                    key={item.id}
+                                                    value={item.name}
+                                                    onSelect={(currentValue) => {
+                                                        setSelectedValue(currentValue === selectedValue ? "" : currentValue)
+                                                        setOpen(false)
+                                                    }}
+                                                >
+                                                    <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        selectedValue === item.name.toLowerCase() ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                    />
+                                                    {item.name}
+                                                </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                        </div>
                        <div>
                            <label className="text-sm font-medium">Quantity</label>
