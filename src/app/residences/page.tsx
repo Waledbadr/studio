@@ -84,17 +84,25 @@ export default function ResidencesPage() {
   const [newFloorName, setNewFloorName] = useState('');
   const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{complexId: string, buildingId: string} | null>(null);
 
+  const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [selectedFloorInfo, setSelectedFloorInfo] = useState<{complexId: string, buildingId: string, floorId: string} | null>(null);
+
+
   const { toast } = useToast();
 
-  const handleAddItem = (type: string, parentId: string, grandParentId?: string) => {
+  const handleAddItem = (type: string, id: string, parentId?: string, grandParentId?: string) => {
     if (type === 'building') {
-      setSelectedComplexId(parentId);
+      setSelectedComplexId(id);
       setIsAddBuildingDialogOpen(true);
-    } else if (type === 'floor' && grandParentId) {
-        setSelectedBuildingInfo({ complexId: grandParentId, buildingId: parentId });
+    } else if (type === 'floor' && parentId) {
+        setSelectedBuildingInfo({ complexId: parentId, buildingId: id });
         setIsAddFloorDialogOpen(true);
+    } else if (type === 'room' && parentId && grandParentId) {
+        setSelectedFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id});
+        setIsAddRoomDialogOpen(true);
     } else {
-      console.log(`Adding ${type} to ${parentId}`);
+      console.log(`Adding ${type} to ${id}`);
       toast({ title: "Note", description: `Adding ${type} is not yet implemented.`});
     }
   };
@@ -102,6 +110,7 @@ export default function ResidencesPage() {
   const handleDeleteItem = (type: string, id: string, parentId?: string, grandParentId?: string) => {
     let newResidences = [...residences];
     let successMessage = '';
+    let complexToUpdate;
 
     if (type === 'complex') {
         newResidences = residences.filter(c => c.id !== id);
@@ -130,18 +139,16 @@ export default function ResidencesPage() {
          });
          successMessage = "Floor deleted successfully.";
     } else if (type === 'room' && parentId && grandParentId) {
-        // Here parentId is floorId, grandParentId is buildingId. We need complexId as well.
-        // This is getting complex. Let's find the room and delete it.
-        const complex = newResidences.find(c => c.buildings.some(b => b.id === grandParentId));
-        if (complex) {
-            const building = complex.buildings.find(b => b.id === grandParentId);
-            if(building) {
-                const floor = building.floors.find(f => f.id === parentId);
-                if (floor) {
-                    floor.rooms = floor.rooms.filter(r => r.id !== id);
+        complexToUpdate = newResidences.find(c => c.buildings.some(b => b.id === grandParentId));
+        if (complexToUpdate) {
+             const buildingToUpdate = complexToUpdate.buildings.find(b => b.id === grandParentId);
+             if (buildingToUpdate) {
+                const floorToUpdate = buildingToUpdate.floors.find(f => f.id === parentId);
+                if (floorToUpdate) {
+                    floorToUpdate.rooms = floorToUpdate.rooms.filter(r => r.id !== id);
                     successMessage = "Room deleted successfully.";
                 }
-            }
+             }
         }
     } else {
         toast({ title: "Error", description: `Could not delete ${type}.`, variant: "destructive" });
@@ -262,11 +269,61 @@ export default function ResidencesPage() {
       description: "New floor added to the building.",
     });
   }
-  
-  const findComplexIdForBuilding = (buildingId: string) => {
-      const complex = residences.find(c => c.buildings.some(b => b.id === buildingId));
-      return complex?.id;
+
+  const handleAddRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+     if (!newRoomName.trim()) {
+      toast({
+        title: "Error",
+        description: "Room name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!selectedFloorInfo) return;
+
+    const { complexId, buildingId, floorId } = selectedFloorInfo;
+
+    const newRoom = {
+        id: `room-${Date.now()}`,
+        name: newRoomName
+    }
+
+    setResidences(residences.map(complex => {
+        if (complex.id === complexId) {
+            return {
+                ...complex,
+                buildings: complex.buildings.map(building => {
+                    if (building.id === buildingId) {
+                        return {
+                            ...building,
+                            floors: building.floors.map(floor => {
+                                if (floor.id === floorId) {
+                                    return {
+                                        ...floor,
+                                        rooms: [...floor.rooms, newRoom]
+                                    }
+                                }
+                                return floor;
+                            })
+                        }
+                    }
+                    return building;
+                })
+            }
+        }
+        return complex;
+    }));
+    
+    setNewRoomName('');
+    setIsAddRoomDialogOpen(false);
+    setSelectedFloorInfo(null);
+     toast({
+      title: "Success",
+      description: "New room added to the floor.",
+    });
   }
+  
 
   return (
     <div className="space-y-6">
@@ -388,7 +445,7 @@ export default function ResidencesPage() {
                                         <div className="flex justify-between items-center">
                                             <h4 className="font-medium">{floor.name}</h4>
                                             <div className="flex items-center">
-                                                <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id)}>
+                                                <Button variant="ghost" size="icon" onClick={() => handleAddItem('room', floor.id, building.id, complex.id)}>
                                                     <PlusCircle className="h-4 w-4" />
                                                 </Button>
                                                  <AlertDialog>
@@ -517,7 +574,34 @@ export default function ResidencesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+       <Dialog open={isAddRoomDialogOpen} onOpenChange={setIsAddRoomDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleAddRoom}>
+            <DialogHeader>
+              <DialogTitle>Add New Room</DialogTitle>
+              <DialogDescription>
+                Enter the name for the new room.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="room-name" className="text-right">Name</Label>
+                <Input 
+                  id="room-name" 
+                  placeholder="e.g., Room 301" 
+                  className="col-span-3"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Save Room</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-
-    
+}
