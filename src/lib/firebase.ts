@@ -13,31 +13,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let app: FirebaseApp | undefined;
-let db: Firestore | undefined;
+let app: FirebaseApp;
+let db: Firestore;
 
-// Check that all required environment variables are present and not empty
-const allConfigPresent =
-  firebaseConfig.apiKey &&
-  firebaseConfig.authDomain &&
-  firebaseConfig.projectId &&
-  firebaseConfig.storageBucket &&
-  firebaseConfig.messagingSenderId &&
-  firebaseConfig.appId;
-
-
-// Initialize Firebase only if all env variables are set
-if (allConfigPresent) {
-  try {
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
-  } catch (e) {
-      console.error("Firebase initialization error", e);
-  }
-} else {
-    if (typeof window !== 'undefined') {
-        console.warn("Firebase configuration is missing or incomplete. Please check your .env file. App will run in offline mode.");
-    }
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  db = getFirestore(app);
+} catch (e) {
+    console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
 }
+
 
 export { app, db };
