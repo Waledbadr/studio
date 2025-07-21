@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, Trash2, Edit } from 'lucide-react';
 import Link from 'next/link';
-import { useInventory, type ItemCategory, type InventoryItem } from '@/context/inventory-context';
+import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -28,7 +28,12 @@ export default function InventoryPage() {
     addItem(newItem);
   }
 
-  const renderItemsTable = (category: ItemCategory | 'all') => {
+  const categories = useMemo(() => {
+    const allCategories = items.map(item => item.category);
+    return ['all', ...Array.from(new Set(allCategories))];
+  }, [items]);
+
+  const renderItemsTable = (category: string) => {
     const filteredItems = category === 'all' ? items : items.filter(item => item.category === category);
 
     if (loading) {
@@ -111,24 +116,18 @@ export default function InventoryPage() {
           <Tabs defaultValue="all">
             <div className="border-b p-4">
                 <TabsList>
-                    <TabsTrigger value="all">All Items</TabsTrigger>
-                    <TabsTrigger value="cleaning">Cleaning</TabsTrigger>
-                    <TabsTrigger value="electrical">Electrical</TabsTrigger>
-                    <TabsTrigger value="plumbing">Plumbing</TabsTrigger>
+                    {categories.map((category) => (
+                      <TabsTrigger key={category} value={category} className="capitalize">
+                        {category === 'all' ? 'All Items' : category}
+                      </TabsTrigger>
+                    ))}
                 </TabsList>
             </div>
-            <TabsContent value="all" className="p-6 pt-0">
-                {renderItemsTable('all')}
-            </TabsContent>
-            <TabsContent value="cleaning" className="p-6 pt-0">
-                {renderItemsTable('cleaning')}
-            </TabsContent>
-            <TabsContent value="electrical" className="p-6 pt-0">
-                {renderItemsTable('electrical')}
-            </TabsContent>
-            <TabsContent value="plumbing" className="p-6 pt-0">
-                {renderItemsTable('plumbing')}
-            </TabsContent>
+             {categories.map((category) => (
+                <TabsContent key={category} value={category} className="p-6 pt-0">
+                    {renderItemsTable(category)}
+                </TabsContent>
+            ))}
           </Tabs>
         </CardContent>
       </Card>

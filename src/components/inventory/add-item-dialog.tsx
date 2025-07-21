@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryItem, ItemCategory } from '@/context/inventory-context';
 import { translateItemName } from '@/ai/flows/translate-item-flow';
@@ -61,7 +60,7 @@ export function AddItemDialog({
                     name: name,
                     nameAr: translationResult.arabicName,
                     nameEn: translationResult.englishName,
-                    category: category as ItemCategory,
+                    category: category.toLowerCase().trim(),
                     unit: unit,
                     stock: parseInt(stock, 10),
                 };
@@ -94,14 +93,7 @@ export function AddItemDialog({
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-category" className="text-right">Category</Label>
-                    <Select onValueChange={value => setCategory(value)} value={category}>
-                        <SelectTrigger className="col-span-3"><SelectValue placeholder="Select a category" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="cleaning">Cleaning</SelectItem>
-                            <SelectItem value="electrical">Electrical</SelectItem>
-                            <SelectItem value="plumbing">Plumbing</SelectItem>
-                        </SelectContent>
-                    </Select>
+                     <Input id="item-category" placeholder="e.g., Electrical, Cleaning" className="col-span-3" value={category} onChange={e => setCategory(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-unit" className="text-right">Unit</Label>
