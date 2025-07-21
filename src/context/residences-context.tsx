@@ -28,6 +28,7 @@ export interface Building {
 export interface Complex {
   id: string;
   name: string;
+  city: string;
   buildings: Building[];
 }
 
@@ -36,7 +37,7 @@ interface ResidencesContextType {
   residences: Complex[];
   loading: boolean;
   loadResidences: () => void;
-  addComplex: (name: string) => Promise<void>;
+  addComplex: (name: string, city: string) => Promise<void>;
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
@@ -92,7 +93,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadResidences]);
 
-  const addComplex = async (name: string) => {
+  const addComplex = async (name: string, city: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -103,27 +104,40 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     const docRef = doc(collection(db, "residences"));
-    await setDoc(docRef, { id: docRef.id, name: trimmedName, buildings: [] });
+    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), buildings: [] });
     toast({ title: "Success", description: "New residential complex added." });
   };
 
   const addBuilding = async (complexId: string, name: string) => {
-    if (!db) {
+     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
-    const trimmedName = name.trim();
-    const complex = residences.find(c => c.id === complexId);
-    if (complex?.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
-        toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
-        return;
+    try {
+        const trimmedName = name.trim();
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        if (complexData.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
+            toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
+            return;
+        }
+
+        const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+        const updatedBuildings = [...complexData.buildings, newBuilding];
+        
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+        toast({ title: "Success", description: "New building added to the complex." });
+
+    } catch (error) {
+        console.error("Error adding building:", error);
+        toast({ title: "Error", description: "Failed to add building.", variant: "destructive" });
     }
-    const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
-    const complexDocRef = doc(db, "residences", complexId);
-    await updateDoc(complexDocRef, {
-      buildings: arrayUnion(newBuilding)
-    });
-    toast({ title: "Success", description: "New building added to the complex." });
   };
   
   const addFloor = async (complexId: string, buildingId: string, name: string) => {
@@ -293,3 +307,5 @@ export const useResidences = () => {
   }
   return context;
 };
+
+    

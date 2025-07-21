@@ -25,6 +25,7 @@ export default function SetupPage() {
 
         const sampleComplex: Omit<Complex, 'id'> = {
             name: "Seaside Residences",
+            city: "Dubai",
             buildings: [
                 {
                     id: 'building-1', name: "Building A", floors: [
@@ -127,3 +128,5 @@ export default function SetupPage() {
         </div>
     );
 }
+
+    

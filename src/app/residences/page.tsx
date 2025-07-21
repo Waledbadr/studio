@@ -41,6 +41,7 @@ export default function ResidencesPage() {
 
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
+  const [newComplexCity, setNewComplexCity] = useState('');
   
   const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
@@ -70,9 +71,10 @@ export default function ResidencesPage() {
 
   const handleAddComplex = (e: React.FormEvent) => {
     e.preventDefault();
-    if(newComplexName.trim() === '') return;
-    addComplex(newComplexName);
+    if(newComplexName.trim() === '' || newComplexCity.trim() === '') return;
+    addComplex(newComplexName, newComplexCity);
     setNewComplexName('');
+    setNewComplexCity('');
     setIsAddComplexDialogOpen(false);
   };
 
@@ -161,6 +163,16 @@ export default function ResidencesPage() {
                     onChange={(e) => setNewComplexName(e.target.value)}
                   />
                 </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="complex-city" className="text-right">City</Label>
+                  <Input 
+                    id="complex-city" 
+                    placeholder="e.g., Dubai" 
+                    className="col-span-3"
+                    value={newComplexCity}
+                    onChange={(e) => setNewComplexCity(e.target.value)}
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit">Save Complex</Button>
@@ -176,8 +188,11 @@ export default function ResidencesPage() {
             {residences.map((complex) => (
               <AccordionItem value={complex.id} key={complex.id} className="border-b last-of-type:border-b-0">
                  <div className="flex items-center hover:bg-muted/50">
-                    <AccordionTrigger className="flex-1 text-lg font-semibold hover:no-underline p-6">
-                        <span>{complex.name}</span>
+                    <AccordionTrigger className="flex-1 hover:no-underline p-6">
+                        <div className="flex flex-col text-left">
+                            <span className="text-lg font-semibold">{complex.name}</span>
+                            <span className="text-sm text-muted-foreground">{complex.city}</span>
+                        </div>
                     </AccordionTrigger>
                     <div className="flex items-center gap-2 pr-6">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('building', complex.id)}>
@@ -410,3 +425,5 @@ export default function ResidencesPage() {
     </div>
   );
 }
+
+    
