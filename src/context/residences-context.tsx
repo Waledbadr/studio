@@ -47,7 +47,7 @@ interface ResidencesContextType {
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
@@ -57,6 +57,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!db) {
       console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
+      toast({ title: "Error", description: "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.", variant: "destructive" });
       setLoading(false);
       return;
     }

@@ -29,7 +29,7 @@ interface InventoryContextType {
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -40,6 +40,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) {
       console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
       setLoading(false);
+      toast({ title: "Error", description: "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.", variant: "destructive" });
       return;
     }
     setLoading(true);
