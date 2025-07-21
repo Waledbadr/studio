@@ -40,7 +40,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) {
       console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
       setLoading(false);
-      toast({ title: "Error", description: "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -58,7 +57,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
-    if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
     if (isDuplicate) {
       toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
@@ -75,7 +77,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteItem = async (id: string) => {
-    if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
     try {
       await deleteDoc(doc(db, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
