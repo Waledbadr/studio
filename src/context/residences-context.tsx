@@ -50,6 +50,45 @@ const ResidencesContext = createContext<ResidencesContextType | undefined>(undef
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
+const seedResidencesData = async () => {
+    if (!db) return;
+    const batch = writeBatch(db);
+    const sampleComplex: Omit<Complex, 'id'> = {
+        name: "Seaside Residences",
+        buildings: [
+            {
+                id: 'building-1', name: "Building A", floors: [
+                    {
+                        id: 'floor-a1', name: "Floor 1", rooms: [
+                            { id: 'room-a101', name: 'A-101' },
+                            { id: 'room-a102', name: 'A-102' }
+                        ]
+                    },
+                    {
+                        id: 'floor-a2', name: "Floor 2", rooms: [
+                            { id: 'room-a201', name: 'A-201' }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'building-2', name: "Building B", floors: [
+                     {
+                        id: 'floor-b1', name: "Floor 1", rooms: [
+                            { id: 'room-b101', name: 'B-101' }
+                        ]
+                    }
+                ]
+            }
+        ]
+    };
+    const docRef = doc(collection(db, "residences"));
+    batch.set(docRef, { ...sampleComplex, id: docRef.id });
+    await batch.commit();
+    console.log("Firestore residences seeded with sample data.");
+};
+
+
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,9 +107,15 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setLoading(true);
-    unsubscribeRef.current = onSnapshot(collection(db, "residences"), (snapshot) => {
-      const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
-      setResidences(residencesData);
+    const residencesCollection = collection(db, "residences");
+    unsubscribeRef.current = onSnapshot(residencesCollection, async (snapshot) => {
+      if (snapshot.empty) {
+        console.log("Residences collection is empty, seeding data...");
+        await seedResidencesData();
+      } else {
+        const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
+        setResidences(residencesData);
+      }
       setLoading(false);
     }, (error) => {
       console.error("Error fetching residences:", error);
@@ -89,8 +134,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
         return;
     }
-    const id = `complex-${Date.now()}`;
-    await setDoc(doc(db, "residences", id), { id, name: trimmedName, buildings: [] });
+    const docRef = doc(collection(db, "residences"));
+    await setDoc(docRef, { id: docRef.id, name: trimmedName, buildings: [] });
     toast({ title: "Success", description: "New residential complex added." });
   };
 
