@@ -56,6 +56,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!db) {
+      console.warn("Firebase (db) is not initialized. Skipping Firestore connection.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const unsubscribe = onSnapshot(collection(db, "residences"), (snapshot) => {
       const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
@@ -63,7 +69,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching residences:", error);
-      toast({ title: "Error", description: "Could not fetch residences data.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not fetch residences data. Is your Firebase config correct?", variant: "destructive" });
       setLoading(false);
     });
 
@@ -71,6 +77,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const addComplex = async (name: string) => {
+    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const trimmedName = name.trim();
     if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
         toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
@@ -82,6 +89,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addBuilding = async (complexId: string, name: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     if (complex?.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
@@ -96,6 +104,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const addFloor = async (complexId: string, buildingId: string, name: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     const building = complex?.buildings.find(b => b.id === buildingId);
@@ -110,6 +119,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     const building = complex?.buildings.find(b => b.id === buildingId);
@@ -132,22 +142,25 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteComplex = async (id: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     await deleteDoc(doc(db, "residences", id));
     toast({ title: "Success", description: "Complex deleted successfully." });
   }
 
   const deleteBuilding = async (complexId: string, buildingId: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const buildingToRemove = complex?.buildings.find(b => b.id === buildingId);
     if (buildingToRemove) {
-      await updateDoc(doc(db, "residences", complexId), {
-        buildings: arrayRemove(buildingToRemove)
-      });
+      const complexRef = doc(db, "residences", complexId);
+      const updatedBuildings = complex.buildings.filter(b => b.id !== buildingId);
+      await updateDoc(complexRef, { buildings: updatedBuildings });
       toast({ title: "Success", description: "Building deleted successfully." });
     }
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
@@ -160,6 +173,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
+     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {

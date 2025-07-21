@@ -35,6 +35,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!db) {
+      console.warn("Firebase (db) is not initialized. Skipping Firestore connection.");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
@@ -42,7 +47,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, (error) => {
         console.error("Error fetching inventory:", error);
-        toast({ title: "Error", description: "Could not fetch inventory data.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not fetch inventory data. Is your Firebase config correct?", variant: "destructive" });
         setLoading(false);
     });
     
@@ -50,19 +55,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
+    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
     if (isDuplicate) {
       toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
       return;
     }
-    const docRef = doc(collection(db, "inventory"));
-    await setDoc(docRef, {...newItem, id: docRef.id});
-    toast({ title: "Success", description: "New item added to inventory." });
+    try {
+      const docRef = doc(collection(db, "inventory"));
+      await setDoc(docRef, {...newItem, id: docRef.id});
+      toast({ title: "Success", description: "New item added to inventory." });
+    } catch (error) {
+       toast({ title: "Error", description: "Failed to add item.", variant: "destructive" });
+       console.error("Error adding item:", error);
+    }
   };
 
   const deleteItem = async (id: string) => {
-    await deleteDoc(doc(db, "inventory", id));
-    toast({ title: "Success", description: "Item has been deleted." });
+    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+    try {
+      await deleteDoc(doc(db, "inventory", id));
+      toast({ title: "Success", description: "Item has been deleted." });
+    } catch (error) {
+       toast({ title: "Error", description: "Failed to delete item.", variant: "destructive" });
+       console.error("Error deleting item:", error);
+    }
   }
 
   return (
