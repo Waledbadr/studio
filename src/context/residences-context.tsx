@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, writeBatch } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -79,15 +79,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [toast]);
 
-  useEffect(() => {
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
-  }, []);
-
-
   const addComplex = async (name: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
@@ -127,23 +118,37 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
-    const trimmedName = name.trim();
-    const complex = residences.find(c => c.id === complexId);
-    const building = complex?.buildings.find(b => b.id === buildingId);
-     if (building?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
-        toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
-        return;
-    }
+    try {
+        const trimmedName = name.trim();
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
 
-    const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
 
-    const updatedBuildings = complex?.buildings.map(b => 
-        b.id === buildingId ? {...b, floors: [...b.floors, newFloor]} : b
-    );
+        const complexData = complexDoc.data() as Complex;
 
-    if (updatedBuildings) {
-        await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+        const building = complexData.buildings.find(b => b.id === buildingId);
+        if (building?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+            toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
+            return;
+        }
+
+        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
+
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId 
+            ? {...b, floors: [...b.floors, newFloor]} 
+            : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
         toast({ title: "Success", description: "New floor added to the building." });
+
+    } catch (error) {
+        console.error("Error adding floor:", error);
+        toast({ title: "Error", description: "Failed to add floor.", variant: "destructive" });
     }
   };
 
@@ -152,27 +157,42 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
-    const trimmedName = name.trim();
-    const complex = residences.find(c => c.id === complexId);
-    const building = complex?.buildings.find(b => b.id === buildingId);
-    const floor = building?.floors.find(f => f.id === floorId);
-    if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
-        toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
-        return;
-    }
-    const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
-    const updatedBuildings = complex?.buildings.map(b => 
-        b.id === buildingId ? {
-            ...b,
-            floors: b.floors.map(f => 
-                f.id === floorId ? {...f, rooms: [...f.rooms, newRoom]} : f
-            )
-        } : b
-    );
+    try {
+        const trimmedName = name.trim();
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
 
-    if (updatedBuildings) {
-        await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+        
+        const complexData = complexDoc.data() as Complex;
+        
+        const building = complexData.buildings.find(b => b.id === buildingId);
+        const floor = building?.floors.find(f => f.id === floorId);
+
+        if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+            toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
+            return;
+        }
+
+        const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
+        
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => 
+                    f.id === floorId ? {...f, rooms: [...f.rooms, newRoom]} : f
+                )
+            } : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
         toast({ title: "Success", description: "New room added to the floor." });
+
+    } catch (error) {
+        console.error("Error adding room:", error);
+        toast({ title: "Error", description: "Failed to add room.", variant: "destructive" });
     }
   };
 
@@ -204,7 +224,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
     const complex = residences.find(c => c.id === complexId);
     if (!complex) return;
-    const updatedBuildings = complex?.buildings.map(b => 
+    const updatedBuildings = complex.buildings.map(b => 
         b.id === buildingId ? {
             ...b,
             floors: b.floors.filter(f => f.id !== floorId)
@@ -221,7 +241,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
     const complex = residences.find(c => c.id === complexId);
     if (!complex) return;
-    const updatedBuildings = complex?.buildings.map(b => 
+    const updatedBuildings = complex.buildings.map(b => 
         b.id === buildingId ? {
             ...b,
             floors: b.floors.map(f => 
