@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe } from "firebase/firestore";
 
 
 export type ItemCategory = 'cleaning' | 'electrical' | 'plumbing' | string;
@@ -31,59 +31,29 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
-const seedInventoryData = async () => {
-    if (!db) return;
-    try {
-        const batch = writeBatch(db);
-        const sampleItems: Omit<InventoryItem, 'id'>[] = [
-            { name: "Light Bulb", nameAr: "لمبة إضاءة", nameEn: "Light Bulb", category: "electrical", unit: "Piece", stock: 150 },
-            { name: "Cleaning Spray", nameAr: "بخاخ تنظيف", nameEn: "Cleaning Spray", category: "cleaning", unit: "Bottle", stock: 80 },
-            { name: "Water Tap", nameAr: "صنبور ماء", nameEn: "Water Tap", category: "plumbing", unit: "Piece", stock: 50 },
-            { name: "Power Socket", nameAr: "مقبس كهربائي", nameEn: "Power Socket", category: "electrical", unit: "Piece", stock: 120 },
-            { name: "Trash Bags", nameAr: "أكياس قمامة", nameEn: "Trash Bags", category: "cleaning", unit: "Roll", stock: 200 },
-        ];
-        sampleItems.forEach(item => {
-            const docRef = doc(collection(db, "inventory"));
-            batch.set(docRef, {...item, id: docRef.id });
-        });
-        await batch.commit();
-        console.log("Firestore inventory seeded with sample data.");
-    } catch (error) {
-        console.error("Error seeding inventory data:", error);
-    }
-}
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const loadingStartedRef = useRef(false);
+  const isLoaded = useRef(false);
 
   const loadInventory = useCallback(() => {
-    if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      setLoading(false);
-      return;
+    if (isLoaded.current || !db) {
+        if (!db) {
+            console.error(firebaseErrorMessage);
+            toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+            setLoading(false);
+        }
+        return;
     }
 
-    if (loadingStartedRef.current) return;
-    loadingStartedRef.current = true;
+    isLoaded.current = true;
     setLoading(true);
 
     const inventoryCollection = collection(db, "inventory");
-
-    // Check for initial data and seed if necessary
-    getDocs(inventoryCollection).then(snapshot => {
-        if (snapshot.empty) {
-            console.log("Inventory collection is empty, seeding data...");
-            seedInventoryData();
-        }
-    }).catch(error => {
-        console.error("Error checking or seeding inventory data: ", error);
-        toast({ title: "Firestore Error", description: "Could not check for initial inventory data.", variant: "destructive" });
-    });
-
+    
     unsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
       setItems(inventoryData);
@@ -101,6 +71,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
+        isLoaded.current = false;
       }
     };
   }, [loadInventory]);

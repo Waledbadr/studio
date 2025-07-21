@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, writeBatch, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -50,79 +50,28 @@ const ResidencesContext = createContext<ResidencesContextType | undefined>(undef
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
-const seedResidencesData = async () => {
-    if (!db) return;
-    try {
-        const batch = writeBatch(db);
-        const sampleComplex: Omit<Complex, 'id'> = {
-            name: "Seaside Residences",
-            buildings: [
-                {
-                    id: 'building-1', name: "Building A", floors: [
-                        {
-                            id: 'floor-a1', name: "Floor 1", rooms: [
-                                { id: 'room-a101', name: 'A-101' },
-                                { id: 'room-a102', name: 'A-102' }
-                            ]
-                        },
-                        {
-                            id: 'floor-a2', name: "Floor 2", rooms: [
-                                { id: 'room-a201', name: 'A-201' }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    id: 'building-2', name: "Building B", floors: [
-                         {
-                            id: 'floor-b1', name: "Floor 1", rooms: [
-                                { id: 'room-b101', name: 'B-101' }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        };
-        const docRef = doc(collection(db, "residences"));
-        batch.set(docRef, { ...sampleComplex, id: docRef.id });
-        await batch.commit();
-        console.log("Firestore residences seeded with sample data.");
-    } catch (error) {
-        console.error("Error seeding residences data:", error);
-    }
-};
-
-
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const loadingStartedRef = useRef(false);
+  const isLoaded = useRef(false);
 
   const loadResidences = useCallback(() => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        setLoading(false);
+    if (isLoaded.current || !db) {
+        if (!db) {
+             console.error(firebaseErrorMessage);
+             toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+             setLoading(false);
+        }
         return;
     }
     
-    if (loadingStartedRef.current) return;
-    loadingStartedRef.current = true;
+    isLoaded.current = true;
     setLoading(true);
 
     const residencesCollection = collection(db, "residences");
     
-    getDocs(residencesCollection).then(snapshot => {
-        if (snapshot.empty) {
-            console.log("Residences collection is empty, seeding data...");
-            seedResidencesData();
-        }
-    }).catch(error => {
-        console.error("Error checking or seeding residences data: ", error);
-        toast({ title: "Firestore Error", description: "Could not check for initial residences data.", variant: "destructive" });
-    });
-
     unsubscribeRef.current = onSnapshot(residencesCollection, (snapshot) => {
         const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
         setResidences(residencesData);
@@ -139,6 +88,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
+        isLoaded.current = false;
       }
     };
   }, [loadResidences]);
