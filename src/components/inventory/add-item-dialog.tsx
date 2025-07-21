@@ -15,12 +15,20 @@ import { Loader2 } from 'lucide-react';
 interface AddItemDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    onItemAdded: (item: Omit<InventoryItem, 'id'>) => void;
+    onItemAdded: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
     triggerButton?: ReactNode;
     initialName?: string;
+    onItemAddedAndOrdered?: (item: InventoryItem) => void;
 }
 
-export function AddItemDialog({ isOpen, onOpenChange, onItemAdded, triggerButton, initialName = '' }: AddItemDialogProps) {
+export function AddItemDialog({ 
+    isOpen, 
+    onOpenChange, 
+    onItemAdded, 
+    triggerButton, 
+    initialName = '',
+    onItemAddedAndOrdered 
+}: AddItemDialogProps) {
     const [name, setName] = useState(initialName);
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
@@ -58,7 +66,12 @@ export function AddItemDialog({ isOpen, onOpenChange, onItemAdded, triggerButton
                     stock: parseInt(stock, 10),
                 };
 
-                onItemAdded(newInventoryItem);
+                const addedItem = await onItemAdded(newInventoryItem);
+                
+                if (addedItem && onItemAddedAndOrdered) {
+                    onItemAddedAndOrdered(addedItem);
+                }
+
                 onOpenChange(false);
             } catch (error) {
                  toast({ title: "Translation Error", description: "Could not translate item name.", variant: "destructive" });

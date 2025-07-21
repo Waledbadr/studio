@@ -1,43 +1,49 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 
 interface OrderItem extends InventoryItem {
     quantity: number;
 }
 
 export default function NewOrderPage() {
-    const { items: allItems, loading, loadInventory } = useInventory();
+    const { items: allItems, loading, loadInventory, addItem } = useInventory();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isAddDialogVisible, setAddDialogVisible] = useState(false);
 
-     useEffect(() => {
+    useEffect(() => {
         loadInventory();
     }, [loadInventory]);
 
 
-    const handleAddItemToOrder = (itemToAdd: InventoryItem) => {
-        const existingItem = orderItems.find(item => item.id === itemToAdd.id);
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
+        setOrderItems((currentOrderItems) => {
+            const existingItem = currentOrderItems.find(item => item.id === itemToAdd.id);
 
-        if (existingItem) {
-            // If item already exists, just increment its quantity
-            handleQuantityChange(itemToAdd.id, existingItem.quantity + 1);
-        } else {
-            // Otherwise, add it to the order with quantity 1
-            setOrderItems([...orderItems, { ...itemToAdd, quantity: 1 }]);
-        }
-    };
+            if (existingItem) {
+                // If item already exists, just increment its quantity
+                return currentOrderItems.map(item => 
+                    item.id === itemToAdd.id ? {...item, quantity: item.quantity + 1} : item
+                );
+            } else {
+                // Otherwise, add it to the order with quantity 1
+                return [...currentOrderItems, { ...itemToAdd, quantity: 1 }];
+            }
+        });
+    }, []);
     
     const handleRemoveItem = (id: string) => {
         setOrderItems(orderItems.filter(item => item.id !== id));
@@ -67,6 +73,12 @@ export default function NewOrderPage() {
     );
 
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
+
+    const handleNewItemAdded = (newItemWithId: InventoryItem) => {
+        // This function is called from the dialog after the item is created in the DB
+        handleAddItemToOrder(newItemWithId);
+        setSearchQuery(''); // Clear search query
+    };
 
     return (
         <div className="space-y-6">
@@ -117,7 +129,16 @@ export default function NewOrderPage() {
                                             </Button>
                                         </div>
                                     )) : (
-                                        <div className="text-center text-muted-foreground py-10">No items match your search.</div>
+                                         searchQuery ? (
+                                            <div className="text-center text-muted-foreground py-10">
+                                                <p className="mb-4">Item not found.</p>
+                                                 <Button onClick={() => setAddDialogVisible(true)}>
+                                                    <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
+                                        )
                                     )}
                                 </div>
                             )}
@@ -175,8 +196,13 @@ export default function NewOrderPage() {
                     </CardContent>
                 </Card>
            </div>
+            <AddItemDialog
+                isOpen={isAddDialogVisible}
+                onOpenChange={setAddDialogVisible}
+                onItemAdded={addItem}
+                onItemAddedAndOrdered={handleNewItemAdded}
+                initialName={searchQuery}
+            />
         </div>
     )
 }
-
-    

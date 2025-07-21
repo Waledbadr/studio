@@ -22,7 +22,7 @@ export interface InventoryItem {
 interface InventoryContextType {
   items: InventoryItem[];
   loading: boolean;
-  addItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
+  addItem: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
   deleteItem: (id: string) => Promise<void>;
   loadInventory: () => void;
 }
@@ -40,15 +40,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const isLoaded = useRef(false);
 
   const loadInventory = useCallback(() => {
-    if (isLoaded.current || !db) {
-        if (!db) {
-            console.error(firebaseErrorMessage);
-            toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
-            setLoading(false);
-        }
+     if (isLoaded.current) return;
+     if (!db) {
+        console.error(firebaseErrorMessage);
+        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+        setLoading(false);
         return;
     }
-
+    
     isLoaded.current = true;
     setLoading(true);
 
@@ -76,7 +75,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadInventory]);
 
-  const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
+  const addItem = async (newItem: Omit<InventoryItem, 'id'>): Promise<InventoryItem | void> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -88,8 +87,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const docRef = doc(collection(db, "inventory"));
-      await setDoc(docRef, {...newItem, id: docRef.id});
+      const itemWithId = { ...newItem, id: docRef.id };
+      await setDoc(docRef, itemWithId);
       toast({ title: "Success", description: "New item added to inventory." });
+      return itemWithId;
     } catch (error) {
        toast({ title: "Error", description: "Failed to add item.", variant: "destructive" });
        console.error("Error adding item:", error);
