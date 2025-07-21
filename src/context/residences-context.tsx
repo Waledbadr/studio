@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -52,40 +52,44 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 
 const seedResidencesData = async () => {
     if (!db) return;
-    const batch = writeBatch(db);
-    const sampleComplex: Omit<Complex, 'id'> = {
-        name: "Seaside Residences",
-        buildings: [
-            {
-                id: 'building-1', name: "Building A", floors: [
-                    {
-                        id: 'floor-a1', name: "Floor 1", rooms: [
-                            { id: 'room-a101', name: 'A-101' },
-                            { id: 'room-a102', name: 'A-102' }
-                        ]
-                    },
-                    {
-                        id: 'floor-a2', name: "Floor 2", rooms: [
-                            { id: 'room-a201', name: 'A-201' }
-                        ]
-                    }
-                ]
-            },
-            {
-                id: 'building-2', name: "Building B", floors: [
-                     {
-                        id: 'floor-b1', name: "Floor 1", rooms: [
-                            { id: 'room-b101', name: 'B-101' }
-                        ]
-                    }
-                ]
-            }
-        ]
-    };
-    const docRef = doc(collection(db, "residences"));
-    batch.set(docRef, { ...sampleComplex, id: docRef.id });
-    await batch.commit();
-    console.log("Firestore residences seeded with sample data.");
+    try {
+        const batch = writeBatch(db);
+        const sampleComplex: Omit<Complex, 'id'> = {
+            name: "Seaside Residences",
+            buildings: [
+                {
+                    id: 'building-1', name: "Building A", floors: [
+                        {
+                            id: 'floor-a1', name: "Floor 1", rooms: [
+                                { id: 'room-a101', name: 'A-101' },
+                                { id: 'room-a102', name: 'A-102' }
+                            ]
+                        },
+                        {
+                            id: 'floor-a2', name: "Floor 2", rooms: [
+                                { id: 'room-a201', name: 'A-201' }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    id: 'building-2', name: "Building B", floors: [
+                         {
+                            id: 'floor-b1', name: "Floor 1", rooms: [
+                                { id: 'room-b101', name: 'B-101' }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+        const docRef = doc(collection(db, "residences"));
+        batch.set(docRef, { ...sampleComplex, id: docRef.id });
+        await batch.commit();
+        console.log("Firestore residences seeded with sample data.");
+    } catch (error) {
+        console.error("Error seeding residences data:", error);
+    }
 };
 
 
@@ -94,11 +98,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
+  const isSeeding = useRef(false);
 
   const loadResidences = useCallback(() => {
     if (!db) {
-      setLoading(false);
-      return;
+        setLoading(false);
+        return;
     }
     
     if (unsubscribeRef.current) {
@@ -108,21 +113,36 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
     setLoading(true);
     const residencesCollection = collection(db, "residences");
-    unsubscribeRef.current = onSnapshot(residencesCollection, async (snapshot) => {
-      if (snapshot.empty) {
-        console.log("Residences collection is empty, seeding data...");
-        await seedResidencesData();
-      } else {
+    
+    // Check for initial data and seed if necessary
+    getDocs(residencesCollection).then(snapshot => {
+        if (snapshot.empty && !isSeeding.current) {
+            isSeeding.current = true;
+            console.log("Residences collection is empty, seeding data...");
+            seedResidencesData().finally(() => {
+                isSeeding.current = false;
+            });
+        }
+    });
+
+    unsubscribeRef.current = onSnapshot(residencesCollection, (snapshot) => {
         const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
         setResidences(residencesData);
-      }
-      setLoading(false);
+        setLoading(false);
     }, (error) => {
       console.error("Error fetching residences:", error);
       toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
     });
   }, [toast]);
+
+   useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, []);
 
   const addComplex = async (name: string) => {
     if (!db) {

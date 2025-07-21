@@ -34,20 +34,24 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 
 const seedInventoryData = async () => {
     if (!db) return;
-    const batch = writeBatch(db);
-    const sampleItems: Omit<InventoryItem, 'id'>[] = [
-        { name: "Light Bulb", nameAr: "لمبة إضاءة", nameEn: "Light Bulb", category: "electrical", unit: "Piece", stock: 150 },
-        { name: "Cleaning Spray", nameAr: "بخاخ تنظيف", nameEn: "Cleaning Spray", category: "cleaning", unit: "Bottle", stock: 80 },
-        { name: "Water Tap", nameAr: "صنبور ماء", nameEn: "Water Tap", category: "plumbing", unit: "Piece", stock: 50 },
-        { name: "Power Socket", nameAr: "مقبس كهربائي", nameEn: "Power Socket", category: "electrical", unit: "Piece", stock: 120 },
-        { name: "Trash Bags", nameAr: "أكياس قمامة", nameEn: "Trash Bags", category: "cleaning", unit: "Roll", stock: 200 },
-    ];
-    sampleItems.forEach(item => {
-        const docRef = doc(collection(db, "inventory"));
-        batch.set(docRef, {...item, id: docRef.id });
-    });
-    await batch.commit();
-    console.log("Firestore inventory seeded with sample data.");
+    try {
+        const batch = writeBatch(db);
+        const sampleItems: Omit<InventoryItem, 'id'>[] = [
+            { name: "Light Bulb", nameAr: "لمبة إضاءة", nameEn: "Light Bulb", category: "electrical", unit: "Piece", stock: 150 },
+            { name: "Cleaning Spray", nameAr: "بخاخ تنظيف", nameEn: "Cleaning Spray", category: "cleaning", unit: "Bottle", stock: 80 },
+            { name: "Water Tap", nameAr: "صنبور ماء", nameEn: "Water Tap", category: "plumbing", unit: "Piece", stock: 50 },
+            { name: "Power Socket", nameAr: "مقبس كهربائي", nameEn: "Power Socket", category: "electrical", unit: "Piece", stock: 120 },
+            { name: "Trash Bags", nameAr: "أكياس قمامة", nameEn: "Trash Bags", category: "cleaning", unit: "Roll", stock: 200 },
+        ];
+        sampleItems.forEach(item => {
+            const docRef = doc(collection(db, "inventory"));
+            batch.set(docRef, {...item, id: docRef.id });
+        });
+        await batch.commit();
+        console.log("Firestore inventory seeded with sample data.");
+    } catch (error) {
+        console.error("Error seeding inventory data:", error);
+    }
 }
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
@@ -55,6 +59,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
+  const isSeeding = useRef(false);
 
   const loadInventory = useCallback(() => {
     if (!db) {
@@ -70,14 +75,19 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     const inventoryCollection = collection(db, "inventory");
 
-    unsubscribeRef.current = onSnapshot(inventoryCollection, async (snapshot) => {
-      if (snapshot.empty) {
-        console.log("Inventory collection is empty, seeding data...");
-        await seedInventoryData();
-      } else {
-        const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
-        setItems(inventoryData);
-      }
+    getDocs(inventoryCollection).then(snapshot => {
+        if (snapshot.empty && !isSeeding.current) {
+            isSeeding.current = true;
+            console.log("Inventory collection is empty, seeding data...");
+            seedInventoryData().finally(() => {
+                isSeeding.current = false;
+            });
+        }
+    });
+
+    unsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
+      const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+      setItems(inventoryData);
       setLoading(false);
     }, (error) => {
         console.error("Error fetching inventory:", error);
