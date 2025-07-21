@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,13 +13,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface OrderItem extends InventoryItem {
     quantity: number;
 }
 
 export default function NewOrderPage() {
-    const { items: allItems, addItem } = useInventory();
+    const { items: allItems, addItem, loading, loadInventory } = useInventory();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [quantity, setQuantity] = useState(1);
     const { toast } = useToast();
@@ -29,6 +30,11 @@ export default function NewOrderPage() {
     const [selectedValue, setSelectedValue] = useState(''); // This will be the item ID
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+     useEffect(() => {
+        loadInventory();
+    }, [loadInventory]);
+
 
     const handleAddItemToOrder = () => {
         if (!selectedValue) {
@@ -95,71 +101,73 @@ export default function NewOrderPage() {
                    <div className="flex items-end gap-4">
                        <div className="flex-1">
                             <label className="text-sm font-medium">Item</label>
-                            <Popover open={open} onOpenChange={setOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={open}
-                                    className="w-full justify-between"
-                                    >
-                                    {currentSelectedItem
-                                        ? `${currentSelectedItem.nameAr} / ${currentSelectedItem.nameEn}`
-                                        : "Select item..."}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                    <Command shouldFilter={false}>
-                                        <CommandInput 
-                                            placeholder="Search item..." 
-                                            value={searchQuery}
-                                            onValueChange={setSearchQuery}
-                                        />
-                                        <CommandList>
-                                            <CommandEmpty>
-                                                 <div className='p-4 text-sm text-center'>
-                                                    No item found. <br/>
-                                                    <Button 
-                                                        variant="link"
-                                                        className="p-0 h-auto"
-                                                        onClick={() => {
-                                                            setOpen(false);
-                                                            setIsAddDialogOpen(true);
-                                                        }}>
-                                                            Add "{searchQuery}"
-                                                    </Button>
-                                                </div>
-                                            </CommandEmpty>
-                                            <CommandGroup>
-                                                {allItems
-                                                .filter(item => 
-                                                    item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                                    item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-                                                )
-                                                .map((item) => (
-                                                <CommandItem
-                                                    key={item.id}
-                                                    value={item.id}
-                                                    onSelect={(currentValue) => {
-                                                        setSelectedValue(currentValue === selectedValue ? "" : currentValue)
-                                                        setOpen(false)
-                                                    }}
-                                                >
-                                                    <Check
-                                                    className={cn(
-                                                        "mr-2 h-4 w-4",
-                                                        selectedValue === item.id ? "opacity-100" : "opacity-0"
-                                                    )}
-                                                    />
-                                                    {item.nameAr} / {item.nameEn}
-                                                </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                            {loading ? <Skeleton className="h-10 w-full" /> : (
+                                <Popover open={open} onOpenChange={setOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={open}
+                                        className="w-full justify-between"
+                                        >
+                                        {currentSelectedItem
+                                            ? `${currentSelectedItem.nameAr} / ${currentSelectedItem.nameEn}`
+                                            : "Select item..."}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                        <Command shouldFilter={false}>
+                                            <CommandInput 
+                                                placeholder="Search item..." 
+                                                value={searchQuery}
+                                                onValueChange={setSearchQuery}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty>
+                                                    <div className='p-4 text-sm text-center'>
+                                                        No item found. <br/>
+                                                        <Button 
+                                                            variant="link"
+                                                            className="p-0 h-auto"
+                                                            onClick={() => {
+                                                                setOpen(false);
+                                                                setIsAddDialogOpen(true);
+                                                            }}>
+                                                                Add "{searchQuery}"
+                                                        </Button>
+                                                    </div>
+                                                </CommandEmpty>
+                                                <CommandGroup>
+                                                    {allItems
+                                                    .filter(item => 
+                                                        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+                                                    )
+                                                    .map((item) => (
+                                                    <CommandItem
+                                                        key={item.id}
+                                                        value={item.id}
+                                                        onSelect={(currentValue) => {
+                                                            setSelectedValue(currentValue === selectedValue ? "" : currentValue)
+                                                            setOpen(false)
+                                                        }}
+                                                    >
+                                                        <Check
+                                                        className={cn(
+                                                            "mr-2 h-4 w-4",
+                                                            selectedValue === item.id ? "opacity-100" : "opacity-0"
+                                                        )}
+                                                        />
+                                                        {item.nameAr} / {item.nameEn}
+                                                    </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            )}
                        </div>
                        <div>
                            <label className="text-sm font-medium">Quantity</label>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,9 +13,13 @@ import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function InventoryPage() {
-  const { items, loading, addItem, deleteItem } = useInventory();
+  const { items, loading, addItem, deleteItem, loadInventory } = useInventory();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
+  useEffect(() => {
+    loadInventory();
+  }, [loadInventory]);
+
   const handleDeleteItem = (id: string) => {
       deleteItem(id);
   }

@@ -4,7 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -35,7 +35,11 @@ const formSchema = z.object({
 
 export default function NewMaintenanceRequestPage() {
   const { toast } = useToast();
-  const { residences, loading } = useResidences();
+  const { residences, loading, loadResidences } = useResidences();
+
+   useEffect(() => {
+    loadResidences();
+  }, [loadResidences]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

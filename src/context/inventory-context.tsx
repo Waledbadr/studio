@@ -1,10 +1,10 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, doc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe } from "firebase/firestore";
 
 
 export type ItemCategory = 'cleaning' | 'electrical' | 'plumbing' | string;
@@ -23,8 +23,9 @@ interface InventoryContextType {
   items: InventoryItem[];
   loading: boolean;
   setItems: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
-  addItem: (item: Omit<InventoryItem, 'id'>) => void;
+  addItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
+  loadInventory: () => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -35,15 +36,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  useEffect(() => {
+  const loadInventory = useCallback(() => {
     if (!db) {
-      console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
       setLoading(false);
       return;
     }
+
+    if (unsubscribeRef.current) {
+        setLoading(false);
+        return;
+    }
+
     setLoading(true);
-    const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
+    unsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
       setItems(inventoryData);
       setLoading(false);
@@ -52,9 +59,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
         setLoading(false);
     });
-    
-    return () => unsubscribe();
   }, [toast]);
+  
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, []);
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
     if (!db) {
@@ -91,7 +104,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <InventoryContext.Provider value={{ items, setItems, loading, addItem, deleteItem }}>
+    <InventoryContext.Provider value={{ items, setItems, loading, addItem, deleteItem, loadInventory }}>
       {children}
     </InventoryContext.Provider>
   );

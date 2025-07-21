@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -35,6 +35,7 @@ export interface Complex {
 interface ResidencesContextType {
   residences: Complex[];
   loading: boolean;
+  loadResidences: () => void;
   addComplex: (name: string) => Promise<void>;
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
@@ -53,16 +54,22 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  useEffect(() => {
+  const loadResidences = useCallback(() => {
     if (!db) {
-      console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
+      setLoading(false);
+      return;
+    }
+    
+    // If already subscribed, don't subscribe again.
+    if (unsubscribeRef.current) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const unsubscribe = onSnapshot(collection(db, "residences"), (snapshot) => {
+    unsubscribeRef.current = onSnapshot(collection(db, "residences"), (snapshot) => {
       const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
       setResidences(residencesData);
       setLoading(false);
@@ -71,9 +78,17 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
     });
-
-    return () => unsubscribe();
   }, [toast]);
+
+  useEffect(() => {
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, []);
+
 
   const addComplex = async (name: string) => {
     if (!db) {
@@ -211,7 +226,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, loading, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
+    <ResidencesContext.Provider value={{ residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
       {children}
     </ResidencesContext.Provider>
   );
