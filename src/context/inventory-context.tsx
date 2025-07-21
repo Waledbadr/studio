@@ -3,6 +3,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, doc, deleteDoc, setDoc } from "firebase/firestore";
+
 
 export type ItemCategory = 'cleaning' | 'electrical' | 'plumbing' | string;
 
@@ -18,60 +21,52 @@ export interface InventoryItem {
 
 interface InventoryContextType {
   items: InventoryItem[];
+  loading: boolean;
   setItems: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
   addItem: (item: Omit<InventoryItem, 'id'>) => void;
+  deleteItem: (id: string) => Promise<void>;
 }
-
-const initialItems: InventoryItem[] = [
-  { id: 'item-1', name: 'Floor Cleaner', nameAr: 'منظف أرضيات', nameEn: 'Floor Cleaner', category: 'cleaning', unit: 'Bottle', stock: 50 },
-  { id: 'item-2', name: 'Light Bulbs', nameAr: 'مصابيح كهربائية', nameEn: 'Light Bulbs', category: 'electrical', unit: 'Pack of 4', stock: 120 },
-  { id: 'item-3', name: 'PVC Pipe (1m)', nameAr: 'أنبوب PVC (1م)', nameEn: 'PVC Pipe (1m)', category: 'plumbing', unit: 'Piece', stock: 30 },
-  { id: 'item-4', name: 'Glass Wipes', nameAr: 'مناديل زجاج', nameEn: 'Glass Wipes', category: 'cleaning', unit: 'Pack', stock: 75 },
-  { id: 'item-5', name: 'Wire Connector', nameAr: 'موصل أسلاك', nameEn: 'Wire Connector', category: 'electrical', unit: 'Box', stock: 200 },
-  { id: 'item-6', name: 'Faucet Washer', nameAr: 'حلقة صنبور', nameEn: 'Faucet Washer', category: 'plumbing', unit: 'Bag', stock: 150 },
-];
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
-  const [items, setItems] = useState<InventoryItem[]>(() => {
-     if (typeof window === 'undefined') {
-      return initialItems;
-    }
-    try {
-      const storedItems = window.localStorage.getItem('inventory');
-      return storedItems ? JSON.parse(storedItems) : initialItems;
-    } catch (error) {
-      console.error("Error reading inventory from localStorage", error);
-      return initialItems;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('inventory', JSON.stringify(items));
-    } catch(error) {
-      console.error("Error writing inventory to localStorage", error);
-    }
-  }, [items]);
-
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const addItem = (newItem: Omit<InventoryItem, 'id'>) => {
-    setItems((prevItems) => {
-      const isDuplicate = prevItems.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
-      if (isDuplicate) {
-        toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
-        return prevItems;
-      }
-      const itemWithId = { ...newItem, id: `item-${Date.now()}` };
-      toast({ title: "Success", description: "New item added to inventory." });
-      return [...prevItems, itemWithId];
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
+      const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+      setItems(inventoryData);
+      setLoading(false);
+    }, (error) => {
+        console.error("Error fetching inventory:", error);
+        toast({ title: "Error", description: "Could not fetch inventory data.", variant: "destructive" });
+        setLoading(false);
     });
+    
+    return () => unsubscribe();
+  }, [toast]);
+
+  const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
+    const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
+    if (isDuplicate) {
+      toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
+      return;
+    }
+    const docRef = doc(collection(db, "inventory"));
+    await setDoc(docRef, {...newItem, id: docRef.id});
+    toast({ title: "Success", description: "New item added to inventory." });
   };
 
+  const deleteItem = async (id: string) => {
+    await deleteDoc(doc(db, "inventory", id));
+    toast({ title: "Success", description: "Item has been deleted." });
+  }
+
   return (
-    <InventoryContext.Provider value={{ items, setItems, addItem }}>
+    <InventoryContext.Provider value={{ items, setItems, loading, addItem, deleteItem }}>
       {children}
     </InventoryContext.Provider>
   );

@@ -2,26 +2,30 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
+
 
 // Define types for our data structure
-interface Room {
+export interface Room {
   id: string;
   name: string;
 }
 
-interface Floor {
+export interface Floor {
   id: string;
   name: string;
   rooms: Room[];
 }
 
-interface Building {
+export interface Building {
   id: string;
   name: string;
   floors: Floor[];
 }
 
-interface Complex {
+export interface Complex {
   id: string;
   name: string;
   buildings: Building[];
@@ -30,79 +34,148 @@ interface Complex {
 // Define the shape of our context
 interface ResidencesContextType {
   residences: Complex[];
-  setResidences: React.Dispatch<React.SetStateAction<Complex[]>>;
+  loading: boolean;
+  addComplex: (name: string) => Promise<void>;
+  addBuilding: (complexId: string, name: string) => Promise<void>;
+  addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
+  addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
+  deleteComplex: (id: string) => Promise<void>;
+  deleteBuilding: (complexId: string, buildingId: string) => Promise<void>;
+  deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
+  deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
 }
 
-// Initial data
-const initialResidencesData: Complex[] = [
-  {
-    id: 'complex-1',
-    name: 'Seaside Residences',
-    buildings: [
-      {
-        id: 'building-a',
-        name: 'Building A',
-        floors: [
-          {
-            id: 'floor-1',
-            name: 'Floor 1',
-            rooms: [
-              { id: 'room-101', name: 'Room 101' },
-              { id: 'room-102', name: 'Room 102' },
-              { id: 'facility-bath', name: 'Main Bathroom' },
-            ],
-          },
-          {
-            id: 'floor-2',
-            name: 'Floor 2',
-            rooms: [{ id: 'room-201', name: 'Room 201' }],
-          },
-        ],
-      },
-      {
-        id: 'building-b',
-        name: 'Building B',
-        floors: [
-          {
-            id: 'floor-1b',
-            name: 'Floor 1',
-            rooms: [{ id: 'room-101b', name: 'Room 101' }],
-          },
-        ],
-      },
-    ],
-  },
-];
 
 // Create the context with a default value
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
 // Create a provider component
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
-  const [residences, setResidences] = useState<Complex[]>(() => {
-    if (typeof window === 'undefined') {
-      return initialResidencesData;
-    }
-    try {
-      const storedResidences = window.localStorage.getItem('residences');
-      return storedResidences ? JSON.parse(storedResidences) : initialResidencesData;
-    } catch (error) {
-      console.error("Error reading residences from localStorage", error);
-      return initialResidencesData;
-    }
-  });
+  const [residences, setResidences] = useState<Complex[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    try {
-        window.localStorage.setItem('residences', JSON.stringify(residences));
-    } catch (error) {
-        console.error("Error writing residences to localStorage", error);
+    setLoading(true);
+    const unsubscribe = onSnapshot(collection(db, "residences"), (snapshot) => {
+      const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
+      setResidences(residencesData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching residences:", error);
+      toast({ title: "Error", description: "Could not fetch residences data.", variant: "destructive" });
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
+
+  const addComplex = async (name: string) => {
+    const trimmedName = name.trim();
+    if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
+        return;
     }
-  }, [residences]);
+    const id = `complex-${Date.now()}`;
+    await setDoc(doc(db, "residences", id), { id, name: trimmedName, buildings: [] });
+    toast({ title: "Success", description: "New residential complex added." });
+  };
+
+  const addBuilding = async (complexId: string, name: string) => {
+    const trimmedName = name.trim();
+    const complex = residences.find(c => c.id === complexId);
+    if (complex?.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
+        return;
+    }
+    const newBuilding = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+    await updateDoc(doc(db, "residences", complexId), {
+      buildings: arrayUnion(newBuilding)
+    });
+    toast({ title: "Success", description: "New building added to the complex." });
+  };
+  
+  const addFloor = async (complexId: string, buildingId: string, name: string) => {
+    const trimmedName = name.trim();
+    const complex = residences.find(c => c.id === complexId);
+    const building = complex?.buildings.find(b => b.id === buildingId);
+     if (building?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
+        return;
+    }
+    const newFloor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
+    const updatedBuildings = complex?.buildings.map(b => b.id === buildingId ? {...b, floors: [...b.floors, newFloor]} : b);
+    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+    toast({ title: "Success", description: "New floor added to the building." });
+  };
+
+  const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string) => {
+    const trimmedName = name.trim();
+    const complex = residences.find(c => c.id === complexId);
+    const building = complex?.buildings.find(b => b.id === buildingId);
+    const floor = building?.floors.find(f => f.id === floorId);
+    if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
+        return;
+    }
+    const newRoom = { id: `room-${Date.now()}`, name: trimmedName };
+    const updatedBuildings = complex?.buildings.map(b => 
+        b.id === buildingId ? {
+            ...b,
+            floors: b.floors.map(f => 
+                f.id === floorId ? {...f, rooms: [...f.rooms, newRoom]} : f
+            )
+        } : b
+    );
+    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+    toast({ title: "Success", description: "New room added to the floor." });
+  };
+
+  const deleteComplex = async (id: string) => {
+    await deleteDoc(doc(db, "residences", id));
+    toast({ title: "Success", description: "Complex deleted successfully." });
+  }
+
+  const deleteBuilding = async (complexId: string, buildingId: string) => {
+    const complex = residences.find(c => c.id === complexId);
+    const buildingToRemove = complex?.buildings.find(b => b.id === buildingId);
+    if (buildingToRemove) {
+      await updateDoc(doc(db, "residences", complexId), {
+        buildings: arrayRemove(buildingToRemove)
+      });
+      toast({ title: "Success", description: "Building deleted successfully." });
+    }
+  };
+
+  const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
+    const complex = residences.find(c => c.id === complexId);
+    const updatedBuildings = complex?.buildings.map(b => 
+        b.id === buildingId ? {
+            ...b,
+            floors: b.floors.filter(f => f.id !== floorId)
+        } : b
+    );
+    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+    toast({ title: "Success", description: "Floor deleted successfully." });
+  };
+
+  const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
+    const complex = residences.find(c => c.id === complexId);
+    const updatedBuildings = complex?.buildings.map(b => 
+        b.id === buildingId ? {
+            ...b,
+            floors: b.floors.map(f => 
+                f.id === floorId ? {...f, rooms: f.rooms.filter(r => r.id !== roomId)} : f
+            )
+        } : b
+    );
+    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+    toast({ title: "Success", description: "Room deleted successfully." });
+  };
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, setResidences }}>
+    <ResidencesContext.Provider value={{ residences, loading, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
       {children}
     </ResidencesContext.Provider>
   );

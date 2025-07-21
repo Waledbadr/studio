@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -21,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast";
 import { useResidences } from "@/context/residences-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const formSchema = z.object({
   complex: z.string().min(1, { message: "Please select a complex." }),
@@ -33,7 +35,7 @@ const formSchema = z.object({
 
 export default function NewMaintenanceRequestPage() {
   const { toast } = useToast();
-  const { residences } = useResidences();
+  const { residences, loading } = useResidences();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -81,6 +83,28 @@ export default function NewMaintenanceRequestPage() {
         variant: "default",
     })
     form.reset();
+  }
+  
+  if (loading) {
+    return (
+       <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
+        </CardHeader>
+        <CardContent className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+            </div>
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-36 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-10 w-32" />
+        </CardContent>
+    </Card>
+    )
   }
 
   return (

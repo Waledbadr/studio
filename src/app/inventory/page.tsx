@@ -6,20 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { useInventory, type ItemCategory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function InventoryPage() {
-  const { items, setItems, addItem } = useInventory();
+  const { items, loading, addItem, deleteItem } = useInventory();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { toast } = useToast();
   
   const handleDeleteItem = (id: string) => {
-      setItems(items.filter(item => item.id !== id));
-      toast({ title: "Success", description: "Item has been deleted." });
+      deleteItem(id);
   }
 
   const handleItemAdded = (newItem: Omit<InventoryItem, 'id'>) => {
@@ -28,6 +26,16 @@ export default function InventoryPage() {
 
   const renderItemsTable = (category: ItemCategory | 'all') => {
     const filteredItems = category === 'all' ? items : items.filter(item => item.category === category);
+
+    if (loading) {
+       return (
+        <div className="space-y-2 mt-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+       )
+    }
 
     return (
       <Table>
