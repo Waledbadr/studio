@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2 } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useResidences } from '@/context/residences-context';
+import { useResidences, type Complex } from '@/context/residences-context';
 import { Skeleton } from '@/components/ui/skeleton';
 
 
@@ -54,6 +54,17 @@ export default function ResidencesPage() {
   const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [selectedFloorInfo, setSelectedFloorInfo] = useState<{complexId: string, buildingId: string, floorId: string} | null>(null);
+
+  const groupedByCity = useMemo(() => {
+    return residences.reduce((acc, complex) => {
+      const city = complex.city || 'Uncategorized';
+      if (!acc[city]) {
+        acc[city] = [];
+      }
+      acc[city].push(complex);
+      return acc;
+    }, {} as Record<string, Complex[]>);
+  }, [residences]);
 
 
   const handleOpenAddDialog = (type: 'building' | 'floor' | 'room', id: string, parentId?: string, grandParentId?: string) => {
@@ -185,157 +196,173 @@ export default function ResidencesPage() {
       <Card>
         <CardContent className="p-0">
           <Accordion type="multiple" className="w-full">
-            {residences.map((complex) => (
-              <AccordionItem value={complex.id} key={complex.id} className="border-b last-of-type:border-b-0">
-                 <div className="flex items-center hover:bg-muted/50">
-                    <AccordionTrigger className="flex-1 hover:no-underline p-6">
-                        <div className="flex flex-col text-left">
-                            <span className="text-lg font-semibold">{complex.name}</span>
-                            <span className="text-sm text-muted-foreground">{complex.city}</span>
-                        </div>
-                    </AccordionTrigger>
-                    <div className="flex items-center gap-2 pr-6">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('building', complex.id)}>
-                            <PlusCircle className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the complex and all its buildings, floors, and rooms.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteComplex(complex.id)}>Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-                </div>
-                <AccordionContent className="bg-muted/20">
-                  <div className="p-4 space-y-2">
-                    {complex.buildings.length > 0 ? (
-                      complex.buildings.map((building) => (
-                        <Accordion type="multiple" key={building.id} className="bg-card rounded-md border">
-                          <AccordionItem value={building.id} className="border-b-0">
-                            <div className="flex items-center rounded-md">
-                              <AccordionTrigger className="hover:no-underline p-4 flex-1">
-                                 <div className="flex items-center gap-3">
-                                   <Building className="h-5 w-5 text-muted-foreground" />
-                                   <span className="font-medium">{building.name}</span>
-                                 </div>
-                              </AccordionTrigger>
-                              <div className="flex items-center gap-2 pr-4">
-                                  <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('floor', building.id, complex.id)}>
-                                      <PlusCircle className="h-4 w-4" />
-                                  </Button>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon">
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          This action cannot be undone. This will permanently delete the building and all its floors and rooms.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                              </div>
-                             </div>
-                            <AccordionContent className="pt-2 pl-8 pr-4 pb-4">
-                                {building.floors.length > 0 ? (
-                                    building.floors.map((floor) => (
-                                        <div key={floor.id} className="ml-4 mt-2 p-3 border-l-2">
-                                        <div className="flex justify-between items-center">
-                                            <h4 className="font-medium">{floor.name}</h4>
-                                            <div className="flex items-center">
-                                                <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
-                                                    <PlusCircle className="h-4 w-4" />
-                                                </Button>
-                                                 <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                                      </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                      <AlertDialogHeader>
-                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                          This action cannot be undone. This will permanently delete the floor and all its rooms.
-                                                        </AlertDialogDescription>
-                                                      </AlertDialogHeader>
-                                                      <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
-                                                      </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                  </AlertDialog>
-                                            </div>
-                                        </div>
-                                        <div className="mt-2 space-y-1">
-                                            {floor.rooms.map((room) => (
-                                            <div key={room.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted">
-                                                <div className="flex items-center gap-2">
-                                                <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                                <span>{room.name}</span>
+            {Object.keys(groupedByCity).length > 0 ? (
+                Object.keys(groupedByCity).map(city => (
+                    <AccordionItem value={city} key={city} className="border-b last-of-type:border-b-0">
+                        <AccordionTrigger className="p-6 hover:no-underline hover:bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <MapPin className="h-5 w-5 text-primary" />
+                                <span className="text-xl font-semibold">{city}</span>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="bg-muted/20">
+                            <div className="p-4 space-y-2">
+                                {groupedByCity[city].map((complex) => (
+                                    <Accordion type="multiple" key={complex.id} className="bg-card rounded-md border">
+                                        <AccordionItem value={complex.id} className="border-b-0">
+                                            <div className="flex items-center rounded-md">
+                                                <AccordionTrigger className="hover:no-underline p-4 flex-1">
+                                                    <div className="flex items-center gap-3">
+                                                        <Building className="h-5 w-5 text-muted-foreground" />
+                                                        <span className="font-medium">{complex.name}</span>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <div className="flex items-center gap-2 pr-4">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('building', complex.id)}>
+                                                        <PlusCircle className="h-4 w-4" />
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    This action cannot be undone. This will permanently delete the complex and all its buildings, floors, and rooms.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => deleteComplex(complex.id)}>Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                 </div>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            This action cannot be undone. This will permanently delete the room.
-                                                        </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
                                             </div>
-                                            ))}
-                                            {floor.rooms.length === 0 && <div className="text-center text-muted-foreground p-2 text-sm">No rooms added yet.</div>}
-                                        </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center text-muted-foreground p-4">No floors added yet.</div>
-                                )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      ))
-                    ) : (
-                      <div className="text-center text-muted-foreground p-4">No buildings added yet.</div>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-             {residences.length === 0 && <div className="text-center text-muted-foreground p-6">No complexes added yet.</div>}
-          </Accordion>
+                                            <AccordionContent className="pt-2 pl-8 pr-4 pb-4">
+                                                <div className="space-y-2">
+                                                    {complex.buildings.length > 0 ? (
+                                                        complex.buildings.map((building) => (
+                                                            <Accordion type="multiple" key={building.id} className="bg-muted/30 rounded-md border">
+                                                                <AccordionItem value={building.id} className="border-b-0">
+                                                                    <div className="flex items-center rounded-md">
+                                                                        <AccordionTrigger className="hover:no-underline p-3 flex-1">
+                                                                            <span className="font-medium text-sm">{building.name}</span>
+                                                                        </AccordionTrigger>
+                                                                        <div className="flex items-center gap-1 pr-3">
+                                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenAddDialog('floor', building.id, complex.id)}>
+                                                                                <PlusCircle className="h-4 w-4" />
+                                                                            </Button>
+                                                                            <AlertDialog>
+                                                                                <AlertDialogTrigger asChild>
+                                                                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                                                    </Button>
+                                                                                </AlertDialogTrigger>
+                                                                                <AlertDialogContent>
+                                                                                    <AlertDialogHeader>
+                                                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                                                        <AlertDialogDescription>
+                                                                                            This action cannot be undone. This will permanently delete the building and all its floors and rooms.
+                                                                                        </AlertDialogDescription>
+                                                                                    </AlertDialogHeader>
+                                                                                    <AlertDialogFooter>
+                                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                                        <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
+                                                                                    </AlertDialogFooter>
+                                                                                </AlertDialogContent>
+                                                                            </AlertDialog>
+                                                                        </div>
+                                                                    </div>
+                                                                    <AccordionContent className="pt-2 pl-6 pr-4 pb-4">
+                                                                        {building.floors.length > 0 ? (
+                                                                            building.floors.map((floor) => (
+                                                                                <div key={floor.id} className="ml-4 mt-2 p-3 border-l-2">
+                                                                                    <div className="flex justify-between items-center">
+                                                                                        <h4 className="font-medium">{floor.name}</h4>
+                                                                                        <div className="flex items-center">
+                                                                                            <Button variant="ghost" size="icon" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
+                                                                                                <PlusCircle className="h-4 w-4" />
+                                                                                            </Button>
+                                                                                            <AlertDialog>
+                                                                                                <AlertDialogTrigger asChild>
+                                                                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                                                                    </Button>
+                                                                                                </AlertDialogTrigger>
+                                                                                                <AlertDialogContent>
+                                                                                                    <AlertDialogHeader>
+                                                                                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                                                                        <AlertDialogDescription>
+                                                                                                            This action cannot be undone. This will permanently delete the floor and all its rooms.
+                                                                                                        </AlertDialogDescription>
+                                                                                                    </AlertDialogHeader>
+                                                                                                    <AlertDialogFooter>
+                                                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                                                        <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                                                                                    </AlertDialogFooter>
+                                                                                                </AlertDialogContent>
+                                                                                            </AlertDialog>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="mt-2 space-y-1">
+                                                                                        {floor.rooms.map((room) => (
+                                                                                            <div key={room.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted">
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <DoorOpen className="h-4 w-4 text-muted-foreground" />
+                                                                                                    <span>{room.name}</span>
+                                                                                                </div>
+                                                                                                <AlertDialog>
+                                                                                                    <AlertDialogTrigger asChild>
+                                                                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                                                                        </Button>
+                                                                                                    </AlertDialogTrigger>
+                                                                                                    <AlertDialogContent>
+                                                                                                        <AlertDialogHeader>
+                                                                                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                                                                            <AlertDialogDescription>
+                                                                                                                This action cannot be undone. This will permanently delete the room.
+                                                                                                            </AlertDialogDescription>
+                                                                                                        </AlertDialogHeader>
+                                                                                                        <AlertDialogFooter>
+                                                                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                                                            <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
+                                                                                                        </AlertDialogFooter>
+                                                                                                    </AlertDialogContent>
+                                                                                                </AlertDialog>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        {floor.rooms.length === 0 && <div className="text-center text-muted-foreground p-2 text-sm">No rooms added yet.</div>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))
+                                                                        ) : (
+                                                                            <div className="text-center text-muted-foreground p-4">No floors added yet.</div>
+                                                                        )}
+                                                                    </AccordionContent>
+                                                                </AccordionItem>
+                                                            </Accordion>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-center text-muted-foreground p-4">No buildings added yet.</div>
+                                                    )}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    </Accordion>
+                                ))}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))
+            ) : (
+                <div className="text-center text-muted-foreground p-6">No complexes added yet.</div>
+            )}
+            </Accordion>
         </CardContent>
       </Card>
 
@@ -374,7 +401,7 @@ export default function ResidencesPage() {
               <DialogTitle>Add New Floor</DialogTitle>
               <DialogDescription>
                 Enter the name for the new floor.
-              </DialogDescription>
+              </Description>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -402,7 +429,7 @@ export default function ResidencesPage() {
               <DialogTitle>Add New Room</DialogTitle>
               <DialogDescription>
                 Enter the name for the new room.
-              </DialogDescription>
+              </Description>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -425,5 +452,3 @@ export default function ResidencesPage() {
     </div>
   );
 }
-
-    
