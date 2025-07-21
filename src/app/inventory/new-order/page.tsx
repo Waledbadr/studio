@@ -7,28 +7,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Minus, Trash2, Search } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { AddItemDialog } from '@/components/inventory/add-item-dialog';
-import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface OrderItem extends InventoryItem {
     quantity: number;
 }
 
 export default function NewOrderPage() {
-    const { items: allItems, addItem, loading, loadInventory } = useInventory();
+    const { items: allItems, loading, loadInventory } = useInventory();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-    const [quantity, setQuantity] = useState(1);
     const { toast } = useToast();
-
-    // For ComboBox
-    const [open, setOpen] = useState(false);
-    const [selectedValue, setSelectedValue] = useState(''); // This will be the item ID
-    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
      useEffect(() => {
@@ -36,23 +27,15 @@ export default function NewOrderPage() {
     }, [loadInventory]);
 
 
-    const handleAddItemToOrder = () => {
-        if (!selectedValue) {
-            toast({ title: "Error", description: "Please select an item.", variant: "destructive" });
-            return;
-        }
+    const handleAddItemToOrder = (itemToAdd: InventoryItem) => {
+        const existingItem = orderItems.find(item => item.id === itemToAdd.id);
 
-        if (orderItems.find(item => item.id === selectedValue)) {
-            toast({ title: "Error", description: "Item is already in the order.", variant: "destructive" });
-            return;
-        }
-
-        const itemToAdd = allItems.find(item => item.id === selectedValue);
-        if (itemToAdd) {
-            setOrderItems([...orderItems, { ...itemToAdd, quantity }]);
-            setSelectedValue('');
-            setQuantity(1);
-            setSearchQuery('');
+        if (existingItem) {
+            // If item already exists, just increment its quantity
+            handleQuantityChange(itemToAdd.id, existingItem.quantity + 1);
+        } else {
+            // Otherwise, add it to the order with quantity 1
+            setOrderItems([...orderItems, { ...itemToAdd, quantity: 1 }]);
         }
     };
     
@@ -61,7 +44,9 @@ export default function NewOrderPage() {
     }
     
     const handleQuantityChange = (id: string, newQuantity: number) => {
-        if (newQuantity >= 1) {
+        if (newQuantity < 1) {
+            handleRemoveItem(id); // Remove item if quantity goes below 1
+        } else {
             setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: newQuantity} : item));
         }
     }
@@ -76,153 +61,122 @@ export default function NewOrderPage() {
         setOrderItems([]);
     }
 
-    const handleAddNewItem = (newItem: Omit<InventoryItem, 'id'>) => {
-        addItem(newItem);
-        setOpen(false);
-    }
-    
-    const currentSelectedItem = allItems.find(item => item.id === selectedValue);
+    const filteredItems = allItems.filter(item => 
+        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
 
     return (
         <div className="space-y-6">
-            <AddItemDialog
-                isOpen={isAddDialogOpen}
-                onOpenChange={setIsAddDialogOpen}
-                onItemAdded={handleAddNewItem}
-                initialName={searchQuery}
-            />
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Create New Monthly Order</CardTitle>
-                    <CardDescription>Search for items from the inventory to create a new purchase order.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                   <div className="flex items-end gap-4">
-                       <div className="flex-1">
-                            <label className="text-sm font-medium">Item</label>
-                            {loading ? <Skeleton className="h-10 w-full" /> : (
-                                <Popover open={open} onOpenChange={setOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={open}
-                                        className="w-full justify-between"
-                                        >
-                                        {currentSelectedItem
-                                            ? `${currentSelectedItem.nameAr} / ${currentSelectedItem.nameEn}`
-                                            : "Select item..."}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                        <Command shouldFilter={false}>
-                                            <CommandInput 
-                                                placeholder="Search item..." 
-                                                value={searchQuery}
-                                                onValueChange={setSearchQuery}
-                                            />
-                                            <CommandList>
-                                                <CommandEmpty>
-                                                    <div className='p-4 text-sm text-center'>
-                                                        No item found. <br/>
-                                                        <Button 
-                                                            variant="link"
-                                                            className="p-0 h-auto"
-                                                            onClick={() => {
-                                                                setOpen(false);
-                                                                setIsAddDialogOpen(true);
-                                                            }}>
-                                                                Add "{searchQuery}"
-                                                        </Button>
-                                                    </div>
-                                                </CommandEmpty>
-                                                <CommandGroup>
-                                                    {allItems
-                                                    .filter(item => 
-                                                        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                                        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-                                                    )
-                                                    .map((item) => (
-                                                    <CommandItem
-                                                        key={item.id}
-                                                        value={item.id}
-                                                        onSelect={(currentId) => {
-                                                            setSelectedValue(currentId === selectedValue ? "" : currentId);
-                                                            setOpen(false);
-                                                        }}
-                                                    >
-                                                        <Check
-                                                        className={cn(
-                                                            "mr-2 h-4 w-4",
-                                                            selectedValue === item.id ? "opacity-100" : "opacity-0"
-                                                        )}
-                                                        />
-                                                        {item.nameAr} / {item.nameEn}
-                                                    </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            )}
-                       </div>
-                       <div>
-                           <label className="text-sm font-medium">Quantity</label>
-                           <Input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value, 10))} min="1" className="w-24"/>
-                       </div>
-                       <Button onClick={handleAddItemToOrder}>
-                           <PlusCircle className="mr-2 h-4 w-4" />
-                           Add to Order
-                       </Button>
-                   </div>
-                </CardContent>
-            </Card>
+             <div className="flex items-center justify-between">
+                <div>
+                <h1 className="text-2xl font-bold">Create New Monthly Order</h1>
+                <p className="text-muted-foreground">Select items from the inventory to build your purchase order.</p>
+                </div>
+                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0}>
+                    Submit Order ({totalOrderQuantity} items)
+                </Button>
+            </div>
             
-            <Card>
-                <CardHeader>
-                    <CardTitle>Order Items</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Item</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Unit</TableHead>
-                                <TableHead className="w-[120px]">Quantity</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {orderItems.length > 0 ? orderItems.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell className="font-medium">{item.nameAr} / {item.nameEn}</TableCell>
-                                    <TableCell>{item.category}</TableCell>
-                                    <TableCell>{item.unit}</TableCell>
-                                    <TableCell>
-                                        <Input type="number" value={item.quantity} onChange={e => handleQuantityChange(item.id, parseInt(e.target.value, 10))} min="1" />
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                                            <Trash2 className="h-4 w-4 text-destructive"/>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center text-muted-foreground">No items added to the order yet.</TableCell>
-                                </TableRow>
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Available Inventory</CardTitle>
+                        <CardDescription>Click the '+' to add an item to your order.</CardDescription>
+                         <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                type="search"
+                                placeholder="Search items..."
+                                className="pl-8 w-full"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                         <ScrollArea className="h-[450px]">
+                            {loading ? (
+                                <div className="space-y-4">
+                                    <Skeleton className="h-12 w-full" />
+                                    <Skeleton className="h-12 w-full" />
+                                    <Skeleton className="h-12 w-full" />
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {filteredItems.length > 0 ? filteredItems.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
+                                            <div>
+                                                <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {item.stock} {item.unit}</p>
+                                            </div>
+                                            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )) : (
+                                        <div className="text-center text-muted-foreground py-10">No items match your search.</div>
+                                    )}
+                                </div>
                             )}
-                        </TableBody>
-                    </Table>
-                    <div className="flex justify-end mt-6">
-                        <Button onClick={handleSubmitOrder}>Submit Order</Button>
-                    </div>
-                </CardContent>
-            </Card>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Current Order</CardTitle>
+                        <CardDescription>Review and adjust the items in your order.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[450px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Item</TableHead>
+                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
+                                        <TableHead className="text-right w-[50px]">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {orderItems.length > 0 ? orderItems.map(item => (
+                                        <TableRow key={item.id}>
+                                            <TableCell className="font-medium">
+                                                {item.nameAr} / {item.nameEn}
+                                                <div className="text-xs text-muted-foreground">{item.category}</div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
+                                                    <Input type="number" value={item.quantity} readOnly className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your order is empty.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+           </div>
         </div>
     )
 }
+
+    
