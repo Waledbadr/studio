@@ -62,10 +62,9 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    // If already subscribed, don't subscribe again.
     if (unsubscribeRef.current) {
-      setLoading(false);
-      return;
+        setLoading(false);
+        return;
     }
 
     setLoading(true);
@@ -81,7 +80,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   useEffect(() => {
-    // Cleanup subscription on unmount
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
@@ -116,15 +114,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
         return;
     }
-    const newBuilding = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
-    await updateDoc(doc(db, "residences", complexId), {
+    const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+    const complexDocRef = doc(db, "residences", complexId);
+    await updateDoc(complexDocRef, {
       buildings: arrayUnion(newBuilding)
     });
     toast({ title: "Success", description: "New building added to the complex." });
   };
   
   const addFloor = async (complexId: string, buildingId: string, name: string) => {
-    if (!db) {
+     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
@@ -135,10 +134,17 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
         return;
     }
-    const newFloor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
-    const updatedBuildings = complex?.buildings.map(b => b.id === buildingId ? {...b, floors: [...b.floors, newFloor]} : b);
-    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
-    toast({ title: "Success", description: "New floor added to the building." });
+
+    const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
+
+    const updatedBuildings = complex?.buildings.map(b => 
+        b.id === buildingId ? {...b, floors: [...b.floors, newFloor]} : b
+    );
+
+    if (updatedBuildings) {
+        await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+        toast({ title: "Success", description: "New floor added to the building." });
+    }
   };
 
   const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string) => {
@@ -154,7 +160,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
         return;
     }
-    const newRoom = { id: `room-${Date.now()}`, name: trimmedName };
+    const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
             ...b,
@@ -163,8 +169,11 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             )
         } : b
     );
-    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
-    toast({ title: "Success", description: "New room added to the floor." });
+
+    if (updatedBuildings) {
+        await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+        toast({ title: "Success", description: "New room added to the floor." });
+    }
   };
 
   const deleteComplex = async (id: string) => {
