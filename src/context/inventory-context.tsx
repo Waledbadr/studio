@@ -22,7 +22,6 @@ export interface InventoryItem {
 interface InventoryContextType {
   items: InventoryItem[];
   loading: boolean;
-  setItems: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
   addItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   loadInventory: () => void;
@@ -59,41 +58,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const hasCheckedForSeed = useRef(false);
-
-  const checkAndSeedData = useCallback(async () => {
-    if (!db || hasCheckedForSeed.current) return;
-    hasCheckedForSeed.current = true;
-    
-    try {
-      const inventoryCollection = collection(db, "inventory");
-      const snapshot = await getDocs(inventoryCollection);
-      if (snapshot.empty) {
-        console.log("Inventory collection is empty, seeding data...");
-        await seedInventoryData();
-      }
-    } catch (error) {
-      console.error("Error checking or seeding inventory data: ", error);
-      toast({ title: "Firestore Error", description: "Could not check for initial inventory data.", variant: "destructive" });
-    }
-  }, [toast]);
-  
+  const loadingStartedRef = useRef(false);
 
   const loadInventory = useCallback(() => {
     if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
       setLoading(false);
       return;
     }
 
-    if (unsubscribeRef.current) {
-        setLoading(false);
-        return;
-    }
-
-    checkAndSeedData();
-
+    if (loadingStartedRef.current) return;
+    loadingStartedRef.current = true;
     setLoading(true);
+
     const inventoryCollection = collection(db, "inventory");
+
+    // Check for initial data and seed if necessary
+    getDocs(inventoryCollection).then(snapshot => {
+        if (snapshot.empty) {
+            console.log("Inventory collection is empty, seeding data...");
+            seedInventoryData();
+        }
+    }).catch(error => {
+        console.error("Error checking or seeding inventory data: ", error);
+        toast({ title: "Firestore Error", description: "Could not check for initial inventory data.", variant: "destructive" });
+    });
 
     unsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
@@ -104,15 +93,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
         setLoading(false);
     });
-  }, [toast, checkAndSeedData]);
+
+  }, [toast]);
   
   useEffect(() => {
+    loadInventory();
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
     };
-  }, []);
+  }, [loadInventory]);
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
     if (!db) {
@@ -149,7 +140,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <InventoryContext.Provider value={{ items, setItems, loading, addItem, deleteItem, loadInventory }}>
+    <InventoryContext.Provider value={{ items, loading, addItem, deleteItem, loadInventory }}>
       {children}
     </InventoryContext.Provider>
   );

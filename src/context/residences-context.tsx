@@ -98,41 +98,31 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const hasCheckedForSeed = useRef(false);
-
-  const checkAndSeedData = useCallback(async () => {
-    if (!db || hasCheckedForSeed.current) return;
-    hasCheckedForSeed.current = true;
-    
-    try {
-      const residencesCollection = collection(db, "residences");
-      const snapshot = await getDocs(residencesCollection);
-      if (snapshot.empty) {
-        console.log("Residences collection is empty, seeding data...");
-        await seedResidencesData();
-      }
-    } catch (error) {
-      console.error("Error checking or seeding residences data: ", error);
-      toast({ title: "Firestore Error", description: "Could not check for initial residences data.", variant: "destructive" });
-    }
-  }, [toast]);
+  const loadingStartedRef = useRef(false);
 
   const loadResidences = useCallback(() => {
     if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         setLoading(false);
         return;
     }
     
-    if (unsubscribeRef.current) {
-        setLoading(false);
-        return;
-    }
-
-    checkAndSeedData();
-
+    if (loadingStartedRef.current) return;
+    loadingStartedRef.current = true;
     setLoading(true);
+
     const residencesCollection = collection(db, "residences");
     
+    getDocs(residencesCollection).then(snapshot => {
+        if (snapshot.empty) {
+            console.log("Residences collection is empty, seeding data...");
+            seedResidencesData();
+        }
+    }).catch(error => {
+        console.error("Error checking or seeding residences data: ", error);
+        toast({ title: "Firestore Error", description: "Could not check for initial residences data.", variant: "destructive" });
+    });
+
     unsubscribeRef.current = onSnapshot(residencesCollection, (snapshot) => {
         const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
         setResidences(residencesData);
@@ -142,15 +132,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
     });
-  }, [toast, checkAndSeedData]);
+  }, [toast]);
 
    useEffect(() => {
+    loadResidences();
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
     };
-  }, []);
+  }, [loadResidences]);
 
   const addComplex = async (name: string) => {
     if (!db) {
