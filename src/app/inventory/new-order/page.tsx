@@ -148,8 +148,8 @@ export default function NewOrderPage() {
                                                     <CommandItem
                                                         key={item.id}
                                                         value={item.id}
-                                                        onSelect={(currentValue) => {
-                                                            setSelectedValue(currentValue === selectedValue ? "" : currentValue);
+                                                        onSelect={(currentId) => {
+                                                            setSelectedValue(currentId === selectedValue ? "" : currentId);
                                                             setOpen(false);
                                                         }}
                                                     >
