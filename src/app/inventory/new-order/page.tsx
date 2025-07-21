@@ -149,8 +149,8 @@ export default function NewOrderPage() {
                                                         key={item.id}
                                                         value={item.id}
                                                         onSelect={(currentValue) => {
-                                                            setSelectedValue(currentValue === selectedValue ? "" : currentValue)
-                                                            setOpen(false)
+                                                            setSelectedValue(currentValue === selectedValue ? "" : currentValue);
+                                                            setOpen(false);
                                                         }}
                                                     >
                                                         <Check
