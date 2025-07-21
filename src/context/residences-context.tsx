@@ -47,7 +47,7 @@ interface ResidencesContextType {
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file.";
+const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
@@ -149,18 +149,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const deleteBuilding = async (complexId: string, buildingId: string) => {
      if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
-    const buildingToRemove = complex?.buildings.find(b => b.id === buildingId);
-    if (buildingToRemove) {
-      const complexRef = doc(db, "residences", complexId);
-      const updatedBuildings = complex.buildings.filter(b => b.id !== buildingId);
-      await updateDoc(complexRef, { buildings: updatedBuildings });
-      toast({ title: "Success", description: "Building deleted successfully." });
-    }
+    if (!complex) return;
+    const updatedBuildings = complex.buildings.filter(b => b.id !== buildingId);
+    await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+    toast({ title: "Success", description: "Building deleted successfully." });
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
      if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
+    if (!complex) return;
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
             ...b,
@@ -174,6 +172,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
      if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
+    if (!complex) return;
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
             ...b,

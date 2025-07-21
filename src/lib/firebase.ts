@@ -18,15 +18,25 @@ let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let auth: Auth | undefined;
 
-// Initialize Firebase only if all env variables are set
-if (
+// Check that all required environment variables are present and not empty
+const allConfigPresent =
   firebaseConfig.apiKey &&
   firebaseConfig.authDomain &&
-  firebaseConfig.projectId
-) {
+  firebaseConfig.projectId &&
+  firebaseConfig.storageBucket &&
+  firebaseConfig.messagingSenderId &&
+  firebaseConfig.appId;
+
+
+// Initialize Firebase only if all env variables are set
+if (allConfigPresent) {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   db = getFirestore(app);
   auth = getAuth(app);
+} else {
+    if (typeof window !== 'undefined') {
+        console.warn("Firebase configuration is missing or incomplete. Please check your .env file. App will run in offline mode.");
+    }
 }
 
 export { app, db, auth };
