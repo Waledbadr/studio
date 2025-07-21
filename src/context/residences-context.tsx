@@ -98,7 +98,24 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const isSeeding = useRef(false);
+  const hasCheckedForSeed = useRef(false);
+
+  const checkAndSeedData = useCallback(async () => {
+    if (!db || hasCheckedForSeed.current) return;
+    hasCheckedForSeed.current = true;
+    
+    try {
+      const residencesCollection = collection(db, "residences");
+      const snapshot = await getDocs(residencesCollection);
+      if (snapshot.empty) {
+        console.log("Residences collection is empty, seeding data...");
+        await seedResidencesData();
+      }
+    } catch (error) {
+      console.error("Error checking or seeding residences data: ", error);
+      toast({ title: "Firestore Error", description: "Could not check for initial residences data.", variant: "destructive" });
+    }
+  }, [toast]);
 
   const loadResidences = useCallback(() => {
     if (!db) {
@@ -111,20 +128,11 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
+    checkAndSeedData();
+
     setLoading(true);
     const residencesCollection = collection(db, "residences");
     
-    // Check for initial data and seed if necessary
-    getDocs(residencesCollection).then(snapshot => {
-        if (snapshot.empty && !isSeeding.current) {
-            isSeeding.current = true;
-            console.log("Residences collection is empty, seeding data...");
-            seedResidencesData().finally(() => {
-                isSeeding.current = false;
-            });
-        }
-    });
-
     unsubscribeRef.current = onSnapshot(residencesCollection, (snapshot) => {
         const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
         setResidences(residencesData);
@@ -134,7 +142,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
     });
-  }, [toast]);
+  }, [toast, checkAndSeedData]);
 
    useEffect(() => {
     return () => {

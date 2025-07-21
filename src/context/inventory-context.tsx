@@ -59,7 +59,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const isSeeding = useRef(false);
+  const hasCheckedForSeed = useRef(false);
+
+  const checkAndSeedData = useCallback(async () => {
+    if (!db || hasCheckedForSeed.current) return;
+    hasCheckedForSeed.current = true;
+    
+    try {
+      const inventoryCollection = collection(db, "inventory");
+      const snapshot = await getDocs(inventoryCollection);
+      if (snapshot.empty) {
+        console.log("Inventory collection is empty, seeding data...");
+        await seedInventoryData();
+      }
+    } catch (error) {
+      console.error("Error checking or seeding inventory data: ", error);
+      toast({ title: "Firestore Error", description: "Could not check for initial inventory data.", variant: "destructive" });
+    }
+  }, [toast]);
+  
 
   const loadInventory = useCallback(() => {
     if (!db) {
@@ -72,18 +90,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
+    checkAndSeedData();
+
     setLoading(true);
     const inventoryCollection = collection(db, "inventory");
-
-    getDocs(inventoryCollection).then(snapshot => {
-        if (snapshot.empty && !isSeeding.current) {
-            isSeeding.current = true;
-            console.log("Inventory collection is empty, seeding data...");
-            seedInventoryData().finally(() => {
-                isSeeding.current = false;
-            });
-        }
-    });
 
     unsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
@@ -94,7 +104,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
         setLoading(false);
     });
-  }, [toast]);
+  }, [toast, checkAndSeedData]);
   
   useEffect(() => {
     return () => {
