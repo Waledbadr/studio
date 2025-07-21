@@ -45,11 +45,10 @@ interface ResidencesContextType {
   deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
 }
 
-
-// Create the context with a default value
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
-// Create a provider component
+const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file.";
+
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +56,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!db) {
-      console.warn("Firebase (db) is not initialized. Skipping Firestore connection.");
+      console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
       setLoading(false);
       return;
     }
@@ -69,7 +68,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching residences:", error);
-      toast({ title: "Error", description: "Could not fetch residences data. Is your Firebase config correct?", variant: "destructive" });
+      toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
     });
 
@@ -77,7 +76,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const addComplex = async (name: string) => {
-    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+    if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const trimmedName = name.trim();
     if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
         toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
@@ -89,7 +88,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addBuilding = async (complexId: string, name: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     if (complex?.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
@@ -104,7 +103,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const addFloor = async (complexId: string, buildingId: string, name: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     const building = complex?.buildings.find(b => b.id === buildingId);
@@ -119,7 +118,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const trimmedName = name.trim();
     const complex = residences.find(c => c.id === complexId);
     const building = complex?.buildings.find(b => b.id === buildingId);
@@ -142,13 +141,13 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteComplex = async (id: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     await deleteDoc(doc(db, "residences", id));
     toast({ title: "Success", description: "Complex deleted successfully." });
   }
 
   const deleteBuilding = async (complexId: string, buildingId: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const buildingToRemove = complex?.buildings.find(b => b.id === buildingId);
     if (buildingToRemove) {
@@ -160,7 +159,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
@@ -173,7 +172,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
-     if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+     if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const complex = residences.find(c => c.id === complexId);
     const updatedBuildings = complex?.buildings.map(b => 
         b.id === buildingId ? {
@@ -195,7 +194,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Create a custom hook to use the context
 export const useResidences = () => {
   const context = useContext(ResidencesContext);
   if (context === undefined) {

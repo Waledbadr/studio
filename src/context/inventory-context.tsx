@@ -29,6 +29,8 @@ interface InventoryContextType {
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
+const firebaseErrorMessage = "Firebase is not configured. Please add your credentials to the .env file.";
+
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +38,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!db) {
-      console.warn("Firebase (db) is not initialized. Skipping Firestore connection.");
+      console.warn("Firebase (db) is not initialized. App will not connect to Firestore.");
       setLoading(false);
       return;
     }
@@ -47,7 +49,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, (error) => {
         console.error("Error fetching inventory:", error);
-        toast({ title: "Error", description: "Could not fetch inventory data. Is your Firebase config correct?", variant: "destructive" });
+        toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
         setLoading(false);
     });
     
@@ -55,7 +57,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>) => {
-    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+    if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
     if (isDuplicate) {
       toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
@@ -72,7 +74,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteItem = async (id: string) => {
-    if (!db) return toast({ title: "Error", description: "Firebase not configured.", variant: "destructive" });
+    if (!db) return toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
     try {
       await deleteDoc(doc(db, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
