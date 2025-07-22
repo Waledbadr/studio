@@ -7,12 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useInventory, type InventoryItem, type ItemCategory } from '@/context/inventory-context';
+import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { translateItemName } from '@/ai/flows/translate-item-flow';
-import { Loader2, ChevronsUpDown, Check } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AddItemDialogProps {
     isOpen: boolean;
@@ -38,15 +36,12 @@ export function AddItemDialog({
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
-    const { categories, addCategory } = useInventory();
-    const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
-    const [categoryInputValue, setCategoryInputValue] = useState("");
+    const { categories } = useInventory();
 
     useEffect(() => {
         if (isOpen) {
             setName(initialName);
             setCategory('');
-            setCategoryInputValue('');
             setUnit('');
             setStock('');
         }
@@ -54,27 +49,21 @@ export function AddItemDialog({
 
     const handleAddItem = (e: React.FormEvent) => {
         e.preventDefault();
-        const finalCategory = category || categoryInputValue;
 
-        if (!name || !finalCategory || !unit || !stock) {
+        if (!name || !category || !unit || !stock) {
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
 
         startTransition(async () => {
             try {
-                const categoryExists = categories.some(c => c.toLowerCase() === finalCategory.toLowerCase().trim());
-                if (!categoryExists) {
-                    await addCategory(finalCategory);
-                }
-
                 const translationResult = await translateItemName({ name: name });
 
                 const newInventoryItem: Omit<InventoryItem, 'id'> = {
                     name: name,
                     nameAr: translationResult.arabicName,
                     nameEn: translationResult.englishName,
-                    category: finalCategory,
+                    category: category,
                     unit: unit,
                     stock: parseInt(stock, 10),
                 };
@@ -93,12 +82,6 @@ export function AddItemDialog({
         });
     };
     
-    const handleCategorySelect = (currentValue: string) => {
-        setCategory(currentValue);
-        setCategoryInputValue(currentValue);
-        setCategoryPopoverOpen(false);
-    };
-
     const dialogContent = (
          <DialogContent>
             <form onSubmit={handleAddItem}>
@@ -107,77 +90,33 @@ export function AddItemDialog({
                 <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="item-name" className="text-right">Name</Label>
-                    <Input id="item-name" placeholder="e.g., Light Bulbs or مصابيح" className="col-span-3" value={name} onChange={e => setName(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="item-category" className="text-right">Category</Label>
-                     <Popover open={isCategoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={isCategoryPopoverOpen}
-                                className="w-full justify-between col-span-3"
-                            >
-                                {category || "Select category..."}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                            <Command>
-                                <CommandInput 
-                                    placeholder="Search or add category..."
-                                    value={categoryInputValue}
-                                    onValueChange={setCategoryInputValue}
-                                />
-                                <CommandList>
-                                    <CommandEmpty>
-                                        <div className="p-4 text-sm text-center">
-                                            No category found. <br />
-                                            <Button
-                                                variant="link"
-                                                className="p-0 h-auto"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleCategorySelect(categoryInputValue);
-                                                }}
-                                            >
-                                                Add and select "{categoryInputValue}"
-                                            </Button>
-                                        </div>
-                                    </CommandEmpty>
-                                    <CommandGroup>
-                                        {categories.map((cat) => (
-                                            <CommandItem
-                                                key={cat}
-                                                value={cat}
-                                                onSelect={handleCategorySelect}
-                                            >
-                                                <Check
-                                                    className={cn(
-                                                        "mr-2 h-4 w-4",
-                                                        category === cat ? "opacity-100" : "opacity-0"
-                                                    )}
-                                                />
-                                                {cat}
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                            </Command>
-                        </PopoverContent>
-                    </Popover>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="item-unit" className="text-right">Unit</Label>
-                    <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="item-stock" className="text-right">Stock</Label>
-                    <Input id="item-stock" type="number" placeholder="e.g., 100" className="col-span-3" value={stock} onChange={e => setStock(e.target.value)} />
-                </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="item-name" className="text-right">Name</Label>
+                        <Input id="item-name" placeholder="e.g., Light Bulbs or مصابيح" className="col-span-3" value={name} onChange={e => setName(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="item-category" className="text-right">Category</Label>
+                        <Select onValueChange={setCategory} value={category}>
+                             <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {categories.map((cat) => (
+                                    <SelectItem key={cat} value={cat}>
+                                        {cat}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="item-unit" className="text-right">Unit</Label>
+                        <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="item-stock" className="text-right">Stock</Label>
+                        <Input id="item-stock" type="number" placeholder="e.g., 100" className="col-span-3" value={stock} onChange={e => setStock(e.target.value)} />
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button type="submit" disabled={isPending}>
