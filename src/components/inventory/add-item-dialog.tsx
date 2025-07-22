@@ -40,11 +40,13 @@ export function AddItemDialog({
     const [isPending, startTransition] = useTransition();
     const { categories, addCategory } = useInventory();
     const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
-    
+    const [categoryInputValue, setCategoryInputValue] = useState("");
+
     useEffect(() => {
         if (isOpen) {
             setName(initialName);
             setCategory('');
+            setCategoryInputValue('');
             setUnit('');
             setStock('');
         }
@@ -52,17 +54,18 @@ export function AddItemDialog({
 
     const handleAddItem = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || !category || !unit || !stock) {
+        const finalCategory = category || categoryInputValue;
+
+        if (!name || !finalCategory || !unit || !stock) {
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
 
         startTransition(async () => {
             try {
-
-                const categoryExists = categories.some(c => c.toLowerCase() === category.toLowerCase().trim());
+                const categoryExists = categories.some(c => c.toLowerCase() === finalCategory.toLowerCase().trim());
                 if (!categoryExists) {
-                    await addCategory(category);
+                    await addCategory(finalCategory);
                 }
 
                 const translationResult = await translateItemName({ name: name });
@@ -71,7 +74,7 @@ export function AddItemDialog({
                     name: name,
                     nameAr: translationResult.arabicName,
                     nameEn: translationResult.englishName,
-                    category: category,
+                    category: finalCategory,
                     unit: unit,
                     stock: parseInt(stock, 10),
                 };
@@ -91,8 +94,8 @@ export function AddItemDialog({
     };
     
     const handleCategorySelect = (currentValue: string) => {
-        const newValue = currentValue === category ? '' : currentValue;
-        setCategory(newValue);
+        setCategory(currentValue);
+        setCategoryInputValue(currentValue);
         setCategoryPopoverOpen(false);
     };
 
@@ -118,9 +121,7 @@ export function AddItemDialog({
                                 aria-expanded={isCategoryPopoverOpen}
                                 className="w-full justify-between col-span-3"
                             >
-                                {category
-                                    ? categories.find((c) => c.toLowerCase() === category.toLowerCase()) || category
-                                    : "Select category..."}
+                                {category || "Select category..."}
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                         </PopoverTrigger>
@@ -128,7 +129,8 @@ export function AddItemDialog({
                             <Command>
                                 <CommandInput 
                                     placeholder="Search or add category..."
-                                    onValueChange={setCategory}
+                                    value={categoryInputValue}
+                                    onValueChange={setCategoryInputValue}
                                 />
                                 <CommandList>
                                     <CommandEmpty>
@@ -139,10 +141,10 @@ export function AddItemDialog({
                                                 className="p-0 h-auto"
                                                 onClick={(e) => {
                                                     e.preventDefault();
-                                                    handleCategorySelect(category);
+                                                    handleCategorySelect(categoryInputValue);
                                                 }}
                                             >
-                                                Add and select "{category}"
+                                                Add and select "{categoryInputValue}"
                                             </Button>
                                         </div>
                                     </CommandEmpty>
@@ -156,7 +158,7 @@ export function AddItemDialog({
                                                 <Check
                                                     className={cn(
                                                         "mr-2 h-4 w-4",
-                                                        category.toLowerCase() === cat.toLowerCase() ? "opacity-100" : "opacity-0"
+                                                        category === cat ? "opacity-100" : "opacity-0"
                                                     )}
                                                 />
                                                 {cat}
