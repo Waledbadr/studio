@@ -7,9 +7,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import type { InventoryItem, ItemCategory } from '@/context/inventory-context';
+import { useInventory, type InventoryItem, type ItemCategory } from '@/context/inventory-context';
 import { translateItemName } from '@/ai/flows/translate-item-flow';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronsUpDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 interface AddItemDialogProps {
     isOpen: boolean;
@@ -35,6 +37,9 @@ export function AddItemDialog({
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
+    const { categories } = useInventory();
+    const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -93,7 +98,36 @@ export function AddItemDialog({
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-category" className="text-right">Category</Label>
-                     <Input id="item-category" placeholder="e.g., Electrical, Cleaning" className="col-span-3" value={category} onChange={e => setCategory(e.target.value)} />
+                     <Popover open={isCategoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" role="combobox" aria-expanded={isCategoryPopoverOpen} className="w-full justify-between col-span-3">
+                                {category ? categories.find(c => c.toLowerCase() === category.toLowerCase()) || 'Select category...' : 'Select category...'}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                           <Command>
+                                <CommandInput placeholder="Search or add category..." onValueChange={setCategory} value={category}/>
+                                <CommandList>
+                                    <CommandEmpty>No category found. Type to add.</CommandEmpty>
+                                    <CommandGroup>
+                                        {categories.map((cat) => (
+                                            <CommandItem
+                                                key={cat}
+                                                value={cat}
+                                                onSelect={(currentValue) => {
+                                                    setCategory(currentValue === category ? '' : currentValue);
+                                                    setCategoryPopoverOpen(false);
+                                                }}
+                                            >
+                                                {cat}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                           </Command>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="item-unit" className="text-right">Unit</Label>

@@ -4,10 +4,10 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc } from "firebase/firestore";
 
 
-export type ItemCategory = 'cleaning' | 'electrical' | 'plumbing' | string;
+export type ItemCategory = string;
 
 export interface InventoryItem {
   id: string;
@@ -21,10 +21,13 @@ export interface InventoryItem {
 
 interface InventoryContextType {
   items: InventoryItem[];
+  categories: string[];
   loading: boolean;
   addItem: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
   deleteItem: (id: string) => Promise<void>;
   loadInventory: () => void;
+  addCategory: (category: string) => Promise<void>;
+  updateCategory: (oldName: string, newName: string) => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -34,9 +37,11 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const unsubscribeRef = useRef<Unsubscribe | null>(null);
+  const inventoryUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const categoriesUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
 
   const loadInventory = useCallback(() => {
@@ -52,8 +57,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const inventoryCollection = collection(db, "inventory");
-    
-    unsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
+    inventoryUnsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
       setItems(inventoryData);
       setLoading(false);
@@ -63,17 +67,95 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
     });
 
-  }, [toast]);
+    const categoriesCollection = collection(db, "inventory-categories");
+    categoriesUnsubscribeRef.current = onSnapshot(categoriesCollection, (snapshot) => {
+      if (snapshot.docs.length > 0) {
+        const categoriesData = snapshot.docs[0].data();
+        setCategories(categoriesData.names || []);
+      } else {
+        // If no categories doc, derive from items and create it
+        const uniqueCategories = Array.from(new Set(items.map(item => item.category)));
+        setCategories(uniqueCategories);
+        if (uniqueCategories.length > 0) {
+          const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+          setDoc(categoriesDocRef, { names: uniqueCategories });
+        }
+      }
+    }, (error) => {
+       console.error("Error fetching categories:", error);
+       toast({ title: "Firestore Error", description: "Could not fetch categories data.", variant: "destructive" });
+    });
+
+
+  }, [toast, items]);
   
   useEffect(() => {
     loadInventory();
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        isLoaded.current = false;
+      if (inventoryUnsubscribeRef.current) {
+        inventoryUnsubscribeRef.current();
       }
+      if (categoriesUnsubscribeRef.current) {
+        categoriesUnsubscribeRef.current();
+      }
+      isLoaded.current = false;
     };
   }, [loadInventory]);
+
+  const addCategory = async (newCategory: string) => {
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    const trimmedCategory = newCategory.trim().toLowerCase();
+    if (categories.map(c => c.toLowerCase()).includes(trimmedCategory)) {
+       toast({ title: "Error", description: "This category already exists.", variant: "destructive" });
+       return;
+    }
+    try {
+      const updatedCategories = [...categories, newCategory.trim()];
+      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
+      toast({ title: "Success", description: "Category added." });
+    } catch(error) {
+      console.error("Error adding category: ", error);
+      toast({ title: "Error", description: "Failed to add category.", variant: "destructive" });
+    }
+  }
+
+  const updateCategory = async (oldName: string, newName: string) => {
+     if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    const trimmedNewName = newName.trim();
+    if (categories.map(c => c.toLowerCase()).includes(trimmedNewName.toLowerCase())) {
+        toast({ title: "Error", description: "A category with this name already exists.", variant: "destructive" });
+        return;
+    }
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Update categories document
+      const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
+      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      batch.set(categoriesDocRef, { names: updatedCategories });
+      
+      // 2. Update all items with the old category name
+      const itemsToUpdateQuery = query(collection(db, "inventory"), where("category", "==", oldName));
+      const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
+      itemsToUpdateSnapshot.forEach(itemDoc => {
+        const itemRef = doc(db, "inventory", itemDoc.id);
+        batch.update(itemRef, { category: trimmedNewName });
+      });
+
+      await batch.commit();
+      toast({ title: "Success", description: "Category updated successfully." });
+    } catch (error) {
+       console.error("Error updating category: ", error);
+       toast({ title: "Error", description: "Failed to update category.", variant: "destructive" });
+    }
+  };
 
   const addItem = async (newItem: Omit<InventoryItem, 'id'>): Promise<InventoryItem | void> => {
     if (!db) {
@@ -89,6 +171,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const docRef = doc(collection(db, "inventory"));
       const itemWithId = { ...newItem, id: docRef.id };
       await setDoc(docRef, itemWithId);
+      
+      const newCategory = newItem.category.toLowerCase();
+      if (!categories.map(c => c.toLowerCase()).includes(newCategory)) {
+        addCategory(newItem.category);
+      }
+
       toast({ title: "Success", description: "New item added to inventory." });
       return itemWithId;
     } catch (error) {
@@ -112,7 +200,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <InventoryContext.Provider value={{ items, loading, addItem, deleteItem, loadInventory }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, deleteItem, loadInventory, addCategory, updateCategory }}>
       {children}
     </InventoryContext.Provider>
   );
@@ -125,3 +213,4 @@ export const useInventory = () => {
   }
   return context;
 };
+

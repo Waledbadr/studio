@@ -6,15 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Trash2, Edit } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 export default function InventoryPage() {
-  const { items, loading, addItem, deleteItem, loadInventory } = useInventory();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { items, loading, addItem, deleteItem, loadInventory, categories, addCategory, updateCategory } = useInventory();
+  const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
+  const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
+  const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategory, setEditingCategory] = useState<{ oldName: string; newName: string } | null>(null);
+  const { toast } = useToast();
   
   useEffect(() => {
     loadInventory();
@@ -28,10 +37,34 @@ export default function InventoryPage() {
     addItem(newItem);
   }
 
-  const categories = useMemo(() => {
-    const allCategories = items.map(item => item.category);
-    return ['all', ...Array.from(new Set(allCategories))];
-  }, [items]);
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) {
+        toast({ title: "Error", description: "Category name cannot be empty.", variant: "destructive" });
+        return;
+    }
+    addCategory(newCategoryName);
+    setNewCategoryName('');
+    setIsAddCategoryDialogOpen(false);
+  }
+
+  const handleUpdateCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editingCategory.newName.trim()) {
+        toast({ title: "Error", description: "Category name cannot be empty.", variant: "destructive" });
+        return;
+    }
+    updateCategory(editingCategory.oldName, editingCategory.newName);
+    setEditingCategory(null);
+    setIsEditCategoryDialogOpen(false);
+  }
+  
+  const openEditCategoryDialog = (category: string) => {
+    if (category === 'all') return;
+    setEditingCategory({ oldName: category, newName: category });
+    setIsEditCategoryDialogOpen(true);
+  }
+
 
   const renderItemsTable = (category: string) => {
     const filteredItems = category === 'all' ? items : items.filter(item => item.category === category);
@@ -94,8 +127,8 @@ export default function InventoryPage() {
         </div>
         <div className="flex gap-2">
           <AddItemDialog 
-            isOpen={isDialogOpen} 
-            onOpenChange={setIsDialogOpen} 
+            isOpen={isAddItemDialogOpen} 
+            onOpenChange={setIsAddItemDialogOpen} 
             onItemAdded={handleItemAdded}
             triggerButton={
               <Button>
@@ -114,16 +147,49 @@ export default function InventoryPage() {
       <Card>
         <CardContent className="p-0">
           <Tabs defaultValue="all">
-            <div className="border-b p-4">
+            <div className="border-b p-4 flex justify-between items-center">
                 <TabsList>
-                    {categories.map((category) => (
-                      <TabsTrigger key={category} value={category} className="capitalize">
+                    {['all', ...categories].map((category) => (
+                      <TabsTrigger key={category} value={category} className="capitalize group relative pr-8">
                         {category === 'all' ? 'All Items' : category}
+                        {category !== 'all' && (
+                             <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditCategoryDialog(category);
+                                }}
+                            >
+                                <Pencil className="h-3 w-3" />
+                            </Button>
+                        )}
                       </TabsTrigger>
                     ))}
                 </TabsList>
+                <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Add Category</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <form onSubmit={handleAddCategory}>
+                            <DialogHeader>
+                                <DialogTitle>Add New Category</DialogTitle>
+                                <DialogDescription>Enter the name for the new inventory category.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                               <Label htmlFor="category-name">Category Name</Label>
+                               <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="e.g., Landscaping"/>
+                            </div>
+                            <DialogFooter>
+                                <Button type="submit">Save Category</Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
-             {categories.map((category) => (
+             {['all', ...categories].map((category) => (
                 <TabsContent key={category} value={category} className="p-6 pt-0">
                     {renderItemsTable(category)}
                 </TabsContent>
@@ -131,6 +197,33 @@ export default function InventoryPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Edit Category Dialog */}
+      <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
+          <DialogContent>
+              <form onSubmit={handleUpdateCategory}>
+                  <DialogHeader>
+                      <DialogTitle>Edit Category Name</DialogTitle>
+                      <DialogDescription>
+                          Renaming a category will update it for all associated items.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                      <Label htmlFor="edit-category-name">New Category Name</Label>
+                      <Input 
+                        id="edit-category-name" 
+                        value={editingCategory?.newName || ''} 
+                        onChange={(e) => editingCategory && setEditingCategory({...editingCategory, newName: e.target.value})}
+                        placeholder="e.g., General Maintenance"
+                      />
+                  </div>
+                  <DialogFooter>
+                      <Button type="submit" disabled={!editingCategory || editingCategory.oldName === editingCategory.newName}>Save Changes</Button>
+                  </DialogFooter>
+              </form>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
