@@ -40,16 +40,13 @@ export function AddItemDialog({
     const [isPending, startTransition] = useTransition();
     const { categories, addCategory } = useInventory();
     const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
-    const [newCategoryValue, setNewCategoryValue] = useState('');
-
-
+    
     useEffect(() => {
         if (isOpen) {
             setName(initialName);
             setCategory('');
             setUnit('');
             setStock('');
-            setNewCategoryValue('');
         }
     }, [isOpen, initialName]);
 
@@ -92,6 +89,12 @@ export function AddItemDialog({
             }
         });
     };
+    
+    const handleCategorySelect = (currentValue: string) => {
+        const newValue = currentValue === category ? '' : currentValue;
+        setCategory(newValue);
+        setCategoryPopoverOpen(false);
+    };
 
     const dialogContent = (
          <DialogContent>
@@ -125,8 +128,7 @@ export function AddItemDialog({
                             <Command>
                                 <CommandInput 
                                     placeholder="Search or add category..."
-                                    value={newCategoryValue}
-                                    onValueChange={setNewCategoryValue}
+                                    onValueChange={setCategory}
                                 />
                                 <CommandList>
                                     <CommandEmpty>
@@ -137,11 +139,10 @@ export function AddItemDialog({
                                                 className="p-0 h-auto"
                                                 onClick={(e) => {
                                                     e.preventDefault();
-                                                    setCategory(newCategoryValue);
-                                                    setCategoryPopoverOpen(false);
+                                                    handleCategorySelect(category);
                                                 }}
                                             >
-                                                Add "{newCategoryValue}"
+                                                Add and select "{category}"
                                             </Button>
                                         </div>
                                     </CommandEmpty>
@@ -150,11 +151,7 @@ export function AddItemDialog({
                                             <CommandItem
                                                 key={cat}
                                                 value={cat}
-                                                onSelect={(currentValue) => {
-                                                    setCategory(currentValue === category ? "" : currentValue);
-                                                    setNewCategoryValue("");
-                                                    setCategoryPopoverOpen(false);
-                                                }}
+                                                onSelect={handleCategorySelect}
                                             >
                                                 <Check
                                                     className={cn(
