@@ -60,6 +60,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     inventoryUnsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
       setItems(inventoryData);
+       const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
+       if (categories.length === 0 && uniqueCategories.length > 0) {
+           const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+           getDoc(categoriesDocRef).then(docSnap => {
+               if (!docSnap.exists()) {
+                   setDoc(categoriesDocRef, { names: uniqueCategories });
+               }
+           });
+       }
       setLoading(false);
     }, (error) => {
         console.error("Error fetching inventory:", error);
@@ -72,14 +81,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       if (snapshot.docs.length > 0) {
         const categoriesData = snapshot.docs[0].data();
         setCategories(categoriesData.names || []);
-      } else {
-        // If no categories doc, derive from items and create it
-        const uniqueCategories = Array.from(new Set(items.map(item => item.category)));
-        setCategories(uniqueCategories);
-        if (uniqueCategories.length > 0) {
-          const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
-          setDoc(categoriesDocRef, { names: uniqueCategories });
-        }
       }
     }, (error) => {
        console.error("Error fetching categories:", error);
@@ -87,7 +88,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
 
 
-  }, [toast, items]);
+  }, [toast]);
   
   useEffect(() => {
     loadInventory();
@@ -213,4 +214,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
