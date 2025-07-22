@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function InventoryPage() {
   const { items, loading, addItem, deleteItem, loadInventory, categories, addCategory, updateCategory } = useInventory();
@@ -153,17 +155,21 @@ export default function InventoryPage() {
                       <TabsTrigger key={category} value={category} className="capitalize group relative pr-8">
                         {category === 'all' ? 'All Items' : category}
                         {category !== 'all' && (
-                             <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100"
+                             <span
+                                role="button"
+                                className={cn(
+                                    buttonVariants({ variant: "ghost", size: "icon" }),
+                                    "absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100"
+                                )}
                                 onClick={(e) => {
                                     e.stopPropagation();
+                                    e.preventDefault();
                                     openEditCategoryDialog(category);
                                 }}
                             >
                                 <Pencil className="h-3 w-3" />
-                            </Button>
+                                <span className="sr-only">Edit category</span>
+                            </span>
                         )}
                       </TabsTrigger>
                     ))}
@@ -226,4 +232,3 @@ export default function InventoryPage() {
     </div>
   );
 }
-
