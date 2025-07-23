@@ -36,7 +36,7 @@ export default function InventoryPage() {
   }
 
   const handleItemAdded = (newItem: Omit<InventoryItem, 'id'>) => {
-    addItem(newItem);
+    return addItem(newItem);
   }
 
   const handleAddCategory = (e: React.FormEvent) => {
