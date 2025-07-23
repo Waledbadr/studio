@@ -47,7 +47,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded.current) return;
     if (!db) {
       console.error(firebaseErrorMessage);
-      toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+      // We can't use toast here directly as it might not be initialized
+      // This is a safe guard.
+      setTimeout(() => {
+        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+      }, 100)
       setLoading(false);
       return;
     }
