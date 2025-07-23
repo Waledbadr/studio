@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 
 export default function ResidencesPage() {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading } = useUsers();
   const { toast } = useToast();
 
@@ -44,10 +44,15 @@ export default function ResidencesPage() {
     loadUsersContext();
   }, [loadResidences, loadUsersContext]);
 
+  // State for Add Dialogs
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
   const [newComplexCity, setNewComplexCity] = useState('');
   const [newComplexManagerId, setNewComplexManagerId] = useState('');
+
+  // State for Edit Dialog
+  const [isEditComplexDialogOpen, setIsEditComplexDialogOpen] = useState(false);
+  const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
 
   const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
@@ -59,7 +64,7 @@ export default function ResidencesPage() {
 
   const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
-  const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: grandParentId, buildingId: parentId, floorId: id } | null>(null);
+  const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
 
   const groupedByCity = useMemo(() => {
     return residences.reduce((acc, complex) => {
@@ -99,6 +104,27 @@ export default function ResidencesPage() {
     setNewComplexCity('');
     setNewComplexManagerId('');
     setIsAddComplexDialogOpen(false);
+  };
+  
+  const handleOpenEditDialog = (complex: Complex) => {
+    setEditingComplex(complex);
+    setIsEditComplexDialogOpen(true);
+  };
+  
+  const handleUpdateComplex = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingComplex) return;
+    if (!editingComplex.name.trim() || !editingComplex.city.trim() || !editingComplex.managerId) {
+      toast({ title: 'Error', description: 'Please fill all fields.', variant: 'destructive' });
+      return;
+    }
+    updateComplex(editingComplex.id, {
+        name: editingComplex.name,
+        city: editingComplex.city,
+        managerId: editingComplex.managerId,
+    });
+    setIsEditComplexDialogOpen(false);
+    setEditingComplex(null);
   };
 
   const handleAddBuilding = (e: React.FormEvent) => {
@@ -224,6 +250,9 @@ export default function ResidencesPage() {
                      <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('building', complex.id)}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Building
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(complex)}>
+                           <Pencil className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -412,6 +441,59 @@ export default function ResidencesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      
+      {/* Edit Complex Dialog */}
+      <Dialog open={isEditComplexDialogOpen} onOpenChange={setIsEditComplexDialogOpen}>
+          <DialogContent>
+              <form onSubmit={handleUpdateComplex}>
+                  <DialogHeader>
+                      <DialogTitle>Edit Complex</DialogTitle>
+                      <DialogDescription>Update the details for the residential complex.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-complex-name" className="text-right">Name</Label>
+                          <Input 
+                              id="edit-complex-name" 
+                              className="col-span-3" 
+                              value={editingComplex?.name || ''} 
+                              onChange={(e) => editingComplex && setEditingComplex({...editingComplex, name: e.target.value})}
+                          />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-complex-city" className="text-right">City</Label>
+                          <Input 
+                              id="edit-complex-city" 
+                              className="col-span-3" 
+                              value={editingComplex?.city || ''} 
+                              onChange={(e) => editingComplex && setEditingComplex({...editingComplex, city: e.target.value})}
+                          />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-complex-manager" className="text-right">Manager</Label>
+                          <Select 
+                              onValueChange={(managerId) => editingComplex && setEditingComplex({...editingComplex, managerId})} 
+                              value={editingComplex?.managerId}
+                          >
+                              <SelectTrigger className="col-span-3">
+                                  <SelectValue placeholder="Select a manager" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {users.map((user) => (
+                                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  </div>
+                  <DialogFooter>
+                      <Button type="button" variant="ghost" onClick={() => setIsEditComplexDialogOpen(false)}>Cancel</Button>
+                      <Button type="submit">Save Changes</Button>
+                  </DialogFooter>
+              </form>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

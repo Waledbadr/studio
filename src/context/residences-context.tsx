@@ -33,12 +33,16 @@ export interface Complex {
   buildings: Building[];
 }
 
+export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
+
+
 // Define the shape of our context
 interface ResidencesContextType {
   residences: Complex[];
   loading: boolean;
   loadResidences: () => void;
   addComplex: (name: string, city: string, managerId: string) => Promise<void>;
+  updateComplex: (id: string, payload: UpdateComplexPayload) => Promise<void>;
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
@@ -107,6 +111,21 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     const docRef = doc(collection(db, "residences"));
     await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [] });
     toast({ title: "Success", description: "New residential complex added." });
+  };
+  
+  const updateComplex = async (id: string, payload: UpdateComplexPayload) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", id);
+        await updateDoc(complexDocRef, payload);
+        toast({ title: "Success", description: "Complex details updated." });
+    } catch (error) {
+        console.error("Error updating complex:", error);
+        toast({ title: "Error", description: "Failed to update complex.", variant: "destructive" });
+    }
   };
 
   const addBuilding = async (complexId: string, name: string) => {
@@ -295,7 +314,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
+    <ResidencesContext.Provider value={{ residences, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
       {children}
     </ResidencesContext.Provider>
   );
@@ -308,3 +327,4 @@ export const useResidences = () => {
   }
   return context;
 };
+
