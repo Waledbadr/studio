@@ -47,8 +47,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded.current) return;
     if (!db) {
       console.error(firebaseErrorMessage);
-      // We can't use toast here directly as it might not be initialized
-      // This is a safe guard.
       setTimeout(() => {
         toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
       }, 100)
@@ -62,7 +60,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     const ordersCollection = collection(db, "orders");
     unsubscribeRef.current = onSnapshot(ordersCollection, (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      // Sort by date descending
       ordersData.sort((a, b) => b.date.toMillis() - a.date.toMillis());
       setOrders(ordersData);
       setLoading(false);
@@ -71,7 +68,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch orders data.", variant: "destructive" });
       setLoading(false);
     });
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadOrders();
@@ -112,7 +109,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
       return null;
     }
-     setLoading(true);
     try {
         const orderDocRef = doc(db, "orders", id);
         const docSnap = await getDoc(orderDocRef);
@@ -126,8 +122,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error fetching order:", error);
         toast({ title: "Error", description: "Failed to fetch order details.", variant: "destructive" });
         return null;
-    } finally {
-        setLoading(false);
     }
   }
 

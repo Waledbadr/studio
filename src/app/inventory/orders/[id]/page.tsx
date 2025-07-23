@@ -15,13 +15,20 @@ import { format } from 'date-fns';
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { getOrderById, loading } = useOrders();
+    const { getOrderById } = useOrders();
     const [order, setOrder] = useState<Order | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (typeof id === 'string') {
-            getOrderById(id).then(setOrder);
-        }
+        const fetchOrder = async () => {
+            if (typeof id === 'string') {
+                setLoading(true);
+                const fetchedOrder = await getOrderById(id);
+                setOrder(fetchedOrder);
+                setLoading(false);
+            }
+        };
+        fetchOrder();
     }, [id, getOrderById]);
     
     const handlePrint = () => {
