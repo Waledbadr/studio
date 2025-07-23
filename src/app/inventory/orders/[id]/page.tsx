@@ -8,16 +8,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { useUsers } from '@/context/users-context';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { getOrderById } = useOrders();
+    const { users, loading: usersLoading } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // This is a temporary placeholder for auth. 
+    // In a real app, you would get the current user from your auth context.
+    const currentUser = users[0]; 
+    const isAdmin = currentUser?.role === 'Admin';
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -34,8 +41,13 @@ export default function OrderDetailPage() {
     const handlePrint = () => {
         window.print();
     }
+    
+    const handleEdit = () => {
+        // TODO: Navigate to an edit page, which could reuse the new-order component
+        alert("Edit functionality to be implemented in the next step.");
+    }
 
-    if (loading) {
+    if (loading || usersLoading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-10 w-48" />
@@ -85,10 +97,18 @@ export default function OrderDetailPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Orders
                 </Button>
-                <Button onClick={handlePrint}>
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print Order
-                </Button>
+                <div className="flex items-center gap-2">
+                    {isAdmin && (
+                         <Button variant="secondary" onClick={handleEdit}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Order
+                        </Button>
+                    )}
+                    <Button onClick={handlePrint}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print Order
+                    </Button>
+                </div>
             </div>
 
              <Card className="print:shadow-none print:border-none">
@@ -112,36 +132,41 @@ export default function OrderDetailPage() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="pt-6 space-y-6">
-                    {Object.entries(groupedItems).map(([category, items]) => (
-                        <div key={category}>
-                             <h3 className="text-lg font-semibold mb-2 capitalize border-b pb-2">{category}</h3>
-                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[100px]">ID</TableHead>
-                                        <TableHead>Item Name (Arabic)</TableHead>
-                                        <TableHead>Item Name (English)</TableHead>
-                                        <TableHead>Unit</TableHead>
-                                        <TableHead className="text-right">Quantity</TableHead>
+                <CardContent className="pt-6">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[100px]">ID</TableHead>
+                                <TableHead>Item Name (Arabic)</TableHead>
+                                <TableHead>Item Name (English)</TableHead>
+                                <TableHead>Unit</TableHead>
+                                <TableHead className="text-center">Stock</TableHead>
+                                <TableHead className="text-right">Quantity</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {Object.entries(groupedItems).map(([category, items]) => (
+                                <React.Fragment key={category}>
+                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                        <TableCell colSpan={6} className="font-semibold text-primary capitalize py-2">
+                                            {category}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
                                     {items.map(item => (
                                         <TableRow key={item.id}>
-                                            <TableCell>{item.id.slice(0,6)}</TableCell>
+                                            <TableCell className="font-mono text-xs">{item.id.slice(0,6)}</TableCell>
                                             <TableCell>{item.nameAr}</TableCell>
                                             <TableCell>{item.nameEn}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
+                                            <TableCell className="text-center">{item.stock}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>
                                         </TableRow>
                                     ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    ))}
+                                </React.Fragment>
+                            ))}
+                        </TableBody>
+                    </Table>
                     
-
                     <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4">
                         Total Quantity: {totalItems}
                     </div>
