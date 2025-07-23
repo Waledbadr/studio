@@ -29,6 +29,7 @@ export interface Complex {
   id: string;
   name: string;
   city: string;
+  managerId: string;
   buildings: Building[];
 }
 
@@ -37,7 +38,7 @@ interface ResidencesContextType {
   residences: Complex[];
   loading: boolean;
   loadResidences: () => void;
-  addComplex: (name: string, city: string) => Promise<void>;
+  addComplex: (name: string, city: string, managerId: string) => Promise<void>;
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
@@ -93,7 +94,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadResidences]);
 
-  const addComplex = async (name: string, city: string) => {
+  const addComplex = async (name: string, city: string, managerId: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -104,7 +105,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     const docRef = doc(collection(db, "residences"));
-    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), buildings: [] });
+    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [] });
     toast({ title: "Success", description: "New residential complex added." });
   };
 
@@ -307,5 +308,3 @@ export const useResidences = () => {
   }
   return context;
 };
-
-    

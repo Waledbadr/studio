@@ -30,17 +30,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room } from '@/context/residences-context';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUsers } from '@/context/users-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ResidencesPage() {
   const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom } = useResidences();
+  const { users, loadUsers: loadUsersContext, loading: usersLoading } = useUsers();
+  const { toast } = useToast();
 
   useEffect(() => {
     loadResidences();
-  }, [loadResidences]);
+    loadUsersContext();
+  }, [loadResidences, loadUsersContext]);
 
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
   const [newComplexCity, setNewComplexCity] = useState('');
+  const [newComplexManagerId, setNewComplexManagerId] = useState('');
 
   const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
@@ -52,7 +59,7 @@ export default function ResidencesPage() {
 
   const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
-  const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
+  const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: grandParentId, buildingId: parentId, floorId: id } | null>(null);
 
   const groupedByCity = useMemo(() => {
     return residences.reduce((acc, complex) => {
@@ -83,10 +90,14 @@ export default function ResidencesPage() {
 
   const handleAddComplex = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newComplexName.trim() === '' || newComplexCity.trim() === '') return;
-    addComplex(newComplexName, newComplexCity);
+    if (!newComplexName.trim() || !newComplexCity.trim() || !newComplexManagerId) {
+        toast({ title: 'Error', description: 'Please fill all fields, including manager.', variant: 'destructive' });
+        return;
+    }
+    addComplex(newComplexName, newComplexCity, newComplexManagerId);
     setNewComplexName('');
     setNewComplexCity('');
+    setNewComplexManagerId('');
     setIsAddComplexDialogOpen(false);
   };
 
@@ -118,8 +129,14 @@ export default function ResidencesPage() {
     setIsAddRoomDialogOpen(false);
     setSelectedFloorInfo(null);
   };
+  
+  const getManagerName = (managerId: string) => {
+    const manager = users.find(u => u.id === managerId);
+    return manager ? manager.name : "N/A";
+  };
 
-  if (loading) {
+
+  if (loading || usersLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -170,6 +187,19 @@ export default function ResidencesPage() {
                   <Label htmlFor="complex-city" className="text-right">City</Label>
                   <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={newComplexCity} onChange={(e) => setNewComplexCity(e.target.value)} />
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-manager" className="text-right">Manager</Label>
+                    <Select onValueChange={setNewComplexManagerId} value={newComplexManagerId}>
+                        <SelectTrigger className="col-span-3">
+                            <SelectValue placeholder="Select a manager" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {users.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit">Save Complex</Button>
@@ -189,7 +219,7 @@ export default function ResidencesPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle>{complex.name}</CardTitle>
-                      <CardDescription>A residential complex located in {complex.city}.</CardDescription>
+                      <CardDescription>Manager: {getManagerName(complex.managerId)}</CardDescription>
                     </div>
                      <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('building', complex.id)}>
