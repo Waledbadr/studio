@@ -5,33 +5,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileDown, ListFilter, MoreHorizontal } from 'lucide-react';
+import { ListFilter, MoreHorizontal, ArrowRight } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
-
-// The shape of a purchase order.
-// In a real app, this would be defined in a shared types file.
-type PurchaseOrder = { 
-    id: string; 
-    date: string;
-    supplier: string;
-    itemCount: number;
-    totalValue: number;
-    status: 'Pending' | 'Approved' | 'Delivered' | 'Cancelled'; 
-};
-
-// NOTE: This is mock data. 
-// In a real application, you would fetch this data from your database.
-const allPurchaseOrders: PurchaseOrder[] = [
-    { id: 'PO-2024-001', date: '2024-07-15', supplier: 'Global Building Supplies', itemCount: 15, totalValue: 3450.00, status: 'Delivered' },
-    { id: 'PO-2024-002', date: '2024-07-18', supplier: 'Sanitary Solutions Ltd.', itemCount: 8, totalValue: 1250.50, status: 'Pending' },
-    { id: 'PO-2024-003', date: '2024-07-20', supplier: 'Electrical Components Inc.', itemCount: 32, totalValue: 8790.25, status: 'Approved' },
-    { id: 'PO-2024-004', date: '2024-07-21', supplier: 'General Maintenance Tools', itemCount: 5, totalValue: 450.00, status: 'Cancelled' },
-];
-
+import { useOrders, type Order } from "@/context/orders-context";
+import { useEffect, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
+import { format } from 'date-fns';
 
 export default function PurchaseOrdersPage() {
-    const [orders, setOrders] = useState<PurchaseOrder[]>(allPurchaseOrders);
+    const { orders, loading, loadOrders } = useOrders();
+    const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+
+    useEffect(() => {
+        loadOrders();
+    }, [loadOrders]);
+
+    useEffect(() => {
+        setFilteredOrders(orders);
+    }, [orders]);
+
+
+    const renderSkeleton = () => (
+        Array.from({ length: 5 }).map((_, i) => (
+             <TableRow key={`skeleton-${i}`}>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
+            </TableRow>
+        ))
+    );
 
     return (
         <div className="space-y-6">
@@ -56,10 +62,6 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem>Delivered</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button variant="outline" className="h-9 gap-1">
-                        <FileDown className="h-3.5 w-3.5" />
-                        <span>Export</span>
-                    </Button>
                 </div>
             </div>
             
@@ -72,19 +74,17 @@ export default function PurchaseOrdersPage() {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Supplier</TableHead>
                                 <TableHead>Items</TableHead>
-                                <TableHead>Total Value</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {orders.length > 0 ? orders.map((order) => (
-                                <TableRow key={order.id}>
-                                    <TableCell className="font-medium">{order.id}</TableCell>
-                                    <TableCell>{order.date}</TableCell>
+                            {loading ? renderSkeleton() : filteredOrders.length > 0 ? filteredOrders.map((order) => (
+                                <TableRow key={order.id} className="cursor-pointer" onClick={() => window.location.href=`/inventory/orders/${order.id}`}>
+                                    <TableCell className="font-medium">{order.id.slice(-6).toUpperCase()}</TableCell>
+                                    <TableCell>{format(order.date.toDate(), 'PPP')}</TableCell>
                                     <TableCell>{order.supplier}</TableCell>
-                                    <TableCell>{order.itemCount}</TableCell>
-                                    <TableCell>AED {order.totalValue.toFixed(2)}</TableCell>
+                                    <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
                                     <TableCell>
                                         <Badge variant={
                                             order.status === 'Delivered' ? 'default' 
@@ -96,18 +96,11 @@ export default function PurchaseOrdersPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                                <DropdownMenuItem>Mark as Delivered</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">Cancel Order</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                         <Button asChild variant="ghost" size="icon">
+                                            <Link href={`/inventory/orders/${order.id}`}>
+                                                <ArrowRight className="h-4 w-4" />
+                                            </Link>
+                                         </Button>
                                     </TableCell>
                                 </TableRow>
                             )) : (

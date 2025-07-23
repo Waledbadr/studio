@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ResidencesProvider } from '@/context/residences-context';
 import { InventoryProvider } from '@/context/inventory-context';
 import { UsersProvider } from '@/context/users-context';
+import { OrdersProvider } from '@/context/orders-context';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -30,7 +31,9 @@ export default function RootLayout({
         <ResidencesProvider>
           <InventoryProvider>
             <UsersProvider>
+              <OrdersProvider>
                 <AppLayout>{children}</AppLayout>
+              </OrdersProvider>
             </UsersProvider>
           </InventoryProvider>
         </ResidencesProvider>

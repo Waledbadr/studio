@@ -7,22 +7,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2 } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { useOrders } from '@/context/orders-context';
+import type { OrderItem } from '@/context/orders-context';
+import { useRouter } from 'next/navigation';
 
-interface OrderItem extends InventoryItem {
-    quantity: number;
-}
 
 export default function NewOrderPage() {
     const { items: allItems, loading, loadInventory, addItem } = useInventory();
+    const { createOrder, loading: ordersLoading } = useOrders();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
+    const router = useRouter();
+
 
     useEffect(() => {
         loadInventory();
@@ -52,21 +55,28 @@ export default function NewOrderPage() {
     const handleQuantityChange = (id: string, newQuantity: number) => {
         const quantity = isNaN(newQuantity) || newQuantity < 1 ? 1 : newQuantity;
         
-        if (quantity < 1) {
-            handleRemoveItem(id); // Remove item if quantity goes below 1
-        } else {
-            setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
-        }
+        setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
     }
     
-    const handleSubmitOrder = () => {
+    const handleSubmitOrder = async () => {
         if (orderItems.length === 0) {
             toast({ title: "Error", description: "Cannot submit an empty order.", variant: "destructive" });
             return;
         }
-        console.log("Order Submitted: ", orderItems);
-        toast({ title: "Success", description: "Your order has been submitted." });
-        setOrderItems([]);
+
+        // Create a basic order object. In a real app, you might add more details.
+        const newOrderData = {
+            supplier: "Global Building Supplies", // Example supplier
+            items: orderItems,
+        };
+        
+        const newOrderId = await createOrder(newOrderData);
+
+        if (newOrderId) {
+            toast({ title: "Success", description: "Your order has been submitted." });
+            setOrderItems([]);
+            router.push(`/inventory/orders/${newOrderId}`);
+        }
     }
 
     const filteredItems = allItems.filter(item => 
@@ -89,8 +99,12 @@ export default function NewOrderPage() {
                 <h1 className="text-2xl font-bold">Create New Monthly Order</h1>
                 <p className="text-muted-foreground">Select items from the inventory to build your purchase order.</p>
                 </div>
-                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0}>
-                    Submit Order ({totalOrderQuantity} items)
+                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading}>
+                    {ordersLoading ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                    ) : (
+                        `Submit Order (${totalOrderQuantity} items)`
+                    )}
                 </Button>
             </div>
             
@@ -209,3 +223,4 @@ export default function NewOrderPage() {
     )
 
     
+}
