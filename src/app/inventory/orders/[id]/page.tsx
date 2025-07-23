@@ -69,6 +69,15 @@ export default function OrderDetailPage() {
 
     const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
+    const groupedItems = order.items.reduce((acc, item) => {
+        const category = item.category || 'Uncategorized';
+        if (!acc[category]) {
+            acc[category] = [];
+        }
+        acc[category].push(item);
+        return acc;
+    }, {} as Record<string, Order['items']>);
+
     return (
         <div className="space-y-6 print:space-y-4">
             <div className="flex items-center justify-between print:hidden">
@@ -103,33 +112,37 @@ export default function OrderDetailPage() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="pt-6">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[100px]">ID</TableHead>
-                                <TableHead>Item Name (Arabic)</TableHead>
-                                <TableHead>Item Name (English)</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Unit</TableHead>
-                                <TableHead className="text-right">Quantity</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {order.items.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell>{item.id.slice(0,6)}</TableCell>
-                                    <TableCell>{item.nameAr}</TableCell>
-                                    <TableCell>{item.nameEn}</TableCell>
-                                    <TableCell>{item.category}</TableCell>
-                                    <TableCell>{item.unit}</TableCell>
-                                    <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                <CardContent className="pt-6 space-y-6">
+                    {Object.entries(groupedItems).map(([category, items]) => (
+                        <div key={category}>
+                             <h3 className="text-lg font-semibold mb-2 capitalize border-b pb-2">{category}</h3>
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[100px]">ID</TableHead>
+                                        <TableHead>Item Name (Arabic)</TableHead>
+                                        <TableHead>Item Name (English)</TableHead>
+                                        <TableHead>Unit</TableHead>
+                                        <TableHead className="text-right">Quantity</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {items.map(item => (
+                                        <TableRow key={item.id}>
+                                            <TableCell>{item.id.slice(0,6)}</TableCell>
+                                            <TableCell>{item.nameAr}</TableCell>
+                                            <TableCell>{item.nameEn}</TableCell>
+                                            <TableCell>{item.unit}</TableCell>
+                                            <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ))}
+                    
 
-                    <div className="mt-6 text-right font-bold text-lg pr-4">
+                    <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4">
                         Total Quantity: {totalItems}
                     </div>
                 </CardContent>
@@ -148,3 +161,4 @@ export default function OrderDetailPage() {
         </div>
     )
 }
+
