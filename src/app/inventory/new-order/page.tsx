@@ -50,10 +50,12 @@ export default function NewOrderPage() {
     }
     
     const handleQuantityChange = (id: string, newQuantity: number) => {
-        if (newQuantity < 1) {
+        const quantity = isNaN(newQuantity) || newQuantity < 1 ? 1 : newQuantity;
+        
+        if (quantity < 1) {
             handleRemoveItem(id); // Remove item if quantity goes below 1
         } else {
-            setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: newQuantity} : item));
+            setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
         }
     }
     
@@ -173,7 +175,7 @@ export default function NewOrderPage() {
                                                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
                                                         <Minus className="h-4 w-4" />
                                                     </Button>
-                                                    <Input type="number" value={item.quantity} readOnly className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                    <Input type="number" value={item.quantity} onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
@@ -205,4 +207,5 @@ export default function NewOrderPage() {
             />
         </div>
     )
-}
+
+    
