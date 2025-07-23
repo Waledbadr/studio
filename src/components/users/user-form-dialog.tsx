@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useResidences } from "@/context/residences-context";
 import { type User } from "@/context/users-context";
 import { Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const formSchema = z.object({
   id: z.string().optional(),
@@ -58,6 +59,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
   const form = useForm<UserFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      id: undefined,
       name: "",
       email: "",
       role: "Technician",
@@ -66,27 +68,33 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
   });
 
   useEffect(() => {
-    loadResidences();
-  }, [loadResidences]);
+    // We only need to load residences once
+    if (residences.length === 0) {
+        loadResidences();
+    }
+  }, [loadResidences, residences.length]);
 
   useEffect(() => {
-    if (user) {
-      form.reset({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        assignedResidences: user.assignedResidences || [],
-      });
-    } else {
-      form.reset({
-        name: "",
-        email: "",
-        role: "Technician",
-        assignedResidences: [],
-      });
+    if (isOpen) {
+      if (user) {
+        form.reset({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          assignedResidences: user.assignedResidences || [],
+        });
+      } else {
+        form.reset({
+          id: undefined,
+          name: "",
+          email: "",
+          role: "Technician",
+          assignedResidences: [],
+        });
+      }
     }
-  }, [user, form]);
+  }, [user, form, isOpen]);
 
   function onSubmit(data: UserFormData) {
     const userToSave: User = {
@@ -142,7 +150,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -169,39 +177,41 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                         Select the residences this user has access to.
                         </FormDescription>
                     </div>
-                    {residencesLoading ? <p>Loading residences...</p> : residences.map((residence) => (
-                        <FormField
-                        key={residence.id}
-                        control={form.control}
-                        name="assignedResidences"
-                        render={({ field }) => {
-                            return (
-                            <FormItem
-                                key={residence.id}
-                                className="flex flex-row items-start space-x-3 space-y-0"
-                            >
-                                <FormControl>
-                                <Checkbox
-                                    checked={field.value?.includes(residence.id)}
-                                    onCheckedChange={(checked) => {
-                                    return checked
-                                        ? field.onChange([...(field.value || []), residence.id])
-                                        : field.onChange(
-                                            (field.value || []).filter(
-                                                (value) => value !== residence.id
-                                            )
-                                            );
-                                    }}
-                                />
-                                </FormControl>
-                                <FormLabel className="font-normal">
-                                {residence.name}
-                                </FormLabel>
-                            </FormItem>
-                            );
-                        }}
-                        />
-                    ))}
+                    <ScrollArea className="h-40 rounded-md border p-4">
+                        {residencesLoading ? <p>Loading residences...</p> : residences.map((residence) => (
+                            <FormField
+                            key={residence.id}
+                            control={form.control}
+                            name="assignedResidences"
+                            render={({ field }) => {
+                                return (
+                                <FormItem
+                                    key={residence.id}
+                                    className="flex flex-row items-start space-x-3 space-y-0 mb-3"
+                                >
+                                    <FormControl>
+                                    <Checkbox
+                                        checked={field.value?.includes(residence.id)}
+                                        onCheckedChange={(checked) => {
+                                        return checked
+                                            ? field.onChange([...(field.value || []), residence.id])
+                                            : field.onChange(
+                                                (field.value || []).filter(
+                                                    (value) => value !== residence.id
+                                                )
+                                                );
+                                        }}
+                                    />
+                                    </FormControl>
+                                    <FormLabel className="font-normal">
+                                    {residence.name}
+                                    </FormLabel>
+                                </FormItem>
+                                );
+                            }}
+                            />
+                        ))}
+                    </ScrollArea>
                     <FormMessage />
                     </FormItem>
                 )}

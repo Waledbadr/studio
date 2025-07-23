@@ -1,22 +1,77 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, MoreHorizontal, Trash2, Edit } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-// MOCK DATA - Replace with actual data from context
-const users = [
-    { id: 'usr_1', name: 'Ahmed Al-Farsi', email: 'ahmed@email.com', role: 'Admin', assignedResidences: ['Seaside Residences'] },
-    { id: 'usr_2', name: 'Fatima Al-Marzooqi', email: 'fatima@email.com', role: 'Supervisor', assignedResidences: ['Seaside Residences', 'Hilltop Apartments'] },
-    { id: 'usr_3', name: 'Yusuf Al-Haddad', email: 'yusuf@email.com', role: 'Technician', assignedResidences: ['Seaside Residences'] },
-];
+import { useUsers, type User } from '@/context/users-context';
+import { useResidences } from '@/context/residences-context';
+import { UserFormDialog } from '@/components/users/user-form-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+
 
 export default function UsersPage() {
+    const { users, loading: usersLoading, saveUser, deleteUser, loadUsers } = useUsers();
+    const { residences, loadResidences } = useResidences();
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        loadUsers();
+        loadResidences();
+    }, [loadUsers, loadResidences]);
+
+    const handleAddNewUser = () => {
+        setSelectedUser(null);
+        setIsUserDialogOpen(true);
+    };
+
+    const handleEditUser = (user: User) => {
+        setSelectedUser(user);
+        setIsUserDialogOpen(true);
+    };
+
+    const handleSaveUser = async (userToSave: User) => {
+        setIsSaving(true);
+        try {
+            await saveUser(userToSave);
+            setIsUserDialogOpen(false);
+            setSelectedUser(null);
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to save user.", variant: "destructive" });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const handleDeleteUser = async (id: string) => {
+        await deleteUser(id);
+    };
+
+    const getResidenceNames = (residenceIds: string[]) => {
+        if (!residenceIds) return [];
+        return residenceIds.map(id => residences.find(res => res.id === id)?.name).filter(Boolean);
+    };
+
+    const renderSkeleton = () => (
+        Array.from({ length: 3 }).map((_, index) => (
+            <TableRow key={index}>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
+            </TableRow>
+        ))
+    );
 
     return (
         <div className="space-y-6">
@@ -25,7 +80,7 @@ export default function UsersPage() {
                     <h1 className="text-2xl font-bold">User Management</h1>
                     <p className="text-muted-foreground">Manage users and their permissions.</p>
                 </div>
-                <Button onClick={() => setIsUserDialogOpen(true)}>
+                <Button onClick={handleAddNewUser}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add User
                 </Button>
             </div>
@@ -47,7 +102,7 @@ export default function UsersPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {users.map((user) => (
+                            {usersLoading ? renderSkeleton() : users.map((user) => (
                                 <TableRow key={user.id}>
                                     <TableCell className="font-medium">{user.name}</TableCell>
                                     <TableCell>{user.email}</TableCell>
@@ -56,7 +111,7 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-wrap gap-1">
-                                            {user.assignedResidences.map(res => <Badge key={res} variant="outline">{res}</Badge>)}
+                                            {getResidenceNames(user.assignedResidences).map(name => <Badge key={name} variant="outline">{name}</Badge>)}
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -67,14 +122,28 @@ export default function UsersPage() {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleEditUser(user)}>
                                                     <Edit className="mr-2 h-4 w-4" />
                                                     Edit
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete
-                                                </DropdownMenuItem>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>This will permanently delete the user "{user.name}".</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -84,8 +153,14 @@ export default function UsersPage() {
                     </Table>
                 </CardContent>
             </Card>
-            {/* The UserFormDialog would be placed here */}
-            {/* <UserFormDialog isOpen={isUserDialogOpen} onOpenChange={setIsUserDialogOpen} /> */}
+
+            <UserFormDialog 
+                isOpen={isUserDialogOpen} 
+                onOpenChange={setIsUserDialogOpen}
+                onSave={handleSaveUser}
+                user={selectedUser}
+                isLoading={isSaving}
+             />
         </div>
     );
 }
