@@ -1,3 +1,4 @@
+
 'use client'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,17 +16,75 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState } from "react";
 
-const allMaintenanceRequests = [
-    { id: 'REQ-001', room: 'A-101', building: 'Building A', complex: 'Seaside Residences', issue: 'Leaky Faucet', status: 'Pending', priority: 'High', date: '2023-10-26' },
-    { id: 'REQ-002', room: 'C-305', building: 'Building C', complex: 'Seaside Residences', issue: 'Broken AC', status: 'In Progress', priority: 'High', date: '2023-10-25' },
-    { id: 'REQ-003', room: 'B-210', building: 'Building B', complex: 'Seaside Residences', issue: 'Window not closing', status: 'Completed', priority: 'Medium', date: '2023-10-24' },
-    { id: 'REQ-004', room: 'A-102', building: 'Building A', complex: 'Seaside Residences', issue: 'Clogged Toilet', status: 'Pending', priority: 'Low', date: '2023-10-23' },
-    { id: 'REQ-005', room: 'D-401', building: 'Building D', complex: 'Hilltop Apartments', issue: 'No hot water', status: 'In Progress', priority: 'High', date: '2023-10-22' },
-    { id: 'REQ-006', room: 'E-110', building: 'Building E', complex: 'Hilltop Apartments', issue: 'Power outlet not working', status: 'Completed', priority: 'Low', date: '2023-10-21' },
-];
+// The shape of a maintenance request.
+// In a real app, this would be defined in a shared types file.
+type MaintenanceRequest = { 
+    id: string; 
+    room: string; 
+    building: string; 
+    complex: string; 
+    issue: string; 
+    status: 'Pending' | 'In Progress' | 'Completed'; 
+    priority: 'Low' | 'Medium' | 'High'; 
+    date: string; 
+};
+
+// NOTE: The mock data has been removed. 
+// In a real application, you would fetch this data from your database.
+const allMaintenanceRequests: MaintenanceRequest[] = [];
+
 
 export default function MaintenancePage() {
+    const [requests, setRequests] = useState<MaintenanceRequest[]>(allMaintenanceRequests);
+    
+    // In a real app, you would have filtering logic here based on state
+    const pendingRequests = requests.filter(r => r.status === 'Pending');
+    const inProgressRequests = requests.filter(r => r.status === 'In Progress');
+    const completedRequests = requests.filter(r => r.status === 'Completed');
+
+    const renderRequestsTable = (requestsToRender: MaintenanceRequest[], emptyMessage: string) => {
+        return (
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Request ID</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Date</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {requestsToRender.length > 0 ? requestsToRender.map((request) => (
+                        <TableRow key={request.id}>
+                            <TableCell className="font-medium">{request.id}</TableCell>
+                            <TableCell>{`${request.complex}, ${request.building}, ${request.room}`}</TableCell>
+                            <TableCell>{request.issue}</TableCell>
+                            <TableCell>
+                                <Badge variant={
+                                    request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
+                                }>
+                                    {request.status}
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
+                            </TableCell>
+                            <TableCell>{request.date}</TableCell>
+                        </TableRow>
+                    )) : (
+                        <TableRow>
+                            <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">{emptyMessage}</TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        )
+    };
+
     return (
         <Tabs defaultValue="all" className="flex flex-col gap-4 h-full">
             <div className="flex items-center">
@@ -59,48 +118,26 @@ export default function MaintenancePage() {
                     </Button>
                 </div>
             </div>
-            <TabsContent value="all" className="flex-1">
-                <Card className="h-full">
-                    <CardHeader>
-                        <CardTitle>Maintenance Requests</CardTitle>
-                        <CardDescription>An overview of all maintenance requests.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Request ID</TableHead>
-                                    <TableHead>Location</TableHead>
-                                    <TableHead>Issue</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Priority</TableHead>
-                                    <TableHead>Date</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {allMaintenanceRequests.map((request) => (
-                                    <TableRow key={request.id}>
-                                        <TableCell className="font-medium">{request.id}</TableCell>
-                                        <TableCell>{`${request.complex}, ${request.building}, ${request.room}`}</TableCell>
-                                        <TableCell>{request.issue}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={
-                                                request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
-                                            }>
-                                                {request.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
-                                        </TableCell>
-                                        <TableCell>{request.date}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-            </TabsContent>
+            <Card className="h-full flex flex-col">
+                <CardHeader>
+                    <CardTitle>Maintenance Requests</CardTitle>
+                    <CardDescription>An overview of all maintenance requests.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col">
+                    <TabsContent value="all" className="flex-1">
+                        {renderRequestsTable(requests, "No maintenance requests found.")}
+                    </TabsContent>
+                     <TabsContent value="pending" className="flex-1">
+                        {renderRequestsTable(pendingRequests, "No pending requests.")}
+                    </TabsContent>
+                     <TabsContent value="in-progress" className="flex-1">
+                        {renderRequestsTable(inProgressRequests, "No requests in progress.")}
+                    </TabsContent>
+                     <TabsContent value="completed" className="flex-1">
+                        {renderRequestsTable(completedRequests, "No completed requests.")}
+                    </TabsContent>
+                </CardContent>
+            </Card>
         </Tabs>
     )
 }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Trash2, Edit, Pencil } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Pencil, ListOrdered } from 'lucide-react';
 import Link from 'next/link';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
@@ -138,7 +138,12 @@ export default function InventoryPage() {
               </Button>
             }
           />
-          <Button asChild variant="outline">
+           <Button asChild variant="secondary">
+            <Link href="/inventory/orders">
+              <ListOrdered className="mr-2 h-4 w-4" /> View Orders
+            </Link>
+          </Button>
+          <Button asChild>
             <Link href="/inventory/new-order">
               <PlusCircle className="mr-2 h-4 w-4" /> New Order
             </Link>
@@ -152,7 +157,7 @@ export default function InventoryPage() {
             <div className="border-b p-4 flex justify-between items-center">
                 <TabsList>
                     {['all', ...categories].map((category) => (
-                      <TabsTrigger key={category} value={category} className="capitalize group relative pr-8">
+                      <TabsTrigger key={category} value={category} className="capitalize group relative">
                         {category === 'all' ? 'All Items' : category}
                         {category !== 'all' && (
                              <span
