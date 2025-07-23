@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, UserCircle, ClipboardList, Settings } from 'lucide-react';
+import { Building, Home, Wrench, Bot, UserCircle, ClipboardList, Settings, Users } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -22,6 +22,7 @@ export function AppSidebar() {
     { href: '/residences', label: 'Residences', icon: Building },
     { href: '/maintenance', label: 'Maintenance', icon: Wrench },
     { href: '/inventory', label: 'Inventory', icon: ClipboardList },
+    { href: '/users', label: 'Users', icon: Users },
     { href: '/tools', label: 'AI Tools', icon: Bot },
     { href: '/setup', label: 'Setup', icon: Settings },
   ];
