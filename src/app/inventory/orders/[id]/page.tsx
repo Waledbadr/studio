@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useOrders, type Order } from '@/context/orders-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +35,9 @@ export default function OrderDetailPage() {
                 setLoading(false);
             }
         };
-        fetchOrder();
+        if (id) {
+            fetchOrder();
+        }
     }, [id, getOrderById]);
     
     const handlePrint = () => {
@@ -186,4 +188,3 @@ export default function OrderDetailPage() {
         </div>
     )
 }
-
