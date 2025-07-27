@@ -5,17 +5,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ListFilter, MoreHorizontal, ArrowRight } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useOrders, type Order } from "@/context/orders-context";
+import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
+import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { format } from 'date-fns';
+import { useRouter } from "next/navigation";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useUsers } from "@/context/users-context";
+
 
 export default function PurchaseOrdersPage() {
-    const { orders, loading, loadOrders } = useOrders();
+    const { orders, loading, loadOrders, deleteOrder, updateOrderStatus } = useOrders();
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+    const router = useRouter();
+
+    // This is a temporary placeholder for auth. 
+    // In a real app, you would get the current user from your auth context.
+    const { users } = useUsers();
+    const currentUser = users[0]; 
+    const isAdmin = currentUser?.role === 'Admin';
 
     useEffect(() => {
         loadOrders();
@@ -80,12 +91,12 @@ export default function PurchaseOrdersPage() {
                         </TableHeader>
                         <TableBody>
                             {loading ? renderSkeleton() : filteredOrders.length > 0 ? filteredOrders.map((order) => (
-                                <TableRow key={order.id} className="cursor-pointer" onClick={() => window.location.href=`/inventory/orders/${order.id}`}>
-                                    <TableCell className="font-medium">{order.id.slice(-6).toUpperCase()}</TableCell>
-                                    <TableCell>{format(order.date.toDate(), 'PPP')}</TableCell>
-                                    <TableCell>{order.supplier}</TableCell>
-                                    <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
-                                    <TableCell>
+                                <TableRow key={order.id}>
+                                    <TableCell className="font-medium" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id.slice(-6).toUpperCase()}</TableCell>
+                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
+                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.supplier}</TableCell>
+                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
+                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                         <Badge variant={
                                             order.status === 'Delivered' ? 'default' 
                                             : order.status === 'Approved' ? 'secondary' 
@@ -96,11 +107,57 @@ export default function PurchaseOrdersPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                         <Button asChild variant="ghost" size="icon">
-                                            <Link href={`/inventory/orders/${order.id}`}>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Link>
-                                         </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
+                                                    <Eye className="mr-2 h-4 w-4" /> View Details
+                                                </DropdownMenuItem>
+                                                {isAdmin && (
+                                                    <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
+                                                        <Pencil className="mr-2 h-4 w-4" /> Edit Order
+                                                    </DropdownMenuItem>
+                                                )}
+                                                <DropdownMenuSub>
+                                                    <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
+                                                    <DropdownMenuSubContent>
+                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Pending')}>
+                                                            <XCircle className="mr-2 h-4 w-4" /> Pending
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Approved')}>
+                                                            <CheckCircle className="mr-2 h-4 w-4" /> Approved
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Delivered')}>
+                                                            <Truck className="mr-2 h-4 w-4" /> Delivered
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Cancelled')}>
+                                                            <XCircle className="mr-2 h-4 w-4 text-destructive" /> Cancelled
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuSubContent>
+                                                </DropdownMenuSub>
+                                                <DropdownMenuSeparator />
+                                                 <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete Order
+                                                        </button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>This will permanently delete order #{order.id.slice(-6).toUpperCase()}. This action cannot be undone.</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => deleteOrder(order.id)}>Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             )) : (
