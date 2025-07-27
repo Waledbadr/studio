@@ -92,7 +92,7 @@ export default function PurchaseOrdersPage() {
                         <TableBody>
                             {loading ? renderSkeleton() : filteredOrders.length > 0 ? filteredOrders.map((order) => (
                                 <TableRow key={order.id}>
-                                    <TableCell className="font-medium" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id.slice(-6).toUpperCase()}</TableCell>
+                                    <TableCell className="font-medium" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.supplier}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
@@ -148,7 +148,7 @@ export default function PurchaseOrdersPage() {
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                            <AlertDialogDescription>This will permanently delete order #{order.id.slice(-6).toUpperCase()}. This action cannot be undone.</AlertDialogDescription>
+                                                            <AlertDialogDescription>This will permanently delete order #{order.id}. This action cannot be undone.</AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancel</AlertDialogCancel>

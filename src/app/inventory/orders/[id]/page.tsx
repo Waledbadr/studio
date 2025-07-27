@@ -117,7 +117,7 @@ export default function OrderDetailPage() {
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle className="text-3xl">Purchase Order</CardTitle>
-                            <CardDescription className="text-lg">ID: #{order.id.slice(-6).toUpperCase()}</CardDescription>
+                            <CardDescription className="text-lg">ID: #{order.id}</CardDescription>
                         </div>
                          <div className="text-right">
                             <p className="font-semibold">{order.supplier}</p>

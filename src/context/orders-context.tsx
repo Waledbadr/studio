@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where } from "firebase/firestore";
 import type { InventoryItem } from './inventory-context';
 
 export interface OrderItem extends InventoryItem {
@@ -83,6 +83,27 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       }
     };
   }, [loadOrders]);
+  
+  const generateNewOrderId = async (): Promise<string> => {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const ordersQuery = query(
+        collection(db, "orders"),
+        where("date", ">=", Timestamp.fromDate(startOfMonth)),
+        where("date", "<=", Timestamp.fromDate(endOfMonth))
+    );
+
+    const querySnapshot = await getDocs(ordersQuery);
+    const orderCount = querySnapshot.size;
+    const nextOrderNumber = (orderCount + 1).toString().padStart(3, '0');
+    
+    return `${year}-${month}-${nextOrderNumber}`;
+  };
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {
     if (!db) {
@@ -91,14 +112,18 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
     try {
-      const newOrderRef = doc(collection(db, "orders"));
+      const newOrderId = await generateNewOrderId();
+      const newOrderRef = doc(db, "orders", newOrderId);
+
       const newOrder: Omit<Order, 'id'> = {
         ...orderData,
         date: Timestamp.now(),
         status: 'Pending'
       }
-      await setDoc(newOrderRef, newOrder);
-      return newOrderRef.id;
+      // Since our new document has a custom ID, we need to add the id field manually
+      await setDoc(newOrderRef, { ...newOrder, id: newOrderId });
+
+      return newOrderId;
     } catch (error) {
       console.error("Error creating order:", error);
       toast({ title: "Error", description: "Failed to create order.", variant: "destructive" });
