@@ -18,13 +18,10 @@ export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { getOrderById } = useOrders();
-    const { users, loading: usersLoading } = useUsers();
+    const { currentUser, users, loading: usersLoading } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // This is a temporary placeholder for auth. 
-    // In a real app, you would get the current user from your auth context.
-    const currentUser = users[0]; 
     const isAdmin = currentUser?.role === 'Admin';
 
     useEffect(() => {
@@ -188,3 +185,5 @@ export default function OrderDetailPage() {
         </div>
     )
 }
+
+    

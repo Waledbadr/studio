@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
@@ -263,3 +264,5 @@ export default function EditOrderPage() {
         </div>
     )
 }
+
+    

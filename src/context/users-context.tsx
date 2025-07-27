@@ -16,10 +16,12 @@ export interface User {
 
 interface UsersContextType {
   users: User[];
+  currentUser: User | null;
   loading: boolean;
   loadUsers: () => void;
   saveUser: (user: Omit<User, 'id'> | User) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  switchUser: (user: User) => void;
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
@@ -28,6 +30,7 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
@@ -49,13 +52,18 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     unsubscribeRef.current = onSnapshot(usersCollection, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
       setUsers(usersData);
+      if (usersData.length > 0) {
+        if (!currentUser) {
+           setCurrentUser(usersData[0]);
+        }
+      }
       setLoading(false);
     }, (error) => {
       console.error("Error fetching users:", error);
       toast({ title: "Firestore Error", description: "Could not fetch users data.", variant: "destructive" });
       setLoading(false);
     });
-  }, [toast]);
+  }, [toast, currentUser]);
 
   useEffect(() => {
     loadUsers();
@@ -105,9 +113,14 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const switchUser = (user: User) => {
+    setCurrentUser(user);
+    toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
+  };
+
 
   return (
-    <UsersContext.Provider value={{ users, loading, loadUsers, saveUser, deleteUser }}>
+    <UsersContext.Provider value={{ users, currentUser, loading, loadUsers, saveUser, deleteUser, switchUser }}>
       {children}
     </UsersContext.Provider>
   );
@@ -120,3 +133,5 @@ export const useUsers = () => {
   }
   return context;
 };
+
+    

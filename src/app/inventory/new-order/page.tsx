@@ -22,7 +22,7 @@ import { useResidences } from '@/context/residences-context';
 export default function NewOrderPage() {
     const { items: allItems, loading, loadInventory, addItem } = useInventory();
     const { createOrder, loading: ordersLoading } = useOrders();
-    const { users, loadUsers } = useUsers();
+    const { currentUser, users, loadUsers } = useUsers();
     const { residences, loadResidences } = useResidences();
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -34,11 +34,10 @@ export default function NewOrderPage() {
 
     useEffect(() => {
         loadInventory();
-        loadUsers();
-        loadResidences();
-    }, [loadInventory, loadUsers, loadResidences]);
+        if (users.length === 0) loadUsers();
+        if (residences.length === 0) loadResidences();
+    }, [loadInventory, loadUsers, loadResidences, users.length, residences.length]);
 
-    const currentUser = users[0];
     const userResidenceId = currentUser?.assignedResidences?.[0];
     const userResidenceName = residences.find(r => r.id === userResidenceId)?.name || "Default Residence";
 
@@ -75,8 +74,8 @@ export default function NewOrderPage() {
             return;
         }
 
-        if (!userResidenceName) {
-            toast({ title: "Error", description: "User residence not found.", variant: "destructive" });
+        if (!userResidenceName || userResidenceName === "Default Residence") {
+            toast({ title: "Error", description: "User has no assigned residence.", variant: "destructive" });
             return;
         }
         
@@ -112,7 +111,7 @@ export default function NewOrderPage() {
              <div className="flex items-center justify-between">
                 <div>
                 <h1 className="text-2xl font-bold">Create New Material Request</h1>
-                <p className="text-muted-foreground">Select items from the inventory to build your request.</p>
+                <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{userResidenceName}</span></p>
                 </div>
                 <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading}>
                     {ordersLoading ? (
@@ -239,3 +238,5 @@ export default function NewOrderPage() {
 
     
 }
+
+    

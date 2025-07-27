@@ -22,10 +22,7 @@ export default function PurchaseOrdersPage() {
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
     const router = useRouter();
 
-    // This is a temporary placeholder for auth. 
-    // In a real app, you would get the current user from your auth context.
-    const { users } = useUsers();
-    const currentUser = users[0]; 
+    const { currentUser } = useUsers();
     const isAdmin = currentUser?.role === 'Admin';
 
     useEffect(() => {
@@ -92,11 +89,11 @@ export default function PurchaseOrdersPage() {
                         <TableBody>
                             {loading ? renderSkeleton() : filteredOrders.length > 0 ? filteredOrders.map((order) => (
                                 <TableRow key={order.id}>
-                                    <TableCell className="font-medium" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id}</TableCell>
-                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
-                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
-                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
-                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>
+                                    <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id}</TableCell>
+                                    <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
+                                    <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
+                                    <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
+                                    <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                         <Badge variant={
                                             order.status === 'Delivered' ? 'default' 
                                             : order.status === 'Approved' ? 'secondary' 
@@ -120,7 +117,7 @@ export default function PurchaseOrdersPage() {
                                                         <Pencil className="mr-2 h-4 w-4" /> Edit Request
                                                     </DropdownMenuItem>
                                                 )}
-                                                <DropdownMenuSub>
+                                                {isAdmin && <DropdownMenuSub>
                                                     <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
                                                     <DropdownMenuSubContent>
                                                         <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Pending')}>
@@ -136,9 +133,9 @@ export default function PurchaseOrdersPage() {
                                                             <XCircle className="mr-2 h-4 w-4 text-destructive" /> Cancelled
                                                         </DropdownMenuItem>
                                                     </DropdownMenuSubContent>
-                                                </DropdownMenuSub>
-                                                <DropdownMenuSeparator />
-                                                 <AlertDialog>
+                                                </DropdownMenuSub>}
+                                                {isAdmin && <DropdownMenuSeparator />}
+                                                 {isAdmin && <AlertDialog>
                                                     <AlertDialogTrigger asChild>
                                                         <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                             <Trash2 className="mr-2 h-4 w-4" />
@@ -155,7 +152,7 @@ export default function PurchaseOrdersPage() {
                                                             <AlertDialogAction onClick={() => deleteOrder(order.id)}>Delete</AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
-                                                </AlertDialog>
+                                                </AlertDialog>}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -172,3 +169,5 @@ export default function PurchaseOrdersPage() {
         </div>
     )
 }
+
+    
