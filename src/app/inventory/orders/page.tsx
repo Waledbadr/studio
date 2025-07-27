@@ -54,8 +54,8 @@ export default function PurchaseOrdersPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Purchase Orders</h1>
-                <p className="text-muted-foreground">Review and manage all purchase orders.</p>
+                <h1 className="text-2xl font-bold">Materials Requests</h1>
+                <p className="text-muted-foreground">Review and manage all material requests.</p>
                 </div>
                  <div className="flex items-center gap-2">
                     <DropdownMenu>
@@ -81,9 +81,9 @@ export default function PurchaseOrdersPage() {
                      <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Order ID</TableHead>
+                                <TableHead>Request ID</TableHead>
                                 <TableHead>Date</TableHead>
-                                <TableHead>Supplier</TableHead>
+                                <TableHead>Residence</TableHead>
                                 <TableHead>Items</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
@@ -94,7 +94,7 @@ export default function PurchaseOrdersPage() {
                                 <TableRow key={order.id}>
                                     <TableCell className="font-medium" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
-                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.supplier}</TableCell>
+                                    <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
                                     <TableCell onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                         <Badge variant={
@@ -117,7 +117,7 @@ export default function PurchaseOrdersPage() {
                                                 </DropdownMenuItem>
                                                 {isAdmin && (
                                                     <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
-                                                        <Pencil className="mr-2 h-4 w-4" /> Edit Order
+                                                        <Pencil className="mr-2 h-4 w-4" /> Edit Request
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuSub>
@@ -142,13 +142,13 @@ export default function PurchaseOrdersPage() {
                                                     <AlertDialogTrigger asChild>
                                                         <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                             <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete Order
+                                                            Delete Request
                                                         </button>
                                                     </AlertDialogTrigger>
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                            <AlertDialogDescription>This will permanently delete order #{order.id}. This action cannot be undone.</AlertDialogDescription>
+                                                            <AlertDialogDescription>This will permanently delete request #{order.id}. This action cannot be undone.</AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -162,7 +162,7 @@ export default function PurchaseOrdersPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-48 text-center text-muted-foreground">No purchase orders found.</TableCell>
+                                    <TableCell colSpan={7} className="h-48 text-center text-muted-foreground">No material requests found.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>

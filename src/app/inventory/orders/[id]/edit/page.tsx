@@ -20,7 +20,7 @@ export default function EditOrderPage() {
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-    const [supplier, setSupplier] = useState('');
+    const [residence, setResidence] = useState('');
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
@@ -40,7 +40,7 @@ export default function EditOrderPage() {
             const order = await getOrderById(id);
             if(order) {
                 setOrderItems(order.items);
-                setSupplier(order.supplier);
+                setResidence(order.residence);
             }
             setPageLoading(false);
         };
@@ -76,12 +76,12 @@ export default function EditOrderPage() {
     
     const handleUpdateOrder = async () => {
         if (orderItems.length === 0) {
-            toast({ title: "Error", description: "Cannot submit an empty order.", variant: "destructive" });
+            toast({ title: "Error", description: "Cannot submit an empty request.", variant: "destructive" });
             return;
         }
 
         const updatedOrderData = {
-            supplier: supplier,
+            residence: residence,
             items: orderItems,
         };
         
@@ -124,8 +124,8 @@ export default function EditOrderPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Edit Purchase Order</h1>
-                <p className="text-muted-foreground">Order ID: #{(id as string).slice(-6).toUpperCase()}</p>
+                <h1 className="text-2xl font-bold">Edit Material Request</h1>
+                <p className="text-muted-foreground">Request ID: #{id as string}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={() => router.back()}>
@@ -145,7 +145,7 @@ export default function EditOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Available Inventory</CardTitle>
-                        <CardDescription>Click the '+' to add an item to your order.</CardDescription>
+                        <CardDescription>Click the '+' to add an item to your request.</CardDescription>
                          <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
@@ -197,8 +197,16 @@ export default function EditOrderPage() {
 
                  <Card>
                     <CardHeader>
-                        <CardTitle>Current Order</CardTitle>
-                        <CardDescription>Review and adjust the items in your order.</CardDescription>
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <CardTitle>Current Request</CardTitle>
+                                <CardDescription>Review and adjust the items in your request.</CardDescription>
+                            </div>
+                            <div className="text-right">
+                                <Label htmlFor='residence' className="text-xs text-muted-foreground">Residence</Label>
+                                <Input id="residence" readOnly value={residence} className="w-48 mt-1 text-sm font-medium" />
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[450px]">
@@ -236,7 +244,7 @@ export default function EditOrderPage() {
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your order is empty.</TableCell>
+                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your request is empty.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>

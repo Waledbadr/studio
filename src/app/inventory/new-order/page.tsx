@@ -15,11 +15,16 @@ import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { useOrders } from '@/context/orders-context';
 import type { OrderItem } from '@/context/orders-context';
 import { useRouter } from 'next/navigation';
+import { useUsers } from '@/context/users-context';
+import { useResidences } from '@/context/residences-context';
 
 
 export default function NewOrderPage() {
     const { items: allItems, loading, loadInventory, addItem } = useInventory();
     const { createOrder, loading: ordersLoading } = useOrders();
+    const { users, loadUsers } = useUsers();
+    const { residences, loadResidences } = useResidences();
+
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -29,7 +34,13 @@ export default function NewOrderPage() {
 
     useEffect(() => {
         loadInventory();
-    }, [loadInventory]);
+        loadUsers();
+        loadResidences();
+    }, [loadInventory, loadUsers, loadResidences]);
+
+    const currentUser = users[0];
+    const userResidenceId = currentUser?.assignedResidences?.[0];
+    const userResidenceName = residences.find(r => r.id === userResidenceId)?.name || "Default Residence";
 
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
@@ -64,9 +75,13 @@ export default function NewOrderPage() {
             return;
         }
 
-        // Create a basic order object. In a real app, you might add more details.
+        if (!userResidenceName) {
+            toast({ title: "Error", description: "User residence not found.", variant: "destructive" });
+            return;
+        }
+        
         const newOrderData = {
-            supplier: "Global Building Supplies", // Example supplier
+            residence: userResidenceName,
             items: orderItems,
         };
         
@@ -96,14 +111,14 @@ export default function NewOrderPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Create New Monthly Order</h1>
-                <p className="text-muted-foreground">Select items from the inventory to build your purchase order.</p>
+                <h1 className="text-2xl font-bold">Create New Material Request</h1>
+                <p className="text-muted-foreground">Select items from the inventory to build your request.</p>
                 </div>
                 <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading}>
                     {ordersLoading ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
                     ) : (
-                        `Submit Order (${totalOrderQuantity} items)`
+                        `Submit Request (${totalOrderQuantity} items)`
                     )}
                 </Button>
             </div>
@@ -112,7 +127,7 @@ export default function NewOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Available Inventory</CardTitle>
-                        <CardDescription>Click the '+' to add an item to your order.</CardDescription>
+                        <CardDescription>Click the '+' to add an item to your request.</CardDescription>
                          <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
@@ -164,8 +179,8 @@ export default function NewOrderPage() {
 
                  <Card>
                     <CardHeader>
-                        <CardTitle>Current Order</CardTitle>
-                        <CardDescription>Review and adjust the items in your order.</CardDescription>
+                        <CardTitle>Current Request</CardTitle>
+                        <CardDescription>Review and adjust the items in your request.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[450px]">
@@ -203,7 +218,7 @@ export default function NewOrderPage() {
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your order is empty.</TableCell>
+                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your request is empty.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>

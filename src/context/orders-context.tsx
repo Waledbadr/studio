@@ -16,13 +16,13 @@ export type OrderStatus = 'Pending' | 'Approved' | 'Delivered' | 'Cancelled';
 export interface Order {
   id: string;
   date: Timestamp;
-  supplier: string;
+  residence: string;
   items: OrderItem[];
   status: OrderStatus;
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status'>;
-type UpdateOrderPayload = Pick<Order, 'items' | 'supplier'>;
+type UpdateOrderPayload = Pick<Order, 'items' | 'residence'>;
 
 
 interface OrdersContextType {

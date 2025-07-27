@@ -73,7 +73,7 @@ export default function OrderDetailPage() {
     if (!order) {
         return (
             <div className="text-center py-10">
-                <p className="text-xl text-muted-foreground">Order not found.</p>
+                <p className="text-xl text-muted-foreground">Request not found.</p>
                 <Button onClick={() => router.back()} className="mt-4">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
                 </Button>
@@ -97,18 +97,18 @@ export default function OrderDetailPage() {
             <div className="flex items-center justify-between print:hidden">
                 <Button variant="outline" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back to Orders
+                    Back to Requests
                 </Button>
                 <div className="flex items-center gap-2">
                     {isAdmin && (
                          <Button variant="secondary" onClick={handleEdit}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit Order
+                            Edit Request
                         </Button>
                     )}
                     <Button onClick={handlePrint}>
                         <Printer className="mr-2 h-4 w-4" />
-                        Print Order
+                        Print Request
                     </Button>
                 </div>
             </div>
@@ -117,11 +117,11 @@ export default function OrderDetailPage() {
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
-                            <CardTitle className="text-3xl">Purchase Order</CardTitle>
+                            <CardTitle className="text-3xl">Materials Request</CardTitle>
                             <CardDescription className="text-lg">ID: #{order.id}</CardDescription>
                         </div>
                          <div className="text-right">
-                            <p className="font-semibold">{order.supplier}</p>
+                            <p className="font-semibold">{order.residence}</p>
                             <p className="text-sm text-muted-foreground">Date: {format(order.date.toDate(), 'PPP')}</p>
                             <Badge className="mt-2" variant={
                                 order.status === 'Delivered' ? 'default'
