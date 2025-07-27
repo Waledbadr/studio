@@ -35,18 +35,17 @@ export default function OrderDetailPage() {
                 setLoading(false);
             }
         };
-        if (id) {
+        if (id && users.length > 0) { // Ensure users are loaded before checking roles
             fetchOrder();
         }
-    }, [id, getOrderById]);
+    }, [id, getOrderById, users]);
     
     const handlePrint = () => {
         window.print();
     }
     
     const handleEdit = () => {
-        // TODO: Navigate to an edit page, which could reuse the new-order component
-        alert("Edit functionality to be implemented in the next step.");
+        router.push(`/inventory/orders/${id}/edit`);
     }
 
     if (loading || usersLoading) {

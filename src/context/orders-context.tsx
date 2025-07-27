@@ -22,12 +22,15 @@ export interface Order {
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status'>;
+type UpdateOrderPayload = Pick<Order, 'items' | 'supplier'>;
+
 
 interface OrdersContextType {
   orders: Order[];
   loading: boolean;
   loadOrders: () => void;
   createOrder: (orderData: NewOrderPayload) => Promise<string | null>;
+  updateOrder: (id: string, orderData: UpdateOrderPayload) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
 }
@@ -103,6 +106,24 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   };
+  
+  const updateOrder = async (id: string, orderData: UpdateOrderPayload) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    setLoading(true);
+    try {
+        const orderDocRef = doc(db, "orders", id);
+        await updateDoc(orderDocRef, { ...orderData });
+        toast({ title: "Success", description: "Order updated successfully." });
+    } catch (error) {
+        console.error("Error updating order:", error);
+        toast({ title: "Error", description: "Failed to update order.", variant: "destructive" });
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const getOrderById = async (id: string): Promise<Order | null> => {
     if (!db) {
@@ -141,7 +162,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, getOrderById, deleteOrder }}>
+    <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, updateOrder, getOrderById, deleteOrder }}>
       {children}
     </OrdersContext.Provider>
   );

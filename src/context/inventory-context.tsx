@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc } from "firebase/firestore";
 
 
 export type ItemCategory = string;
@@ -24,6 +24,7 @@ interface InventoryContextType {
   categories: string[];
   loading: boolean;
   addItem: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
+  updateItem: (item: InventoryItem) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   loadInventory: () => void;
   addCategory: (category: string) => Promise<void>;
@@ -186,6 +187,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateItem = async (itemToUpdate: InventoryItem) => {
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    try {
+      const itemDocRef = doc(db, "inventory", itemToUpdate.id);
+      await updateDoc(itemDocRef, { ...itemToUpdate });
+      toast({ title: "Success", description: "Item updated." });
+    } catch (error) {
+      console.error("Error updating item:", error);
+      toast({ title: "Error", description: "Failed to update item.", variant: "destructive" });
+    }
+  }
+
   const deleteItem = async (id: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
@@ -201,7 +217,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, deleteItem, loadInventory, addCategory, updateCategory }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory }}>
       {children}
     </InventoryContext.Provider>
   );

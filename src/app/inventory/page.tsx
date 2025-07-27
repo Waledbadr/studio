@@ -10,6 +10,7 @@ import { PlusCircle, Trash2, Edit, Pencil, ListOrdered } from 'lucide-react';
 import Link from 'next/link';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -19,8 +20,11 @@ import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 
 export default function InventoryPage() {
-  const { items, loading, addItem, deleteItem, loadInventory, categories, addCategory, updateCategory } = useInventory();
+  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory } = useInventory();
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
+  const [isEditItemDialogOpen, setIsEditItemDialogOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -35,8 +39,17 @@ export default function InventoryPage() {
       deleteItem(id);
   }
 
+  const handleEditItemClick = (item: InventoryItem) => {
+    setItemToEdit(item);
+    setIsEditItemDialogOpen(true);
+  }
+
   const handleItemAdded = (newItem: Omit<InventoryItem, 'id'>) => {
     return addItem(newItem);
+  }
+
+  const handleItemUpdated = (item: InventoryItem) => {
+    return updateItem(item);
   }
 
   const handleAddCategory = (e: React.FormEvent) => {
@@ -102,7 +115,7 @@ export default function InventoryPage() {
               <TableCell>{item.unit}</TableCell>
               <TableCell>{item.stock}</TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="icon" className="mr-2">
+                <Button variant="ghost" size="icon" className="mr-2" onClick={() => handleEditItemClick(item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)}>
@@ -208,6 +221,13 @@ export default function InventoryPage() {
           </Tabs>
         </CardContent>
       </Card>
+      
+      <EditItemDialog
+          isOpen={isEditItemDialogOpen}
+          onOpenChange={setIsEditItemDialogOpen}
+          onItemUpdated={handleItemUpdated}
+          item={itemToEdit}
+      />
 
       {/* Edit Category Dialog */}
       <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
