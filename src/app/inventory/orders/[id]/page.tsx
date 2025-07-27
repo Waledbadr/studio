@@ -12,6 +12,7 @@ import { ArrowLeft, Printer, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
+import type { OrderItem } from '@/context/orders-context';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -153,7 +154,7 @@ export default function OrderDetailPage() {
                                             {category}
                                         </TableCell>
                                     </TableRow>
-                                    {items.map(item => (
+                                    {items.map((item: OrderItem) => (
                                         <TableRow key={item.id}>
                                             <TableCell className="font-mono text-xs">{item.id.slice(0,6)}</TableCell>
                                             <TableCell>{item.nameAr}</TableCell>

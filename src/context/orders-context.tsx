@@ -85,17 +85,21 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   }, [loadOrders]);
   
   const generateNewOrderId = async (): Promise<string> => {
+    if (!db) {
+        throw new Error("Firebase not initialized");
+    }
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2);
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
 
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
+    // Firestore timestamps for querying
+    const startOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const endOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59));
+    
     const ordersQuery = query(
         collection(db, "orders"),
-        where("date", ">=", Timestamp.fromDate(startOfMonth)),
-        where("date", "<=", Timestamp.fromDate(endOfMonth))
+        where("date", ">=", startOfMonth),
+        where("date", "<=", endOfMonth)
     );
 
     const querySnapshot = await getDocs(ordersQuery);
@@ -120,7 +124,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         date: Timestamp.now(),
         status: 'Pending'
       }
-      // Since our new document has a custom ID, we need to add the id field manually
+      
       await setDoc(newOrderRef, { ...newOrder, id: newOrderId });
 
       return newOrderId;
