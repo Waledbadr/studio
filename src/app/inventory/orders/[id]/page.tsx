@@ -98,29 +98,21 @@ export default function OrderDetailPage() {
         <div className="space-y-6">
              <style jsx global>{`
                 @media print {
-                  body {
-                    -webkit-print-color-adjust: exact;
+                  body * {
+                    visibility: hidden;
                   }
-                  .no-print {
-                    display: none !important;
+                  .printable-area, .printable-area * {
+                    visibility: visible;
                   }
                   .printable-area {
-                    display: block !important;
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: auto;
                     box-shadow: none !important;
                     border: none !important;
-                    padding: 0 !important;
-                    margin: 0 !important;
-                    width: 100%;
-                    height: 100%;
-                    background: white !important;
-                    color: black !important;
                   }
-                   body > :not(.printable-area) {
-                        display: none !important;
-                    }
-                    .printable-area > * {
-                        display: block !important;
-                    }
                 }
             `}</style>
             
@@ -143,7 +135,7 @@ export default function OrderDetailPage() {
                 </div>
             </div>
 
-             <Card className="printable-area" id="print-area">
+             <Card className="printable-area">
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
