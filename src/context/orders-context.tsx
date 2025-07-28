@@ -4,11 +4,15 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment } from "firebase/firestore";
 import type { InventoryItem } from './inventory-context';
 
 export interface OrderItem extends InventoryItem {
   quantity: number;
+}
+
+export interface ReceivedOrderItem extends OrderItem {
+  quantityReceived: number;
 }
 
 export type OrderStatus = 'Pending' | 'Approved' | 'Delivered' | 'Cancelled';
@@ -18,10 +22,11 @@ export interface Order {
   date: Timestamp;
   residence: string;
   items: OrderItem[];
+  itemsReceived?: ReceivedOrderItem[]; // Optional: store what was actually received
   status: OrderStatus;
 }
 
-type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status'>;
+type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived'>;
 type UpdateOrderPayload = Pick<Order, 'items' | 'residence'>;
 
 
@@ -34,6 +39,7 @@ interface OrdersContextType {
   updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
+  receiveOrderItems: (orderId: string, receivedItems: ReceivedOrderItem[]) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -170,6 +176,40 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const receiveOrderItems = async (orderId: string, receivedItems: ReceivedOrderItem[]) => {
+     if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Update stock for each received item
+      receivedItems.forEach(item => {
+        if (item.quantityReceived > 0) {
+          const itemRef = doc(db, "inventory", item.id);
+          batch.update(itemRef, { stock: increment(item.quantityReceived) });
+        }
+      });
+
+      // 2. Update the order status and received items data
+      const orderRef = doc(db, "orders", orderId);
+      batch.update(orderRef, { 
+        status: 'Delivered',
+        itemsReceived: receivedItems 
+      });
+
+      await batch.commit();
+
+    } catch (error) {
+      console.error("Error receiving order items:", error);
+      toast({ title: "Error", description: "Failed to process receipt.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const getOrderById = async (id: string): Promise<Order | null> => {
     if (!db) {
@@ -208,7 +248,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, updateOrder, updateOrderStatus, getOrderById, deleteOrder }}>
+    <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, updateOrder, updateOrderStatus, getOrderById, deleteOrder, receiveOrderItems }}>
       {children}
     </OrdersContext.Provider>
   );

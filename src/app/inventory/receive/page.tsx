@@ -28,9 +28,12 @@ export default function ReceiveMaterialsPage() {
 
     const userApprovedOrders = useMemo(() => {
         if (!currentUser) return [];
-        return approvedOrders.filter(order => 
-            currentUser.assignedResidences?.includes(order.residence) || currentUser.role === 'Admin'
-        );
+        // Admins see all approved orders. Other users see orders for their assigned residences.
+        const userResidences = currentUser.assignedResidences || [];
+        if (currentUser.role === 'Admin') {
+            return approvedOrders;
+        }
+        return approvedOrders.filter(order => userResidences.includes(order.residence));
     }, [approvedOrders, currentUser]);
 
 
@@ -46,10 +49,8 @@ export default function ReceiveMaterialsPage() {
         ))
     );
     
-    // In a future step, clicking a row will go to a details page `receive/[id]`
     const handleSelectOrder = (orderId: string) => {
-        // router.push(`/inventory/receive/${orderId}`);
-        console.log("Navigating to receive order page for:", orderId);
+        router.push(`/inventory/receive/${orderId}`);
     };
 
     return (
