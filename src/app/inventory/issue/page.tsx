@@ -177,8 +177,15 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-            const itemsToIssue = voucherLocations.map(loc => ({
-                ...loc,
+            // Transform the local state `voucherLocations` into the format expected by `issueItemsFromStock`
+             const itemsToIssueForAPI = voucherLocations.map(loc => ({
+                buildingId: loc.buildingId,
+                buildingName: loc.buildingName,
+                floorId: loc.floorId,
+                floorName: loc.floorName,
+                locationId: loc.locationId,
+                roomId: loc.roomId,
+                roomName: loc.roomName,
                 items: loc.items.map(item => ({
                     id: item.id,
                     nameEn: item.nameEn,
@@ -186,15 +193,18 @@ export default function IssueMaterialPage() {
                     issueQuantity: item.issueQuantity,
                 }))
             }));
-            await issueItemsFromStock(selectedComplexId, itemsToIssue);
+
+
+            await issueItemsFromStock(selectedComplexId, itemsToIssueForAPI);
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');
-            // Maybe route to a history page in the future
-            // router.push('/inventory'); 
+            setSelectedFloorId('');
+            setSelectedRoomId('');
         } catch (error) {
             console.error("Failed to submit voucher:", error);
-            toast({ title: "Submission Error", description: `An error occurred: ${error}`, variant: "destructive" });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            toast({ title: "Submission Error", description: `An error occurred: ${errorMessage}`, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
