@@ -402,41 +402,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
-            where("residenceId", "==", residenceId),
-            orderBy("date", "asc")
+            where("residenceId", "==", residenceId)
         );
 
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        let balance = 0;
-        const openingBalanceTx = transactions.find(tx => tx.type === 'IN');
-        if (openingBalanceTx) {
-            balance = openingBalanceTx.quantity;
-        }
-
-        const transactionsWithBalance = transactions.map(tx => {
-            if (tx.type === 'IN' && tx !== openingBalanceTx) {
-                balance += tx.quantity;
-            } else if (tx.type === 'OUT') {
-                balance -= tx.quantity;
-            }
-            return { ...tx, balance };
-        });
-
-        const openingBalanceRecord: InventoryTransaction = {
-            id: 'opening-balance',
-            itemId,
-            residenceId,
-            date: openingBalanceTx ? new Timestamp(openingBalanceTx.date.seconds - 1, 0) : new Timestamp(0,0),
-            type: 'IN',
-            quantity: openingBalanceTx ? openingBalanceTx.quantity : 0,
-            referenceDocId: 'Opening Balance',
-            itemNameEn: openingBalanceTx?.itemNameEn || '',
-            itemNameAr: openingBalanceTx?.itemNameAr || '',
-        };
+        // Sort on the client side to avoid needing a composite index
+        transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
         
-        return transactionsWithBalance;
+        return transactions;
 
     } catch (error) {
         console.error("Error fetching inventory transactions:", error);

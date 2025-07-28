@@ -39,9 +39,9 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    const { transactionsWithBalance, currentStock } = useMemo(() => {
+    const transactionsWithBalance = useMemo(() => {
         let runningBalance = 0;
-        const transactionsWithBalance = transactions.map(tx => {
+        return transactions.map(tx => {
             if (tx.type === 'IN') {
                 runningBalance += tx.quantity;
             } else {
@@ -49,13 +49,14 @@ function ItemMovementContent() {
             }
             return { ...tx, balance: runningBalance };
         });
-        
-        return { 
-            transactionsWithBalance: transactionsWithBalance, 
-            currentStock: runningBalance 
-        };
     }, [transactions]);
 
+    const currentStock = useMemo(() => {
+        if (transactionsWithBalance.length === 0) {
+            return item && residenceId ? getStockForResidence(item, residenceId) : 0;
+        }
+        return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
+    }, [transactionsWithBalance, item, residenceId, getStockForResidence]);
 
     
     const pageLoading = inventoryLoading || residencesLoading;
