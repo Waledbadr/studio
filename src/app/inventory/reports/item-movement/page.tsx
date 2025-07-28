@@ -39,22 +39,30 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    const currentStock = useMemo(() => {
-        if (!item || !residenceId) return 0;
-        return getStockForResidence(item, residenceId);
-    }, [item, residenceId, getStockForResidence, items]);
     
     const transactionsWithBalance = useMemo(() => {
-        if (transactionsLoading) return [];
-        
-        let runningBalance = 0;
-        
-        return transactions.map(tx => {
-            runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
-            return { ...tx, balance: runningBalance };
-        });
+        if (transactionsLoading || !item) return [];
 
-    }, [transactions, transactionsLoading]);
+        let runningBalance = getStockForResidence(item, residenceId || '');
+        const reversedTransactions = [...transactions].sort((a, b) => b.date.toMillis() - a.date.toMillis());
+
+        const txs = reversedTransactions.map(tx => {
+            const balanceAfter = runningBalance;
+            runningBalance -= (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+            return { ...tx, balance: balanceAfter };
+        });
+        
+        return txs.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+
+    }, [transactions, item, residenceId, getStockForResidence, transactionsLoading]);
+    
+    const currentStock = useMemo(() => {
+        if (!item || !residenceId) return 0;
+        if (transactionsWithBalance.length > 0) {
+            return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
+        }
+        return getStockForResidence(item, residenceId);
+    }, [item, residenceId, transactionsWithBalance, getStockForResidence]);
     
     const pageLoading = inventoryLoading || residencesLoading;
     
@@ -122,7 +130,7 @@ function ItemMovementContent() {
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
                     <div className="text-3xl font-bold">
-                        {inventoryLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
+                        {inventoryLoading || transactionsLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
                     </div>
                 </div>
             </div>
