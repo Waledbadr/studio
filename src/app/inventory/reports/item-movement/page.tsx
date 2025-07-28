@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 function ItemMovementContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { getInventoryTransactions, items, loading: inventoryLoading } = useInventory();
+    const { getInventoryTransactions, items, loading: inventoryLoading, getStockForResidence } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
     
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
@@ -39,37 +39,39 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    const openingBalance = useMemo(() => {
-        if (!item || !residenceId) return 0;
-        // This is the total current stock for the item in the specific residence
-        const currentStockInResidence = item.stockByResidence?.[residenceId] || 0;
+    const { openingBalance, transactionsWithBalance, currentStock } = useMemo(() => {
+        if (!item || !residenceId) {
+            return { openingBalance: 0, transactionsWithBalance: [], currentStock: 0 };
+        }
+
+        const totalStockInResidence = getStockForResidence(item, residenceId);
         
         const totalIn = transactions.filter(tx => tx.type === 'IN').reduce((sum, tx) => sum + tx.quantity, 0);
         const totalOut = transactions.filter(tx => tx.type === 'OUT').reduce((sum, tx) => sum + tx.quantity, 0);
         
-        // Correct calculation for Opening Balance: Current Stock - IN transactions + OUT transactions
-        return currentStockInResidence - totalIn + totalOut;
-    }, [transactions, item, residenceId]);
+        const calculatedOpeningBalance = totalStockInResidence - totalIn + totalOut;
 
-
-    const transactionsWithBalance = useMemo(() => {
-        let balance = openingBalance;
-        return transactions.map(tx => {
+        let runningBalance = calculatedOpeningBalance;
+        const calculatedTransactionsWithBalance = transactions.map(tx => {
             if (tx.type === 'IN') {
-                balance += tx.quantity;
+                runningBalance += tx.quantity;
             } else {
-                balance -= tx.quantity;
+                runningBalance -= tx.quantity;
             }
-            return { ...tx, balance };
+            return { ...tx, balance: runningBalance };
         });
-    }, [transactions, openingBalance]);
 
-    const currentStock = useMemo(() => {
-        if (transactionsWithBalance.length === 0) {
-            return openingBalance;
-        }
-        return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
-    }, [transactionsWithBalance, openingBalance]);
+        const finalStock = calculatedTransactionsWithBalance.length > 0 
+            ? calculatedTransactionsWithBalance[calculatedTransactionsWithBalance.length - 1].balance 
+            : calculatedOpeningBalance;
+
+        return { 
+            openingBalance: calculatedOpeningBalance, 
+            transactionsWithBalance: calculatedTransactionsWithBalance, 
+            currentStock: finalStock
+        };
+    }, [transactions, item, residenceId, getStockForResidence]);
+
 
     
     const pageLoading = inventoryLoading || residencesLoading;
