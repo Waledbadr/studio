@@ -452,11 +452,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
      const q = query(
         collection(db, "inventoryTransactions"), 
-        where("type", "==", "OUT"), 
-        orderBy("date", "desc")
+        where("type", "==", "OUT")
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+    const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+
+    // Sort on the client-side to avoid composite index
+    return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
   const getMIVs = async (): Promise<MIV[]> => {
