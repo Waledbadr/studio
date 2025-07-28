@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 interface ReceivedItem extends OrderItem {
     quantityReceived: number;
+    alreadyReceived: number;
 }
 
 export default function ReceiveOrderPage() {
@@ -34,7 +35,8 @@ export default function ReceiveOrderPage() {
             setLoading(true);
             const fetchedOrder = await getOrderById(id);
             if (fetchedOrder) {
-                if (fetchedOrder.status !== 'Approved') {
+                const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
+                if (!receivableStatuses.includes(fetchedOrder.status)) {
                     toast({
                         title: "Invalid Status",
                         description: `This request has a status of "${fetchedOrder.status}" and cannot be received.`,
@@ -44,11 +46,16 @@ export default function ReceiveOrderPage() {
                     return;
                 }
                 setOrder(fetchedOrder);
-                // Initialize receivedItems with quantity requested
-                const initialReceivedItems = fetchedOrder.items.map(item => ({
-                    ...item,
-                    quantityReceived: item.quantity,
-                }));
+                
+                const initialReceivedItems = fetchedOrder.items.map(item => {
+                    const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
+                    const remainingToReceive = item.quantity - alreadyReceived;
+                    return {
+                        ...item,
+                        quantityReceived: remainingToReceive, // Default to receiving the remaining amount
+                        alreadyReceived: alreadyReceived,
+                    }
+                });
                 setReceivedItems(initialReceivedItems);
             }
             setLoading(false);
@@ -57,7 +64,16 @@ export default function ReceiveOrderPage() {
     }, [id, getOrderById, router, toast]);
 
     const handleQuantityChange = (itemId: string, newQuantity: number) => {
-        const quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
+        const itemInfo = receivedItems.find(item => item.id === itemId);
+        if (!itemInfo) return;
+
+        const maxReceivable = itemInfo.quantity - itemInfo.alreadyReceived;
+        let quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
+        if (quantity > maxReceivable) {
+            quantity = maxReceivable;
+            toast({ title: "Warning", description: "Cannot receive more than requested quantity." });
+        }
+
         setReceivedItems(prevItems =>
             prevItems.map(item =>
                 item.id === itemId ? { ...item, quantityReceived: quantity } : item
@@ -70,9 +86,16 @@ export default function ReceiveOrderPage() {
             toast({ title: "Error", description: "No items to receive.", variant: "destructive" });
             return;
         }
+        
+        const itemsToProcess = receivedItems.filter(item => item.quantityReceived > 0);
+        
+        if (itemsToProcess.length === 0) {
+            toast({ title: "No Change", description: "No new quantities were entered to receive." });
+            return;
+        }
 
-        await receiveOrderItems(order.id, receivedItems);
-        toast({ title: "Success", description: "Stock has been updated and request marked as delivered." });
+        await receiveOrderItems(order.id, itemsToProcess);
+        
         router.push('/inventory/orders');
     };
 
@@ -144,7 +167,8 @@ export default function ReceiveOrderPage() {
                             <TableRow>
                                 <TableHead>Item Name</TableHead>
                                 <TableHead className="w-[120px] text-center">Qty Requested</TableHead>
-                                <TableHead className="w-[150px] text-center">Qty Received</TableHead>
+                                <TableHead className="w-[120px] text-center">Qty Received (Prev)</TableHead>
+                                <TableHead className="w-[150px] text-center">Qty to Receive (Now)</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -155,6 +179,7 @@ export default function ReceiveOrderPage() {
                                         <p className="text-sm text-muted-foreground">{item.category} - {item.unit}</p>
                                     </TableCell>
                                     <TableCell className="text-center font-medium">{item.quantity}</TableCell>
+                                    <TableCell className="text-center font-medium">{item.alreadyReceived}</TableCell>
                                     <TableCell>
                                          <Input 
                                             type="number" 
@@ -162,6 +187,7 @@ export default function ReceiveOrderPage() {
                                             onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} 
                                             className="w-24 text-center mx-auto [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                                             min={0}
+                                            max={item.quantity - item.alreadyReceived}
                                         />
                                     </TableCell>
                                 </TableRow>

@@ -31,7 +31,8 @@ export default function ReceiveMaterialsPage() {
     const userApprovedOrders = useMemo(() => {
         if (!currentUser) return [];
 
-        const approvedOrders = orders.filter(order => order.status === 'Approved');
+        const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
+        const approvedOrders = orders.filter(order => receivableStatuses.includes(order.status));
         
         if (currentUser.role === 'Admin') {
             return approvedOrders;
@@ -71,7 +72,7 @@ export default function ReceiveMaterialsPage() {
                 <CardHeader>
                     <CardTitle>Approved Material Requests</CardTitle>
                     <CardDescription>
-                        Showing requests assigned to your residences that are approved and pending delivery.
+                        Showing requests assigned to your residences that are approved or partially delivered.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -94,7 +95,7 @@ export default function ReceiveMaterialsPage() {
                                     <TableCell>{order.residence}</TableCell>
                                     <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
                                     <TableCell>
-                                        <Badge variant='secondary'>
+                                        <Badge variant={order.status === 'Partially Delivered' ? 'secondary' : 'default'}>
                                             {order.status}
                                         </Badge>
                                     </TableCell>

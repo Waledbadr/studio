@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction } from "firebase/firestore";
 import type { InventoryItem } from './inventory-context';
 import { useResidences } from './residences-context';
 
@@ -12,11 +12,12 @@ export interface OrderItem extends InventoryItem {
   quantity: number;
 }
 
-export interface ReceivedOrderItem extends OrderItem {
+export interface ReceivedOrderItem {
+  id: string; // Storing only ID and quantity to keep it lean
   quantityReceived: number;
 }
 
-export type OrderStatus = 'Pending' | 'Approved' | 'Delivered' | 'Cancelled';
+export type OrderStatus = 'Pending' | 'Approved' | 'Partially Delivered' | 'Delivered' | 'Cancelled';
 
 export interface Order {
   id: string;
@@ -24,7 +25,7 @@ export interface Order {
   residence: string; // This is the residence name
   residenceId: string; // This is the residence ID
   items: OrderItem[];
-  itemsReceived?: ReceivedOrderItem[]; // Optional: store what was actually received
+  itemsReceived?: ReceivedOrderItem[]; // Tracks total received quantities per item
   status: OrderStatus;
 }
 
@@ -41,7 +42,7 @@ interface OrdersContextType {
   updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
-  receiveOrderItems: (orderId: string, receivedItems: ReceivedOrderItem[]) => Promise<void>;
+  receiveOrderItems: (orderId: string, newlyReceivedItems: OrderItem[]) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -179,53 +180,84 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const receiveOrderItems = async (orderId: string, receivedItems: ReceivedOrderItem[]) => {
-     if (!db || !residences) {
+  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number}[]) => {
+    if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     setLoading(true);
+
+    const orderRef = doc(db, "orders", orderId);
+
     try {
-      const orderRef = doc(db, "orders", orderId);
-      const orderSnap = await getDoc(orderRef);
-      if (!orderSnap.exists()) {
-          throw new Error("Order not found");
-      }
-      const orderData = orderSnap.data() as Order;
-      const residenceId = orderData.residenceId;
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) {
+                throw new Error("Order not found");
+            }
 
-      if (!residenceId) {
-          throw new Error("Residence ID not found on order.");
-      }
+            const orderData = orderSnap.data() as Order;
+            const residenceId = orderData.residenceId;
+            if (!residenceId) {
+                throw new Error("Residence ID not found on order.");
+            }
 
-      const batch = writeBatch(db);
+            // Update inventory stock for each item
+            for (const receivedItem of newlyReceivedItems) {
+                if (receivedItem.quantityReceived > 0) {
+                    const itemRef = doc(db, "inventory", receivedItem.id);
+                    const stockUpdateKey = `stockByResidence.${residenceId}`;
+                    
+                    const itemSnap = await transaction.get(itemRef);
+                    const itemData = itemSnap.data();
 
-      // 1. Update stock for each received item for the specific residence
-      for (const item of receivedItems) {
-        if (item.quantityReceived > 0) {
-          const itemRef = doc(db, "inventory", item.id);
-          const stockUpdateKey = `stockByResidence.${residenceId}`;
-          batch.update(itemRef, { [stockUpdateKey]: increment(item.quantityReceived) });
-        }
-      }
+                    if (itemData && itemData.stockByResidence && itemData.stockByResidence[residenceId]) {
+                         transaction.update(itemRef, { [stockUpdateKey]: increment(receivedItem.quantityReceived) });
+                    } else {
+                        // If stockByResidence or the specific residenceId key doesn't exist, set it.
+                        transaction.set(itemRef, { stockByResidence: { [residenceId]: receivedItem.quantityReceived } }, { merge: true });
+                    }
+                }
+            }
+            
+            // Update the order's received items and status
+            const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
+            for (const receivedItem of newlyReceivedItems) {
+                const existingItemIndex = existingReceived.findIndex(item => item.id === receivedItem.id);
+                if (existingItemIndex > -1) {
+                    existingReceived[existingItemIndex].quantityReceived += receivedItem.quantityReceived;
+                } else {
+                    existingReceived.push({ id: receivedItem.id, quantityReceived: receivedItem.quantityReceived });
+                }
+            }
 
-      // 2. Update the order status and received items data
-      batch.update(orderRef, { 
-        status: 'Delivered',
-        itemsReceived: receivedItems 
-      });
+            // Determine the new status
+            let allItemsDelivered = true;
+            for (const requestedItem of orderData.items) {
+                const totalReceived = existingReceived.find(ri => ri.id === requestedItem.id)?.quantityReceived || 0;
+                if (totalReceived < requestedItem.quantity) {
+                    allItemsDelivered = false;
+                    break;
+                }
+            }
+            
+            const newStatus: OrderStatus = allItemsDelivered ? 'Delivered' : 'Partially Delivered';
 
-      await batch.commit();
-      toast({ title: "Success", description: "Stock has been updated and request marked as delivered." });
+            transaction.update(orderRef, {
+                itemsReceived: existingReceived,
+                status: newStatus
+            });
+        });
 
-
+        toast({ title: "Success", description: "Stock updated and request status changed." });
     } catch (error) {
-      console.error("Error receiving order items:", error);
-      toast({ title: "Error", description: "Failed to process receipt.", variant: "destructive" });
+        console.error("Error receiving order items:", error);
+        toast({ title: "Transaction Error", description: `Failed to process receipt: ${error}`, variant: "destructive" });
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
+
 
 
   const getOrderById = async (id: string): Promise<Order | null> => {

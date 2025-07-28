@@ -107,7 +107,8 @@ export default function PurchaseOrdersPage() {
                                     <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                         <Badge variant={
                                             order.status === 'Delivered' ? 'default' 
-                                            : order.status === 'Approved' ? 'secondary' 
+                                            : order.status === 'Approved' ? 'secondary'
+                                            : order.status === 'Partially Delivered' ? 'secondary'
                                             : order.status === 'Cancelled' ? 'destructive'
                                             : 'outline'
                                         }>
