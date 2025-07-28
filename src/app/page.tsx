@@ -110,7 +110,7 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent Material Requests</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent MRs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/orders">View All<ArrowUpRight className="h-4 w-4" /></Link>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent Receipts</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent MRVs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/receive">View All<ArrowUpRight className="h-4 w-4" /></Link>
@@ -184,7 +184,7 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent Issues</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent MIVs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
