@@ -90,7 +90,7 @@ export default function OrderDetailPage() {
     }, {} as Record<string, Order['items']>);
 
     return (
-        <div className="space-y-6 print:space-y-4">
+        <div className="space-y-6 print:space-y-4 print:bg-white">
             <div className="flex items-center justify-between print:hidden">
                 <Button variant="outline" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -110,7 +110,7 @@ export default function OrderDetailPage() {
                 </div>
             </div>
 
-             <Card className="print:shadow-none print:border-none">
+             <Card className="print:shadow-none print:border-none print:bg-white" id="print-area">
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
@@ -138,8 +138,8 @@ export default function OrderDetailPage() {
                                 <TableHead>Item Name (Arabic)</TableHead>
                                 <TableHead>Item Name (English)</TableHead>
                                 <TableHead>Unit</TableHead>
-                                <TableHead className="text-center">Stock</TableHead>
                                 <TableHead className="text-right">Quantity</TableHead>
+                                <TableHead className="text-center">Stock</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -155,8 +155,8 @@ export default function OrderDetailPage() {
                                             <TableCell>{item.nameAr}</TableCell>
                                             <TableCell>{item.nameEn}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
-                                            <TableCell className="text-center">{item.stock}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                            <TableCell className="text-center">{item.stock}</TableCell>
                                         </TableRow>
                                     ))}
                                 </React.Fragment>
@@ -172,22 +172,33 @@ export default function OrderDetailPage() {
 
              <style jsx global>{`
                 @media print {
-                    body > div:first-child {
-                       display: none;
-                    }
-                    body > div:last-child {
-                        display: none;
-                    }
-                    main {
-                        padding: 0 !important;
-                    }
-                    .print-content {
-                        display: block !important;
-                    }
+                  body {
+                    background-color: white !important;
+                  }
+                  
+                  body > div:first-child > div:first-child, 
+                  body > div:first-child > div:last-child {
+                    display: none !important;
+                  }
+
+                  main {
+                    padding: 0 !important;
+                  }
+                  
+                  .print-content {
+                    display: block !important;
+                  }
+
+                  #print-area {
+                    display: block !important;
+                  }
+
+                  .print\:hidden {
+                    display: none !important;
+                  }
                 }
             `}</style>
              <div className="print-content hidden">
-                {/* This div will only be visible during print */}
                 <Card>
                     <CardHeader className="border-b">
                         <div className="flex justify-between items-start">
@@ -216,8 +227,8 @@ export default function OrderDetailPage() {
                                     <TableHead>Item Name (Arabic)</TableHead>
                                     <TableHead>Item Name (English)</TableHead>
                                     <TableHead>Unit</TableHead>
-                                    <TableHead className="text-center">Stock</TableHead>
                                     <TableHead className="text-right">Quantity</TableHead>
+                                    <TableHead className="text-center">Stock</TableHead>
                                 </TableRow>
                             </TableHeader>
                              <TableBody>
@@ -233,8 +244,8 @@ export default function OrderDetailPage() {
                                                 <TableCell>{item.nameAr}</TableCell>
                                                 <TableCell>{item.nameEn}</TableCell>
                                                 <TableCell>{item.unit}</TableCell>
-                                                <TableCell className="text-center">{item.stock}</TableCell>
                                                 <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                                <TableCell className="text-center">{item.stock}</TableCell>
                                             </TableRow>
                                         ))}
                                     </React.Fragment>
