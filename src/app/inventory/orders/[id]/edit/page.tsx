@@ -15,15 +15,17 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { useRouter, useParams } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 export default function EditOrderPage() {
-    const { items: allItems, loading: inventoryLoading, loadInventory, addItem } = useInventory();
+    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [residence, setResidence] = useState('');
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
     const router = useRouter();
     const { id } = useParams();
@@ -90,10 +92,12 @@ export default function EditOrderPage() {
         router.push(`/inventory/orders/${id}`);
     }
 
-    const filteredItems = allItems.filter(item => 
-        item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredItems = allItems.filter(item => {
+        const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+        const matchesSearch = item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              item.nameAr.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesCategory && matchesSearch;
+    });
 
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
 
@@ -147,15 +151,28 @@ export default function EditOrderPage() {
                     <CardHeader>
                         <CardTitle>Available Inventory</CardTitle>
                         <CardDescription>Click the '+' to add an item to your request.</CardDescription>
-                         <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                type="search"
-                                placeholder="Search items..."
-                                className="pl-8 w-full"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                         <div className="flex gap-2">
+                            <div className="relative flex-grow">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    type="search"
+                                    placeholder="Search items..."
+                                    className="pl-8 w-full"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Filter by category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Categories</SelectItem>
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -179,12 +196,12 @@ export default function EditOrderPage() {
                                             </Button>
                                         </div>
                                     )) : (
-                                         searchQuery ? (
+                                         searchQuery || selectedCategory !== 'all' ? (
                                             <div className="text-center text-muted-foreground py-10">
-                                                <p className="mb-4">Item not found.</p>
-                                                 <Button onClick={() => setAddDialogVisible(true)}>
+                                                <p className="mb-4">No items found matching your criteria.</p>
+                                                {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
                                                     <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
-                                                </Button>
+                                                </Button>}
                                             </div>
                                         ) : (
                                             <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
