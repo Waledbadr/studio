@@ -72,7 +72,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch orders data.", variant: "destructive" });
       setLoading(false);
     });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadOrders();
