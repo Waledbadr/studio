@@ -8,17 +8,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useResidences, type Complex, type Building, type Floor, type Room } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { useInventory } from '@/context/inventory-context';
+import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+
+interface IssuedItem extends InventoryItem {
+    issueQuantity: number;
+}
 
 export default function IssueMaterialPage() {
     const { currentUser } = useUsers();
     const { residences, loading: residencesLoading } = useResidences();
     const { items: allItems, loading: inventoryLoading, getStockForResidence } = useInventory();
+    const { toast } = useToast();
     
     // Form state
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
@@ -27,7 +33,7 @@ export default function IssueMaterialPage() {
     const [selectedRoomId, setSelectedRoomId] = useState<string>('');
     
     // Items state
-    const [issuedItems, setIssuedItems] = useState<any[]>([]);
+    const [issuedItems, setIssuedItems] = useState<IssuedItem[]>([]);
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -74,16 +80,51 @@ export default function IssueMaterialPage() {
         setSelectedRoomId('');
     }, [selectedFloorId]);
 
-    const handleAddItem = (item: any) => {
-        // Logic to add an item to the issuedItems list
+    const handleAddItem = (item: InventoryItem) => {
+        setIssuedItems(prevItems => {
+            const existingItem = prevItems.find(i => i.id === item.id);
+            if (existingItem) {
+                // Increment quantity if item already exists in the list
+                const newQuantity = existingItem.issueQuantity + 1;
+                const stock = getStockForResidence(item, selectedComplexId);
+                if (newQuantity > stock) {
+                    toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive" });
+                    return prevItems;
+                }
+                return prevItems.map(i => i.id === item.id ? { ...i, issueQuantity: newQuantity } : i);
+            } else {
+                // Add new item with quantity 1
+                 const stock = getStockForResidence(item, selectedComplexId);
+                 if (stock < 1) {
+                     toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
+                     return prevItems;
+                 }
+                return [...prevItems, { ...item, issueQuantity: 1 }];
+            }
+        });
     };
     
     const handleQuantityChange = (itemId: string, newQuantity: number) => {
-        // Logic to change the quantity of an issued item
+        const itemInfo = allItems.find(i => i.id === itemId);
+        if (!itemInfo || !selectedComplexId) return;
+
+        const stock = getStockForResidence(itemInfo, selectedComplexId);
+
+        let quantity = newQuantity;
+        if (quantity < 1) {
+            quantity = 1;
+        } else if (quantity > stock) {
+            quantity = stock;
+            toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+        }
+        
+        setIssuedItems(prevItems => prevItems.map(item => 
+            item.id === itemId ? { ...item, issueQuantity: quantity } : item
+        ));
     };
     
     const handleRemoveItem = (itemId: string) => {
-        // Logic to remove an item from the issuedItems list
+        setIssuedItems(prevItems => prevItems.filter(item => item.id !== itemId));
     };
 
     const handleSubmitVoucher = () => {
@@ -109,7 +150,7 @@ export default function IssueMaterialPage() {
                     <h1 className="text-2xl font-bold">Material Issue Voucher (MIV)</h1>
                     <p className="text-muted-foreground">Issue materials from a residence's storeroom to a specific location.</p>
                 </div>
-                <Button onClick={handleSubmitVoucher}>Submit Voucher</Button>
+                <Button onClick={handleSubmitVoucher} disabled={issuedItems.length === 0 || !selectedRoomId}>Submit Voucher</Button>
             </div>
 
             <Card>
@@ -165,10 +206,29 @@ export default function IssueMaterialPage() {
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[400px]">
-                            {/* Inventory items will be listed here */}
-                            <div className="text-center text-muted-foreground p-8">
-                                Select a residence to see its inventory.
-                            </div>
+                            {selectedComplexId ? (
+                                <div className="space-y-2">
+                                    {availableInventory.length > 0 ? availableInventory.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-background hover:bg-muted/50">
+                                            <div>
+                                                <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
+                                            </div>
+                                            <Button size="icon" variant="outline" onClick={() => handleAddItem(item)}>
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )) : (
+                                        <div className="text-center text-muted-foreground p-8">
+                                            No inventory with stock found for this residence.
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center text-muted-foreground p-8">
+                                    Select a residence to see its inventory.
+                                </div>
+                            )}
                         </ScrollArea>
                     </CardContent>
                 </Card>
@@ -188,11 +248,36 @@ export default function IssueMaterialPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    <TableRow>
-                                        <TableCell colSpan={3} className="h-48 text-center text-muted-foreground">
-                                            No items added to the voucher yet.
-                                        </TableCell>
-                                    </TableRow>
+                                    {issuedItems.length > 0 ? issuedItems.map(item => (
+                                        <TableRow key={item.id}>
+                                            <TableCell className="font-medium">
+                                                <p>{item.nameAr} / {item.nameEn}</p>
+                                                <p className="text-xs text-muted-foreground">{item.category}</p>
+                                            </TableCell>
+                                            <TableCell>
+                                                 <div className="flex items-center justify-center gap-2">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.issueQuantity - 1)}>
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
+                                                    <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.issueQuantity + 1)}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                 <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="h-48 text-center text-muted-foreground">
+                                                No items added to the voucher yet.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                 </TableBody>
                             </Table>
                         </ScrollArea>
@@ -201,4 +286,5 @@ export default function IssueMaterialPage() {
             </div>
         </div>
     );
-}
+
+    
