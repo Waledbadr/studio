@@ -53,6 +53,17 @@ function ItemMovementContent() {
         });
     }, [transactions]);
     
+    const finalBalance = useMemo(() => {
+        if (transactionsWithBalance.length > 0) {
+            return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
+        }
+        // Fallback to the main item stock if no transactions exist.
+        if (item && residenceId) {
+             return item.stockByResidence?.[residenceId] || 0
+        }
+        return 0;
+    }, [transactionsWithBalance, item, residenceId]);
+
     const pageLoading = inventoryLoading || residencesLoading;
     
     const renderSkeleton = () => (
@@ -118,7 +129,7 @@ function ItemMovementContent() {
                 </div>
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
-                    <p className="text-3xl font-bold">{item.stockByResidence?.[residenceId] || 0}</p>
+                    <p className="text-3xl font-bold">{transactionsLoading ? <Skeleton className="h-8 w-16 inline-block" /> : finalBalance}</p>
                 </div>
             </div>
 
