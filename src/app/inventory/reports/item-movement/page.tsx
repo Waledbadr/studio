@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 function ItemMovementContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { getInventoryTransactions, items, loading: inventoryLoading, getStockForResidence } = useInventory();
+    const { getInventoryTransactions, items, loading: inventoryLoading } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
     
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
@@ -28,7 +28,6 @@ function ItemMovementContent() {
 
     const item = useMemo(() => items.find(i => i.id === itemId), [items, itemId]);
     const residence = useMemo(() => residences.find(r => r.id === residenceId), [residences, residenceId]);
-    const currentStock = useMemo(() => item && residenceId ? getStockForResidence(item, residenceId) : 0, [item, residenceId, getStockForResidence]);
 
     useEffect(() => {
         if (itemId && residenceId && !inventoryLoading && !residencesLoading) {
@@ -42,12 +41,16 @@ function ItemMovementContent() {
 
     const openingBalance = useMemo(() => {
         if (!item || !residenceId) return 0;
+        // This is the total current stock for the item in the specific residence
+        const currentStockInResidence = item.stockByResidence?.[residenceId] || 0;
         
         const totalIn = transactions.filter(tx => tx.type === 'IN').reduce((sum, tx) => sum + tx.quantity, 0);
         const totalOut = transactions.filter(tx => tx.type === 'OUT').reduce((sum, tx) => sum + tx.quantity, 0);
         
-        return currentStock - (totalIn - totalOut);
-    }, [transactions, currentStock, item, residenceId]);
+        // Opening balance is the current stock minus the net of transactions shown.
+        return currentStockInResidence - (totalIn - totalOut);
+    }, [transactions, item, residenceId]);
+
 
     const transactionsWithBalance = useMemo(() => {
         let balance = openingBalance;
@@ -60,6 +63,14 @@ function ItemMovementContent() {
             return { ...tx, balance };
         });
     }, [transactions, openingBalance]);
+
+    const currentStock = useMemo(() => {
+        if (transactionsWithBalance.length === 0) {
+            return openingBalance;
+        }
+        return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
+    }, [transactionsWithBalance, openingBalance]);
+
     
     const pageLoading = inventoryLoading || residencesLoading;
     
@@ -126,7 +137,9 @@ function ItemMovementContent() {
                 </div>
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
-                    <p className="text-3xl font-bold">{transactionsLoading ? <Skeleton className="h-8 w-16 inline-block" /> : currentStock}</p>
+                    <div className="text-3xl font-bold">
+                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
+                    </div>
                 </div>
             </div>
 
@@ -164,7 +177,7 @@ function ItemMovementContent() {
                                             <TableCell className="text-right font-bold">{tx.balance}</TableCell>
                                         </TableRow>
                                     )) : (
-                                        !transactionsLoading && openingBalance === 0 && (
+                                        !transactionsLoading && (
                                             <TableRow>
                                                 <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No movement history found for this item in this residence.</TableCell>
                                             </TableRow>
