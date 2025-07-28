@@ -42,7 +42,7 @@ function ItemMovementContent() {
     const currentStock = useMemo(() => {
         if (!item || !residenceId) return 0;
         return getStockForResidence(item, residenceId);
-    }, [item, residenceId, getStockForResidence]);
+    }, [item, residenceId, getStockForResidence, items]);
 
 
     const transactionsWithBalance = useMemo(() => {
