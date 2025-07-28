@@ -39,20 +39,9 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    const { openingBalance, transactionsWithBalance, currentStock } = useMemo(() => {
-        if (!item || !residenceId) {
-            return { openingBalance: 0, transactionsWithBalance: [], currentStock: 0 };
-        }
-
-        const totalStockInResidence = getStockForResidence(item, residenceId);
-        
-        const totalIn = transactions.filter(tx => tx.type === 'IN').reduce((sum, tx) => sum + tx.quantity, 0);
-        const totalOut = transactions.filter(tx => tx.type === 'OUT').reduce((sum, tx) => sum + tx.quantity, 0);
-        
-        const calculatedOpeningBalance = totalStockInResidence - totalIn + totalOut;
-
-        let runningBalance = calculatedOpeningBalance;
-        const calculatedTransactionsWithBalance = transactions.map(tx => {
+    const { transactionsWithBalance, currentStock } = useMemo(() => {
+        let runningBalance = 0;
+        const transactionsWithBalance = transactions.map(tx => {
             if (tx.type === 'IN') {
                 runningBalance += tx.quantity;
             } else {
@@ -60,17 +49,12 @@ function ItemMovementContent() {
             }
             return { ...tx, balance: runningBalance };
         });
-
-        const finalStock = calculatedTransactionsWithBalance.length > 0 
-            ? calculatedTransactionsWithBalance[calculatedTransactionsWithBalance.length - 1].balance 
-            : calculatedOpeningBalance;
-
+        
         return { 
-            openingBalance: calculatedOpeningBalance, 
-            transactionsWithBalance: calculatedTransactionsWithBalance, 
-            currentStock: finalStock
+            transactionsWithBalance: transactionsWithBalance, 
+            currentStock: runningBalance 
         };
-    }, [transactions, item, residenceId, getStockForResidence]);
+    }, [transactions]);
 
 
     
@@ -160,10 +144,6 @@ function ItemMovementContent() {
                         <TableBody>
                             {transactionsLoading ? renderSkeleton() : (
                                 <>
-                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                        <TableCell colSpan={4} className="font-semibold">Opening Balance</TableCell>
-                                        <TableCell className="text-right font-bold">{openingBalance}</TableCell>
-                                    </TableRow>
                                     {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
                                         <TableRow key={tx.id}>
                                             <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
@@ -202,3 +182,4 @@ export default function ItemMovementPage() {
         </Suspense>
     )
 }
+
