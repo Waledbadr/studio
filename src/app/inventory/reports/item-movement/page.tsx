@@ -39,30 +39,28 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    
-    const transactionsWithBalance = useMemo(() => {
-        if (transactionsLoading || !item) return [];
-
-        let runningBalance = getStockForResidence(item, residenceId || '');
-        const reversedTransactions = [...transactions].sort((a, b) => b.date.toMillis() - a.date.toMillis());
-
-        const txs = reversedTransactions.map(tx => {
-            const balanceAfter = runningBalance;
-            runningBalance -= (tx.type === 'IN' ? tx.quantity : -tx.quantity);
-            return { ...tx, balance: balanceAfter };
-        });
-        
-        return txs.sort((a, b) => a.date.toMillis() - b.date.toMillis());
-
-    }, [transactions, item, residenceId, getStockForResidence, transactionsLoading]);
-    
     const currentStock = useMemo(() => {
         if (!item || !residenceId) return 0;
-        if (transactionsWithBalance.length > 0) {
-            return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
-        }
         return getStockForResidence(item, residenceId);
-    }, [item, residenceId, transactionsWithBalance, getStockForResidence]);
+    }, [item, residenceId, getStockForResidence]);
+
+
+    const transactionsWithBalance = useMemo(() => {
+        if (!item || !residenceId) return [];
+
+        const netMovement = transactions.reduce((acc, tx) => {
+            return acc + (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+        }, 0);
+
+        const startingBalance = currentStock - netMovement;
+        
+        let runningBalance = startingBalance;
+        return transactions.map(tx => {
+            runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+            return { ...tx, balance: runningBalance };
+        });
+
+    }, [transactions, item, residenceId, currentStock]);
     
     const pageLoading = inventoryLoading || residencesLoading;
     
