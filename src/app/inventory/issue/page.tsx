@@ -12,16 +12,24 @@ import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2 } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface IssuedItem extends InventoryItem {
-    voucherItemId: string; // Unique ID for the item within this voucher
     issueQuantity: number;
-    buildingId?: string;
-    floorId?: string;
-    roomId?: string;
+}
+
+interface LocationWithItems {
+    locationId: string;
+    buildingId: string;
+    buildingName: string;
+    floorId: string;
+    floorName: string;
+    roomId: string;
+    roomName: string;
+    items: IssuedItem[];
 }
 
 export default function IssueMaterialPage() {
@@ -33,8 +41,13 @@ export default function IssueMaterialPage() {
     // Form state
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     
-    // Items state
-    const [issuedItems, setIssuedItems] = useState<IssuedItem[]>([]);
+    // Location selection state
+    const [selectedBuildingId, setSelectedBuildingId] = useState('');
+    const [selectedFloorId, setSelectedFloorId] = useState('');
+    const [selectedRoomId, setSelectedRoomId] = useState('');
+
+    // Voucher state
+    const [voucherLocations, setVoucherLocations] = useState<LocationWithItems[]>([]);
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -42,9 +55,12 @@ export default function IssueMaterialPage() {
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
-    const selectedComplex = useMemo(() => {
-        return residences.find(c => c.id === selectedComplexId);
-    }, [selectedComplexId, residences]);
+    const selectedComplex = useMemo(() => residences.find(c => c.id === selectedComplexId), [selectedComplexId, residences]);
+    const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
+    const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
+    const selectedRoom = useMemo(() => selectedFloor?.rooms.find(r => r.id === selectedRoomId), [selectedRoomId, selectedFloor]);
+    
+    const isLocationSelected = useMemo(() => selectedBuildingId && selectedFloorId && selectedRoomId, [selectedBuildingId, selectedFloorId, selectedRoomId]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
@@ -54,32 +70,73 @@ export default function IssueMaterialPage() {
 
     // Reset selections when a parent selection changes
     useEffect(() => {
-        setIssuedItems([]);
+        setVoucherLocations([]);
     }, [selectedComplexId]);
 
+    useEffect(() => {
+        setSelectedFloorId('');
+        setSelectedRoomId('');
+    }, [selectedBuildingId]);
 
-    const handleAddItem = (item: InventoryItem) => {
-        const stock = getStockForResidence(item, selectedComplexId);
+    useEffect(() => {
+        setSelectedRoomId('');
+    }, [selectedFloorId]);
+    
+    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+        if (!isLocationSelected || !selectedComplex || !selectedBuilding || !selectedFloor || !selectedRoom) {
+            toast({ title: "No Location Selected", description: "Please select a building, floor, and room first.", variant: "destructive"});
+            return;
+        }
+
+        const stock = getStockForResidence(itemToAdd, selectedComplexId);
         if (stock < 1) {
             toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
             return;
         }
 
-        setIssuedItems(prevItems => {
-            const newItem: IssuedItem = {
-                ...item,
-                voucherItemId: `${item.id}-${Date.now()}`, // Create a unique ID for this line item
-                issueQuantity: 1,
-                buildingId: '',
-                floorId: '',
-                roomId: '',
-            };
-            return [...prevItems, newItem];
+        const locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+        
+        setVoucherLocations(prevLocations => {
+            const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
+            
+            // Location already exists in voucher
+            if (existingLocationIndex > -1) {
+                const newLocations = [...prevLocations];
+                const targetLocation = newLocations[existingLocationIndex];
+                const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
+
+                if (existingItemIndex > -1) {
+                    // Item already in location, increment quantity
+                    const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
+                    if(currentQty < stock) {
+                        targetLocation.items[existingItemIndex].issueQuantity += 1;
+                    } else {
+                         toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                    }
+                } else {
+                    // Add new item to location
+                    targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                }
+                return newLocations;
+            } else {
+                 // Add new location with the new item
+                const newLocation: LocationWithItems = {
+                    locationId,
+                    buildingId: selectedBuildingId,
+                    buildingName: selectedBuilding.name,
+                    floorId: selectedFloorId,
+                    floorName: selectedFloor.name,
+                    roomId: selectedRoomId,
+                    roomName: selectedRoom.name,
+                    items: [{ ...itemToAdd, issueQuantity: 1 }]
+                };
+                return [...prevLocations, newLocation];
+            }
         });
     };
-    
-    const handleQuantityChange = (voucherItemId: string, newQuantity: number) => {
-        const itemInfo = issuedItems.find(i => i.voucherItemId === voucherItemId);
+
+    const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
+         const itemInfo = allItems.find(i => i.id === itemId);
         if (!itemInfo || !selectedComplexId) return;
 
         const stock = getStockForResidence(itemInfo, selectedComplexId);
@@ -92,60 +149,39 @@ export default function IssueMaterialPage() {
             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
         }
         
-        setIssuedItems(prevItems => prevItems.map(item => 
-            item.voucherItemId === voucherItemId ? { ...item, issueQuantity: quantity } : item
+        setVoucherLocations(prev => prev.map(loc => 
+            loc.locationId === locationId 
+            ? { ...loc, items: loc.items.map(item => item.id === itemId ? {...item, issueQuantity: quantity} : item) }
+            : loc
         ));
     };
 
-    const handleLocationChange = (voucherItemId: string, field: 'buildingId' | 'floorId' | 'roomId', value: string) => {
-        setIssuedItems(prevItems => prevItems.map(item => {
-            if (item.voucherItemId === voucherItemId) {
-                const updatedItem = { ...item, [field]: value };
-                // Reset child fields when a parent changes
-                if (field === 'buildingId') {
-                    updatedItem.floorId = '';
-                    updatedItem.roomId = '';
-                } else if (field === 'floorId') {
-                    updatedItem.roomId = '';
+    const handleRemoveItem = (locationId: string, itemId: string) => {
+        setVoucherLocations(prev => {
+            const newLocations = prev.map(loc => {
+                if (loc.locationId === locationId) {
+                    return { ...loc, items: loc.items.filter(item => item.id !== itemId) };
                 }
-                return updatedItem;
-            }
-            return item;
-        }));
+                return loc;
+            });
+            // Remove location if it has no items left
+            return newLocations.filter(loc => loc.items.length > 0);
+        });
     };
     
-    const handleRemoveItem = (voucherItemId: string) => {
-        setIssuedItems(prevItems => prevItems.filter(item => item.voucherItemId !== voucherItemId));
-    };
-
     const handleSubmitVoucher = () => {
-        // Logic to submit the MIV
         console.log({
             complex: selectedComplexId,
-            items: issuedItems
+            issuedItemsByLocation: voucherLocations
         })
     };
 
     const isVoucherSubmittable = useMemo(() => {
-        if (issuedItems.length === 0) return false;
-        // Every item must have a quantity, building, floor, and room selected.
-        return issuedItems.every(item => item.issueQuantity > 0 && item.buildingId && item.floorId && item.roomId);
-    }, [issuedItems]);
-
+        return voucherLocations.length > 0 && voucherLocations.every(loc => loc.items.length > 0);
+    }, [voucherLocations]);
 
     if (residencesLoading || inventoryLoading) {
         return <Skeleton className="h-96 w-full" />
-    }
-
-    const getBuildingOptions = () => selectedComplex?.buildings || [];
-    const getFloorOptions = (buildingId?: string) => {
-        if (!buildingId) return [];
-        return selectedComplex?.buildings.find(b => b.id === buildingId)?.floors || [];
-    };
-    const getRoomOptions = (buildingId?: string, floorId?: string) => {
-        if (!buildingId || !floorId) return [];
-        return selectedComplex?.buildings.find(b => b.id === buildingId)
-            ?.floors.find(f => f.id === floorId)?.rooms || [];
     }
 
     return (
@@ -169,114 +205,128 @@ export default function IssueMaterialPage() {
                 </div>
             </div>
 
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Available Inventory for {selectedComplex?.name || '...'}</CardTitle>
-                        <CardDescription>Items with stock in the selected residence.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[400px]">
-                            {selectedComplexId ? (
-                                <div className="space-y-2">
-                                    {availableInventory.length > 0 ? availableInventory.map(item => (
-                                        <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-background hover:bg-muted/50">
-                                            <div>
-                                                <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
-                                            </div>
-                                            <Button size="icon" variant="outline" onClick={() => handleAddItem(item)}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    )) : (
-                                        <div className="text-center text-muted-foreground p-8">
-                                            No inventory with stock found for this residence.
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="text-center text-muted-foreground p-8">
-                                    Select a residence to see its inventory.
-                                </div>
-                            )}
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Items to Issue</CardTitle>
-                        <CardDescription>Specify location and quantity for each item.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[400px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead className="w-[120px] text-center">Location</TableHead>
-                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                        <TableHead className="w-[50px] text-right"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {issuedItems.length > 0 ? issuedItems.map(item => (
-                                        <TableRow key={item.voucherItemId}>
-                                            <TableCell className="font-medium align-top">
-                                                <p>{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-xs text-muted-foreground">{item.category}</p>
-                                            </TableCell>
-                                            <TableCell className="space-y-2">
-                                                 <Select value={item.buildingId} onValueChange={(val) => handleLocationChange(item.voucherItemId, 'buildingId', val)} disabled={!selectedComplexId}>
-                                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Building" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {getBuildingOptions().map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Select value={item.floorId} onValueChange={(val) => handleLocationChange(item.voucherItemId, 'floorId', val)} disabled={!item.buildingId}>
-                                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Floor" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {getFloorOptions(item.buildingId).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Select value={item.roomId} onValueChange={(val) => handleLocationChange(item.voucherItemId, 'roomId', val)} disabled={!item.floorId}>
-                                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Room" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {getRoomOptions(item.buildingId, item.floorId).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell className="align-top">
-                                                 <div className="flex items-center justify-center gap-2">
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.voucherItemId, item.issueQuantity - 1)}>
-                                                        <Minus className="h-4 w-4" />
-                                                    </Button>
-                                                    <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(item.voucherItemId, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.voucherItemId, item.issueQuantity + 1)}>
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Add Items to a Location</CardTitle>
+                    <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* Location Selection */}
+                        <div className="lg:col-span-1 space-y-4">
+                            <h3 className="font-semibold">Select Location</h3>
+                             <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
+                                <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
+                                <SelectContent>
+                                    {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
+                                <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
+                                <SelectContent>
+                                    {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
+                                <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
+                                <SelectContent>
+                                    {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {/* Available Inventory */}
+                        <div className="lg:col-span-3">
+                            <h3 className="font-semibold mb-4">Available Inventory</h3>
+                             <ScrollArea className="h-[250px] border rounded-md">
+                                {isLocationSelected ? (
+                                    <div className="p-2 space-y-2">
+                                        {availableInventory.length > 0 ? availableInventory.map(item => (
+                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
+                                                <div>
+                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
-                                            </TableCell>
-                                            <TableCell className="text-right align-top">
-                                                 <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.voucherItemId)}>
-                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)}>
+                                                    <Plus className="h-4 w-4" />
                                                 </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="h-48 text-center text-muted-foreground">
-                                                No items added to the voucher yet.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-            </div>
+                                            </div>
+                                        )) : (
+                                            <div className="text-center text-muted-foreground p-8">No inventory with stock found.</div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                                        Select a full location to see available items.
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
+                    <CardDescription>Review all items and locations before submitting the voucher.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {voucherLocations.length > 0 ? (
+                         <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
+                            {voucherLocations.map(location => (
+                                <AccordionItem key={location.locationId} value={location.locationId}>
+                                    <AccordionTrigger className="font-semibold text-lg">
+                                        {location.buildingName} &rarr; {location.floorName} &rarr; {location.roomName}
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Item</TableHead>
+                                                    <TableHead className="w-[150px] text-center">Quantity</TableHead>
+                                                    <TableHead className="w-[50px] text-right"></TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {location.items.map(item => (
+                                                    <TableRow key={item.id}>
+                                                         <TableCell className="font-medium">
+                                                            <p>{item.nameAr} / {item.nameEn}</p>
+                                                            <p className="text-xs text-muted-foreground">{item.category}</p>
+                                                        </TableCell>
+                                                         <TableCell>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
+                                                                    <Minus className="h-4 w-4" />
+                                                                </Button>
+                                                                <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
+                                                                    <Plus className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
+                                                                <Trash2 className="h-4 w-4 text-destructive"/>
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </Accordion>
+                    ) : (
+                        <div className="text-center text-muted-foreground p-8">
+                            No items added to the voucher yet.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
         </div>
     );
 }
+
