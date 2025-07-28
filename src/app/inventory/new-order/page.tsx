@@ -88,11 +88,17 @@ export default function NewOrderPage() {
             toast({ title: "Error", description: "Please select a residence for the request.", variant: "destructive" });
             return;
         }
+
+        if (!currentUser) {
+            toast({ title: "Error", description: "User not found. Please log in again.", variant: "destructive" });
+            return;
+        }
         
         const newOrderData = {
             residence: selectedResidence.name,
             residenceId: selectedResidence.id,
             items: orderItems,
+            requestedById: currentUser.id,
         };
         
         const newOrderId = await createOrder(newOrderData);

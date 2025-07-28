@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction } from "firebase/firestore";
 import type { InventoryItem } from './inventory-context';
 import { useResidences } from './residences-context';
+import { useUsers } from './users-context';
 
 export interface OrderItem extends InventoryItem {
   quantity: number;
@@ -24,12 +25,14 @@ export interface Order {
   date: Timestamp;
   residence: string; // This is the residence name
   residenceId: string; // This is the residence ID
+  requestedById: string;
+  approvedById?: string;
   items: OrderItem[];
   itemsReceived?: ReceivedOrderItem[]; // Tracks total received quantities per item
   status: OrderStatus;
 }
 
-type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived'>;
+type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived' | 'approvedById'>;
 type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId'>;
 
 
@@ -39,7 +42,7 @@ interface OrdersContextType {
   loadOrders: () => void;
   createOrder: (orderData: NewOrderPayload) => Promise<string | null>;
   updateOrder: (id: string, orderData: UpdateOrderPayload) => Promise<void>;
-  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  updateOrderStatus: (id: string, status: OrderStatus, approverId?: string) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
   receiveOrderItems: (orderId: string, newlyReceivedItems: OrderItem[]) => Promise<void>;
@@ -55,7 +58,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
-  const { residences } = useResidences();
 
   const loadOrders = useCallback(() => {
     if (isLoaded.current) return;
@@ -165,14 +167,19 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-   const updateOrderStatus = async (id: string, status: OrderStatus) => {
+   const updateOrderStatus = async (id: string, status: OrderStatus, approverId?: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     try {
         const orderDocRef = doc(db, "orders", id);
-        await updateDoc(orderDocRef, { status });
+        const updatePayload: {status: OrderStatus, approvedById?: string} = { status };
+        if (status === 'Approved' && approverId) {
+            updatePayload.approvedById = approverId;
+        }
+
+        await updateDoc(orderDocRef, updatePayload);
         toast({ title: "Success", description: `Order status changed to ${status}.` });
     } catch (error) {
         console.error("Error updating order status:", error);
@@ -208,15 +215,10 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                     const itemRef = doc(db, "inventory", receivedItem.id);
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     
-                    const itemSnap = await transaction.get(itemRef);
-                    const itemData = itemSnap.data();
-
-                    if (itemData && itemData.stockByResidence && itemData.stockByResidence[residenceId]) {
-                         transaction.update(itemRef, { [stockUpdateKey]: increment(receivedItem.quantityReceived) });
-                    } else {
-                        // If stockByResidence or the specific residenceId key doesn't exist, set it.
-                        transaction.set(itemRef, { stockByResidence: { [residenceId]: receivedItem.quantityReceived } }, { merge: true });
-                    }
+                    transaction.set(itemRef, 
+                        { stockByResidence: { [residenceId]: increment(receivedItem.quantityReceived) } }, 
+                        { merge: true }
+                    );
                 }
             }
             

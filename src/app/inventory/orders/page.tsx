@@ -53,6 +53,15 @@ export default function PurchaseOrdersPage() {
         ))
     );
 
+    const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
+        if (status === 'Approved' && currentUser) {
+            updateOrderStatus(orderId, status, currentUser.id);
+        } else {
+            updateOrderStatus(orderId, status);
+        }
+    };
+
+
     return (
         <div className="space-y-6">
              <div className="flex items-center justify-between">
@@ -132,16 +141,16 @@ export default function PurchaseOrdersPage() {
                                                 {isAdmin && <DropdownMenuSub>
                                                     <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
                                                     <DropdownMenuSubContent>
-                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Pending')}>
+                                                        <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Pending')}>
                                                             <XCircle className="mr-2 h-4 w-4" /> Pending
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Approved')}>
+                                                        <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Approved')}>
                                                             <CheckCircle className="mr-2 h-4 w-4" /> Approved
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Delivered')}>
+                                                        <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Delivered')}>
                                                             <Truck className="mr-2 h-4 w-4" /> Delivered
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => updateOrderStatus(order.id, 'Cancelled')}>
+                                                        <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Cancelled')}>
                                                             <XCircle className="mr-2 h-4 w-4 text-destructive" /> Cancelled
                                                         </DropdownMenuItem>
                                                     </DropdownMenuSubContent>

@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useOrders, type Order } from '@/context/orders-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,11 +18,14 @@ export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { getOrderById } = useOrders();
-    const { currentUser, users, loading: usersLoading } = useUsers();
+    const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
 
     const isAdmin = currentUser?.role === 'Admin';
+    const requestedBy = order?.requestedById ? getUserById(order.requestedById) : null;
+    const approvedBy = order?.approvedById ? getUserById(order.approvedById) : null;
+
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -84,6 +87,8 @@ export default function OrderDetailPage() {
     }
 
     const totalItems = order.items.length;
+    const totalQuantity = order.items.reduce((acc, item) => acc + item.quantity, 0);
+
 
     const groupedItems = order.items.reduce((acc, item) => {
         const category = item.category || 'Uncategorized';
@@ -98,10 +103,6 @@ export default function OrderDetailPage() {
         <div className="space-y-6">
              <style jsx global>{`
                 @media print {
-                  body {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                  }
                   body * {
                     visibility: hidden;
                   }
@@ -116,7 +117,8 @@ export default function OrderDetailPage() {
                     height: auto;
                     box-shadow: none !important;
                     border: none !important;
-                    padding: 1rem;
+                    padding: 1rem !important;
+                    margin: 0 !important;
                   }
                   .printable-area .print-title {
                       font-size: 2rem !important;
@@ -130,6 +132,9 @@ export default function OrderDetailPage() {
                    .printable-area .print-table {
                        border-top: 1px solid #e5e7eb;
                        border-bottom: 1px solid #e5e7eb;
+                   }
+                   .no-print {
+                       display: none !important;
                    }
                 }
             `}</style>
@@ -212,6 +217,21 @@ export default function OrderDetailPage() {
                         Total Items: {totalItems}
                     </div>
                 </CardContent>
+
+                <CardFooter className="mt-8 pt-4 border-t">
+                    <div className="grid grid-cols-2 gap-8 w-full">
+                        <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Requested By:</p>
+                            <p className="font-semibold">{requestedBy?.name || '...'}</p>
+                            <div className="mt-4 border-t-2 w-48"></div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Approved By:</p>
+                             <p className="font-semibold">{approvedBy?.name || '...'}</p>
+                            <div className="mt-4 border-t-2 w-48"></div>
+                        </div>
+                    </div>
+                </CardFooter>
             </Card>
         </div>
     )

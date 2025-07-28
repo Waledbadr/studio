@@ -22,6 +22,7 @@ interface UsersContextType {
   saveUser: (user: Omit<User, 'id'> | User) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   switchUser: (user: User) => void;
+  getUserById: (id: string) => User | null;
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
@@ -117,10 +118,14 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setCurrentUser(user);
     toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
   };
+  
+  const getUserById = (id: string): User | null => {
+    return users.find(user => user.id === id) || null;
+  }
 
 
   return (
-    <UsersContext.Provider value={{ users, currentUser, loading, loadUsers, saveUser, deleteUser, switchUser }}>
+    <UsersContext.Provider value={{ users, currentUser, loading, loadUsers, saveUser, deleteUser, switchUser, getUserById }}>
       {children}
     </UsersContext.Provider>
   );
