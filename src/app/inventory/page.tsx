@@ -44,7 +44,7 @@ export default function InventoryPage() {
     setIsEditItemDialogOpen(true);
   }
 
-  const handleItemAdded = (newItem: Omit<InventoryItem, 'id'>) => {
+  const handleItemAdded = (newItem: Omit<InventoryItem, 'id' | 'stock'>) => {
     return addItem(newItem);
   }
 
@@ -102,7 +102,7 @@ export default function InventoryPage() {
             <TableHead>English Name</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Unit</TableHead>
-            <TableHead>Stock</TableHead>
+            <TableHead>Total Stock</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>

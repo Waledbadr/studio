@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment } from "firebase/firestore";
 import type { InventoryItem } from './inventory-context';
+import { useResidences } from './residences-context';
 
 export interface OrderItem extends InventoryItem {
   quantity: number;
@@ -20,14 +21,15 @@ export type OrderStatus = 'Pending' | 'Approved' | 'Delivered' | 'Cancelled';
 export interface Order {
   id: string;
   date: Timestamp;
-  residence: string;
+  residence: string; // This is the residence name
+  residenceId: string; // This is the residence ID
   items: OrderItem[];
   itemsReceived?: ReceivedOrderItem[]; // Optional: store what was actually received
   status: OrderStatus;
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived'>;
-type UpdateOrderPayload = Pick<Order, 'items' | 'residence'>;
+type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId'>;
 
 
 interface OrdersContextType {
@@ -52,6 +54,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
+  const { residences } = useResidences();
 
   const loadOrders = useCallback(() => {
     if (isLoaded.current) return;
@@ -177,30 +180,44 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const receiveOrderItems = async (orderId: string, receivedItems: ReceivedOrderItem[]) => {
-     if (!db) {
+     if (!db || !residences) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     setLoading(true);
     try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderSnap = await getDoc(orderRef);
+      if (!orderSnap.exists()) {
+          throw new Error("Order not found");
+      }
+      const orderData = orderSnap.data() as Order;
+      const residenceId = orderData.residenceId;
+
+      if (!residenceId) {
+          throw new Error("Residence ID not found on order.");
+      }
+
       const batch = writeBatch(db);
 
-      // 1. Update stock for each received item
-      receivedItems.forEach(item => {
+      // 1. Update stock for each received item for the specific residence
+      for (const item of receivedItems) {
         if (item.quantityReceived > 0) {
           const itemRef = doc(db, "inventory", item.id);
-          batch.update(itemRef, { stock: increment(item.quantityReceived) });
+          const stockUpdateKey = `stockByResidence.${residenceId}`;
+          batch.update(itemRef, { [stockUpdateKey]: increment(item.quantityReceived) });
         }
-      });
+      }
 
       // 2. Update the order status and received items data
-      const orderRef = doc(db, "orders", orderId);
       batch.update(orderRef, { 
         status: 'Delivered',
         itemsReceived: receivedItems 
       });
 
       await batch.commit();
+      toast({ title: "Success", description: "Stock has been updated and request marked as delivered." });
+
 
     } catch (error) {
       console.error("Error receiving order items:", error);

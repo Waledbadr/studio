@@ -36,11 +36,7 @@ export default function PurchaseOrdersPage() {
         if (!currentUser) return [];
         if (isAdmin) return orders;
 
-        const userResidenceNames = currentUser.assignedResidences
-            .map(id => residences.find(r => r.id === id)?.name)
-            .filter(Boolean);
-            
-        return orders.filter(order => userResidenceNames.includes(order.residence));
+        return orders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
     }, [orders, currentUser, isAdmin, residences]);
 
 

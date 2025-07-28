@@ -36,12 +36,8 @@ export default function ReceiveMaterialsPage() {
         if (currentUser.role === 'Admin') {
             return approvedOrders;
         }
-
-        const userResidenceNames = currentUser.assignedResidences
-            .map(id => residences.find(r => r.id === id)?.name)
-            .filter(Boolean);
-
-        return approvedOrders.filter(order => userResidenceNames.includes(order.residence));
+        
+        return approvedOrders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
     }, [orders, currentUser, residences]);
 
 

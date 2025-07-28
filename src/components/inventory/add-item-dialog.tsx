@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface AddItemDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    onItemAdded: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
+    onItemAdded: (item: Omit<InventoryItem, 'id' | 'stock'>) => Promise<InventoryItem | void>;
     triggerButton?: ReactNode;
     initialName?: string;
     onItemAddedAndOrdered?: (item: InventoryItem) => void;
@@ -32,7 +32,6 @@ export function AddItemDialog({
     const [name, setName] = useState(initialName);
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
-    const [stock, setStock] = useState('');
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -43,14 +42,13 @@ export function AddItemDialog({
             setName(initialName);
             setCategory('');
             setUnit('');
-            setStock('');
         }
     }, [isOpen, initialName]);
 
     const handleAddItem = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!name || !category || !unit || !stock) {
+        if (!name || !category || !unit) {
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
@@ -59,13 +57,13 @@ export function AddItemDialog({
             try {
                 const translationResult = await translateItemName({ name: name });
 
-                const newInventoryItem: Omit<InventoryItem, 'id'> = {
+                const newInventoryItem: Omit<InventoryItem, 'id' | 'stock'> = {
                     name: name,
                     nameAr: translationResult.arabicName,
                     nameEn: translationResult.englishName,
                     category: category,
                     unit: unit,
-                    stock: parseInt(stock, 10),
+                    stockByResidence: {},
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -87,7 +85,7 @@ export function AddItemDialog({
             <form onSubmit={handleAddItem}>
                 <DialogHeader>
                 <DialogTitle>Add New Inventory Item</DialogTitle>
-                <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically.</DialogDescription>
+                <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically. Initial stock is set to zero and managed via receiving vouchers.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -112,10 +110,6 @@ export function AddItemDialog({
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="item-unit" className="text-right">Unit</Label>
                         <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="item-stock" className="text-right">Stock</Label>
-                        <Input id="item-stock" type="number" placeholder="e.g., 100" className="col-span-3" value={stock} onChange={e => setStock(e.target.value)} />
                     </div>
                 </div>
                 <DialogFooter>

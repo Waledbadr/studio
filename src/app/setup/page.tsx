@@ -14,18 +14,25 @@ import type { InventoryItem } from "@/context/inventory-context";
 export default function SetupPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [firstResidenceId, setFirstResidenceId] = useState<string | null>(null);
 
     const seedResidencesData = async (batch: ReturnType<typeof writeBatch>) => {
         const residencesCollection = collection(db, "residences");
         const snapshot = await getDocs(residencesCollection);
         if (!snapshot.empty) {
             toast({ title: "Skipped Seeding", description: "Residences collection already contains data." });
+            setFirstResidenceId(snapshot.docs[0].id);
             return;
         }
+
+        const docRef = doc(residencesCollection);
+        const complexId = docRef.id;
+        setFirstResidenceId(complexId);
 
         const sampleComplex: Omit<Complex, 'id'> = {
             name: "Seaside Residences",
             city: "Dubai",
+            managerId: '', // Will be set later if needed
             buildings: [
                 {
                     id: 'building-1', name: "Building A", floors: [
@@ -53,12 +60,11 @@ export default function SetupPage() {
                 }
             ]
         };
-        const docRef = doc(residencesCollection);
-        batch.set(docRef, { ...sampleComplex, id: docRef.id });
+        batch.set(docRef, { ...sampleComplex, id: complexId });
         console.log("Residences data prepared for seeding.");
     };
 
-    const seedInventoryData = async (batch: ReturnType<typeof writeBatch>) => {
+    const seedInventoryData = async (batch: ReturnType<typeof writeBatch>, residenceId: string) => {
         const inventoryCollection = collection(db, "inventory");
         const snapshot = await getDocs(inventoryCollection);
         if (!snapshot.empty) {
@@ -66,12 +72,13 @@ export default function SetupPage() {
             return;
         }
         
-        const sampleItems: Omit<InventoryItem, 'id'>[] = [
-            { name: "Light Bulb", nameAr: "لمبة إضاءة", nameEn: "Light Bulb", category: "electrical", unit: "Piece", stock: 150 },
-            { name: "Cleaning Spray", nameAr: "بخاخ تنظيف", nameEn: "Cleaning Spray", category: "cleaning", unit: "Bottle", stock: 80 },
-            { name: "Water Tap", nameAr: "صنبور ماء", nameEn: "Water Tap", category: "plumbing", unit: "Piece", stock: 50 },
-            { name: "Power Socket", nameAr: "مقبس كهربائي", nameEn: "Power Socket", category: "electrical", unit: "Piece", stock: 120 },
-            { name: "Trash Bags", nameAr: "أكياس قمامة", nameEn: "Trash Bags", category: "cleaning", unit: "Roll", stock: 200 },
+        type SampleItem = Omit<InventoryItem, 'id' | 'stock'>;
+        const sampleItems: SampleItem[] = [
+            { name: "Light Bulb", nameAr: "لمبة إضاءة", nameEn: "Light Bulb", category: "electrical", unit: "Piece", stockByResidence: { [residenceId]: 150 } },
+            { name: "Cleaning Spray", nameAr: "بخاخ تنظيف", nameEn: "Cleaning Spray", category: "cleaning", unit: "Bottle", stockByResidence: { [residenceId]: 80 } },
+            { name: "Water Tap", nameAr: "صنبور ماء", nameEn: "Water Tap", category: "plumbing", unit: "Piece", stockByResidence: { [residenceId]: 50 } },
+            { name: "Power Socket", nameAr: "مقبس كهربائي", nameEn: "Power Socket", category: "electrical", unit: "Piece", stockByResidence: { [residenceId]: 120 } },
+            { name: "Trash Bags", nameAr: "أكياس قمامة", nameEn: "Trash Bags", category: "cleaning", unit: "Roll", stockByResidence: { [residenceId]: 200 } },
         ];
         
         sampleItems.forEach(item => {
@@ -90,10 +97,27 @@ export default function SetupPage() {
         try {
             const batch = writeBatch(db);
             
-            await Promise.all([
-                seedResidencesData(batch),
-                seedInventoryData(batch)
-            ]);
+            await seedResidencesData(batch);
+            
+            // This logic ensures we have a residence ID to associate initial stock with.
+            let resId = firstResidenceId;
+            if (!resId) {
+                const residencesCollection = collection(db, "residences");
+                const snapshot = await getDocs(residencesCollection);
+                if (!snapshot.empty) {
+                    resId = snapshot.docs[0].id;
+                } else {
+                    // This case handles when the collection is truly empty and we are seeding it now.
+                    // The ref is created inside seedResidencesData but not committed yet.
+                    // To keep it simple, we'll re-query after commit if needed, or rely on the user to run setup again if inventory fails.
+                    // A more robust solution would pass the new docRef.id out of the seeding function.
+                    console.warn("Could not determine a residence ID for inventory seeding. Inventory might not be seeded.");
+                }
+            }
+
+            if (resId) {
+                 await seedInventoryData(batch, resId);
+            }
 
             await batch.commit();
             

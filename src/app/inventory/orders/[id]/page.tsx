@@ -77,6 +77,11 @@ export default function OrderDetailPage() {
             </div>
         )
     }
+    
+    const getStockForResidence = (item: OrderItem) => {
+        if (!order?.residenceId || !item.stockByResidence) return 0;
+        return item.stockByResidence[order.residenceId] || 0;
+    }
 
     const totalItems = order.items.length;
 
@@ -185,7 +190,7 @@ export default function OrderDetailPage() {
                                                 <TableCell>{item.nameEn}</TableCell>
                                                 <TableCell>{item.unit}</TableCell>
                                                 <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                                                <TableCell className="text-center">{item.stock}</TableCell>
+                                                <TableCell className="text-center">{getStockForResidence(item)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </React.Fragment>

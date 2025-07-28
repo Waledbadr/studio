@@ -28,7 +28,7 @@ export function EditItemDialog({
     const [nameAr, setNameAr] = useState('');
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
-    const [stock, setStock] = useState('');
+    // stock is now managed per residence, so we don't edit it here directly.
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -40,14 +40,13 @@ export function EditItemDialog({
             setNameAr(item.nameAr);
             setCategory(item.category);
             setUnit(item.unit);
-            setStock(String(item.stock));
         }
     }, [item]);
 
     const handleUpdateItem = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!nameEn || !nameAr || !category || !unit || !stock || !item) {
+        if (!nameEn || !nameAr || !category || !unit || !item) {
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
@@ -60,7 +59,6 @@ export function EditItemDialog({
                 nameEn: nameEn,
                 category: category,
                 unit: unit,
-                stock: parseInt(stock, 10),
             };
 
             await onItemUpdated(updatedItem);
@@ -74,7 +72,7 @@ export function EditItemDialog({
                 <form onSubmit={handleUpdateItem}>
                     <DialogHeader>
                         <DialogTitle>Edit Inventory Item</DialogTitle>
-                        <DialogDescription>Update the details for this item.</DialogDescription>
+                        <DialogDescription>Update the details for this item. Stock is managed via Material Receipt Vouchers.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -103,10 +101,6 @@ export function EditItemDialog({
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="item-unit" className="text-right">Unit</Label>
                             <Input id="item-unit" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="item-stock" className="text-right">Stock</Label>
-                            <Input id="item-stock" type="number" className="col-span-3" value={stock} onChange={e => setStock(e.target.value)} />
                         </div>
                     </div>
                     <DialogFooter>

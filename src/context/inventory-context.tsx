@@ -16,14 +16,15 @@ export interface InventoryItem {
   nameEn: string;
   category: ItemCategory;
   unit: string;
-  stock: number;
+  stock: number; // This will now represent total stock across all residences.
+  stockByResidence?: { [residenceId: string]: number };
 }
 
 interface InventoryContextType {
   items: InventoryItem[];
   categories: string[];
   loading: boolean;
-  addItem: (item: Omit<InventoryItem, 'id'>) => Promise<InventoryItem | void>;
+  addItem: (item: Omit<InventoryItem, 'id' | 'stock'>) => Promise<InventoryItem | void>;
   updateItem: (item: InventoryItem) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   loadInventory: () => void;
@@ -59,7 +60,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const inventoryCollection = collection(db, "inventory");
     inventoryUnsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
-      const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+      const inventoryData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const stockByResidence = data.stockByResidence || {};
+          const totalStock = Object.values(stockByResidence).reduce((sum: number, current: any) => sum + (Number(current) || 0), 0);
+          return {
+              id: doc.id,
+              ...data,
+              stock: totalStock,
+              stockByResidence: stockByResidence,
+          } as InventoryItem;
+      });
       setItems(inventoryData);
        const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
        if (categories.length === 0 && uniqueCategories.length > 0) {
@@ -159,7 +170,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addItem = async (newItem: Omit<InventoryItem, 'id'>): Promise<InventoryItem | void> => {
+  const addItem = async (newItem: Omit<InventoryItem, 'id' | 'stock'>): Promise<InventoryItem | void> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -171,7 +182,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id };
+      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {} };
       await setDoc(docRef, itemWithId);
       
       const newCategory = newItem.category.toLowerCase();
@@ -194,7 +205,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const itemDocRef = doc(db, "inventory", itemToUpdate.id);
-      await updateDoc(itemDocRef, { ...itemToUpdate });
+      const { stock, ...itemData } = itemToUpdate; // Exclude total stock from being written to DB
+      await updateDoc(itemDocRef, { ...itemData });
       toast({ title: "Success", description: "Item updated." });
     } catch (error) {
       console.error("Error updating item:", error);

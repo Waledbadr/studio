@@ -19,6 +19,7 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import type { Complex } from '@/context/residences-context';
 
 
 export default function NewOrderPage() {
@@ -28,7 +29,7 @@ export default function NewOrderPage() {
     const { residences, loadResidences } = useResidences();
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-    const [selectedResidence, setSelectedResidence] = useState<string | undefined>(undefined);
+    const [selectedResidence, setSelectedResidence] = useState<Complex | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
@@ -42,17 +43,15 @@ export default function NewOrderPage() {
         if (residences.length === 0) loadResidences();
     }, [loadInventory, loadUsers, loadResidences, users.length, residences.length]);
 
-    useEffect(() => {
-        if (currentUser?.assignedResidences?.length === 1) {
-            const residenceId = currentUser.assignedResidences[0];
-            const residenceName = residences.find(r => r.id === residenceId)?.name;
-            setSelectedResidence(residenceName);
-        }
-    }, [currentUser, residences]);
-
     const userResidences = currentUser?.assignedResidences
         ?.map(id => residences.find(r => r.id === id))
         .filter((r): r is NonNullable<typeof r> => r !== undefined) || [];
+
+    useEffect(() => {
+        if (userResidences.length === 1) {
+            setSelectedResidence(userResidences[0]);
+        }
+    }, [currentUser, residences, userResidences]);
 
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
@@ -60,12 +59,10 @@ export default function NewOrderPage() {
             const existingItem = currentOrderItems.find(item => item.id === itemToAdd.id);
 
             if (existingItem) {
-                // If item already exists, just increment its quantity
                 return currentOrderItems.map(item => 
                     item.id === itemToAdd.id ? {...item, quantity: item.quantity + 1} : item
                 );
             } else {
-                // Otherwise, add it to the order with quantity 1
                 return [...currentOrderItems, { ...itemToAdd, quantity: 1 }];
             }
         });
@@ -93,7 +90,8 @@ export default function NewOrderPage() {
         }
         
         const newOrderData = {
-            residence: selectedResidence,
+            residence: selectedResidence.name,
+            residenceId: selectedResidence.id,
             items: orderItems,
         };
         
@@ -116,10 +114,20 @@ export default function NewOrderPage() {
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
 
     const handleNewItemAdded = (newItemWithId: InventoryItem) => {
-        // This function is called from the dialog after the item is created in the DB
         handleAddItemToOrder(newItemWithId);
-        setSearchQuery(''); // Clear search query
+        setSearchQuery('');
     };
+
+    const handleResidenceChange = (residenceId: string) => {
+        const residence = userResidences.find(r => r.id === residenceId);
+        setSelectedResidence(residence);
+        setOrderItems([]); // Clear order items when residence changes
+    };
+    
+    const getStockForResidence = (item: InventoryItem) => {
+        if (!selectedResidence || !item.stockByResidence) return 0;
+        return item.stockByResidence[selectedResidence.id] || 0;
+    }
 
     return (
         <div className="space-y-6">
@@ -129,19 +137,19 @@ export default function NewOrderPage() {
                     {userResidences.length > 1 ? (
                         <div className="flex items-center gap-4 mt-2">
                              <Label htmlFor="residence-select" className="text-muted-foreground">Request for residence:</Label>
-                             <Select onValueChange={setSelectedResidence} value={selectedResidence}>
+                             <Select onValueChange={handleResidenceChange} value={selectedResidence?.id}>
                                 <SelectTrigger id="residence-select" className="w-[250px]">
                                     <SelectValue placeholder="Select a residence" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {userResidences.map(res => (
-                                        <SelectItem key={res.id} value={res.name}>{res.name}</SelectItem>
+                                        <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                              </Select>
                         </div>
                     ) : (
-                         <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{selectedResidence || '...'}</span></p>
+                         <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{selectedResidence?.name || '...'}</span></p>
                     )}
                 </div>
                 <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading || !selectedResidence}>
@@ -196,9 +204,9 @@ export default function NewOrderPage() {
                                         <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                                             <div>
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {item.stock} {item.unit}</p>
+                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
                                             </div>
-                                            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+                                            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={!selectedResidence}>
                                                 <Plus className="h-4 w-4" />
                                             </Button>
                                         </div>
