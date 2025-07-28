@@ -47,8 +47,8 @@ function ItemMovementContent() {
         const totalIn = transactions.filter(tx => tx.type === 'IN').reduce((sum, tx) => sum + tx.quantity, 0);
         const totalOut = transactions.filter(tx => tx.type === 'OUT').reduce((sum, tx) => sum + tx.quantity, 0);
         
-        // Opening balance is the current stock minus the net of transactions shown.
-        return currentStockInResidence - (totalIn - totalOut);
+        // Correct calculation for Opening Balance: Current Stock - IN transactions + OUT transactions
+        return currentStockInResidence - totalIn + totalOut;
     }, [transactions, item, residenceId]);
 
 
