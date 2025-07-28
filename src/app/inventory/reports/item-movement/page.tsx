@@ -122,7 +122,7 @@ function ItemMovementContent() {
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
                     <div className="text-3xl font-bold">
-                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
+                        {inventoryLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
                     </div>
                 </div>
             </div>
