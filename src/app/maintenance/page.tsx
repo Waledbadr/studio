@@ -20,22 +20,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useMaintenance, type MaintenanceRequest, type MaintenanceStatus } from "@/context/maintenance-context";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUsers } from "@/context/users-context";
 
 export default function MaintenancePage() {
     const { requests, loading, loadRequests, updateRequestStatus } = useMaintenance();
+    const { currentUser } = useUsers();
     const [activeTab, setActiveTab] = useState('all');
+    const isAdmin = currentUser?.role === 'Admin';
+
 
     useEffect(() => {
         loadRequests();
     }, [loadRequests]);
     
+    const userRequests = useMemo(() => {
+        if (!currentUser || isAdmin) return requests;
+        return requests.filter(r => currentUser.assignedResidences.includes(r.complexId));
+    }, [requests, currentUser, isAdmin]);
+    
     const filteredRequests = (status: MaintenanceStatus | 'all') => {
-        if (status === 'all') return requests;
-        return requests.filter(r => r.status === status);
+        if (status === 'all') return userRequests;
+        return userRequests.filter(r => r.status === status);
     };
 
     const handleUpdateStatus = (id: string, status: MaintenanceStatus) => {

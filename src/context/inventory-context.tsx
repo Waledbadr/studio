@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot } from "firebase/firestore";
+import { useUsers } from './users-context';
 
 
 export type ItemCategory = string;
@@ -284,13 +285,44 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
        console.error("Error deleting item:", error);
     }
   }
+  
+    const generateNewMivId = async (): Promise<string> => {
+        if (!db) {
+            throw new Error("Firebase not initialized");
+        }
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(-2);
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const prefix = `MIV-${year}-${month}-`;
+
+        const mivQuery = query(collection(db, "inventoryTransactions"), 
+            where("referenceDocId", ">=", prefix),
+            where("type", "==", "OUT")
+        );
+        
+        const querySnapshot = await getDocs(mivQuery);
+        const docIds = new Set(querySnapshot.docs.map(doc => doc.data().referenceDocId));
+        
+        let maxNum = 0;
+        docIds.forEach(docId => {
+            if (docId.startsWith(prefix)) {
+                const numPart = parseInt(docId.substring(prefix.length), 10);
+                if (!isNaN(numPart) && numPart > maxNum) {
+                    maxNum = numPart;
+                }
+            }
+        });
+
+        const nextRequestNumber = (maxNum + 1).toString().padStart(3, '0');
+        return `${prefix}${nextRequestNumber}`;
+    };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
     }
     
-    const mivId = `MIV-${Date.now()}`;
+    const mivId = await generateNewMivId();
 
     try {
         await runTransaction(db, async (transaction) => {
@@ -367,14 +399,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
-            where("residenceId", "==", residenceId)
+            where("residenceId", "==", residenceId),
+            orderBy("date", "asc")
         );
 
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
-
         return transactions;
     } catch (error) {
         console.error("Error fetching inventory transactions:", error);

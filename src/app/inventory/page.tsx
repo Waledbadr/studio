@@ -24,6 +24,7 @@ export default function InventoryPage() {
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
   const router = useRouter();
+  const isAdmin = currentUser?.role === 'Admin';
   
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
   const [isEditItemDialogOpen, setIsEditItemDialogOpen] = useState(false);
@@ -44,9 +45,9 @@ export default function InventoryPage() {
 
   const userResidences = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'Admin') return residences;
+    if (isAdmin) return residences;
     return residences.filter(r => currentUser.assignedResidences.includes(r.id));
-  }, [currentUser, residences]);
+  }, [currentUser, residences, isAdmin]);
 
   const [activeTab, setActiveTab] = useState<string | undefined>(userResidences[0]?.id);
 

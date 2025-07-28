@@ -10,16 +10,20 @@ import Link from 'next/link';
 import { useMaintenance } from "@/context/maintenance-context";
 import { useOrders, type Order } from "@/context/orders-context";
 import { useInventory, type MIV } from "@/context/inventory-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { useUsers } from "@/context/users-context";
 
 export default function DashboardPage() {
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
   const { orders, loading: ordersLoading, loadOrders } = useOrders();
   const { getMIVs, loading: inventoryLoading } = useInventory();
+  const { currentUser, loading: usersLoading } = useUsers();
   
   const [mivs, setMivs] = useState<MIV[]>([]);
+  const isAdmin = currentUser?.role === 'Admin';
+
 
   useEffect(() => {
     loadRequests();
@@ -27,16 +31,31 @@ export default function DashboardPage() {
     getMIVs().then(setMivs);
   }, [loadRequests, loadOrders, getMIVs]);
   
-  const recentMaintenance = requests.slice(0, 5);
-  const recentMaterialRequests = orders.slice(0, 5);
-  const recentReceipts = orders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
-  const recentIssues = mivs.slice(0, 5);
+  const filteredMaintenance = useMemo(() => {
+    if (!currentUser || isAdmin) return requests;
+    return requests.filter(r => currentUser.assignedResidences.includes(r.complexId));
+  }, [requests, currentUser, isAdmin]);
 
-  const totalRequests = requests.length;
-  const pendingRequests = requests.filter(r => r.status === 'Pending').length;
-  const completedRequests = requests.filter(r => r.status === 'Completed').length;
+  const filteredOrders = useMemo(() => {
+    if (!currentUser || isAdmin) return orders;
+    return orders.filter(o => currentUser.assignedResidences.includes(o.residenceId));
+  }, [orders, currentUser, isAdmin]);
+  
+  const filteredMIVs = useMemo(() => {
+    if (!currentUser || isAdmin) return mivs;
+    return mivs.filter(miv => currentUser.assignedResidences.includes(miv.residenceId));
+  }, [mivs, currentUser, isAdmin]);
 
-  const loading = maintenanceLoading || ordersLoading || inventoryLoading;
+  const recentMaintenance = filteredMaintenance.slice(0, 5);
+  const recentMaterialRequests = filteredOrders.slice(0, 5);
+  const recentReceipts = filteredOrders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
+  const recentIssues = filteredMIVs.slice(0, 5);
+
+  const totalRequests = filteredMaintenance.length;
+  const pendingRequests = filteredMaintenance.filter(r => r.status === 'Pending').length;
+  const completedRequests = filteredMaintenance.filter(r => r.status === 'Completed').length;
+
+  const loading = maintenanceLoading || ordersLoading || inventoryLoading || usersLoading;
 
   return (
     <div className="flex flex-col gap-6">

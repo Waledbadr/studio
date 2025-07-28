@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -10,18 +10,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context';
 
 export default function MIVHistoryPage() {
     const { getMIVs, loading } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
+    const { currentUser, loading: usersLoading } = useUsers();
     const [mivs, setMivs] = useState<MIV[]>([]);
     const router = useRouter();
+    const isAdmin = currentUser?.role === 'Admin';
+
 
     useEffect(() => {
-        if (!loading && !residencesLoading) {
+        if (!loading && !residencesLoading && !usersLoading) {
             getMIVs().then(setMivs);
         }
-    }, [loading, residencesLoading, getMIVs]);
+    }, [loading, residencesLoading, usersLoading, getMIVs]);
+    
+    const filteredMIVs = useMemo(() => {
+        if (!currentUser) return [];
+        if (isAdmin) return mivs;
+        return mivs.filter(miv => currentUser.assignedResidences.includes(miv.residenceId));
+    }, [mivs, currentUser, isAdmin]);
     
     const getResidenceName = (residenceId: string) => {
         return residences.find(r => r.id === residenceId)?.name || residenceId;
@@ -59,7 +69,7 @@ export default function MIVHistoryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading || residencesLoading ? renderSkeleton() : mivs.length > 0 ? mivs.map((miv) => (
+                            {loading || residencesLoading ? renderSkeleton() : filteredMIVs.length > 0 ? filteredMIVs.map((miv) => (
                                 <TableRow key={miv.id} className="cursor-pointer" onClick={() => router.push(`/inventory/issue-history/${miv.id}`)}>
                                     <TableCell className="font-medium">{miv.id}</TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP p')}</TableCell>

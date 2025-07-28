@@ -19,6 +19,7 @@ export default function ReceiveMaterialsPage() {
     const router = useRouter();
     const { currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
+    const isAdmin = currentUser?.role === 'Admin';
 
 
     useEffect(() => {
@@ -34,12 +35,12 @@ export default function ReceiveMaterialsPage() {
         const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
         const approvedOrders = orders.filter(order => receivableStatuses.includes(order.status));
         
-        if (currentUser.role === 'Admin') {
+        if (isAdmin) {
             return approvedOrders;
         }
         
         return approvedOrders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
-    }, [orders, currentUser, residences]);
+    }, [orders, currentUser, isAdmin]);
 
 
     const renderSkeleton = () => (
