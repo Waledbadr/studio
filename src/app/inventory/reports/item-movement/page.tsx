@@ -39,23 +39,39 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
-    const transactionsWithBalance = useMemo(() => {
-        let runningBalance = 0;
-        return transactions.map(tx => {
-            if (tx.type === 'IN') {
-                runningBalance += tx.quantity;
-            } else {
-                runningBalance -= tx.quantity;
-            }
-            return { ...tx, balance: runningBalance };
-        });
-    }, [transactions]);
-    
     const currentStock = useMemo(() => {
         if (!item || !residenceId) return 0;
         return getStockForResidence(item, residenceId);
-    }, [item, residenceId, getStockForResidence]);
+    }, [item, residenceId, getStockForResidence, items]);
 
+    const transactionsWithBalance = useMemo(() => {
+        if (transactionsLoading) return [];
+        
+        const netMovement = transactions.reduce((acc, tx) => {
+            return acc + (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+        }, 0);
+
+        const openingBalance = currentStock - netMovement;
+        
+        let runningBalance = openingBalance;
+        
+        const processedTransactions = transactions.map(tx => {
+            runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+            return { ...tx, balance: runningBalance };
+        });
+
+        return [
+            { 
+                id: 'opening-balance', 
+                date: transactions.length > 0 ? transactions[0].date : new Timestamp(0,0),
+                referenceDocId: 'Opening Balance', 
+                type: 'IN', 
+                quantity: 0, 
+                balance: openingBalance 
+            } as any,
+            ...processedTransactions
+        ];
+    }, [transactions, currentStock, transactionsLoading]);
     
     const pageLoading = inventoryLoading || residencesLoading;
     
@@ -108,7 +124,7 @@ function ItemMovementContent() {
         );
     }
     
-    const finalBalance = transactionsWithBalance.length > 0 ? transactionsWithBalance[transactionsWithBalance.length - 1].balance : 0;
+    const finalBalance = transactionsWithBalance.length > 1 ? transactionsWithBalance[transactionsWithBalance.length - 1].balance : (transactionsWithBalance[0]?.balance ?? 0);
 
     return (
         <div className="space-y-6">
@@ -145,17 +161,17 @@ function ItemMovementContent() {
                         <TableBody>
                             {transactionsLoading ? renderSkeleton() : (
                                 <>
-                                    {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
+                                    {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx, index) => (
                                         <TableRow key={tx.id}>
-                                            <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
+                                            <TableCell>{index === 0 ? '' : format(tx.date.toDate(), 'PPP p')}</TableCell>
                                             <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
                                             <TableCell>
-                                                <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
+                                                {index > 0 && <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
                                                     {tx.type === 'IN' ? 'Received' : 'Issued'}
-                                                </Badge>
+                                                </Badge>}
                                             </TableCell>
                                             <TableCell className={`text-center font-semibold ${tx.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
-                                            {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                                            {index > 0 ? `${tx.type === 'IN' ? '+' : '-'}${tx.quantity}`: ''}
                                             </TableCell>
                                             <TableCell className="text-right font-bold">{tx.balance}</TableCell>
                                         </TableRow>
@@ -183,4 +199,3 @@ export default function ItemMovementPage() {
         </Suspense>
     )
 }
-
