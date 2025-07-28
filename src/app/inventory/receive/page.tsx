@@ -12,29 +12,37 @@ import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
 import { ArrowRight } from "lucide-react";
+import { useResidences } from "@/context/residences-context";
 
 export default function ReceiveMaterialsPage() {
     const { orders, loading, loadOrders } = useOrders();
     const router = useRouter();
     const { currentUser } = useUsers();
+    const { residences, loadResidences } = useResidences();
+
 
     useEffect(() => {
         loadOrders();
-    }, [loadOrders]);
-
-    const approvedOrders = useMemo(() => {
-        return orders.filter(order => order.status === 'Approved');
-    }, [orders]);
+        if (residences.length === 0) {
+            loadResidences();
+        }
+    }, [loadOrders, loadResidences, residences.length]);
 
     const userApprovedOrders = useMemo(() => {
         if (!currentUser) return [];
-        // Admins see all approved orders. Other users see orders for their assigned residences.
-        const userResidences = currentUser.assignedResidences || [];
+
+        const approvedOrders = orders.filter(order => order.status === 'Approved');
+        
         if (currentUser.role === 'Admin') {
             return approvedOrders;
         }
-        return approvedOrders.filter(order => userResidences.includes(order.residence));
-    }, [approvedOrders, currentUser]);
+
+        const userResidenceNames = currentUser.assignedResidences
+            .map(id => residences.find(r => r.id === id)?.name)
+            .filter(Boolean);
+
+        return approvedOrders.filter(order => userResidenceNames.includes(order.residence));
+    }, [orders, currentUser, residences]);
 
 
     const renderSkeleton = () => (

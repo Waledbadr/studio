@@ -8,30 +8,40 @@ import { Button } from "@/components/ui/button";
 import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useUsers } from "@/context/users-context";
+import { useResidences } from "@/context/residences-context";
 
 
 export default function PurchaseOrdersPage() {
     const { orders, loading, loadOrders, deleteOrder, updateOrderStatus } = useOrders();
-    const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
     const router = useRouter();
-
     const { currentUser } = useUsers();
+    const { residences, loadResidences } = useResidences();
     const isAdmin = currentUser?.role === 'Admin';
 
     useEffect(() => {
         loadOrders();
-    }, [loadOrders]);
+        if (residences.length === 0) {
+            loadResidences();
+        }
+    }, [loadOrders, loadResidences, residences.length]);
 
-    useEffect(() => {
-        setFilteredOrders(orders);
-    }, [orders]);
+    const filteredOrders = useMemo(() => {
+        if (!currentUser) return [];
+        if (isAdmin) return orders;
+
+        const userResidenceNames = currentUser.assignedResidences
+            .map(id => residences.find(r => r.id === id)?.name)
+            .filter(Boolean);
+            
+        return orders.filter(order => userResidenceNames.includes(order.residence));
+    }, [orders, currentUser, isAdmin, residences]);
 
 
     const renderSkeleton = () => (
