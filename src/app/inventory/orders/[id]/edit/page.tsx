@@ -16,13 +16,16 @@ import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { useRouter, useParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useResidences } from '@/context/residences-context';
 
 
 export default function EditOrderPage() {
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-    const [residence, setResidence] = useState('');
+    const [residenceName, setResidenceName] = useState('');
+    const [residenceId, setResidenceId] = useState('');
+
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
@@ -43,7 +46,8 @@ export default function EditOrderPage() {
             const order = await getOrderById(id);
             if(order) {
                 setOrderItems(order.items);
-                setResidence(order.residence);
+                setResidenceName(order.residence);
+                setResidenceId(order.residenceId);
             }
             setPageLoading(false);
         };
@@ -84,7 +88,8 @@ export default function EditOrderPage() {
         }
 
         const updatedOrderData = {
-            residence: residence,
+            residence: residenceName,
+            residenceId: residenceId,
             items: orderItems,
         };
         
@@ -105,6 +110,12 @@ export default function EditOrderPage() {
         handleAddItemToOrder(newItemWithId);
         setSearchQuery('');
     };
+
+    const getStockForResidence = (item: InventoryItem) => {
+        if (!residenceId || !item.stockByResidence) return 0;
+        return item.stockByResidence[residenceId] || 0;
+    }
+
 
     if (pageLoading) {
          return (
@@ -189,7 +200,7 @@ export default function EditOrderPage() {
                                         <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                                             <div>
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {item.stock} {item.unit}</p>
+                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
                                             </div>
                                             <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
                                                 <Plus className="h-4 w-4" />
@@ -222,7 +233,7 @@ export default function EditOrderPage() {
                             </div>
                             <div className="text-right">
                                 <Label htmlFor='residence' className="text-xs text-muted-foreground">Residence</Label>
-                                <Input id="residence" readOnly value={residence} className="w-48 mt-1 text-sm font-medium" />
+                                <Input id="residence" readOnly value={residenceName} className="w-48 mt-1 text-sm font-medium" />
                             </div>
                         </div>
                     </CardHeader>
