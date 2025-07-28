@@ -43,35 +43,18 @@ function ItemMovementContent() {
         if (!item || !residenceId) return 0;
         return getStockForResidence(item, residenceId);
     }, [item, residenceId, getStockForResidence, items]);
-
+    
     const transactionsWithBalance = useMemo(() => {
         if (transactionsLoading) return [];
         
-        const netMovement = transactions.reduce((acc, tx) => {
-            return acc + (tx.type === 'IN' ? tx.quantity : -tx.quantity);
-        }, 0);
-
-        const openingBalance = currentStock - netMovement;
+        let runningBalance = 0;
         
-        let runningBalance = openingBalance;
-        
-        const processedTransactions = transactions.map(tx => {
+        return transactions.map(tx => {
             runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
             return { ...tx, balance: runningBalance };
         });
 
-        return [
-            { 
-                id: 'opening-balance', 
-                date: transactions.length > 0 ? transactions[0].date : new Timestamp(0,0),
-                referenceDocId: 'Opening Balance', 
-                type: 'IN', 
-                quantity: 0, 
-                balance: openingBalance 
-            } as any,
-            ...processedTransactions
-        ];
-    }, [transactions, currentStock, transactionsLoading]);
+    }, [transactions, transactionsLoading]);
     
     const pageLoading = inventoryLoading || residencesLoading;
     
@@ -123,8 +106,6 @@ function ItemMovementContent() {
             </div>
         );
     }
-    
-    const finalBalance = transactionsWithBalance.length > 1 ? transactionsWithBalance[transactionsWithBalance.length - 1].balance : (transactionsWithBalance[0]?.balance ?? 0);
 
     return (
         <div className="space-y-6">
@@ -141,7 +122,7 @@ function ItemMovementContent() {
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
                     <div className="text-3xl font-bold">
-                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : finalBalance}
+                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
                     </div>
                 </div>
             </div>
@@ -161,26 +142,24 @@ function ItemMovementContent() {
                         <TableBody>
                             {transactionsLoading ? renderSkeleton() : (
                                 <>
-                                    {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx, index) => (
+                                    {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
                                         <TableRow key={tx.id}>
-                                            <TableCell>{index === 0 ? '' : format(tx.date.toDate(), 'PPP p')}</TableCell>
+                                            <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
                                             <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
                                             <TableCell>
-                                                {index > 0 && <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
+                                                <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
                                                     {tx.type === 'IN' ? 'Received' : 'Issued'}
-                                                </Badge>}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className={`text-center font-semibold ${tx.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
-                                            {index > 0 ? `${tx.type === 'IN' ? '+' : '-'}${tx.quantity}`: ''}
+                                             {`${tx.type === 'IN' ? '+' : '-'}${tx.quantity}`}
                                             </TableCell>
                                             <TableCell className="text-right font-bold">{tx.balance}</TableCell>
                                         </TableRow>
                                     )) : (
-                                        !transactionsLoading && (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No movement history found for this item in this residence.</TableCell>
-                                            </TableRow>
-                                        )
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No movement history found for this item in this residence.</TableCell>
+                                        </TableRow>
                                     )}
                                 </>
                             )}
