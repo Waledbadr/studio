@@ -33,7 +33,9 @@ function ItemMovementContent() {
         if (itemId && residenceId && !inventoryLoading && !residencesLoading) {
             setTransactionsLoading(true);
             getInventoryTransactions(itemId, residenceId).then(data => {
-                setTransactions(data);
+                // IMPORTANT: Sort transactions by date ascending to calculate balance correctly
+                const sortedData = data.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+                setTransactions(sortedData);
                 setTransactionsLoading(false);
             });
         }
@@ -46,7 +48,7 @@ function ItemMovementContent() {
 
 
     const transactionsWithBalance = useMemo(() => {
-        if (!item || !residenceId) return [];
+        if (transactionsLoading || !item || !residenceId) return [];
 
         const netMovement = transactions.reduce((acc, tx) => {
             return acc + (tx.type === 'IN' ? tx.quantity : -tx.quantity);
@@ -58,9 +60,9 @@ function ItemMovementContent() {
         return transactions.map(tx => {
             runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
             return { ...tx, balance: runningBalance };
-        });
+        }).sort((a,b) => b.date.toMillis() - a.date.toMillis()); // Sort back to descending for display
 
-    }, [transactions, item, residenceId, currentStock]);
+    }, [transactions, item, residenceId, currentStock, transactionsLoading]);
     
     const pageLoading = inventoryLoading || residencesLoading;
     
