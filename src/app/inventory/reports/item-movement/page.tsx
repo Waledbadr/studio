@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 function ItemMovementContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { getInventoryTransactions, items, loading: inventoryLoading } = useInventory();
+    const { getInventoryTransactions, items, loading: inventoryLoading, getStockForResidence } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
     
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
@@ -28,6 +28,7 @@ function ItemMovementContent() {
 
     const item = useMemo(() => items.find(i => i.id === itemId), [items, itemId]);
     const residence = useMemo(() => residences.find(r => r.id === residenceId), [residences, residenceId]);
+    const currentStock = useMemo(() => item && residenceId ? getStockForResidence(item, residenceId) : 0, [item, residenceId, getStockForResidence]);
 
     useEffect(() => {
         if (itemId && residenceId && !inventoryLoading && !residencesLoading) {
@@ -39,11 +40,18 @@ function ItemMovementContent() {
         }
     }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
+    const openingBalance = useMemo(() => {
+        if (!item || !residenceId) return 0;
+        
+        const totalIn = transactions.filter(tx => tx.type === 'IN').reduce((sum, tx) => sum + tx.quantity, 0);
+        const totalOut = transactions.filter(tx => tx.type === 'OUT').reduce((sum, tx) => sum + tx.quantity, 0);
+        
+        return currentStock - (totalIn - totalOut);
+    }, [transactions, currentStock, item, residenceId]);
+
     const transactionsWithBalance = useMemo(() => {
-        let balance = 0;
-        // Sort transactions by date ascending before calculating balance
-        const sortedTransactions = [...transactions].sort((a, b) => a.date.toMillis() - b.date.toMillis());
-        return sortedTransactions.map(tx => {
+        let balance = openingBalance;
+        return transactions.map(tx => {
             if (tx.type === 'IN') {
                 balance += tx.quantity;
             } else {
@@ -51,19 +59,8 @@ function ItemMovementContent() {
             }
             return { ...tx, balance };
         });
-    }, [transactions]);
+    }, [transactions, openingBalance]);
     
-    const finalBalance = useMemo(() => {
-        if (transactionsWithBalance.length > 0) {
-            return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
-        }
-        // Fallback to the main item stock if no transactions exist.
-        if (item && residenceId) {
-             return item.stockByResidence?.[residenceId] || 0
-        }
-        return 0;
-    }, [transactionsWithBalance, item, residenceId]);
-
     const pageLoading = inventoryLoading || residencesLoading;
     
     const renderSkeleton = () => (
@@ -129,7 +126,7 @@ function ItemMovementContent() {
                 </div>
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
-                    <p className="text-3xl font-bold">{transactionsLoading ? <Skeleton className="h-8 w-16 inline-block" /> : finalBalance}</p>
+                    <p className="text-3xl font-bold">{transactionsLoading ? <Skeleton className="h-8 w-16 inline-block" /> : currentStock}</p>
                 </div>
             </div>
 
@@ -146,24 +143,34 @@ function ItemMovementContent() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {transactionsLoading ? renderSkeleton() : transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
-                                <TableRow key={tx.id}>
-                                    <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
-                                    <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
-                                            {tx.type === 'IN' ? 'Received' : 'Issued'}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className={`text-center font-semibold ${tx.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
-                                       {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
-                                    </TableCell>
-                                    <TableCell className="text-right font-bold">{tx.balance}</TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No movement history found for this item in this residence.</TableCell>
-                                </TableRow>
+                            {transactionsLoading ? renderSkeleton() : (
+                                <>
+                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                        <TableCell colSpan={4} className="font-semibold">Opening Balance</TableCell>
+                                        <TableCell className="text-right font-bold">{openingBalance}</TableCell>
+                                    </TableRow>
+                                    {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
+                                        <TableRow key={tx.id}>
+                                            <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
+                                            <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
+                                                    {tx.type === 'IN' ? 'Received' : 'Issued'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className={`text-center font-semibold ${tx.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
+                                            {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                                            </TableCell>
+                                            <TableCell className="text-right font-bold">{tx.balance}</TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        !transactionsLoading && openingBalance === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No movement history found for this item in this residence.</TableCell>
+                                            </TableRow>
+                                        )
+                                    )}
+                                </>
                             )}
                         </TableBody>
                     </Table>
