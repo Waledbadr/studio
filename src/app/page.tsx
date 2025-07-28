@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Truck, Package, PackageOpen } from 'lucide-react';
+import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Truck, Package, PackageOpen, ListOrdered, ClipboardMinus } from 'lucide-react';
 import Link from 'next/link';
 import { useMaintenance } from "@/context/maintenance-context";
 import { useOrders, type Order } from "@/context/orders-context";
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   }, [loadRequests, loadOrders, getMIVs]);
   
   const recentMaintenance = requests.slice(0, 5);
+  const recentMaterialRequests = orders.slice(0, 5);
   const recentReceipts = orders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
   const recentIssues = mivs.slice(0, 5);
 
@@ -72,8 +73,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-        <Card className="col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
                     <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
@@ -106,7 +107,48 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
         
-        <Card className="col-span-1">
+        <Card>
+            <CardHeader className="flex flex-row items-center">
+                <div className="grid gap-2">
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent Material Requests</CardTitle>
+                </div>
+                <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link href="/inventory/orders">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">No material requests found.</div>
+                : (
+                    <Table>
+                         <TableHeader><TableRow><TableHead>Request ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {recentMaterialRequests.map(order => (
+                                <TableRow key={order.id}>
+                                    <TableCell>
+                                        <div className="font-medium">{order.id}</div>
+                                        <div className="text-sm text-muted-foreground">{order.residence}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                         <Badge variant={
+                                            order.status === 'Delivered' ? 'default' 
+                                            : order.status === 'Approved' ? 'secondary'
+                                            : order.status === 'Partially Delivered' ? 'secondary'
+                                            : order.status === 'Cancelled' ? 'destructive'
+                                            : 'outline'
+                                        }>
+                                            {order.status}
+                                        </Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+
+        <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
                     <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent Receipts</CardTitle>
@@ -139,10 +181,10 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        <Card className="col-span-1">
+        <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5"/> Recent Issues</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent Issues</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
@@ -170,4 +212,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
