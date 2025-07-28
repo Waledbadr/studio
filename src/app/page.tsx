@@ -1,27 +1,41 @@
 
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Truck, Package, PackageOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useMaintenance } from "@/context/maintenance-context";
-import { useEffect } from "react";
+import { useOrders, type Order } from "@/context/orders-context";
+import { useInventory, type MIV } from "@/context/inventory-context";
+import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
 
 export default function DashboardPage() {
-  const { requests, loading, loadRequests } = useMaintenance();
+  const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
+  const { orders, loading: ordersLoading, loadOrders } = useOrders();
+  const { getMIVs, loading: inventoryLoading } = useInventory();
+  
+  const [mivs, setMivs] = useState<MIV[]>([]);
 
   useEffect(() => {
     loadRequests();
-  }, [loadRequests]);
+    loadOrders();
+    getMIVs().then(setMivs);
+  }, [loadRequests, loadOrders, getMIVs]);
   
-  const recentRequests = requests.slice(0, 5);
+  const recentMaintenance = requests.slice(0, 5);
+  const recentReceipts = orders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
+  const recentIssues = mivs.slice(0, 5);
+
   const totalRequests = requests.length;
   const pendingRequests = requests.filter(r => r.status === 'Pending').length;
   const completedRequests = requests.filter(r => r.status === 'Completed').length;
+
+  const loading = maintenanceLoading || ordersLoading || inventoryLoading;
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,63 +72,102 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center">
-          <div className="grid gap-2">
-            <CardTitle>Recent Maintenance Requests</CardTitle>
-          </div>
-          <Button asChild size="sm" className="ml-auto gap-1">
-            <Link href="/maintenance">
-              View All
-              <ArrowUpRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {loading && (
-             <div className="flex items-center justify-center p-10">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-             </div>
-          )}
-          {!loading && recentRequests.length === 0 && (
-             <div className="text-center text-muted-foreground p-10">
-                No maintenance requests found.
-             </div>
-          )}
-          {!loading && recentRequests.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Request ID</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Issue</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentRequests.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell className="font-medium">{request.id}</TableCell>
-                    <TableCell>{`${request.complexName}, ${request.roomName}`}</TableCell>
-                    <TableCell>{request.issueTitle}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
-                      }>
-                        {request.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+        <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center">
+                <div className="grid gap-2">
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
+                </div>
+                <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
+                : (
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {recentMaintenance.map(req => (
+                                <TableRow key={req.id}>
+                                    <TableCell>
+                                        <div className="font-medium">{req.issueTitle}</div>
+                                        <div className="text-sm text-muted-foreground">{req.complexName}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+        
+        <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center">
+                <div className="grid gap-2">
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent Receipts</CardTitle>
+                </div>
+                <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link href="/inventory/receive">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent receipts found.</div>
+                : (
+                    <Table>
+                         <TableHeader><TableRow><TableHead>Request ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {recentReceipts.map(order => (
+                                <TableRow key={order.id}>
+                                    <TableCell>
+                                        <div className="font-medium">{order.id}</div>
+                                        <div className="text-sm text-muted-foreground">{order.residence}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={order.status === 'Delivered' ? 'default' : 'secondary'}>{order.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+
+        <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center">
+                <div className="grid gap-2">
+                    <CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5"/> Recent Issues</CardTitle>
+                </div>
+                <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent issues found.</div>
+                : (
+                    <Table>
+                         <TableHeader><TableRow><TableHead>MIV ID</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {recentIssues.map(miv => (
+                                <TableRow key={miv.id}>
+                                    <TableCell><div className="font-medium">{miv.id}</div></TableCell>
+                                    <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
+
