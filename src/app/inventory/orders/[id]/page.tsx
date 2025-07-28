@@ -78,7 +78,7 @@ export default function OrderDetailPage() {
         )
     }
 
-    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
     const groupedItems = order.items.reduce((acc, item) => {
         const category = item.category || 'Uncategorized';
@@ -93,19 +93,26 @@ export default function OrderDetailPage() {
         <div className="space-y-6">
              <style jsx global>{`
                 @media print {
-                  body {
-                    background: white !important;
-                  }
-                  .no-print {
+                  body > *:not(.printable-area) {
                     display: none !important;
+                  }
+                  .printable-area {
+                    display: block !important;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    padding: 2rem;
+                    background: white !important;
+                    box-shadow: none !important;
+                    border: none !important;
                   }
                    main {
                      padding: 0 !important;
                    }
-                  .printable-area {
-                    display: block !important;
-                    box-shadow: none !important;
-                    border: none !important;
+                  .no-print {
+                    display: none !important;
                   }
                 }
             `}</style>
@@ -184,14 +191,11 @@ export default function OrderDetailPage() {
                     </Table>
                     
                     <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4">
-                        Total Quantity: {totalItems}
+                        Total Items: {totalQuantity}
                     </div>
                 </CardContent>
             </Card>
 
-            <div className="hidden">
-                 <div className="no-print"></div>
-            </div>
         </div>
     )
 }
