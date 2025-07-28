@@ -135,7 +135,6 @@ export default function OrderDetailPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[100px]">ID</TableHead>
                                 <TableHead>Item Name (Arabic)</TableHead>
                                 <TableHead>Item Name (English)</TableHead>
                                 <TableHead>Unit</TableHead>
@@ -146,14 +145,13 @@ export default function OrderDetailPage() {
                         <TableBody>
                             {Object.entries(groupedItems).map(([category, items]) => (
                                 <React.Fragment key={category}>
-                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                        <TableCell colSpan={6} className="font-semibold text-primary capitalize py-2">
+                                    <TableRow className="bg-muted/50 hover:bg-muted/50 print:bg-gray-100">
+                                        <TableCell colSpan={5} className="font-semibold text-primary capitalize py-2">
                                             {category}
                                         </TableCell>
                                     </TableRow>
                                     {items.map((item: OrderItem) => (
                                         <TableRow key={item.id}>
-                                            <TableCell className="font-mono text-xs">{item.id.slice(0,6)}</TableCell>
                                             <TableCell>{item.nameAr}</TableCell>
                                             <TableCell>{item.nameEn}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
@@ -174,16 +172,81 @@ export default function OrderDetailPage() {
 
              <style jsx global>{`
                 @media print {
-                    body {
-                        background: white;
+                    body > div:first-child {
+                       display: none;
+                    }
+                    body > div:last-child {
+                        display: none;
                     }
                     main {
-                        padding: 0;
+                        padding: 0 !important;
+                    }
+                    .print-content {
+                        display: block !important;
                     }
                 }
             `}</style>
+             <div className="print-content hidden">
+                {/* This div will only be visible during print */}
+                <Card>
+                    <CardHeader className="border-b">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle className="text-3xl">Materials Request</CardTitle>
+                                <CardDescription className="text-lg">ID: #{order.id}</CardDescription>
+                            </div>
+                            <div className="text-right">
+                                <p className="font-semibold">{order.residence}</p>
+                                <p className="text-sm text-muted-foreground">Date: {format(order.date.toDate(), 'PPP')}</p>
+                                <Badge className="mt-2" variant={
+                                    order.status === 'Delivered' ? 'default'
+                                    : order.status === 'Approved' ? 'secondary'
+                                    : order.status === 'Cancelled' ? 'destructive'
+                                    : 'outline'
+                                }>
+                                    {order.status}
+                                </Badge>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <Table>
+                             <TableHeader>
+                                <TableRow>
+                                    <TableHead>Item Name (Arabic)</TableHead>
+                                    <TableHead>Item Name (English)</TableHead>
+                                    <TableHead>Unit</TableHead>
+                                    <TableHead className="text-center">Stock</TableHead>
+                                    <TableHead className="text-right">Quantity</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                             <TableBody>
+                                {Object.entries(groupedItems).map(([category, items]) => (
+                                    <React.Fragment key={category}>
+                                        <TableRow className="bg-gray-50">
+                                            <TableCell colSpan={5} className="font-semibold text-primary capitalize py-2">
+                                                {category}
+                                            </TableCell>
+                                        </TableRow>
+                                        {items.map((item: OrderItem) => (
+                                            <TableRow key={item.id}>
+                                                <TableCell>{item.nameAr}</TableCell>
+                                                <TableCell>{item.nameEn}</TableCell>
+                                                <TableCell>{item.unit}</TableCell>
+                                                <TableCell className="text-center">{item.stock}</TableCell>
+                                                <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </React.Fragment>
+                                ))}
+                            </TableBody>
+                        </Table>
+                         <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4">
+                            Total Quantity: {totalItems}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     )
 }
-
-    
