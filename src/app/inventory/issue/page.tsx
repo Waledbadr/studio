@@ -167,24 +167,16 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-             const itemsToIssueForAPI = voucherLocations.map(loc => ({
-                buildingId: loc.buildingId,
-                buildingName: loc.buildingName,
-                floorId: loc.floorId,
-                floorName: loc.floorName,
-                locationId: loc.locationId,
-                roomId: loc.roomId,
-                roomName: loc.roomName,
-                items: loc.items.map(item => ({
-                    id: item.id,
-                    nameEn: item.nameEn,
-                    nameAr: item.nameAr,
+             const itemsToIssueForAPI = voucherLocations.flatMap(loc => 
+                loc.items.map(item => ({
+                    ...item,
                     issueQuantity: item.issueQuantity,
+                    locationId: loc.locationId,
+                    locationName: `${loc.buildingName} -> ${loc.floorName} -> ${loc.roomName}`
                 }))
-            }));
+            );
 
-
-            await issueItemsFromStock(selectedComplexId, itemsToIssueForAPI);
+            await issueItemsFromStock(selectedComplexId, voucherLocations);
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');
@@ -193,7 +185,7 @@ export default function IssueMaterialPage() {
             router.push('/inventory/issue-history');
         } catch (error) {
             console.error("Failed to submit voucher:", error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error has occurred";
             toast({ title: "Submission Error", description: `An error occurred: ${errorMessage}`, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
@@ -270,7 +262,7 @@ export default function IssueMaterialPage() {
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>
                              <ScrollArea className="h-[250px] border rounded-md">
-                                {isLocationSelected ? (
+                                {selectedComplexId ? (
                                     <div className="p-2 space-y-2">
                                         {availableInventory.length > 0 ? availableInventory.map(item => (
                                             <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
@@ -278,17 +270,17 @@ export default function IssueMaterialPage() {
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                     <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)}>
+                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                         )) : (
-                                            <div className="text-center text-muted-foreground p-8">No inventory with stock found.</div>
+                                            <div className="text-center text-muted-foreground p-8">No inventory with stock found for this residence.</div>
                                         )}
                                     </div>
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        Select a full location to see available items.
+                                        Select a residence to see available items.
                                     </div>
                                 )}
                             </ScrollArea>
