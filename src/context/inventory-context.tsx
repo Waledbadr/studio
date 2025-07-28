@@ -30,6 +30,7 @@ interface InventoryContextType {
   loadInventory: () => void;
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
+  getStockForResidence: (item: InventoryItem, residenceId: string) => number;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -114,6 +115,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       isLoaded.current = false;
     };
   }, [loadInventory]);
+  
+  const getStockForResidence = (item: InventoryItem, residenceId: string) => {
+      if (!item.stockByResidence) return 0;
+      return item.stockByResidence[residenceId] || 0;
+  }
 
   const addCategory = async (newCategory: string) => {
     if (!db) {
@@ -229,7 +235,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence }}>
       {children}
     </InventoryContext.Provider>
   );

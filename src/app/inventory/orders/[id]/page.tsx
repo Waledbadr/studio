@@ -13,11 +13,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
 import type { OrderItem } from '@/context/orders-context';
+import { useInventory } from '@/context/inventory-context';
+
 
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { getOrderById } = useOrders();
+    const { getStockForResidence } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
@@ -81,13 +84,12 @@ export default function OrderDetailPage() {
         )
     }
     
-    const getStockForResidence = (item: OrderItem) => {
-        if (!order?.residenceId || !item.stockByResidence) return 0;
-        return item.stockByResidence[order.residenceId] || 0;
+    const handleGetStockForResidence = (item: OrderItem) => {
+        if (!order?.residenceId) return 0;
+        return getStockForResidence(item, order.residenceId);
     }
 
     const totalItems = order.items.length;
-    const totalQuantity = order.items.reduce((acc, item) => acc + item.quantity, 0);
 
 
     const groupedItems = order.items.reduce((acc, item) => {
@@ -205,7 +207,7 @@ export default function OrderDetailPage() {
                                             <TableCell>{item.nameEn}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                                            <TableCell className="text-center">{getStockForResidence(item)}</TableCell>
+                                            <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
                                         </TableRow>
                                     ))}
                                 </React.Fragment>

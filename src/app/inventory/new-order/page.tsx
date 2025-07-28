@@ -23,7 +23,7 @@ import type { Complex } from '@/context/residences-context';
 
 
 export default function NewOrderPage() {
-    const { items: allItems, loading, loadInventory, addItem, categories } = useInventory();
+    const { items: allItems, loading, loadInventory, addItem, categories, getStockForResidence } = useInventory();
     const { createOrder, loading: ordersLoading } = useOrders();
     const { currentUser, users, loadUsers } = useUsers();
     const { residences, loadResidences } = useResidences();
@@ -130,9 +130,9 @@ export default function NewOrderPage() {
         setOrderItems([]); // Clear order items when residence changes
     };
     
-    const getStockForResidence = (item: InventoryItem) => {
-        if (!selectedResidence || !item.stockByResidence) return 0;
-        return item.stockByResidence[selectedResidence.id] || 0;
+    const handleGetStockForResidence = (item: InventoryItem) => {
+        if (!selectedResidence) return 0;
+        return getStockForResidence(item, selectedResidence.id);
     }
 
     return (
@@ -210,7 +210,7 @@ export default function NewOrderPage() {
                                         <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                                             <div>
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
+                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {handleGetStockForResidence(item)} {item.unit}</p>
                                             </div>
                                             <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={!selectedResidence}>
                                                 <Plus className="h-4 w-4" />

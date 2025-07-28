@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useResidences } from '@/context/residences-context';
+import { ScrollArea } from '../ui/scroll-area';
 
 interface EditItemDialogProps {
     isOpen: boolean;
@@ -28,11 +30,11 @@ export function EditItemDialog({
     const [nameAr, setNameAr] = useState('');
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
-    // stock is now managed per residence, so we don't edit it here directly.
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
     const { categories } = useInventory();
+    const { residences } = useResidences();
 
     useEffect(() => {
         if (item) {
@@ -68,7 +70,7 @@ export function EditItemDialog({
     
     return (
          <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-md">
                 <form onSubmit={handleUpdateItem}>
                     <DialogHeader>
                         <DialogTitle>Edit Inventory Item</DialogTitle>
@@ -101,6 +103,19 @@ export function EditItemDialog({
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="item-unit" className="text-right">Unit</Label>
                             <Input id="item-unit" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
+                        </div>
+                        <div className="space-y-2 pt-2">
+                             <Label>Stock by Residence</Label>
+                             <ScrollArea className="h-32 rounded-md border p-2">
+                                <div className="space-y-2">
+                                     {residences.map(res => (
+                                        <div key={res.id} className="flex justify-between items-center text-sm p-1">
+                                            <span className="text-muted-foreground">{res.name}</span>
+                                            <span className="font-medium">{item?.stockByResidence?.[res.id] || 0}</span>
+                                        </div>
+                                     ))}
+                                </div>
+                             </ScrollArea>
                         </div>
                     </div>
                     <DialogFooter>
