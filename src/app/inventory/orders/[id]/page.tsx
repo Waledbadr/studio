@@ -98,6 +98,10 @@ export default function OrderDetailPage() {
         <div className="space-y-6">
              <style jsx global>{`
                 @media print {
+                  body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                  }
                   body * {
                     visibility: hidden;
                   }
@@ -112,7 +116,21 @@ export default function OrderDetailPage() {
                     height: auto;
                     box-shadow: none !important;
                     border: none !important;
+                    padding: 1rem;
                   }
+                  .printable-area .print-title {
+                      font-size: 2rem !important;
+                  }
+                   .printable-area .print-table th, .printable-area .print-table td {
+                        padding-top: 0.25rem;
+                        padding-bottom: 0.25rem;
+                        padding-left: 0.5rem;
+                        padding-right: 0.5rem;
+                   }
+                   .printable-area .print-table {
+                       border-top: 1px solid #e5e7eb;
+                       border-bottom: 1px solid #e5e7eb;
+                   }
                 }
             `}</style>
             
@@ -139,7 +157,7 @@ export default function OrderDetailPage() {
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
-                            <CardTitle className="text-3xl">Materials Request</CardTitle>
+                            <CardTitle className="text-3xl print-title">Materials Request</CardTitle>
                             <CardDescription className="text-lg">ID: #{order.id}</CardDescription>
                         </div>
                          <div className="text-right">
@@ -158,7 +176,7 @@ export default function OrderDetailPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                    <Table>
+                    <Table className="print-table">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Item Name (Arabic)</TableHead>
