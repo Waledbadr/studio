@@ -326,12 +326,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
-            where("residenceId", "==", residenceId),
-            orderBy("date", "asc")
+            where("residenceId", "==", residenceId)
         );
 
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+        const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+        
+        // Sort transactions by date in the client-side
+        transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+
+        return transactions;
     } catch (error) {
         console.error("Error fetching inventory transactions:", error);
         toast({ title: "Error", description: "Failed to fetch item history.", variant: "destructive" });
