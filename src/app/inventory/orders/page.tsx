@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle } from 'lucide-react';
+import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
@@ -76,6 +76,11 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem>Delivered</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    <Button asChild>
+                        <Link href="/inventory/new-order">
+                        <PlusCircle className="mr-2 h-4 w-4" /> New Request
+                        </Link>
+                    </Button>
                 </div>
             </div>
             

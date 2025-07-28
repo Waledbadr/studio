@@ -151,11 +151,6 @@ export default function InventoryPage() {
               </Button>
             }
           />
-           <Button asChild>
-            <Link href="/inventory/new-order">
-              <PlusCircle className="mr-2 h-4 w-4" /> New Request
-            </Link>
-          </Button>
         </div>
       </div>
       
