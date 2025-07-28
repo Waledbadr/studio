@@ -30,6 +30,8 @@ export interface InventoryTransaction {
     type: 'IN' | 'OUT';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
+    locationId?: string;
+    locationName?: string;
 }
 
 export interface LocationWithItems<T> {
@@ -42,6 +44,28 @@ export interface LocationWithItems<T> {
     roomName: string;
     items: T[];
 }
+
+export interface MIV {
+    id: string;
+    date: Timestamp;
+    residenceId: string;
+    itemCount: number;
+}
+
+export interface MIVDetails {
+    id: string;
+    date: Timestamp;
+    residenceId: string;
+    locations: {
+        [locationName: string]: {
+            itemId: string;
+            itemNameEn: string;
+            itemNameAr: string;
+            quantity: number;
+        }[];
+    }
+}
+
 
 interface InventoryContextType {
   items: InventoryItem[];
@@ -56,6 +80,8 @@ interface InventoryContextType {
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
+  getMIVs: () => Promise<MIV[]>;
+  getMIVById: (mivId: string) => Promise<MIVDetails | null>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -273,19 +299,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const itemRefs: DocumentReference<DocumentData>[] = [];
             
-            // --- 1. READ PHASE ---
-            // First, collect all unique item document references.
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
             uniqueItemIds.forEach(id => itemRefs.push(doc(db, "inventory", id)));
 
-            // Then, read all documents in one go.
             const itemSnapshots = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
 
-            // --- 2. VALIDATION & PREPARE WRITES PHASE ---
             const itemsToWrite: { ref: DocumentReference; data: any }[] = [];
             const transactionsToWrite: { ref: DocumentReference; data: any }[] = [];
 
             for (const location of voucherLocations) {
+                const locationName = `${location.buildingName} -> ${location.floorName} -> ${location.roomName}`;
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
 
@@ -299,14 +322,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Not enough stock for ${itemDoc.data().nameEn}. Available: ${currentStock}, Required: ${issuedItem.issueQuantity}`);
                     }
                     
-                    // Prepare stock update
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     itemsToWrite.push({
                         ref: itemDoc.ref,
                         data: { [stockUpdateKey]: increment(-issuedItem.issueQuantity) }
                     });
 
-                    // Prepare transaction log
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transactionsToWrite.push({
                         ref: transactionRef,
@@ -319,20 +340,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             type: 'OUT',
                             quantity: issuedItem.issueQuantity,
                             referenceDocId: mivId,
+                            locationId: location.locationId,
+                            locationName: locationName,
                         } as Omit<InventoryTransaction, 'id'>
                     });
                 }
             }
 
-             // --- 3. WRITE PHASE ---
-            // If all validations pass, perform all writes.
             itemsToWrite.forEach(item => transaction.set(item.ref, item.data, { merge: true }));
             transactionsToWrite.forEach(tx => transaction.set(tx.ref, tx.data));
 
         });
     } catch (error) {
         console.error("Transaction failed: ", error);
-        throw error; // Re-throw to be caught by the calling component
+        throw error;
     }
   };
 
@@ -352,7 +373,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        // Sort transactions by date in the client-side
         transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
 
         return transactions;
@@ -363,9 +383,82 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const getMIVs = async (): Promise<MIV[]> => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+    }
+    const q = query(collection(db, "inventoryTransactions"), where("type", "==", "OUT"));
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+    
+    const groupedByMivId = transactions.reduce((acc, tx) => {
+        const mivId = tx.referenceDocId;
+        if (!acc[mivId]) {
+            acc[mivId] = {
+                id: mivId,
+                date: tx.date,
+                residenceId: tx.residenceId,
+                itemCount: 0
+            };
+        }
+        acc[mivId].itemCount++;
+        return acc;
+    }, {} as Record<string, MIV>);
+
+    const mivList = Object.values(groupedByMivId);
+    mivList.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    
+    return mivList;
+  };
+  
+  const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return null;
+    }
+     try {
+        const q = query(collection(db, "inventoryTransactions"), where("referenceDocId", "==", mivId));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            return null;
+        }
+
+        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+        
+        const mivDetails: MIVDetails = {
+            id: mivId,
+            date: transactions[0].date,
+            residenceId: transactions[0].residenceId,
+            locations: {},
+        };
+
+        transactions.forEach(tx => {
+            const locationName = tx.locationName || "Unspecified Location";
+            if (!mivDetails.locations[locationName]) {
+                mivDetails.locations[locationName] = [];
+            }
+            mivDetails.locations[locationName].push({
+                itemId: tx.itemId,
+                itemNameEn: tx.itemNameEn,
+                itemNameAr: tx.itemNameAr,
+                quantity: tx.quantity
+            });
+        });
+        
+        return mivDetails;
+
+    } catch (error) {
+        console.error("Error fetching MIV details:", error);
+        toast({ title: "Error", description: "Failed to fetch MIV details.", variant: "destructive" });
+        return null;
+    }
+  }
+
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById }}>
       {children}
     </InventoryContext.Provider>
   );

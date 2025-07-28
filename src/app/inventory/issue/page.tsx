@@ -12,7 +12,7 @@ import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLoc
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2 } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -22,7 +22,6 @@ interface IssuedItem extends InventoryItem {
     issueQuantity: number;
 }
 
-// Renaming to avoid conflict if we ever import the context type directly
 type VoucherLocation = IVoucherLocation<IssuedItem>;
 
 
@@ -33,16 +32,13 @@ export default function IssueMaterialPage() {
     const { toast } = useToast();
     const router = useRouter();
     
-    // Form state
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Location selection state
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
 
-    // Voucher state
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
     const userResidences = useMemo(() => {
@@ -63,7 +59,6 @@ export default function IssueMaterialPage() {
     }, [selectedComplexId, allItems, getStockForResidence]);
 
 
-    // Reset selections when a parent selection changes
     useEffect(() => {
         setVoucherLocations([]);
         setSelectedBuildingId('');
@@ -100,14 +95,12 @@ export default function IssueMaterialPage() {
         setVoucherLocations(prevLocations => {
             const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
             
-            // Location already exists in voucher
             if (existingLocationIndex > -1) {
                 const newLocations = [...prevLocations];
                 const targetLocation = newLocations[existingLocationIndex];
                 const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
                 if (existingItemIndex > -1) {
-                    // Item already in location, increment quantity
                     const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
                     if(currentQty < stock) {
                         targetLocation.items[existingItemIndex].issueQuantity += 1;
@@ -115,12 +108,10 @@ export default function IssueMaterialPage() {
                          toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
                     }
                 } else {
-                    // Add new item to location
                     targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
                 }
                 return newLocations;
             } else {
-                 // Add new location with the new item
                 const newLocation: VoucherLocation = {
                     locationId,
                     buildingId: selectedBuildingId,
@@ -165,7 +156,6 @@ export default function IssueMaterialPage() {
                 }
                 return loc;
             });
-            // Remove location if it has no items left
             return newLocations.filter(loc => loc.items.length > 0);
         });
     };
@@ -177,7 +167,6 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-            // Transform the local state `voucherLocations` into the format expected by `issueItemsFromStock`
              const itemsToIssueForAPI = voucherLocations.map(loc => ({
                 buildingId: loc.buildingId,
                 buildingName: loc.buildingName,
@@ -201,6 +190,7 @@ export default function IssueMaterialPage() {
             setSelectedBuildingId('');
             setSelectedFloorId('');
             setSelectedRoomId('');
+            router.push('/inventory/issue-history');
         } catch (error) {
             console.error("Failed to submit voucher:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -226,15 +216,9 @@ export default function IssueMaterialPage() {
                     <p className="text-muted-foreground">Issue materials from a residence's storeroom to specific locations.</p>
                 </div>
                  <div className="flex items-center gap-4">
-                     <div className="flex items-center gap-2">
-                        <Label className="whitespace-nowrap">Issue From Residence:</Label>
-                        <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                            <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
-                            <SelectContent>
-                                {userResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                     </div>
+                    <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
+                        <History className="mr-2 h-4 w-4"/> View History
+                    </Button>
                     <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Submit Voucher
@@ -243,13 +227,25 @@ export default function IssueMaterialPage() {
             </div>
 
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Add Items to a Location</CardTitle>
-                    <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                 <CardHeader>
+                     <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Add Items to a Location</CardTitle>
+                            <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Label className="whitespace-nowrap">Issue From Residence:</Label>
+                            <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
+                                <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
+                                <SelectContent>
+                                    {userResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                     </div>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        {/* Location Selection */}
                         <div className="lg:col-span-1 space-y-4">
                             <h3 className="font-semibold">Select Location</h3>
                              <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
@@ -271,7 +267,6 @@ export default function IssueMaterialPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        {/* Available Inventory */}
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>
                              <ScrollArea className="h-[250px] border rounded-md">
