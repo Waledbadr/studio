@@ -126,7 +126,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
 
 
-  }, [toast]);
+  }, [toast, categories.length]);
   
   useEffect(() => {
     loadInventory();
@@ -272,7 +272,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const itemRefs: DocumentReference<DocumentData>[] = [];
-            const itemSnapshots: DocumentSnapshot<DocumentData>[] = [];
             
             // --- 1. READ PHASE ---
             // First, collect all unique item document references.
@@ -280,12 +279,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             uniqueItemIds.forEach(id => itemRefs.push(doc(db, "inventory", id)));
 
             // Then, read all documents in one go.
-            for (const ref of itemRefs) {
-                itemSnapshots.push(await transaction.get(ref));
-            }
+            const itemSnapshots = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
 
-            // --- 2. VALIDATION PHASE ---
-            // Now, validate using the snapshots.
+            // --- 2. VALIDATION & PREPARE WRITES PHASE ---
             const itemsToWrite: { ref: DocumentReference; data: any }[] = [];
             const transactionsToWrite: { ref: DocumentReference; data: any }[] = [];
 
