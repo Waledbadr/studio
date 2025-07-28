@@ -17,6 +17,8 @@ import type { OrderItem } from '@/context/orders-context';
 import { useRouter } from 'next/navigation';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 
 export default function NewOrderPage() {
@@ -26,6 +28,7 @@ export default function NewOrderPage() {
     const { residences, loadResidences } = useResidences();
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+    const [selectedResidence, setSelectedResidence] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
@@ -38,8 +41,17 @@ export default function NewOrderPage() {
         if (residences.length === 0) loadResidences();
     }, [loadInventory, loadUsers, loadResidences, users.length, residences.length]);
 
-    const userResidenceId = currentUser?.assignedResidences?.[0];
-    const userResidenceName = residences.find(r => r.id === userResidenceId)?.name || "Default Residence";
+    useEffect(() => {
+        if (currentUser?.assignedResidences?.length === 1) {
+            const residenceId = currentUser.assignedResidences[0];
+            const residenceName = residences.find(r => r.id === residenceId)?.name;
+            setSelectedResidence(residenceName);
+        }
+    }, [currentUser, residences]);
+
+    const userResidences = currentUser?.assignedResidences
+        ?.map(id => residences.find(r => r.id === id))
+        .filter((r): r is NonNullable<typeof r> => r !== undefined) || [];
 
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
@@ -74,13 +86,13 @@ export default function NewOrderPage() {
             return;
         }
 
-        if (!userResidenceName || userResidenceName === "Default Residence") {
-            toast({ title: "Error", description: "User has no assigned residence.", variant: "destructive" });
+        if (!selectedResidence) {
+            toast({ title: "Error", description: "Please select a residence for the request.", variant: "destructive" });
             return;
         }
         
         const newOrderData = {
-            residence: userResidenceName,
+            residence: selectedResidence,
             items: orderItems,
         };
         
@@ -110,10 +122,26 @@ export default function NewOrderPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Create New Material Request</h1>
-                <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{userResidenceName}</span></p>
+                    <h1 className="text-2xl font-bold">Create New Material Request</h1>
+                    {userResidences.length > 1 ? (
+                        <div className="flex items-center gap-4 mt-2">
+                             <Label htmlFor="residence-select" className="text-muted-foreground">Request for residence:</Label>
+                             <Select onValueChange={setSelectedResidence} value={selectedResidence}>
+                                <SelectTrigger id="residence-select" className="w-[250px]">
+                                    <SelectValue placeholder="Select a residence" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {userResidences.map(res => (
+                                        <SelectItem key={res.id} value={res.name}>{res.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                             </Select>
+                        </div>
+                    ) : (
+                         <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{selectedResidence || '...'}</span></p>
+                    )}
                 </div>
-                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading}>
+                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading || !selectedResidence}>
                     {ordersLoading ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
                     ) : (
@@ -238,5 +266,3 @@ export default function NewOrderPage() {
 
     
 }
-
-    
