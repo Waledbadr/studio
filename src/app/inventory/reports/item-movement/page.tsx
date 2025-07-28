@@ -50,13 +50,11 @@ function ItemMovementContent() {
             return { ...tx, balance: runningBalance };
         });
     }, [transactions]);
-
+    
     const currentStock = useMemo(() => {
-        if (transactionsWithBalance.length === 0) {
-            return item && residenceId ? getStockForResidence(item, residenceId) : 0;
-        }
-        return transactionsWithBalance[transactionsWithBalance.length - 1].balance;
-    }, [transactionsWithBalance, item, residenceId, getStockForResidence]);
+        if (!item || !residenceId) return 0;
+        return getStockForResidence(item, residenceId);
+    }, [item, residenceId, getStockForResidence]);
 
     
     const pageLoading = inventoryLoading || residencesLoading;
@@ -109,6 +107,8 @@ function ItemMovementContent() {
             </div>
         );
     }
+    
+    const finalBalance = transactionsWithBalance.length > 0 ? transactionsWithBalance[transactionsWithBalance.length - 1].balance : 0;
 
     return (
         <div className="space-y-6">
@@ -125,7 +125,7 @@ function ItemMovementContent() {
                  <div className="text-right">
                     <p className="text-sm text-muted-foreground">Current Stock</p>
                     <div className="text-3xl font-bold">
-                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : currentStock}
+                        {transactionsLoading ? <Skeleton className="h-8 w-16" /> : finalBalance}
                     </div>
                 </div>
             </div>
