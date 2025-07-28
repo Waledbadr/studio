@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,9 @@ export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
 // Define the shape of our context
 interface ResidencesContextType {
   residences: Complex[];
+  buildings: Building[];
+  floors: Floor[];
+  rooms: Room[];
   loading: boolean;
   loadResidences: () => void;
   addComplex: (name: string, city: string, managerId: string) => Promise<void>;
@@ -311,10 +314,14 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(complexDocRef, { buildings: updatedBuildings });
     toast({ title: "Success", description: "Room deleted successfully." });
   };
+  
+  const buildings = useMemo(() => residences.flatMap(c => c.buildings), [residences]);
+  const floors = useMemo(() => buildings.flatMap(b => b.floors), [buildings]);
+  const rooms = useMemo(() => floors.flatMap(f => f.rooms), [floors]);
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
+    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
       {children}
     </ResidencesContext.Provider>
   );
@@ -327,4 +334,3 @@ export const useResidences = () => {
   }
   return context;
 };
-
