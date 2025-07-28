@@ -29,7 +29,6 @@ export function AppSidebar() {
     { href: '/inventory/orders', label: 'Materials Requests', icon: ListOrdered },
     { href: '/inventory/receive', label: 'Receive Materials', icon: PackageCheck },
     { href: '/inventory/issue', label: 'Issue Materials (MIV)', icon: ClipboardMinus, exact: true },
-    { href: '/inventory/issue-history', label: 'MIV History', icon: History },
     { href: '/reports', label: 'Reports', icon: AreaChart },
     { href: '/users', label: 'Users', icon: Users },
     { href: '/tools', label: 'AI Tools', icon: Bot },
