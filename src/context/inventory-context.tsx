@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot } from "firebase/firestore";
 
 
 export type ItemCategory = string;
@@ -264,21 +264,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(firebaseErrorMessage);
     }
     
-    // Generate a unique ID for this MIV
     const mivId = `MIV-${Date.now()}`;
 
     try {
         await runTransaction(db, async (transaction) => {
             const transactionTime = Timestamp.now();
             
+            const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
+            const itemRefs: DocumentReference<DocumentData>[] = [];
+            const itemSnapshots: DocumentSnapshot<DocumentData>[] = [];
+            
+            // --- 1. READ PHASE ---
+            // First, collect all unique item document references.
+            const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
+            uniqueItemIds.forEach(id => itemRefs.push(doc(db, "inventory", id)));
+
+            // Then, read all documents in one go.
+            for (const ref of itemRefs) {
+                itemSnapshots.push(await transaction.get(ref));
+            }
+
+            // --- 2. VALIDATION PHASE ---
+            // Now, validate using the snapshots.
+            const itemsToWrite: { ref: DocumentReference; data: any }[] = [];
+            const transactionsToWrite: { ref: DocumentReference; data: any }[] = [];
+
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
-                    
-                    const itemRef = doc(db, "inventory", issuedItem.id);
-                    const itemDoc = await transaction.get(itemRef);
 
-                    if (!itemDoc.exists()) {
+                    const itemDoc = itemSnapshots.find(snap => snap.id === issuedItem.id);
+                     if (!itemDoc || !itemDoc.exists()) {
                         throw new Error(`Item with ID ${issuedItem.id} not found.`);
                     }
 
@@ -287,35 +303,43 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Not enough stock for ${itemDoc.data().nameEn}. Available: ${currentStock}, Required: ${issuedItem.issueQuantity}`);
                     }
                     
-                    // 1. Decrement stock
+                    // Prepare stock update
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
-                    transaction.set(itemRef, 
-                        { stockByResidence: { [residenceId]: increment(-issuedItem.issueQuantity) } }, 
-                        { merge: true }
-                    );
+                    itemsToWrite.push({
+                        ref: itemDoc.ref,
+                        data: { [stockUpdateKey]: increment(-issuedItem.issueQuantity) }
+                    });
 
-                    // 2. Log the transaction
+                    // Prepare transaction log
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
-                    const newTransaction: Omit<InventoryTransaction, 'id'> = {
-                        itemId: issuedItem.id,
-                        itemNameEn: issuedItem.nameEn,
-                        itemNameAr: issuedItem.nameAr,
-                        residenceId: residenceId,
-                        date: transactionTime,
-                        type: 'OUT',
-                        quantity: issuedItem.issueQuantity,
-                        referenceDocId: mivId,
-                    };
-                    transaction.set(transactionRef, newTransaction);
+                    transactionsToWrite.push({
+                        ref: transactionRef,
+                        data: {
+                            itemId: issuedItem.id,
+                            itemNameEn: issuedItem.nameEn,
+                            itemNameAr: issuedItem.nameAr,
+                            residenceId: residenceId,
+                            date: transactionTime,
+                            type: 'OUT',
+                            quantity: issuedItem.issueQuantity,
+                            referenceDocId: mivId,
+                        } as Omit<InventoryTransaction, 'id'>
+                    });
                 }
             }
-            // Here you could also write the MIV record to a separate collection for history
+
+             // --- 3. WRITE PHASE ---
+            // If all validations pass, perform all writes.
+            itemsToWrite.forEach(item => transaction.set(item.ref, item.data, { merge: true }));
+            transactionsToWrite.forEach(tx => transaction.set(tx.ref, tx.data));
+
         });
     } catch (error) {
         console.error("Transaction failed: ", error);
         throw error; // Re-throw to be caught by the calling component
     }
   };
+
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
     if (!db) {
