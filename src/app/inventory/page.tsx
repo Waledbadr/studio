@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, Trash2, Edit, Pencil, ListOrdered } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
@@ -16,8 +16,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-import { buttonVariants } from '@/components/ui/button';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 
@@ -25,6 +23,7 @@ export default function InventoryPage() {
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
+  const router = useRouter();
   
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
   const [isEditItemDialogOpen, setIsEditItemDialogOpen] = useState(false);
@@ -58,11 +57,13 @@ export default function InventoryPage() {
   }, [userResidences, activeTab]);
 
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
       deleteItem(id);
   }
 
-  const handleEditItemClick = (item: InventoryItem) => {
+  const handleEditItemClick = (e: React.MouseEvent, item: InventoryItem) => {
+    e.stopPropagation();
     setItemToEdit(item);
     setIsEditItemDialogOpen(true);
   }
@@ -102,6 +103,11 @@ export default function InventoryPage() {
     setIsEditCategoryDialogOpen(true);
   }
 
+  const handleRowClick = (itemId: string, residenceId: string | undefined) => {
+    if (!residenceId) return;
+    router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
+  };
+
 
   const renderItemsTable = (residenceId: string) => {
     const filteredItems = items.filter(item => (item.stockByResidence?.[residenceId] ?? 0) > 0);
@@ -130,17 +136,17 @@ export default function InventoryPage() {
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
-            <TableRow key={item.id}>
+            <TableRow key={item.id} onClick={() => handleRowClick(item.id, residenceId)} className="cursor-pointer">
               <TableCell className="font-medium">{item.nameAr}</TableCell>
               <TableCell className="font-medium">{item.nameEn}</TableCell>
               <TableCell>{item.category}</TableCell>
               <TableCell>{item.unit}</TableCell>
               <TableCell>{getStockForResidence(item, residenceId)}</TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="icon" className="mr-2" onClick={() => handleEditItemClick(item)}>
+                <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)}>
+                <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </TableCell>

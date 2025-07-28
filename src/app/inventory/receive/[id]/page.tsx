@@ -87,7 +87,14 @@ export default function ReceiveOrderPage() {
             return;
         }
         
-        const itemsToProcess = receivedItems.filter(item => item.quantityReceived > 0);
+        const itemsToProcess = receivedItems
+            .filter(item => item.quantityReceived > 0)
+            .map(item => ({
+                id: item.id,
+                nameAr: item.nameAr,
+                nameEn: item.nameEn,
+                quantityReceived: item.quantityReceived,
+            }));
         
         if (itemsToProcess.length === 0) {
             toast({ title: "No Change", description: "No new quantities were entered to receive." });

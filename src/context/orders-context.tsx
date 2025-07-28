@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction } from "firebase/firestore";
-import type { InventoryItem } from './inventory-context';
+import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
 
@@ -187,7 +187,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number}[]) => {
+  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[]) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -208,17 +208,34 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
             if (!residenceId) {
                 throw new Error("Residence ID not found on order.");
             }
+            
+            const transactionTime = Timestamp.now();
 
-            // Update inventory stock for each item
+            // Update inventory stock for each item and log transaction
             for (const receivedItem of newlyReceivedItems) {
                 if (receivedItem.quantityReceived > 0) {
                     const itemRef = doc(db, "inventory", receivedItem.id);
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     
+                    // Increment stock
                     transaction.set(itemRef, 
                         { stockByResidence: { [residenceId]: increment(receivedItem.quantityReceived) } }, 
                         { merge: true }
                     );
+
+                    // Log the transaction
+                    const transactionRef = doc(collection(db, "inventoryTransactions"));
+                    const newTransaction: Omit<InventoryTransaction, 'id'> = {
+                        itemId: receivedItem.id,
+                        itemNameEn: receivedItem.nameEn,
+                        itemNameAr: receivedItem.nameAr,
+                        residenceId: residenceId,
+                        date: transactionTime,
+                        type: 'IN',
+                        quantity: receivedItem.quantityReceived,
+                        referenceDocId: orderId,
+                    };
+                    transaction.set(transactionRef, newTransaction);
                 }
             }
             

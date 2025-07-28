@@ -177,7 +177,16 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-            await issueItemsFromStock(selectedComplexId, voucherLocations);
+            const itemsToIssue = voucherLocations.map(loc => ({
+                ...loc,
+                items: loc.items.map(item => ({
+                    id: item.id,
+                    nameEn: item.nameEn,
+                    nameAr: item.nameAr,
+                    issueQuantity: item.issueQuantity,
+                }))
+            }));
+            await issueItemsFromStock(selectedComplexId, itemsToIssue);
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');

@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc } from "firebase/firestore";
 
 
 export type ItemCategory = string;
@@ -18,6 +18,18 @@ export interface InventoryItem {
   unit: string;
   stock: number; // This will now represent total stock across all residences.
   stockByResidence?: { [residenceId: string]: number };
+}
+
+export interface InventoryTransaction {
+    id: string;
+    itemId: string;
+    itemNameEn: string;
+    itemNameAr: string;
+    residenceId: string;
+    date: Timestamp;
+    type: 'IN' | 'OUT';
+    quantity: number;
+    referenceDocId: string; // e.g., Order ID or MIV ID
 }
 
 export interface LocationWithItems<T> {
@@ -42,7 +54,8 @@ interface InventoryContextType {
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
-  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number}>[]) => Promise<void>;
+  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
+  getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -246,13 +259,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number}>[]) => {
+  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
     }
+    
+    // Generate a unique ID for this MIV
+    const mivId = `MIV-${Date.now()}`;
 
     try {
         await runTransaction(db, async (transaction) => {
+            const transactionTime = Timestamp.now();
+            
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
@@ -269,11 +287,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Not enough stock for ${itemDoc.data().nameEn}. Available: ${currentStock}, Required: ${issuedItem.issueQuantity}`);
                     }
                     
+                    // 1. Decrement stock
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     transaction.set(itemRef, 
                         { stockByResidence: { [residenceId]: increment(-issuedItem.issueQuantity) } }, 
                         { merge: true }
                     );
+
+                    // 2. Log the transaction
+                    const transactionRef = doc(collection(db, "inventoryTransactions"));
+                    const newTransaction: Omit<InventoryTransaction, 'id'> = {
+                        itemId: issuedItem.id,
+                        itemNameEn: issuedItem.nameEn,
+                        itemNameAr: issuedItem.nameAr,
+                        residenceId: residenceId,
+                        date: transactionTime,
+                        type: 'OUT',
+                        quantity: issuedItem.issueQuantity,
+                        referenceDocId: mivId,
+                    };
+                    transaction.set(transactionRef, newTransaction);
                 }
             }
             // Here you could also write the MIV record to a separate collection for history
@@ -284,8 +317,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+   const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+    }
+    try {
+        const q = query(
+            collection(db, "inventoryTransactions"),
+            where("itemId", "==", itemId),
+            where("residenceId", "==", residenceId),
+            orderBy("date", "asc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+    } catch (error) {
+        console.error("Error fetching inventory transactions:", error);
+        toast({ title: "Error", description: "Failed to fetch item history.", variant: "destructive" });
+        return [];
+    }
+  };
+
+
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions }}>
       {children}
     </InventoryContext.Provider>
   );
