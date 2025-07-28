@@ -4,7 +4,8 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,73 +24,95 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { useResidences } from "@/context/residences-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMaintenance } from "@/context/maintenance-context";
+import { Loader2 } from "lucide-react";
+import { useUsers } from "@/context/users-context";
+
 
 const formSchema = z.object({
-  complex: z.string().min(1, { message: "Please select a complex." }),
-  building: z.string().min(1, { message: "Please select a building." }),
-  room: z.string().min(1, { message: "Please select a room." }),
+  complexId: z.string().min(1, { message: "Please select a complex." }),
+  buildingId: z.string().min(1, { message: "Please select a building." }),
+  roomId: z.string().min(1, { message: "Please select a room." }),
   issueTitle: z.string().min(5, { message: "Title must be at least 5 characters." }),
   issueDescription: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  priority: z.string().min(1, { message: "Please select a priority level." }),
+  priority: z.enum(["Low", "Medium", "High"]),
 })
 
 export default function NewMaintenanceRequestPage() {
   const { toast } = useToast();
-  const { residences, loading, loadResidences } = useResidences();
+  const { residences, loading: residencesLoading, loadResidences } = useResidences();
+  const { createRequest, loading: maintenanceLoading } = useMaintenance();
+  const { currentUser } = useUsers();
+  const router = useRouter();
 
    useEffect(() => {
-    loadResidences();
-  }, [loadResidences]);
+    if (residences.length === 0) {
+      loadResidences();
+    }
+  }, [loadResidences, residences.length]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      complex: "",
-      building: "",
-      room: "",
+      complexId: "",
+      buildingId: "",
+      roomId: "",
       issueTitle: "",
       issueDescription: "",
-      priority: "",
+      priority: "Medium",
     },
   })
 
-  const selectedComplexId = form.watch("complex");
-  const selectedBuildingId = form.watch("building");
+  const selectedComplexId = form.watch("complexId");
+  const selectedBuildingId = form.watch("buildingId");
 
   useEffect(() => {
-    form.resetField("building", { defaultValue: "" });
-    form.resetField("room", { defaultValue: "" });
+    form.resetField("buildingId", { defaultValue: "" });
+    form.resetField("roomId", { defaultValue: "" });
   }, [selectedComplexId, form]);
 
   useEffect(() => {
-    form.resetField("room", { defaultValue: "" });
+    form.resetField("roomId", { defaultValue: "" });
   }, [selectedBuildingId, form]);
 
-  const buildings = useMemo(() => {
-    if (!selectedComplexId) return [];
-    const complex = residences.find((c) => c.id === selectedComplexId);
-    return complex ? complex.buildings : [];
-  }, [selectedComplexId, residences]);
-
-  const rooms = useMemo(() => {
-    if (!selectedBuildingId) return [];
-    const complex = residences.find((c) => c.id === selectedComplexId);
-    const building = complex?.buildings.find((b) => b.id === selectedBuildingId);
-    return building ? building.floors.flatMap(floor => floor.rooms) : [];
-  }, [selectedComplexId, selectedBuildingId, residences]);
+  const selectedComplex = useMemo(() => residences.find((c) => c.id === selectedComplexId), [selectedComplexId, residences]);
+  const buildings = useMemo(() => selectedComplex?.buildings || [], [selectedComplex]);
+  const selectedBuilding = useMemo(() => buildings.find((b) => b.id === selectedBuildingId), [selectedBuildingId, buildings]);
+  const rooms = useMemo(() => selectedBuilding?.floors.flatMap(floor => floor.rooms) || [], [selectedBuilding]);
 
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in to create a request.", variant: "destructive" });
+        return;
+    }
+    const complex = selectedComplex;
+    const building = selectedBuilding;
+    const room = rooms.find(r => r.id === values.roomId);
+
+    if (!complex || !building || !room) {
+        toast({ title: "Error", description: "Invalid location selected. Please try again.", variant: "destructive" });
+        return;
+    }
+    
+    await createRequest({
+        ...values,
+        complexName: complex.name,
+        buildingName: building.name,
+        roomName: room.name,
+        requestedById: currentUser.id,
+    });
+    
     toast({
         title: "Request Submitted",
         description: "Your maintenance request has been successfully submitted.",
         variant: "default",
     })
     form.reset();
+    router.push("/maintenance");
   }
   
-  if (loading) {
+  if (residencesLoading) {
     return (
        <Card className="max-w-4xl mx-auto">
         <CardHeader>
@@ -123,7 +146,7 @@ export default function NewMaintenanceRequestPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <FormField
                             control={form.control}
-                            name="complex"
+                            name="complexId"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Complex</FormLabel>
@@ -143,7 +166,7 @@ export default function NewMaintenanceRequestPage() {
                         />
                          <FormField
                             control={form.control}
-                            name="building"
+                            name="buildingId"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Building</FormLabel>
@@ -163,7 +186,7 @@ export default function NewMaintenanceRequestPage() {
                         />
                          <FormField
                             control={form.control}
-                            name="room"
+                            name="roomId"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Room / Unit</FormLabel>
@@ -219,16 +242,19 @@ export default function NewMaintenanceRequestPage() {
                                         <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="low">Low</SelectItem>
-                                        <SelectItem value="medium">Medium</SelectItem>
-                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="Low">Low</SelectItem>
+                                        <SelectItem value="Medium">Medium</SelectItem>
+                                        <SelectItem value="High">High</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
                             </FormItem>
                         )}
                     />
-                    <Button type="submit">Submit Request</Button>
+                    <Button type="submit" disabled={maintenanceLoading}>
+                        {maintenanceLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Submit Request
+                    </Button>
                 </form>
             </Form>
         </CardContent>

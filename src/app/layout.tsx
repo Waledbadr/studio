@@ -6,6 +6,7 @@ import { ResidencesProvider } from '@/context/residences-context';
 import { InventoryProvider } from '@/context/inventory-context';
 import { UsersProvider } from '@/context/users-context';
 import { OrdersProvider } from '@/context/orders-context';
+import { MaintenanceProvider } from '@/context/maintenance-context';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -32,7 +33,9 @@ export default function RootLayout({
           <InventoryProvider>
             <UsersProvider>
               <OrdersProvider>
-                <AppLayout>{children}</AppLayout>
+                <MaintenanceProvider>
+                  <AppLayout>{children}</AppLayout>
+                </MaintenanceProvider>
               </OrdersProvider>
             </UsersProvider>
           </InventoryProvider>

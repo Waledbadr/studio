@@ -1,18 +1,27 @@
+
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Activity, Wrench, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useMaintenance } from "@/context/maintenance-context";
+import { useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
-  const maintenanceRequests = [
-    { id: 'REQ-001', room: 'A-101', issue: 'Leaky Faucet', status: 'Pending', priority: 'High' },
-    { id: 'REQ-002', room: 'C-305', issue: 'Broken AC', status: 'In Progress', priority: 'High' },
-    { id: 'REQ-003', room: 'B-210', issue: 'Window not closing', status: 'Completed', priority: 'Medium' },
-    { id: 'REQ-004', room: 'A-102', issue: 'Clogged Toilet', status: 'Pending', priority: 'Low' },
-    { id: 'REQ-005', room: 'D-401', issue: 'No hot water', status: 'In Progress', priority: 'High' },
-  ];
+  const { requests, loading, loadRequests } = useMaintenance();
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+  
+  const recentRequests = requests.slice(0, 5);
+  const totalRequests = requests.length;
+  const pendingRequests = requests.filter(r => r.status === 'Pending').length;
+  const completedRequests = requests.filter(r => r.status === 'Completed').length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,8 +32,8 @@ export default function DashboardPage() {
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
+            <p className="text-xs text-muted-foreground">Total maintenance requests</p>
           </CardContent>
         </Card>
         <Card>
@@ -33,8 +42,8 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">57</div>
-            <p className="text-xs text-muted-foreground">+12 since yesterday</p>
+            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{pendingRequests}</div>}
+            <p className="text-xs text-muted-foreground">Requests needing attention</p>
           </CardContent>
         </Card>
         <Card>
@@ -43,8 +52,8 @@ export default function DashboardPage() {
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">842</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRequests}</div>}
+            <p className="text-xs text-muted-foreground">Requests completed</p>
           </CardContent>
         </Card>
       </div>
@@ -62,36 +71,48 @@ export default function DashboardPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Request ID</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Issue</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {maintenanceRequests.map((request) => (
-                <TableRow key={request.id}>
-                  <TableCell className="font-medium">{request.id}</TableCell>
-                  <TableCell>{request.room}</TableCell>
-                  <TableCell>{request.issue}</TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
-                    }>
-                      {request.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                     <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
-                  </TableCell>
+          {loading && (
+             <div className="flex items-center justify-center p-10">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+             </div>
+          )}
+          {!loading && recentRequests.length === 0 && (
+             <div className="text-center text-muted-foreground p-10">
+                No maintenance requests found.
+             </div>
+          )}
+          {!loading && recentRequests.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Request ID</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Issue</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {recentRequests.map((request) => (
+                  <TableRow key={request.id}>
+                    <TableCell className="font-medium">{request.id}</TableCell>
+                    <TableCell>{`${request.complexName}, ${request.roomName}`}</TableCell>
+                    <TableCell>{request.issueTitle}</TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
+                      }>
+                        {request.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
