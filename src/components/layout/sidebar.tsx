@@ -8,6 +8,9 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
 import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, ChevronsUpDown, PackageCheck, ListOrdered, ClipboardMinus, AreaChart, History } from 'lucide-react';
 import { usePathname } from 'next/navigation';
@@ -34,6 +37,10 @@ export function AppSidebar() {
     { href: '/tools', label: 'AI Tools', icon: Bot },
     { href: '/setup', label: 'Setup', icon: Settings },
   ];
+  
+    const reportMenuItems = [
+        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History }
+    ]
 
   return (
     <>
@@ -46,17 +53,31 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarMenu>
           {menuItems.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href)}
-                tooltip={item.label}
-              >
-                <Link href={item.href}>
-                  <item.icon />
-                  <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
+             <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+                  tooltip={item.label}
+                >
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+                 {item.href === '/reports' && (
+                    <SidebarMenuSub>
+                        {reportMenuItems.map(subItem => (
+                             <SidebarMenuSubItem key={subItem.href}>
+                                <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
+                                     <Link href={subItem.href}>
+                                        <subItem.icon />
+                                        <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
+                                    </Link>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                        ))}
+                    </SidebarMenuSub>
+                )}
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

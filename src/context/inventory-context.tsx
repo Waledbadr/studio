@@ -19,6 +19,7 @@ export interface InventoryItem {
   unit: string;
   stock: number; // This will now represent total stock across all residences.
   stockByResidence?: { [residenceId: string]: number };
+  lifespanDays?: number;
 }
 
 export interface InventoryTransaction {
@@ -81,8 +82,10 @@ interface InventoryContextType {
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
+  getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
+  getLastIssueDateForItemAtLocation: (itemId: string, locationId: string) => Promise<Timestamp | null>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -240,7 +243,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {} };
+      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: newItem.lifespanDays || 0 };
       await setDoc(docRef, itemWithId);
       
       const newCategory = newItem.category.toLowerCase();
@@ -406,13 +409,55 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        return transactions;
+        let balance = 0;
+        const openingBalanceTx = transactions.find(tx => tx.type === 'IN');
+        if (openingBalanceTx) {
+            balance = openingBalanceTx.quantity;
+        }
+
+        const transactionsWithBalance = transactions.map(tx => {
+            if (tx.type === 'IN' && tx !== openingBalanceTx) {
+                balance += tx.quantity;
+            } else if (tx.type === 'OUT') {
+                balance -= tx.quantity;
+            }
+            return { ...tx, balance };
+        });
+
+        const openingBalanceRecord: InventoryTransaction = {
+            id: 'opening-balance',
+            itemId,
+            residenceId,
+            date: openingBalanceTx ? new Timestamp(openingBalanceTx.date.seconds - 1, 0) : new Timestamp(0,0),
+            type: 'IN',
+            quantity: openingBalanceTx ? openingBalanceTx.quantity : 0,
+            referenceDocId: 'Opening Balance',
+            itemNameEn: openingBalanceTx?.itemNameEn || '',
+            itemNameAr: openingBalanceTx?.itemNameAr || '',
+        };
+        
+        return transactionsWithBalance;
+
     } catch (error) {
         console.error("Error fetching inventory transactions:", error);
         toast({ title: "Error", description: "Failed to fetch item history.", variant: "destructive" });
         return [];
     }
   };
+
+  const getAllIssueTransactions = async (): Promise<InventoryTransaction[]> => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+    }
+     const q = query(
+        collection(db, "inventoryTransactions"), 
+        where("type", "==", "OUT"), 
+        orderBy("date", "desc")
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+  }
 
   const getMIVs = async (): Promise<MIV[]> => {
     if (!db) {
@@ -487,9 +532,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
+    if (!db) {
+        return null;
+    }
+    const q = query(
+        collection(db, "inventoryTransactions"),
+        where("itemId", "==", itemId),
+        where("locationId", "==", locationId),
+        where("type", "==", "OUT"),
+        orderBy("date", "desc"),
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].data().date as Timestamp;
+    }
+    return null;
+  };
+
+
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions }}>
       {children}
     </InventoryContext.Provider>
   );

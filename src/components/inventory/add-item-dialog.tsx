@@ -32,6 +32,7 @@ export function AddItemDialog({
     const [name, setName] = useState(initialName);
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
+    const [lifespanDays, setLifespanDays] = useState('');
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -42,6 +43,7 @@ export function AddItemDialog({
             setName(initialName);
             setCategory('');
             setUnit('');
+            setLifespanDays('');
         }
     }, [isOpen, initialName]);
 
@@ -56,6 +58,11 @@ export function AddItemDialog({
         startTransition(async () => {
             try {
                 const translationResult = await translateItemName({ name: name });
+                const lifespan = lifespanDays ? parseInt(lifespanDays, 10) : undefined;
+                if (lifespanDays && isNaN(lifespan!)) {
+                     toast({ title: "Validation Error", description: "Lifespan must be a number.", variant: "destructive" });
+                     return;
+                }
 
                 const newInventoryItem: Omit<InventoryItem, 'id' | 'stock'> = {
                     name: name,
@@ -64,6 +71,7 @@ export function AddItemDialog({
                     category: category,
                     unit: unit,
                     stockByResidence: {},
+                    lifespanDays: lifespan
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -110,6 +118,10 @@ export function AddItemDialog({
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="item-unit" className="text-right">Unit</Label>
                         <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="item-lifespan" className="text-right">Lifespan (Days)</Label>
+                        <Input id="item-lifespan" type="number" placeholder="e.g., 365" className="col-span-3" value={lifespanDays} onChange={e => setLifespanDays(e.target.value)} />
                     </div>
                 </div>
                 <DialogFooter>

@@ -30,6 +30,8 @@ export function EditItemDialog({
     const [nameAr, setNameAr] = useState('');
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
+    const [lifespanDays, setLifespanDays] = useState<string | number>('');
+
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -42,6 +44,7 @@ export function EditItemDialog({
             setNameAr(item.nameAr);
             setCategory(item.category);
             setUnit(item.unit);
+            setLifespanDays(item.lifespanDays || '');
         }
     }, [item]);
 
@@ -53,6 +56,13 @@ export function EditItemDialog({
             return;
         }
 
+        const lifespan = lifespanDays ? parseInt(String(lifespanDays), 10) : undefined;
+        if (lifespanDays && isNaN(lifespan!)) {
+            toast({ title: "Validation Error", description: "Lifespan must be a number.", variant: "destructive" });
+            return;
+        }
+
+
         startTransition(async () => {
             const updatedItem: InventoryItem = {
                 ...item,
@@ -61,6 +71,7 @@ export function EditItemDialog({
                 nameEn: nameEn,
                 category: category,
                 unit: unit,
+                lifespanDays: lifespan
             };
 
             await onItemUpdated(updatedItem);
@@ -103,6 +114,10 @@ export function EditItemDialog({
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="item-unit" className="text-right">Unit</Label>
                             <Input id="item-unit" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="item-lifespan" className="text-right">Lifespan (Days)</Label>
+                            <Input id="item-lifespan" type="number" placeholder="e.g., 365" className="col-span-3" value={lifespanDays} onChange={e => setLifespanDays(e.target.value)} />
                         </div>
                         <div className="space-y-2 pt-2">
                              <Label>Stock by Residence</Label>

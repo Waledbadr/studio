@@ -17,6 +17,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
+import { differenceInDays } from 'date-fns';
+
 
 interface IssuedItem extends InventoryItem {
     issueQuantity: number;
@@ -28,7 +30,7 @@ type VoucherLocation = IVoucherLocation<IssuedItem>;
 export default function IssueMaterialPage() {
     const { currentUser } = useUsers();
     const { residences, loading: residencesLoading } = useResidences();
-    const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock } = useInventory();
+    const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
     
@@ -72,7 +74,7 @@ export default function IssueMaterialPage() {
         setSelectedRoomId('');
     }, [selectedFloorId]);
     
-    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+    const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
         if (!isLocationSelected || !selectedComplex || !selectedBuilding || !selectedFloor) {
             toast({ title: "No Location Selected", description: "Please select a building, floor, and room first.", variant: "destructive"});
             return;
@@ -91,6 +93,23 @@ export default function IssueMaterialPage() {
         }
 
         const locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+        
+        // Lifespan check
+        if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
+            const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
+            if (lastIssueDate) {
+                const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                if (daysSinceLastIssue < itemToAdd.lifespanDays) {
+                    toast({
+                        title: "Lifespan Warning",
+                        description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
+                        variant: "default",
+                        duration: 8000,
+                        className: "bg-yellow-100 border-yellow-400 text-yellow-800"
+                    });
+                }
+            }
+        }
         
         setVoucherLocations(prevLocations => {
             const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
