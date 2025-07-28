@@ -151,14 +151,9 @@ export default function InventoryPage() {
               </Button>
             }
           />
-           <Button asChild variant="secondary">
-            <Link href="/inventory/orders">
-              <ListOrdered className="mr-2 h-4 w-4" /> View Orders
-            </Link>
-          </Button>
-          <Button asChild>
+           <Button asChild>
             <Link href="/inventory/new-order">
-              <PlusCircle className="mr-2 h-4 w-4" /> New Order
+              <PlusCircle className="mr-2 h-4 w-4" /> New Request
             </Link>
           </Button>
         </div>

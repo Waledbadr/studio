@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, ChevronsUpDown, PackageCheck } from 'lucide-react';
+import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, ChevronsUpDown, PackageCheck, ListOrdered } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -25,7 +25,8 @@ export function AppSidebar() {
     { href: '/', label: 'Dashboard', icon: Home },
     { href: '/residences', label: 'Residences', icon: Building },
     { href: '/maintenance', label: 'Maintenance', icon: Wrench },
-    { href: '/inventory', label: 'Inventory', icon: ClipboardList },
+    { href: '/inventory', label: 'Inventory', icon: ClipboardList, exact: true },
+    { href: '/inventory/orders', label: 'Materials Requests', icon: ListOrdered },
     { href: '/inventory/receive', label: 'Receive Materials', icon: PackageCheck },
     { href: '/users', label: 'Users', icon: Users },
     { href: '/tools', label: 'AI Tools', icon: Bot },
@@ -46,7 +47,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+                isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href)}
                 tooltip={item.label}
               >
                 <Link href={item.href}>
