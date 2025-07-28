@@ -21,7 +21,7 @@ function ItemMovementContent() {
     const { residences, loading: residencesLoading } = useResidences();
     
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [transactionsLoading, setTransactionsLoading] = useState(true);
 
     const itemId = searchParams.get('itemId');
     const residenceId = searchParams.get('residenceId');
@@ -30,18 +30,20 @@ function ItemMovementContent() {
     const residence = useMemo(() => residences.find(r => r.id === residenceId), [residences, residenceId]);
 
     useEffect(() => {
-        if (itemId && residenceId) {
-            setLoading(true);
+        if (itemId && residenceId && !inventoryLoading && !residencesLoading) {
+            setTransactionsLoading(true);
             getInventoryTransactions(itemId, residenceId).then(data => {
                 setTransactions(data);
-                setLoading(false);
+                setTransactionsLoading(false);
             });
         }
-    }, [itemId, residenceId, getInventoryTransactions]);
+    }, [itemId, residenceId, getInventoryTransactions, inventoryLoading, residencesLoading]);
 
     const transactionsWithBalance = useMemo(() => {
         let balance = 0;
-        return transactions.map(tx => {
+        // Sort transactions by date ascending before calculating balance
+        const sortedTransactions = [...transactions].sort((a, b) => a.date.toMillis() - b.date.toMillis());
+        return sortedTransactions.map(tx => {
             if (tx.type === 'IN') {
                 balance += tx.quantity;
             } else {
@@ -50,6 +52,8 @@ function ItemMovementContent() {
             return { ...tx, balance };
         });
     }, [transactions]);
+    
+    const pageLoading = inventoryLoading || residencesLoading;
     
     const renderSkeleton = () => (
         Array.from({ length: 5 }).map((_, i) => (
@@ -63,8 +67,30 @@ function ItemMovementContent() {
         ))
     );
 
-    if (inventoryLoading || residencesLoading) {
-        return <div>Loading...</div>;
+    if (pageLoading) {
+        return (
+             <div className="space-y-6">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="h-4 w-96" />
+                <Card>
+                    <CardContent className="pt-6">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                                    <TableHead><Skeleton className="h-5 w-40" /></TableHead>
+                                    <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+                                    <TableHead><Skeleton className="h-5 w-16" /></TableHead>
+                                    <TableHead><Skeleton className="h-5 w-16" /></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>{renderSkeleton()}</TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </div>
+        );
     }
 
     if (!item || !residence) {
@@ -97,7 +123,7 @@ function ItemMovementContent() {
             </div>
 
              <Card>
-                <CardContent>
+                <CardContent className="pt-6">
                      <Table>
                         <TableHeader>
                             <TableRow>
@@ -109,7 +135,7 @@ function ItemMovementContent() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading ? renderSkeleton() : transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
+                            {transactionsLoading ? renderSkeleton() : transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
                                 <TableRow key={tx.id}>
                                     <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
                                     <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
