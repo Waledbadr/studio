@@ -1,45 +1,41 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useResidences, type Complex, type Building, type Floor, type Room } from '@/context/residences-context';
+import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { useInventory, type InventoryItem } from '@/context/inventory-context';
+import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useRouter } from 'next/navigation';
 
 interface IssuedItem extends InventoryItem {
     issueQuantity: number;
 }
 
-interface LocationWithItems {
-    locationId: string;
-    buildingId: string;
-    buildingName: string;
-    floorId: string;
-    floorName: string;
-    roomId: string;
-    roomName: string;
-    items: IssuedItem[];
-}
+// Renaming to avoid conflict if we ever import the context type directly
+type VoucherLocation = IVoucherLocation<IssuedItem>;
+
 
 export default function IssueMaterialPage() {
     const { currentUser } = useUsers();
     const { residences, loading: residencesLoading } = useResidences();
-    const { items: allItems, loading: inventoryLoading, getStockForResidence } = useInventory();
+    const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock } = useInventory();
     const { toast } = useToast();
+    const router = useRouter();
     
     // Form state
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Location selection state
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
@@ -47,7 +43,7 @@ export default function IssueMaterialPage() {
     const [selectedRoomId, setSelectedRoomId] = useState('');
 
     // Voucher state
-    const [voucherLocations, setVoucherLocations] = useState<LocationWithItems[]>([]);
+    const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -58,7 +54,6 @@ export default function IssueMaterialPage() {
     const selectedComplex = useMemo(() => residences.find(c => c.id === selectedComplexId), [selectedComplexId, residences]);
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
-    const selectedRoom = useMemo(() => selectedFloor?.rooms.find(r => r.id === selectedRoomId), [selectedRoomId, selectedFloor]);
     
     const isLocationSelected = useMemo(() => selectedBuildingId && selectedFloorId && selectedRoomId, [selectedBuildingId, selectedFloorId, selectedRoomId]);
 
@@ -71,11 +66,11 @@ export default function IssueMaterialPage() {
     // Reset selections when a parent selection changes
     useEffect(() => {
         setVoucherLocations([]);
+        setSelectedBuildingId('');
     }, [selectedComplexId]);
 
     useEffect(() => {
         setSelectedFloorId('');
-        setSelectedRoomId('');
     }, [selectedBuildingId]);
 
     useEffect(() => {
@@ -83,8 +78,14 @@ export default function IssueMaterialPage() {
     }, [selectedFloorId]);
     
     const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
-        if (!isLocationSelected || !selectedComplex || !selectedBuilding || !selectedFloor || !selectedRoom) {
+        if (!isLocationSelected || !selectedComplex || !selectedBuilding || !selectedFloor) {
             toast({ title: "No Location Selected", description: "Please select a building, floor, and room first.", variant: "destructive"});
+            return;
+        }
+        
+        const selectedRoom = selectedFloor.rooms.find(r => r.id === selectedRoomId);
+        if(!selectedRoom) {
+            toast({ title: "Room not found", description: "An error occurred with the selected room.", variant: "destructive"});
             return;
         }
 
@@ -120,7 +121,7 @@ export default function IssueMaterialPage() {
                 return newLocations;
             } else {
                  // Add new location with the new item
-                const newLocation: LocationWithItems = {
+                const newLocation: VoucherLocation = {
                     locationId,
                     buildingId: selectedBuildingId,
                     buildingName: selectedBuilding.name,
@@ -169,11 +170,25 @@ export default function IssueMaterialPage() {
         });
     };
     
-    const handleSubmitVoucher = () => {
-        console.log({
-            complex: selectedComplexId,
-            issuedItemsByLocation: voucherLocations
-        })
+    const handleSubmitVoucher = async () => {
+        if (!selectedComplexId || !isVoucherSubmittable) {
+            toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            await issueItemsFromStock(selectedComplexId, voucherLocations);
+            toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
+            setVoucherLocations([]);
+            setSelectedBuildingId('');
+            // Maybe route to a history page in the future
+            // router.push('/inventory'); 
+        } catch (error) {
+            console.error("Failed to submit voucher:", error);
+            toast({ title: "Submission Error", description: `An error occurred: ${error}`, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const isVoucherSubmittable = useMemo(() => {
@@ -194,14 +209,17 @@ export default function IssueMaterialPage() {
                  <div className="flex items-center gap-4">
                      <div className="flex items-center gap-2">
                         <Label className="whitespace-nowrap">Issue From Residence:</Label>
-                        <Select value={selectedComplexId} onValueChange={setSelectedComplexId}>
+                        <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
                             <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
                             <SelectContent>
                                 {userResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                      </div>
-                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable}>Submit Voucher</Button>
+                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Submit Voucher
+                    </Button>
                 </div>
             </div>
 
@@ -329,4 +347,3 @@ export default function IssueMaterialPage() {
         </div>
     );
 }
-
