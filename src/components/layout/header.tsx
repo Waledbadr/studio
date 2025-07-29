@@ -6,8 +6,17 @@ import { Bell, UserCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
+import { useUsers } from '@/context/users-context';
+import { useRouter } from 'next/navigation';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  const { currentUser } = useUsers();
+  const router = useRouter();
+
+  const handleProfileClick = () => {
+    router.push('/users');
+  };
+
   return (
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
@@ -22,15 +31,15 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">
             <Avatar className="h-9 w-9">
-              <AvatarImage src="https://placehold.co/100x100.png" alt="@johndoe" data-ai-hint="profile picture" />
-              <AvatarFallback>JD</AvatarFallback>
+              <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser?.name || ''} data-ai-hint="profile picture" />
+              <AvatarFallback>{currentUser?.name?.charAt(0) || 'U'}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Profile</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
           <DropdownMenuItem>Settings</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem>Logout</DropdownMenuItem>
