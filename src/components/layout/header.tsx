@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Globe, UserCircle } from 'lucide-react';
+import { Bell, Globe, UserCircle, Sun, Moon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -17,10 +17,23 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const { currentUser, users, switchUser } = useUsers();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
     setIsMounted(true);
+    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const initialTheme = storedTheme || 'dark';
+    setTheme(initialTheme);
+    document.documentElement.classList.add(initialTheme);
   }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(newTheme);
+  };
 
 
   const handleProfileClick = () => {
@@ -33,6 +46,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
       </div>
+       <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleTheme}>
+        {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+        <span className="sr-only">Toggle theme</span>
+      </Button>
        <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
         <Globe className="h-5 w-5" />
         <span className="sr-only">{dict.changeLanguage}</span>
