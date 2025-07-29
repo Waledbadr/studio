@@ -92,8 +92,8 @@ export function AddItemDialog({
          <DialogContent>
             <form onSubmit={handleAddItem}>
                 <DialogHeader>
-                <DialogTitle>Add New Inventory Item</DialogTitle>
-                <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically. Initial stock is set to zero and managed via receiving vouchers.</DialogDescription>
+                    <DialogTitle>Add New Inventory Item</DialogTitle>
+                    <DialogDescription>Enter the item name in Arabic or English, and we'll translate it automatically. Initial stock is set to zero and managed via receiving vouchers.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
