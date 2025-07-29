@@ -102,7 +102,7 @@ export function AppSidebar() {
                                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                                  </>
                                ) : (
-                                <AvatarFallback>U</AvatarFallback>
+                                <AvatarFallback />
                                )}
                             </Avatar>
                             <div className="group-data-[collapsible=icon]:hidden text-left">

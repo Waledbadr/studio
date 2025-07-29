@@ -45,7 +45,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (
-                <AvatarFallback>U</AvatarFallback>
+                <AvatarFallback />
               )}
             </Avatar>
           </Button>
