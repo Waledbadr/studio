@@ -17,7 +17,6 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUsers } from '@/context/users-context';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/language-context';
@@ -25,7 +24,7 @@ import { useLanguage } from '@/context/language-context';
 export function AppSidebar() {
   const { dict } = useLanguage();
   const pathname = usePathname();
-  const { currentUser, users, switchUser, loading } = useUsers();
+  const { currentUser, loading } = useUsers();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -92,36 +91,24 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <div className="p-2">
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2">
-                         <div className="flex items-center gap-2">
-                             <Avatar className="size-8">
-                               {isMounted && currentUser ? (
-                                 <>
-                                  <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser.name} data-ai-hint="profile picture" />
-                                  <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
-                                 </>
-                               ) : (
-                                <AvatarFallback />
-                               )}
-                            </Avatar>
-                            <div className="group-data-[collapsible=icon]:hidden text-left">
-                                <p className="font-semibold text-sm">{loading || !isMounted ? dict.loading : currentUser?.name}</p>
-                                <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
-                            </div>
-                            <ChevronsUpDown className="h-4 w-4 ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                         </div>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[var(--sidebar-width)] mb-2" side="top" align="start">
-                    {users.map(user => (
-                        <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
-                            {user.name} ({user.role})
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+             <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
+                 <div className="flex items-center gap-2">
+                     <Avatar className="size-8">
+                       {isMounted && currentUser ? (
+                         <>
+                          <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser.name} data-ai-hint="profile picture" />
+                          <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
+                         </>
+                       ) : (
+                        <AvatarFallback />
+                       )}
+                    </Avatar>
+                    <div className="group-data-[collapsible=icon]:hidden text-left">
+                        <p className="font-semibold text-sm">{loading || !isMounted ? dict.loading : currentUser?.name}</p>
+                        <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
+                    </div>
+                 </div>
+            </div>
         </div>
       </SidebarFooter>
     </>

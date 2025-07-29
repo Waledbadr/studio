@@ -14,7 +14,7 @@ import { useLanguage } from '@/context/language-context';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { dict, toggleLanguage } = useLanguage();
-  const { currentUser } = useUsers();
+  const { currentUser, users, switchUser } = useUsers();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
@@ -61,6 +61,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
           <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Switch User</DropdownMenuLabel>
+           {users.map(user => (
+              <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
+                  {user.name} ({user.role})
+              </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem>{dict.logout}</DropdownMenuItem>
         </DropdownMenuContent>
