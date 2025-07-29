@@ -19,10 +19,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUsers } from '@/context/users-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
+import { useState, useEffect } from 'react';
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, users, switchUser, loading } = useUsers();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const menuItems = [
     { href: '/', label: 'Dashboard', icon: Home },
@@ -89,12 +96,18 @@ export function AppSidebar() {
                     <Button variant="outline" className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2">
                          <div className="flex items-center gap-2">
                              <Avatar className="size-8">
-                                <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser?.name} data-ai-hint="profile picture" />
-                                <AvatarFallback>{currentUser?.name.charAt(0)}</AvatarFallback>
+                               {isClient ? (
+                                 <>
+                                  <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser?.name} data-ai-hint="profile picture" />
+                                  <AvatarFallback>{currentUser?.name.charAt(0)}</AvatarFallback>
+                                 </>
+                               ) : (
+                                <AvatarFallback>U</AvatarFallback>
+                               )}
                             </Avatar>
                             <div className="group-data-[collapsible=icon]:hidden text-left">
-                                <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
-                                <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
+                                <p className="font-semibold text-sm">{loading || !isClient ? 'Loading...' : currentUser?.name}</p>
+                                <p className="text-xs text-muted-foreground">{loading || !isClient ? '' : currentUser?.role}</p>
                             </div>
                             <ChevronsUpDown className="h-4 w-4 ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
                          </div>
