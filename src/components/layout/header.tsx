@@ -39,10 +39,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">
             <Avatar className="h-9 w-9">
-              {isMounted ? (
+              {isMounted && currentUser ? (
                 <>
-                  <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser?.name || ''} data-ai-hint="profile picture" />
-                  <AvatarFallback>{currentUser?.name?.charAt(0) || 'U'}</AvatarFallback>
+                  <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser.name} data-ai-hint="profile picture" />
+                  <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (
                 <AvatarFallback>U</AvatarFallback>

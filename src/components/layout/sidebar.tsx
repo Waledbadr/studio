@@ -96,10 +96,10 @@ export function AppSidebar() {
                     <Button variant="outline" className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2">
                          <div className="flex items-center gap-2">
                              <Avatar className="size-8">
-                               {isMounted ? (
+                               {isMounted && currentUser ? (
                                  <>
-                                  <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser?.name} data-ai-hint="profile picture" />
-                                  <AvatarFallback>{currentUser?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                  <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser.name} data-ai-hint="profile picture" />
+                                  <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                                  </>
                                ) : (
                                 <AvatarFallback>U</AvatarFallback>
