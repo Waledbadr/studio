@@ -298,9 +298,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
         const prefix = `MIV-${year}-${month}-`;
 
+        // Get all 'OUT' transactions for the current month
+        const startOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        const endOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59));
+
         const mivQuery = query(collection(db, "inventoryTransactions"), 
-            where("referenceDocId", ">=", prefix),
-            where("type", "==", "OUT")
+            where("type", "==", "OUT"),
+            where("date", ">=", startOfMonth),
+            where("date", "<=", endOfMonth)
         );
         
         const querySnapshot = await getDocs(mivQuery);
