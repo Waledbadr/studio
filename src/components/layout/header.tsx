@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, UserCircle } from 'lucide-react';
+import { Bell, Globe, UserCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -31,6 +31,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
       </div>
+       <Button variant="ghost" size="icon" className="rounded-full">
+        <Globe className="h-5 w-5" />
+        <span className="sr-only">تغيير اللغة</span>
+      </Button>
       <Button variant="ghost" size="icon" className="rounded-full">
         <Bell className="h-5 w-5" />
         <span className="sr-only">الإشعارات</span>
