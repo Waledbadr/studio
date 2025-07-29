@@ -34,14 +34,14 @@ body {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 224 71% 4%;
-    --sidebar-foreground: 210 40% 98%;
+    --sidebar-background: 240 10% 99%;
+    --sidebar-foreground: 222.2 84% 4.9%;
     --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 240 5% 90%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-border: 240 6% 90%;
+    --sidebar-ring: 217 91% 60%;
   }
   .dark {
     --background: 222 47% 11%;
