@@ -14,10 +14,10 @@ import { useState, useEffect } from 'react';
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { currentUser } = useUsers();
   const router = useRouter();
-  const [isClient, setIsClient] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setIsMounted(true);
   }, []);
 
 
@@ -39,7 +39,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">
             <Avatar className="h-9 w-9">
-              {isClient ? (
+              {isMounted ? (
                 <>
                   <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser?.name || ''} data-ai-hint="profile picture" />
                   <AvatarFallback>{currentUser?.name?.charAt(0) || 'U'}</AvatarFallback>

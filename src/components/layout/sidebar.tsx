@@ -24,10 +24,10 @@ import { useState, useEffect } from 'react';
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, users, switchUser, loading } = useUsers();
-  const [isClient, setIsClient] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setIsMounted(true);
   }, []);
 
 
@@ -96,18 +96,18 @@ export function AppSidebar() {
                     <Button variant="outline" className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2">
                          <div className="flex items-center gap-2">
                              <Avatar className="size-8">
-                               {isClient ? (
+                               {isMounted ? (
                                  <>
                                   <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser?.name} data-ai-hint="profile picture" />
-                                  <AvatarFallback>{currentUser?.name.charAt(0)}</AvatarFallback>
+                                  <AvatarFallback>{currentUser?.name?.charAt(0) || 'U'}</AvatarFallback>
                                  </>
                                ) : (
                                 <AvatarFallback>U</AvatarFallback>
                                )}
                             </Avatar>
                             <div className="group-data-[collapsible=icon]:hidden text-left">
-                                <p className="font-semibold text-sm">{loading || !isClient ? 'Loading...' : currentUser?.name}</p>
-                                <p className="text-xs text-muted-foreground">{loading || !isClient ? '' : currentUser?.role}</p>
+                                <p className="font-semibold text-sm">{loading || !isMounted ? 'Loading...' : currentUser?.name}</p>
+                                <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
                             </div>
                             <ChevronsUpDown className="h-4 w-4 ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
                          </div>
