@@ -33,11 +33,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/context/language-context';
 
 export default function ResidencesPage() {
   const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex } = useResidences();
-  const { users, loadUsers: loadUsersContext, loading: usersLoading } = useUsers();
+  const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
+  const { dict } = useLanguage();
+  const isAdmin = currentUser?.role === 'Admin';
+
 
   useEffect(() => {
     loadResidences();
@@ -192,47 +196,49 @@ export default function ResidencesPage() {
           <h1 className="text-2xl font-bold">Residences</h1>
           <p className="text-muted-foreground">Manage your residential complexes, buildings, and units.</p>
         </div>
-        <Dialog open={isAddComplexDialogOpen} onOpenChange={setIsAddComplexDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Complex
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleAddComplex}>
-              <DialogHeader>
-                <DialogTitle>Add New Complex</DialogTitle>
-                <DialogDescription>Enter the details for the new residential complex.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="complex-name" className="text-right">Name</Label>
-                  <Input id="complex-name" placeholder="e.g., Seaside Residences" className="col-span-3" value={newComplexName} onChange={(e) => setNewComplexName(e.target.value)} />
+        {isAdmin && (
+            <Dialog open={isAddComplexDialogOpen} onOpenChange={setIsAddComplexDialogOpen}>
+            <DialogTrigger asChild>
+                <Button>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Complex
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <form onSubmit={handleAddComplex}>
+                <DialogHeader>
+                    <DialogTitle>Add New Complex</DialogTitle>
+                    <DialogDescription>Enter the details for the new residential complex.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-name" className="text-right">Name</Label>
+                    <Input id="complex-name" placeholder="e.g., Seaside Residences" className="col-span-3" value={newComplexName} onChange={(e) => setNewComplexName(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-city" className="text-right">City</Label>
+                    <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={newComplexCity} onChange={(e) => setNewComplexCity(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="complex-manager" className="text-right">Manager</Label>
+                        <Select onValueChange={setNewComplexManagerId} value={newComplexManagerId}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select a manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {users.map((user) => (
+                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="complex-city" className="text-right">City</Label>
-                  <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={newComplexCity} onChange={(e) => setNewComplexCity(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="complex-manager" className="text-right">Manager</Label>
-                    <Select onValueChange={setNewComplexManagerId} value={newComplexManagerId}>
-                        <SelectTrigger className="col-span-3">
-                            <SelectValue placeholder="Select a manager" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {users.map((user) => (
-                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit">Save Complex</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                    <Button type="submit">Save Complex</Button>
+                </DialogFooter>
+                </form>
+            </DialogContent>
+            </Dialog>
+        )}
       </div>
 
       {Object.entries(groupedByCity).map(([city, complexes]) => (
@@ -247,31 +253,33 @@ export default function ResidencesPage() {
                       <CardTitle>{complex.name}</CardTitle>
                       <CardDescription>Manager: {getManagerName(complex.managerId)}</CardDescription>
                     </div>
-                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('building', complex.id)}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Building
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(complex)}>
-                           <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action will permanently delete the complex "{complex.name}" and all its associated buildings, floors, and rooms. This cannot be undone.
-                                </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => deleteComplex(complex.id)}>Delete</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
+                     {isAdmin && (
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('building', complex.id)}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Building
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(complex)}>
+                            <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This action will permanently delete the complex "{complex.name}" and all its associated buildings, floors, and rooms. This cannot be undone.
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteComplex(complex.id)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                     )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -286,26 +294,28 @@ export default function ResidencesPage() {
                         </AccordionTrigger>
                         <AccordionContent>
                            <div className="pl-4 border-l-2 border-primary/20 space-y-3">
-                                <div className="flex justify-end gap-2 mb-2">
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('floor', building.id, complex.id)}>
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Add Floor
-                                    </Button>
-                                     <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4" /></Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>This will delete "{building.name}" and all its contents.</AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                </div>
+                                {isAdmin && (
+                                    <div className="flex justify-end gap-2 mb-2">
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('floor', building.id, complex.id)}>
+                                            <PlusCircle className="mr-2 h-4 w-4" /> Add Floor
+                                        </Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="destructive" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4" /></Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                <AlertDialogDescription>This will delete "{building.name}" and all its contents.</AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </div>
+                                )}
                                 {building.floors.map((floor: Floor) => (
                                     <div key={floor.id} className="p-3 rounded-md bg-muted/50">
                                          <div className="flex justify-between items-center mb-2">
@@ -313,26 +323,28 @@ export default function ResidencesPage() {
                                                 <Layers className="h-4 w-4" />
                                                 {floor.name}
                                             </div>
-                                            <div className="flex gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
-                                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Room
-                                                </Button>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="icon" className="h-7 w-7"><Trash2 className="h-4 w-4" /></Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                        <AlertDialogDescription>This will delete "{floor.name}" and all its contents.</AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
+                                            {isAdmin && (
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> Add Room
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="destructive" size="icon" className="h-7 w-7"><Trash2 className="h-4 w-4" /></Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>This will delete "{floor.name}" and all its contents.</AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pl-6">
                                             {floor.rooms.map((room: Room) => (
@@ -341,21 +353,23 @@ export default function ResidencesPage() {
                                                       <DoorOpen className="h-4 w-4 text-muted-foreground" />
                                                       {room.name}
                                                     </div>
-                                                     <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                            <AlertDialogDescription>This will delete room "{room.name}".</AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
+                                                     {isAdmin && (
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                                <AlertDialogDescription>This will delete room "{room.name}".</AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                     )}
                                                   </div>
                                             ))}
                                         </div>
@@ -496,4 +510,3 @@ export default function ResidencesPage() {
     </div>
   );
 }
-
