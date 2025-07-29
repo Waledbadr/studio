@@ -62,32 +62,32 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+            <CardTitle className="text-sm font-medium">إجمالي الطلبات</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">Total maintenance requests</p>
+            <p className="text-xs text-muted-foreground">إجمالي طلبات الصيانة</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium">قيد الانتظار</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{pendingRequests}</div>}
-            <p className="text-xs text-muted-foreground">Requests needing attention</p>
+            <p className="text-xs text-muted-foreground">طلبات تحتاج إلى متابعة</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CardTitle className="text-sm font-medium">مكتملة</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRequests}</div>}
-            <p className="text-xs text-muted-foreground">Requests completed</p>
+            <p className="text-xs text-muted-foreground">الطلبات المكتملة</p>
           </CardContent>
         </Card>
       </div>
@@ -96,18 +96,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> صيانة حديثة</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/maintenance">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على طلبات صيانة.</div>
                 : (
                     <Table>
-                        <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>الموقع</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaintenance.map(req => (
                                 <TableRow key={req.id}>
@@ -129,18 +129,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent MRs</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> طلبات مواد حديثة</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/orders">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/orders">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">No material requests found.</div>
+                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على طلبات مواد.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>Request ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>رقم الطلب</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaterialRequests.map(order => (
                                 <TableRow key={order.id}>
@@ -170,18 +170,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent MRVs</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> استلامات حديثة</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/receive">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/receive">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent receipts found.</div>
+                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على استلامات حديثة.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>Request ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>رقم الطلب</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentReceipts.map(order => (
                                 <TableRow key={order.id}>
@@ -203,18 +203,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent MIVs</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> مذكرات صرف حديثة</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/issue-history">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                  {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent issues found.</div>
+                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على مذكرات صرف حديثة.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>MIV ID</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>رقم المذكرة</TableHead><TableHead>التاريخ</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentIssues.map(miv => (
                                 <TableRow key={miv.id}>

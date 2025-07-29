@@ -32,21 +32,21 @@ export function AppSidebar() {
 
 
   const menuItems = [
-    { href: '/', label: 'Dashboard', icon: Home },
-    { href: '/residences', label: 'Residences', icon: Building },
-    { href: '/maintenance', label: 'Maintenance', icon: Wrench },
-    { href: '/inventory', label: 'Inventory', icon: ClipboardList, exact: true },
-    { href: '/inventory/orders', label: 'Materials Requests', icon: ListOrdered },
-    { href: '/inventory/receive', label: 'Receive Materials', icon: PackageCheck },
-    { href: '/inventory/issue', label: 'Issue Materials (MIV)', icon: ClipboardMinus, exact: true },
-    { href: '/reports', label: 'Reports', icon: AreaChart },
-    { href: '/users', label: 'Users', icon: Users },
-    { href: '/tools', label: 'AI Tools', icon: Bot },
-    { href: '/setup', label: 'Setup', icon: Settings },
+    { href: '/', label: 'الرئيسية', icon: Home },
+    { href: '/residences', label: 'المجمعات السكنية', icon: Building },
+    { href: '/maintenance', label: 'الصيانة', icon: Wrench },
+    { href: '/inventory', label: 'المخزون', icon: ClipboardList, exact: true },
+    { href: '/inventory/orders', label: 'طلبات المواد', icon: ListOrdered },
+    { href: '/inventory/receive', label: 'استلام المواد', icon: PackageCheck },
+    { href: '/inventory/issue', label: 'صرف المواد (MIV)', icon: ClipboardMinus, exact: true },
+    { href: '/reports', label: 'التقارير', icon: AreaChart },
+    { href: '/users', label: 'المستخدمون', icon: Users },
+    { href: '/tools', label: 'أدوات الذكاء الاصطناعي', icon: Bot },
+    { href: '/setup', label: 'الإعدادات', icon: Settings },
   ];
   
     const reportMenuItems = [
-        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History }
+        { href: '/inventory/reports/lifespan', label: 'تقرير العمر الافتراضي', icon: History }
     ]
 
   return (
@@ -106,7 +106,7 @@ export function AppSidebar() {
                                )}
                             </Avatar>
                             <div className="group-data-[collapsible=icon]:hidden text-left">
-                                <p className="font-semibold text-sm">{loading || !isMounted ? 'Loading...' : currentUser?.name}</p>
+                                <p className="font-semibold text-sm">{loading || !isMounted ? 'جار التحميل...' : currentUser?.name}</p>
                                 <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
                             </div>
                             <ChevronsUpDown className="h-4 w-4 ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />

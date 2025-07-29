@@ -33,7 +33,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       </div>
       <Button variant="ghost" size="icon" className="rounded-full">
         <Bell className="h-5 w-5" />
-        <span className="sr-only">Notifications</span>
+        <span className="sr-only">الإشعارات</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -51,12 +51,12 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuLabel>حسابي</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleProfileClick}>الملف الشخصي</DropdownMenuItem>
+          <DropdownMenuItem>الإعدادات</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Logout</DropdownMenuItem>
+          <DropdownMenuItem>تسجيل الخروج</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
