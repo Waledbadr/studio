@@ -20,8 +20,10 @@ import { useUsers } from '@/context/users-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/language-context';
 
 export function AppSidebar() {
+  const { dict } = useLanguage();
   const pathname = usePathname();
   const { currentUser, users, switchUser, loading } = useUsers();
   const [isMounted, setIsMounted] = useState(false);
@@ -30,23 +32,22 @@ export function AppSidebar() {
     setIsMounted(true);
   }, []);
 
-
   const menuItems = [
-    { href: '/', label: 'الرئيسية', icon: Home },
-    { href: '/residences', label: 'المجمعات السكنية', icon: Building },
-    { href: '/maintenance', label: 'الصيانة', icon: Wrench },
-    { href: '/inventory', label: 'المخزون', icon: ClipboardList, exact: true },
-    { href: '/inventory/orders', label: 'طلبات المواد', icon: ListOrdered },
-    { href: '/inventory/receive', label: 'استلام المواد', icon: PackageCheck },
-    { href: '/inventory/issue', label: 'صرف المواد (MIV)', icon: ClipboardMinus, exact: true },
-    { href: '/reports', label: 'التقارير', icon: AreaChart },
-    { href: '/users', label: 'المستخدمون', icon: Users },
-    { href: '/tools', label: 'أدوات الذكاء الاصطناعي', icon: Bot },
-    { href: '/setup', label: 'الإعدادات', icon: Settings },
+    { href: '/', label: dict.sidebar.dashboard, icon: Home },
+    { href: '/residences', label: dict.sidebar.residences, icon: Building },
+    { href: '/maintenance', label: dict.sidebar.maintenance, icon: Wrench },
+    { href: '/inventory', label: dict.sidebar.inventory, icon: ClipboardList, exact: true },
+    { href: '/inventory/orders', label: dict.sidebar.materialRequests, icon: ListOrdered },
+    { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, icon: PackageCheck },
+    { href: '/inventory/issue', label: dict.sidebar.issueMaterials, icon: ClipboardMinus, exact: true },
+    { href: '/reports', label: dict.sidebar.reports, icon: AreaChart },
+    { href: '/users', label: dict.sidebar.users, icon: Users },
+    { href: '/tools', label: dict.sidebar.aiTools, icon: Bot },
+    { href: '/setup', label: dict.sidebar.setup, icon: Settings },
   ];
   
     const reportMenuItems = [
-        { href: '/inventory/reports/lifespan', label: 'تقرير العمر الافتراضي', icon: History }
+        { href: '/inventory/reports/lifespan', label: dict.sidebar.lifespanReport, icon: History }
     ]
 
   return (
@@ -106,7 +107,7 @@ export function AppSidebar() {
                                )}
                             </Avatar>
                             <div className="group-data-[collapsible=icon]:hidden text-left">
-                                <p className="font-semibold text-sm">{loading || !isMounted ? 'جار التحميل...' : currentUser?.name}</p>
+                                <p className="font-semibold text-sm">{loading || !isMounted ? dict.loading : currentUser?.name}</p>
                                 <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
                             </div>
                             <ChevronsUpDown className="h-4 w-4 ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />

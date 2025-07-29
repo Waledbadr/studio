@@ -14,8 +14,10 @@ import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { useUsers } from "@/context/users-context";
+import { useLanguage } from "@/context/language-context";
 
 export default function DashboardPage() {
+  const { dict } = useLanguage();
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
   const { orders, loading: ordersLoading, loadOrders } = useOrders();
   const { getMIVs, loading: inventoryLoading } = useInventory();
@@ -62,32 +64,32 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الطلبات</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.dashboard.totalRequests}</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">إجمالي طلبات الصيانة</p>
+            <p className="text-xs text-muted-foreground">{dict.dashboard.totalMaintenanceRequests}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">قيد الانتظار</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.dashboard.pending}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{pendingRequests}</div>}
-            <p className="text-xs text-muted-foreground">طلبات تحتاج إلى متابعة</p>
+            <p className="text-xs text-muted-foreground">{dict.dashboard.requestsNeedAttention}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">مكتملة</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.dashboard.completed}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRequests}</div>}
-            <p className="text-xs text-muted-foreground">الطلبات المكتملة</p>
+            <p className="text-xs text-muted-foreground">{dict.dashboard.completedRequests}</p>
           </CardContent>
         </Card>
       </div>
@@ -96,18 +98,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> صيانة حديثة</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> {dict.dashboard.recentMaintenance}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/maintenance">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/maintenance">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على طلبات صيانة.</div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noMaintenanceRequestsFound}</div>
                 : (
                     <Table>
-                        <TableHeader><TableRow><TableHead>الموقع</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>{dict.location}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaintenance.map(req => (
                                 <TableRow key={req.id}>
@@ -129,18 +131,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> طلبات مواد حديثة</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> {dict.dashboard.recentMaterialRequests}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/orders">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/orders">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على طلبات مواد.</div>
+                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noMaterialRequestsFound}</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>رقم الطلب</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>{dict.orderId}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaterialRequests.map(order => (
                                 <TableRow key={order.id}>
@@ -170,18 +172,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> استلامات حديثة</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> {dict.dashboard.recentReceipts}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/receive">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/receive">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على استلامات حديثة.</div>
+                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noRecentReceiptsFound}</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>رقم الطلب</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>{dict.orderId}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentReceipts.map(order => (
                                 <TableRow key={order.id}>
@@ -203,18 +205,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> مذكرات صرف حديثة</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> {dict.dashboard.recentIssues}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/issue-history">عرض الكل<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/issue-history">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                  {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">لم يتم العثور على مذكرات صرف حديثة.</div>
+                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noRecentIssuesFound}.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>رقم المذكرة</TableHead><TableHead>التاريخ</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>{dict.mivId}</TableHead><TableHead>{dict.date}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentIssues.map(miv => (
                                 <TableRow key={miv.id}>

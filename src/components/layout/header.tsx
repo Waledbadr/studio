@@ -10,8 +10,10 @@ import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/language-context';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  const { dict, toggleLanguage } = useLanguage();
   const { currentUser } = useUsers();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -31,13 +33,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
       </div>
-       <Button variant="ghost" size="icon" className="rounded-full">
+       <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
         <Globe className="h-5 w-5" />
-        <span className="sr-only">تغيير اللغة</span>
+        <span className="sr-only">{dict.changeLanguage}</span>
       </Button>
       <Button variant="ghost" size="icon" className="rounded-full">
         <Bell className="h-5 w-5" />
-        <span className="sr-only">الإشعارات</span>
+        <span className="sr-only">{dict.notifications}</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -55,12 +57,12 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>حسابي</DropdownMenuLabel>
+          <DropdownMenuLabel>{dict.myAccount}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleProfileClick}>الملف الشخصي</DropdownMenuItem>
-          <DropdownMenuItem>الإعدادات</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
+          <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>تسجيل الخروج</DropdownMenuItem>
+          <DropdownMenuItem>{dict.logout}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
