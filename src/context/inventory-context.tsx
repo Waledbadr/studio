@@ -523,13 +523,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         where("itemId", "==", itemId),
         where("locationId", "==", locationId),
         where("type", "==", "OUT"),
-        orderBy("date", "desc"),
     );
     const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-        return querySnapshot.docs[0].data().date as Timestamp;
+
+    if (querySnapshot.empty) {
+        return null;
     }
-    return null;
+
+    const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+    transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+
+    return transactions[0].date;
   };
 
 
