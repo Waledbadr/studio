@@ -587,15 +587,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
                         
-                        transaction.update(itemRef, { 
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
-                        });
-                        
                         // Ensure 'to' residence has a stock entry before incrementing
                         transaction.set(itemRef, 
                             { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, 
                             { merge: true }
                         );
+                        transaction.update(itemRef, { 
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                        });
                     }
                      // Create a completed transfer record
                     const transferDocRef = doc(collection(db, 'stockTransfers'));
@@ -676,7 +675,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     // Decrement from source
                     transaction.update(itemRef, { [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity) });
                     // Increment at destination
-                    transaction.set(itemRef, { [`stockByResidence.${toResidenceId}`]: increment(item.quantity) }, { merge: true });
+                    transaction.set(itemRef, { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, { merge: true });
                 }
 
                 transaction.update(transferRef, {
@@ -688,7 +687,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             toast({ title: "Success", description: "Transfer approved and stock updated." });
         } catch (error) {
             console.error("Failed to approve transfer:", error);
-            toast({ title: "Error", description: `Approval failed: ${error}`, variant: "destructive" });
+            const err = error as Error;
+            toast({ title: "Error", description: `Approval failed: ${err.message}`, variant: "destructive" });
         }
     };
     

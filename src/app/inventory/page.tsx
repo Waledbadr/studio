@@ -20,7 +20,7 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 
 export default function InventoryPage() {
-  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
+  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } from useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
   const router = useRouter();
@@ -124,9 +124,15 @@ export default function InventoryPage() {
 
   const renderItemsTable = (residenceId: string | 'all') => {
     const isAllItemsTab = residenceId === 'all';
-    const filteredItems = isAllItemsTab 
+    let filteredItems = isAllItemsTab 
         ? items 
         : items.filter(item => (getStockForResidence(item, residenceId) ?? 0) > 0);
+
+    if (isAllItemsTab) {
+        // Create a shallow copy before sorting to avoid mutating the original array
+        filteredItems = [...filteredItems].sort((a, b) => calculateStockForUser(b) - calculateStockForUser(a));
+    }
+
 
     if (loading) {
        return (
