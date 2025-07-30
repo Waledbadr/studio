@@ -132,6 +132,14 @@ export default function SetupPage() {
 
         try {
             const batch = writeBatch(db);
+            const collectionsToDelete = [
+                "orders",
+                "inventoryTransactions",
+                "mivs",
+                "maintenanceRequests",
+                "stockTransfers",
+                "notifications"
+            ];
 
             // 1. Reset all inventory item stocks to zero
             const inventorySnapshot = await getDocs(collection(db, "inventory"));
@@ -140,31 +148,19 @@ export default function SetupPage() {
             });
             console.log("Prepared to reset inventory stock.");
 
-            // 2. Delete all orders
-            const ordersSnapshot = await getDocs(collection(db, "orders"));
-            ordersSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            console.log("Prepared to delete all orders.");
-
-            // 3. Delete all inventory transactions
-            const transactionsSnapshot = await getDocs(collection(db, "inventoryTransactions"));
-            transactionsSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            console.log("Prepared to delete all inventory transactions.");
-             
-            // 4. Delete all MIVs
-            const mivsSnapshot = await getDocs(collection(db, "mivs"));
-            mivsSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            console.log("Prepared to delete all mivs.");
+            // 2. Delete all documents from operational collections
+            for (const collectionName of collectionsToDelete) {
+                const snapshot = await getDocs(collection(db, collectionName));
+                snapshot.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                console.log(`Prepared to delete all documents from: ${collectionName}`);
+            }
 
             // Commit all batched writes
             await batch.commit();
 
-            toast({ title: "Success", description: "System has been reset. All orders and transactions deleted, and inventory stock zeroed out." });
+            toast({ title: "Success", description: "System has been reset. All operational data deleted, and inventory stock zeroed out." });
             setPassword('');
         } catch (error) {
             console.error("Error resetting system:", error);
@@ -291,7 +287,7 @@ export default function SetupPage() {
                 <CardHeader>
                     <CardTitle className="text-destructive">Advanced Settings - System Reset</CardTitle>
                     <CardDescription>
-                        This will permanently delete all orders and inventory transactions. It will also reset the stock of all inventory items to zero. User and residence data will not be affected. This action cannot be undone.
+                        This will permanently delete all orders, transfers, maintenance requests, notifications and inventory transactions. It will also reset the stock of all inventory items to zero. User and residence data will not be affected. This action cannot be undone.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -337,5 +333,3 @@ export default function SetupPage() {
         </div>
     );
 }
-
-    
