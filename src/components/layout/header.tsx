@@ -24,8 +24,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const [isMounted, setIsMounted] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const initialTheme = storedTheme || 'dark';
@@ -34,6 +32,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     document.documentElement.classList.add(initialTheme);
     setIsMounted(true);
   }, []);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -63,7 +63,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         {isMounted ? (
           theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />
         ) : (
-          <div className="h-5 w-5" />
+          <div className="h-5 w-5" /> // Empty placeholder
         )}
         <span className="sr-only">Toggle theme</span>
       </Button>
@@ -93,7 +93,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                     <p className="text-xs text-muted-foreground">{notification.message}</p>
                     <p className="text-xs text-muted-foreground">{formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}</p>
                 </DropdownMenuItem>
-            )) : <p className="p-2 text-sm text-muted-foreground text-center">No notifications</p>}
+            )) : <DropdownMenuItem disabled><p className="p-2 text-sm text-muted-foreground text-center">No notifications</p></DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -107,27 +107,25 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (
-                 <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
+                 <AvatarFallback /> 
               )}
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <>
-              <DropdownMenuLabel>{isMounted ? dict.myAccount : <Skeleton className="h-4 w-20" />}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
-              <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Switch User</DropdownMenuLabel>
-              {isMounted && users ? users.map(user => (
-                  <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
-                      {user.name} ({user.role})
-                  </DropdownMenuItem>
-              )) : <div className="px-2 py-1.5"><Skeleton className="h-4 w-full" /></div> }
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>{dict.logout}</DropdownMenuItem>
-            </>
+            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : dict.myAccount}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
+            <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Switch User</DropdownMenuLabel>
+            {isMounted && users ? users.map(user => (
+                <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
+                    {user.name} ({user.role})
+                </DropdownMenuItem>
+            )) : <DropdownMenuItem disabled>{dict.loading}</DropdownMenuItem> }
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>{dict.logout}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
