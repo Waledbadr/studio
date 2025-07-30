@@ -29,8 +29,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     setIsMounted(true);
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const initialTheme = storedTheme || 'dark';
-    setTheme(initialTheme);
-    document.documentElement.classList.add(initialTheme);
+    if(initialTheme){
+      setTheme(initialTheme);
+      document.documentElement.classList.add(initialTheme);
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -50,6 +52,19 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     markAsRead(notificationId);
     router.push(href);
   };
+  
+  if (!isMounted) {
+    return (
+       <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
+          <SidebarTrigger className="md:hidden" />
+          <div className="flex-1"></div>
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
+       </header>
+    )
+  }
 
   return (
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
@@ -69,7 +84,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
            <Button variant="ghost" size="icon" className="rounded-full relative">
                 <Bell className="h-5 w-5" />
-                {isMounted && unreadCount > 0 && (
+                {unreadCount > 0 && (
                     <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 justify-center rounded-full p-0">{unreadCount}</Badge>
                 )}
                 <span className="sr-only">{dict.notifications}</span>
@@ -95,7 +110,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">
             <Avatar className="h-9 w-9">
-              {isMounted && currentUser ? (
+              {currentUser ? (
                 <>
                   <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser.name} data-ai-hint="profile picture" />
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
