@@ -293,16 +293,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-  const generateNewMivId = async (): Promise<string> => {
-    if (!db) throw new Error("Firebase not initialized");
-
+  const generateNewMivId = async (db: Firestore): Promise<string> => {
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2);
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
     const prefix = `MIV-${year}-${month}-`;
 
     const mivsCollectionRef = collection(db, 'mivs');
-    const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
+    const q = query(
+      mivsCollectionRef,
+      where('id', '>=', prefix),
+      where('id', '<', prefix + '\uf8ff'),
+      orderBy('id', 'desc'),
+      limit(1)
+    );
     
     const querySnapshot = await getDocs(q);
     
@@ -323,50 +327,55 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
     }
-    
+
     try {
-        const mivId = await generateNewMivId();
+        const mivId = await generateNewMivId(db);
         
         await runTransaction(db, async (transaction) => {
-            const transactionTime = Timestamp.now();
-            
-            let totalItemsCount = 0;
-            voucherLocations.forEach(loc => totalItemsCount += loc.items.length);
-
-            const mivDocRef = doc(db, 'mivs', mivId);
-            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId: residenceId, itemCount: totalItemsCount });
-
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
-            
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
-            
-            const itemSnapshots = await Promise.all(
-                uniqueItemIds.map(id => transaction.get(doc(db, "inventory", id)))
-            );
 
-            for (const location of voucherLocations) {
-                let locationName = location.locationName;
-                 if (!location.isFacility && location.buildingName && location.floorName && location.roomName) {
-                   locationName = `${location.buildingName} -> ${location.floorName} -> ${location.roomName}`;
+            // --- STAGE 1: READS ---
+            // Read all necessary item documents from the database first.
+            const itemSnapshots = new Map<string, DocumentSnapshot>();
+            for (const id of uniqueItemIds) {
+                const itemRef = doc(db, "inventory", id);
+                const itemSnap = await transaction.get(itemRef);
+                if (!itemSnap.exists()) {
+                    throw new Error(`Item with ID ${id} not found.`);
                 }
+                itemSnapshots.set(id, itemSnap);
+            }
 
+            // Check for sufficient stock for all items before any writes.
+            for (const item of allIssuedItems) {
+                const itemSnap = itemSnapshots.get(item.id);
+                const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
+                if (currentStock < item.issueQuantity) {
+                    throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
+                }
+            }
+            
+            // --- STAGE 2: WRITES ---
+            // All reads are done, now we can perform writes.
+            const transactionTime = Timestamp.now();
+            let totalItemsCount = allIssuedItems.length;
+
+            // 1. Create the MIV document.
+            const mivDocRef = doc(db, 'mivs', mivId);
+            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId, itemCount: totalItemsCount });
+
+            // 2. Update stock and create transaction logs for each issued item.
+            for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
 
-                    const itemDoc = itemSnapshots.find(snap => snap.id === issuedItem.id);
-                     if (!itemDoc || !itemDoc.exists()) {
-                        throw new Error(`Item with ID ${issuedItem.id} not found.`);
-                    }
-
-                    const currentStock = itemDoc.data().stockByResidence?.[residenceId] || 0;
-                    if (currentStock < issuedItem.issueQuantity) {
-                        throw new Error(`Not enough stock for ${itemDoc.data().nameEn}. Available: ${currentStock}, Required: ${issuedItem.issueQuantity}`);
-                    }
-                    
+                    // Update stock (decrement)
+                    const itemRef = doc(db, "inventory", issuedItem.id);
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
-                    
-                     transaction.update(itemDoc.ref, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) });
+                    transaction.update(itemRef, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) });
 
+                    // Create inventory transaction log
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
@@ -378,11 +387,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         quantity: issuedItem.issueQuantity,
                         referenceDocId: mivId,
                         locationId: location.locationId,
-                        locationName: locationName,
+                        locationName: location.locationName,
                     } as Omit<InventoryTransaction, 'id'>);
                 }
             }
         });
+
         toast({ title: "Success", description: "Voucher submitted successfully." });
     } catch (error) {
         console.error("Transaction failed: ", error);
@@ -493,6 +503,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return null;
     }
     try {
+        // Query for all 'OUT' transactions for a specific item at a specific location.
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
@@ -505,15 +516,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
+        // Map and sort client-side to find the most recent transaction date.
         const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        // Sort client-side to find the most recent one
         transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
         
         const lastTransaction = transactions[0];
         return lastTransaction?.date || null;
+
     } catch (error) {
         console.error("Error fetching last issue date:", error);
-        // Fail silently to allow the user to proceed without the lifespan check
+        // Fail silently to allow the user to proceed without the lifespan check if it fails
         return null;
     }
   };
