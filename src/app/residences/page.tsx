@@ -24,7 +24,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -79,9 +78,15 @@ export default function ResidencesPage() {
   
   const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
 
+  const userVisibleResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (isAdmin) return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences, isAdmin]);
+
 
   const groupedByCity = useMemo(() => {
-    return residences.reduce((acc, complex) => {
+    return userVisibleResidences.reduce((acc, complex) => {
       const city = complex.city || 'Uncategorized';
       if (!acc[city]) {
         acc[city] = [];
@@ -89,7 +94,7 @@ export default function ResidencesPage() {
       acc[city].push(complex);
       return acc;
     }, {} as Record<string, Complex[]>);
-  }, [residences]);
+  }, [userVisibleResidences]);
 
   const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms' | 'facility', id: string, parentId?: string, grandParentId?: string) => {
     setSelectedComplexId(id);
