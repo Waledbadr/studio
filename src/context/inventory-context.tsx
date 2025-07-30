@@ -577,6 +577,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             // Direct transfer, no approval needed
             try {
                 await runTransaction(db, async (transaction) => {
+                    const transferDocRef = doc(collection(db, 'stockTransfers'));
+
                     for (const item of itemsToTransfer) {
                         const itemRef = doc(db, 'inventory', item.id);
                         const itemDoc = await transaction.get(itemRef);
@@ -587,17 +589,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
                         
-                        // Ensure 'to' residence has a stock entry before incrementing
+                        transaction.update(itemRef, { 
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                        });
                         transaction.set(itemRef, 
                             { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, 
                             { merge: true }
                         );
-                        transaction.update(itemRef, { 
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
-                        });
                     }
-                     // Create a completed transfer record
-                    const transferDocRef = doc(collection(db, 'stockTransfers'));
+                    
                     const newTransfer: StockTransfer = {
                         ...payload,
                         id: transferDocRef.id,
@@ -610,9 +610,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 });
                 toast({ title: "Success", description: "Internal transfer completed successfully." });
             } catch (error) {
-                 console.error("Failed to execute direct transfer:", error);
-                 toast({ title: "Error", description: `Transfer failed: ${error}`, variant: "destructive" });
-                 throw error;
+                 const err = error as Error;
+                 console.error("Failed to execute direct transfer:", err);
+                 toast({ title: "Error", description: `Transfer failed: ${err.message}`, variant: "destructive" });
+                 throw err;
             }
         } else {
             // External transfer, requires approval
@@ -660,10 +661,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
                 
                 const transferData = transferDoc.data() as StockTransfer;
-                 if (!transferData) {
+                if (!transferData) {
                     throw new Error("Transfer data is missing.");
                 }
-                 if (transferData.status !== 'Pending') {
+
+                if (transferData.status !== 'Pending') {
                     throw new Error("Transfer request already processed.");
                 }
 
