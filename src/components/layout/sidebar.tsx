@@ -58,7 +58,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu>
+        <SidebarMenu key={dict.sidebar.dashboard}>
           {menuItems.map((item) => (
              <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
@@ -68,7 +68,7 @@ export function AppSidebar() {
                 >
                   <Link href={item.href}>
                     <item.icon />
-                    {isMounted && <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>}
+                    <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>
                   </Link>
                 </SidebarMenuButton>
                  {item.href === '/reports' && (
@@ -78,7 +78,7 @@ export function AppSidebar() {
                                 <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
                                      <Link href={subItem.href}>
                                         <subItem.icon />
-                                        {isMounted && <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>}
+                                        <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
