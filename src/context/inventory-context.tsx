@@ -655,10 +655,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         try {
             await runTransaction(db, async (transaction) => {
                 const transferDoc = await transaction.get(transferRef);
-                if (!transferDoc.exists() || transferDoc.data().status !== 'Pending') {
+                if (!transferDoc.exists()) {
                     throw new Error("Transfer request not found or already processed.");
                 }
+                
                 const transferData = transferDoc.data() as StockTransfer;
+                 if (!transferData) {
+                    throw new Error("Transfer data is missing.");
+                }
+                 if (transferData.status !== 'Pending') {
+                    throw new Error("Transfer request already processed.");
+                }
 
                 const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
 
