@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from "firebase/firestore";
 import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
 
@@ -293,27 +293,29 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-    const generateNewMivId = async (db: Firestore, transaction: any): Promise<string> => {
+    const generateNewMivId = async (): Promise<string> => {
+        if (!db) throw new Error("Firebase not initialized");
+
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
         const prefix = `MIV-${year}-${month}-`;
 
         const mivsCollectionRef = collection(db, 'mivs');
-        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'));
+        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
         
-        const querySnapshot = await transaction.get(q);
+        const querySnapshot = await getDocs(q);
         
-        let maxNum = 0;
-        querySnapshot.docs.forEach((docSnap: DocumentSnapshot) => {
-            const docId = docSnap.id;
-            const numPart = parseInt(docId.substring(prefix.length), 10);
-            if (!isNaN(numPart) && numPart > maxNum) {
-                maxNum = numPart;
+        let lastNum = 0;
+        if (!querySnapshot.empty) {
+            const lastId = querySnapshot.docs[0].id;
+            const numPart = parseInt(lastId.substring(prefix.length), 10);
+            if (!isNaN(numPart)) {
+                lastNum = numPart;
             }
-        });
+        }
 
-        const nextRequestNumber = (maxNum + 1).toString().padStart(3, '0');
+        const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
         return `${prefix}${nextRequestNumber}`;
     };
 
@@ -323,8 +325,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     
     try {
+        const mivId = await generateNewMivId();
+        
         await runTransaction(db, async (transaction) => {
-            const mivId = await generateNewMivId(db, transaction);
             const transactionTime = Timestamp.now();
             
             let totalItemsCount = 0;
@@ -362,7 +365,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     
-                     transaction.set(itemDoc.ref, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) }, { merge: true });
+                     transaction.update(itemDoc.ref, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) });
 
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transaction.set(transactionRef, {
@@ -493,7 +496,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         collection(db, "inventoryTransactions"),
         where("itemId", "==", itemId),
         where("locationId", "==", locationId),
-        where("type", "==", "OUT")
+        where("type", "==", "OUT"),
+        orderBy("date", "desc"),
+        limit(1)
     );
     const querySnapshot = await getDocs(q);
 
@@ -501,10 +506,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return null;
     }
     
-    const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-    transactions.sort((a,b) => b.date.toMillis() - a.date.toMillis());
-
-    return transactions[0]?.date || null;
+    const lastTransaction = querySnapshot.docs[0].data() as InventoryTransaction;
+    return lastTransaction?.date || null;
   };
 
 
