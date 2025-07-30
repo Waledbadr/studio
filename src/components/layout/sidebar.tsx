@@ -12,7 +12,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, ChevronsUpDown, PackageCheck, ListOrdered, ClipboardMinus, AreaChart, History } from 'lucide-react';
+import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -36,6 +36,7 @@ export function AppSidebar() {
     { href: '/residences', label: dict.sidebar.residences, icon: Building },
     { href: '/maintenance', label: dict.sidebar.maintenance, icon: Wrench },
     { href: '/inventory', label: dict.sidebar.inventory, icon: ClipboardList, exact: true },
+    { href: '/inventory/transfer', label: dict.sidebar.stockTransfer, icon: Move },
     { href: '/inventory/orders', label: dict.sidebar.materialRequests, abbreviation: ' (MR)', icon: ListOrdered },
     { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, abbreviation: ' (MRV)', icon: PackageCheck },
     { href: '/inventory/issue', label: dict.sidebar.issueMaterials, abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
@@ -68,7 +69,7 @@ export function AppSidebar() {
                 >
                   <Link href={item.href}>
                     <item.icon />
-                    <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>
+                    {isMounted && <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>}
                   </Link>
                 </SidebarMenuButton>
                  {item.href === '/reports' && (

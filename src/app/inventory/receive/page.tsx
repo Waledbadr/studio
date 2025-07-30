@@ -123,6 +123,3 @@ export default function ReceiveMaterialsPage() {
         </div>
     )
 }
-
-
-    

@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Trash2, Edit, Pencil, ListOrdered } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, ListOrdered, Move } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -49,11 +49,13 @@ export default function InventoryPage() {
     return residences.filter(r => currentUser.assignedResidences.includes(r.id));
   }, [currentUser, residences, isAdmin]);
 
-  const [activeTab, setActiveTab] = useState<string | undefined>(userResidences[0]?.id);
+  const [activeTab, setActiveTab] = useState<string>('all');
 
   useEffect(() => {
-    if (!activeTab && userResidences.length > 0) {
-      setActiveTab(userResidences[0].id);
+    if (userResidences.length > 0 && activeTab === 'all') {
+      // Default state is fine
+    } else if (userResidences.length > 0) {
+        setActiveTab(userResidences[0].id)
     }
   }, [userResidences, activeTab]);
 
@@ -104,14 +106,17 @@ export default function InventoryPage() {
     setIsEditCategoryDialogOpen(true);
   }
 
-  const handleRowClick = (itemId: string, residenceId: string | undefined) => {
+  const handleRowClick = (itemId: string, residenceId?: string | undefined) => {
     if (!residenceId) return;
     router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
   };
 
 
-  const renderItemsTable = (residenceId: string) => {
-    const filteredItems = items.filter(item => (item.stockByResidence?.[residenceId] ?? 0) > 0);
+  const renderItemsTable = (residenceId: string | 'all') => {
+    const isAllItemsTab = residenceId === 'all';
+    const filteredItems = isAllItemsTab 
+        ? items 
+        : items.filter(item => (getStockForResidence(item, residenceId) ?? 0) > 0);
 
     if (loading) {
        return (
@@ -137,12 +142,12 @@ export default function InventoryPage() {
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
-            <TableRow key={item.id} onClick={() => handleRowClick(item.id, residenceId)} className="cursor-pointer">
+            <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className={!isAllItemsTab ? "cursor-pointer" : ""}>
               <TableCell className="font-medium">{item.nameAr}</TableCell>
               <TableCell className="font-medium">{item.nameEn}</TableCell>
               <TableCell>{item.category}</TableCell>
               <TableCell>{item.unit}</TableCell>
-              <TableCell>{getStockForResidence(item, residenceId)}</TableCell>
+              <TableCell>{isAllItemsTab ? item.stock : getStockForResidence(item, residenceId)}</TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
@@ -170,6 +175,9 @@ export default function InventoryPage() {
           <p className="text-muted-foreground">Manage your materials and supplies for each residence.</p>
         </div>
         <div className="flex gap-2">
+           <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
+                <Move className="mr-2 h-4 w-4" /> Stock Transfer
+            </Button>
            <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
               <DialogTrigger asChild>
                   <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Category</Button>
@@ -208,6 +216,7 @@ export default function InventoryPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="border-b p-4 flex justify-between items-center">
                 <TabsList>
+                    <TabsTrigger value="all">All Items</TabsTrigger>
                     {userResidences.map((res) => (
                       <TabsTrigger key={res.id} value={res.id}>
                         {res.name}
@@ -215,6 +224,9 @@ export default function InventoryPage() {
                     ))}
                 </TabsList>
             </div>
+            <TabsContent value="all" className="p-6 pt-4">
+                {renderItemsTable('all')}
+            </TabsContent>
              {userResidences.map((res) => (
                 <TabsContent key={res.id} value={res.id} className="p-6 pt-4">
                     {renderItemsTable(res.id)}
