@@ -12,6 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useResidences } from '@/context/residences-context';
 import { ScrollArea } from '../ui/scroll-area';
+import { Textarea } from '../ui/textarea';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
@@ -35,6 +36,7 @@ export function EditItemDialog({
     const [unit, setUnit] = useState('');
     const [lifespanValue, setLifespanValue] = useState<string>('');
     const [lifespanUnit, setLifespanUnit] = useState<LifespanUnit>('days');
+    const [variants, setVariants] = useState('');
 
     
     const { toast } = useToast();
@@ -48,12 +50,13 @@ export function EditItemDialog({
             setNameAr(item.nameAr);
             setCategory(item.category);
             setUnit(item.unit);
+            setVariants(item.variants?.join(', ') || '');
 
             if (item.lifespanDays) {
-                if (item.lifespanDays % 365 === 0) {
+                if (item.lifespanDays >= 365 && item.lifespanDays % 365 === 0) {
                     setLifespanValue(String(item.lifespanDays / 365));
                     setLifespanUnit('years');
-                } else if (item.lifespanDays % 30 === 0) {
+                } else if (item.lifespanDays >= 30 && item.lifespanDays % 30 === 0) {
                     setLifespanValue(String(item.lifespanDays / 30));
                     setLifespanUnit('months');
                 } else {
@@ -91,6 +94,8 @@ export function EditItemDialog({
             }
         }
 
+        const variantList = variants.split(/[\n,]+/).map(v => v.trim()).filter(v => v);
+
 
         startTransition(async () => {
             const updatedItem: InventoryItem = {
@@ -100,7 +105,8 @@ export function EditItemDialog({
                 nameEn: nameEn,
                 category: category,
                 unit: unit,
-                lifespanDays: totalLifespanDays
+                lifespanDays: totalLifespanDays,
+                variants: variantList
             };
 
             await onItemUpdated(updatedItem);
@@ -158,6 +164,19 @@ export function EditItemDialog({
                                         <SelectItem value="years">Years</SelectItem>
                                     </SelectContent>
                                 </Select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-start gap-4 pt-2">
+                            <Label htmlFor="item-variants" className="text-right mt-2">Variants</Label>
+                            <div className="col-span-3">
+                                <Textarea 
+                                    id="item-variants" 
+                                    placeholder="e.g., 1000g, 1200g, 1500g" 
+                                    className="col-span-3" 
+                                    value={variants} 
+                                    onChange={e => setVariants(e.target.value)} 
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">Separate variants with a comma or new line. Leave blank if none.</p>
                             </div>
                         </div>
                         <div className="space-y-2 pt-2">

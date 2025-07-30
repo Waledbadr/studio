@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { translateItemName } from '@/ai/flows/translate-item-flow';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '../ui/textarea';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
@@ -36,6 +37,7 @@ export function AddItemDialog({
     const [unit, setUnit] = useState('');
     const [lifespanValue, setLifespanValue] = useState<string>('');
     const [lifespanUnit, setLifespanUnit] = useState<LifespanUnit>('days');
+    const [variants, setVariants] = useState<string>('');
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -48,6 +50,7 @@ export function AddItemDialog({
             setUnit('');
             setLifespanValue('');
             setLifespanUnit('days');
+            setVariants('');
         }
     }, [isOpen, initialName]);
 
@@ -55,7 +58,7 @@ export function AddItemDialog({
         e.preventDefault();
 
         if (!name || !category || !unit) {
-            toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
+            toast({ title: "Error", description: "Please fill all required fields.", variant: "destructive" });
             return;
         }
 
@@ -78,6 +81,9 @@ export function AddItemDialog({
                         totalLifespanDays = value;
                     }
                 }
+                
+                const variantList = variants.split(/[\n,]+/).map(v => v.trim()).filter(v => v);
+
 
                 const newInventoryItem: Omit<InventoryItem, 'id' | 'stock'> = {
                     name: name,
@@ -86,7 +92,8 @@ export function AddItemDialog({
                     category: category,
                     unit: unit,
                     stockByResidence: {},
-                    lifespanDays: totalLifespanDays
+                    lifespanDays: totalLifespanDays,
+                    variants: variantList
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -148,6 +155,19 @@ export function AddItemDialog({
                                     <SelectItem value="years">Years</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </div>
+                     <div className="grid grid-cols-4 items-start gap-4 pt-2">
+                        <Label htmlFor="item-variants" className="text-right mt-2">Variants</Label>
+                        <div className="col-span-3">
+                            <Textarea 
+                                id="item-variants" 
+                                placeholder="e.g., 1000g, 1200g, 1500g" 
+                                className="col-span-3" 
+                                value={variants} 
+                                onChange={e => setVariants(e.target.value)} 
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Separate variants with a comma or new line. Leave blank if none.</p>
                         </div>
                     </div>
                 </div>

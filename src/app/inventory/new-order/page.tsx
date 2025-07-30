@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +20,7 @@ import { useResidences } from '@/context/residences-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import type { Complex } from '@/context/residences-context';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 
 export default function NewOrderPage() {
@@ -54,16 +55,22 @@ export default function NewOrderPage() {
     }, [currentUser, residences, userResidences]);
 
 
-    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
+        const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
+        const nameEn = variant ? `${itemToAdd.nameEn} - ${variant}` : itemToAdd.nameEn;
+        
+        // Use a unique ID for each variant to allow adding multiple variants of the same item
+        const orderItemId = variant ? `${itemToAdd.id}-${variant}` : itemToAdd.id;
+
         setOrderItems((currentOrderItems) => {
-            const existingItem = currentOrderItems.find(item => item.id === itemToAdd.id);
+            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
 
             if (existingItem) {
                 return currentOrderItems.map(item => 
-                    item.id === itemToAdd.id ? {...item, quantity: item.quantity + 1} : item
+                    item.id === orderItemId ? {...item, quantity: item.quantity + 1} : item
                 );
             } else {
-                return [...currentOrderItems, { ...itemToAdd, quantity: 1 }];
+                return [...currentOrderItems, { ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1 }];
             }
         });
     }, []);
@@ -134,6 +141,34 @@ export default function NewOrderPage() {
         if (!selectedResidence) return 0;
         return getStockForResidence(item, selectedResidence.id);
     }
+    
+    const AddItemButton = ({ item }: { item: InventoryItem }) => {
+        if (!item.variants || item.variants.length === 0) {
+            return (
+                <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={!selectedResidence}>
+                    <Plus className="h-4 w-4" />
+                </Button>
+            );
+        }
+
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="outline" disabled={!selectedResidence}>
+                        <ChevronDown className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {item.variants.map(variant => (
+                        <DropdownMenuItem key={variant} onClick={() => handleAddItemToOrder(item, variant)}>
+                            Add: {variant}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    };
+
 
     return (
         <div className="space-y-6">
@@ -212,9 +247,7 @@ export default function NewOrderPage() {
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                 <p className="text-sm text-muted-foreground">{item.category} - Stock: {handleGetStockForResidence(item)} {item.unit}</p>
                                             </div>
-                                            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={!selectedResidence}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
+                                            <AddItemButton item={item} />
                                         </div>
                                     )) : (
                                          searchQuery || selectedCategory !== 'all' ? (

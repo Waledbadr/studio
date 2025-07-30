@@ -24,6 +24,7 @@ export interface InventoryItem {
   stock: number; // This will now represent total stock across all residences.
   stockByResidence?: { [residenceId: string]: number };
   lifespanDays?: number;
+  variants?: string[];
 }
 
 export interface InventoryTransaction {
@@ -282,7 +283,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: newItem.lifespanDays || 0 };
+      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: newItem.lifespanDays || 0, variants: newItem.variants || [] };
       await setDoc(docRef, itemWithId);
       
       const newCategory = newItem.category.toLowerCase();
@@ -591,11 +592,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         });
                         
                         // Ensure 'to' residence has a stock entry before incrementing
-                        const toStockUpdate = {
-                             [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
-                        };
-
-                        transaction.set(itemRef, toStockUpdate, { merge: true });
+                        transaction.set(itemRef, 
+                            { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, 
+                            { merge: true }
+                        );
                     }
                      // Create a completed transfer record
                     const transferDocRef = doc(collection(db, 'stockTransfers'));

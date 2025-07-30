@@ -20,7 +20,7 @@ export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { getOrderById } = useOrders();
-    const { getStockForResidence } = useInventory();
+    const { getStockForResidence, items: allItems } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
@@ -84,9 +84,14 @@ export default function OrderDetailPage() {
         )
     }
     
-    const handleGetStockForResidence = (item: OrderItem) => {
+     const handleGetStockForResidence = (item: OrderItem) => {
         if (!order?.residenceId) return 0;
-        return getStockForResidence(item, order.residenceId);
+        // The item ID in an order can be a composite ID (e.g., itemID-variant).
+        // We need to find the base item to get its stock.
+        const baseItemId = item.id.split('-')[0]; 
+        const baseItem = allItems.find(i => i.id === baseItemId);
+        if (!baseItem) return 0;
+        return getStockForResidence(baseItem, order.residenceId);
     }
 
     const totalItems = order.items.length;
