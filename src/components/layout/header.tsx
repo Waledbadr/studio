@@ -27,12 +27,12 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
-    setIsMounted(true);
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const initialTheme = storedTheme || 'dark';
     setTheme(initialTheme);
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(initialTheme);
+    setIsMounted(true);
   }, []);
 
   const toggleTheme = () => {
@@ -60,7 +60,11 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         {/* Can add breadcrumbs here */}
       </div>
        <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleTheme}>
-        {isMounted ? (theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />) : <Skeleton className="h-5 w-5" />}
+        {isMounted ? (
+          theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />
+        ) : (
+          <div className="h-5 w-5" />
+        )}
         <span className="sr-only">Toggle theme</span>
       </Button>
        <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
@@ -103,7 +107,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (
-                <Skeleton className="h-full w-full rounded-full" />
+                 <div className="h-9 w-9 rounded-full bg-muted animate-pulse"></div>
               )}
             </Avatar>
           </Button>
