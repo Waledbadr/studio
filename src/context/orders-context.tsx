@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit } from "firebase/firestore";
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
@@ -107,22 +107,29 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2);
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const prefix = `${year}-${month}-`;
 
-    // Firestore timestamps for querying
-    const startOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    const endOfMonth = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59));
-    
-    const ordersQuery = query(
-        collection(db, "orders"),
-        where("date", ">=", startOfMonth),
-        where("date", "<=", endOfMonth)
+    const q = query(
+        collection(db, 'orders'),
+        where('id', '>=', prefix),
+        where('id', '<', prefix + '\uf8ff'),
+        orderBy('id', 'desc'),
+        limit(1)
     );
 
-    const querySnapshot = await getDocs(ordersQuery);
-    const orderCount = querySnapshot.size;
-    const nextOrderNumber = (orderCount + 1).toString().padStart(3, '0');
+    const querySnapshot = await getDocs(q);
     
-    return `${year}-${month}-${nextOrderNumber}`;
+    let lastNum = 0;
+    if (!querySnapshot.empty) {
+        const lastId = querySnapshot.docs[0].id;
+        const numPart = parseInt(lastId.substring(prefix.length), 10);
+        if (!isNaN(numPart)) {
+            lastNum = numPart;
+        }
+    }
+
+    const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
+    return `${prefix}${nextRequestNumber}`;
   };
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {

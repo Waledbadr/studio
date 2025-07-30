@@ -47,7 +47,7 @@ export default function ReceiveOrderPage() {
             const fetchedOrder = await getOrderById(id);
             
             if (fetchedOrder) {
-                const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
+                const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
                 if (!receivableStatuses.includes(fetchedOrder.status)) {
                     toast({
                         title: "Invalid Status",
@@ -99,7 +99,7 @@ export default function ReceiveOrderPage() {
             return;
         }
 
-        const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
+        const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
         if (!receivableStatuses.includes(order.status)) {
              toast({
                 title: "Invalid Status",
