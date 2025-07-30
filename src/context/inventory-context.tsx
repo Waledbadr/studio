@@ -567,7 +567,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
     const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db || !payload) {
+            const msg = !db ? firebaseErrorMessage : "Transfer payload is missing.";
+            toast({ title: "Error", description: msg, variant: "destructive" });
+            throw new Error(msg);
+        }
         
         const { fromResidenceId, toResidenceId, items: itemsToTransfer } = payload;
         
@@ -671,6 +675,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
+                
+                if(!fromResidenceId || !toResidenceId || !itemsToTransfer) {
+                     throw new Error("Transfer data is incomplete.");
+                }
 
                 for (const item of itemsToTransfer) {
                     const itemRef = doc(db, 'inventory', item.id);
