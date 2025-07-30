@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where } from "firebase/firestore";
+import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc } from "firebase/firestore";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Complex } from "@/context/residences-context";
@@ -20,6 +20,7 @@ export default function SetupPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
+    const [isAddingRooms, setIsAddingRooms] = useState(false);
     const [password, setPassword] = useState('');
     
     // In a real app, this should be an environment variable.
@@ -120,7 +121,7 @@ export default function SetupPage() {
     
     const handleResetSystem = async () => {
         if (!db) {
-            toast({ title: "Firebase Error", description: firebaseErrorMessage, variant: "destructive" });
+            toast({ title: "Firebase Error", description: "Firebase not configured", variant: "destructive" });
             return;
         }
         if (password !== RESET_PASSWORD) {
@@ -152,6 +153,13 @@ export default function SetupPage() {
                 batch.delete(doc.ref);
             });
             console.log("Prepared to delete all inventory transactions.");
+             
+            // 4. Delete all MIVs
+            const mivsSnapshot = await getDocs(collection(db, "mivs"));
+            mivsSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            console.log("Prepared to delete all mivs.");
 
             // Commit all batched writes
             await batch.commit();
@@ -167,9 +175,82 @@ export default function SetupPage() {
         }
     };
 
+    const handleAddRooms = async () => {
+        if (!db) {
+            toast({ title: "Firebase Error", description: "Firebase not configured", variant: "destructive" });
+            return;
+        }
+        setIsAddingRooms(true);
+
+        const complexName = "um alsalam";
+        const buildingName = "B1";
+        const floorName = "floor 1";
+        const roomsToAdd = ["32", "33", "34", "35", "37", "38", "39", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "89", "201", "202"];
+
+        try {
+            const q = query(collection(db, "residences"), where("name", "==", complexName));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                toast({ title: "Error", description: `Complex "${complexName}" not found.`, variant: "destructive" });
+                setIsAddingRooms(false);
+                return;
+            }
+
+            const complexDoc = querySnapshot.docs[0];
+            const complexData = complexDoc.data() as Complex;
+            const complexId = complexDoc.id;
+
+            let buildingFound = false;
+            const updatedBuildings = complexData.buildings.map(building => {
+                if (building.name === buildingName) {
+                    buildingFound = true;
+                    let floorFound = false;
+                    building.floors = building.floors.map(floor => {
+                        if (floor.name === floorName) {
+                            floorFound = true;
+                            const existingRoomNames = new Set(floor.rooms.map(r => r.name));
+                            const newRooms = roomsToAdd
+                                .filter(roomName => !existingRoomNames.has(roomName))
+                                .map(roomName => ({ id: `room-${Date.now()}-${Math.random()}`, name: roomName }));
+
+                            if (newRooms.length > 0) {
+                                floor.rooms.push(...newRooms);
+                                toast({ title: "Info", description: `Added ${newRooms.length} new rooms.` });
+                            } else {
+                                toast({ title: "Info", description: `All specified rooms already exist.` });
+                            }
+                        }
+                        return floor;
+                    });
+                    if (!floorFound) {
+                        toast({ title: "Error", description: `Floor "${floorName}" not found in building "${buildingName}".`, variant: "destructive" });
+                    }
+                }
+                return building;
+            });
+
+            if (!buildingFound) {
+                toast({ title: "Error", description: `Building "${buildingName}" not found in complex "${complexName}".`, variant: "destructive" });
+                setIsAddingRooms(false);
+                return;
+            }
+            
+            await updateDoc(doc(db, "residences", complexId), { buildings: updatedBuildings });
+            toast({ title: "Success", description: "Room list updated successfully." });
+
+        } catch (error) {
+            console.error("Error adding rooms:", error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            toast({ title: "Error", description: `Failed to add rooms: ${errorMessage}`, variant: "destructive" });
+        } finally {
+            setIsAddingRooms(false);
+        }
+    };
+
 
     return (
-        <div className="flex flex-col items-center justify-center h-full gap-8">
+        <div className="flex flex-col items-center justify-start h-full gap-8 pt-10">
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <CardTitle>Initial Data Setup</CardTitle>
@@ -183,6 +264,24 @@ export default function SetupPage() {
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
                         ) : (
                             'Seed Database'
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle>Add Specific Rooms</CardTitle>
+                    <CardDescription>
+                        This will add a list of rooms to Floor 1, Building B1, in the "um alsalam" complex.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
+                        {isAddingRooms ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
+                        ) : (
+                            'Add Rooms to Um Al-Salam'
                         )}
                     </Button>
                 </CardContent>
@@ -238,3 +337,5 @@ export default function SetupPage() {
         </div>
     );
 }
+
+    
