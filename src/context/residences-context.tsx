@@ -438,9 +438,9 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     toast({ title: "Success", description: "Facility deleted successfully." });
   };
   
-  const buildings = useMemo(() => residences.flatMap(c => c.buildings), [residences]);
-  const floors = useMemo(() => buildings.flatMap(b => b.floors), [buildings]);
-  const rooms = useMemo(() => floors.flatMap(f => f.rooms), [floors]);
+  const buildings = useMemo(() => residences?.flatMap(c => c.buildings) || [], [residences]);
+  const floors = useMemo(() => buildings?.flatMap(b => b.floors) || [], [buildings]);
+  const rooms = useMemo(() => floors?.flatMap(f => f.rooms) || [], [floors]);
 
 
   return (
