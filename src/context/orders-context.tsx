@@ -133,14 +133,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {
-    if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    if (!db || !orderData) {
+      toast({ title: "Error", description: !db ? firebaseErrorMessage : "Cannot create order with empty data.", variant: "destructive" });
       return null;
     }
-     if (!orderData) {
-        toast({ title: "Error", description: "Cannot create order with empty data.", variant: "destructive" });
-        return null;
-    }
+    
     setLoading(true);
     try {
       const newOrderId = await generateNewOrderId();
@@ -250,13 +247,19 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                 for (const receivedItem of newlyReceivedItems) {
                     if (receivedItem.quantityReceived > 0) {
                         const itemRef = doc(db, "inventory", receivedItem.id);
-                        const stockUpdateKey = `stockByResidence.${residenceId}`;
-                        
-                        // Increment stock
-                        transaction.set(itemRef, 
-                            { stockByResidence: { [residenceId]: increment(receivedItem.quantityReceived) } }, 
-                            { merge: true }
-                        );
+                        const itemDoc = await transaction.get(itemRef);
+
+                        if (!itemDoc.exists()) {
+                             throw new Error(`Item ${receivedItem.nameEn} not found in inventory.`);
+                        }
+
+                        const currentStock = itemDoc.data()?.stockByResidence?.[residenceId] || 0;
+                        const newStock = currentStock + receivedItem.quantityReceived;
+
+                        transaction.update(itemRef, {
+                            [`stockByResidence.${residenceId}`]: newStock
+                        });
+
 
                         // Log the transaction
                         const transactionRef = doc(collection(db, "inventoryTransactions"));
@@ -309,7 +312,9 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Success", description: "Stock updated and request status changed." });
     } catch (error) {
         console.error("Error receiving order items:", error);
-        toast({ title: "Transaction Error", description: `Failed to process receipt: ${error}`, variant: "destructive" });
+        const err = error as Error;
+        toast({ title: "Transaction Error", description: `Failed to process receipt: ${err.message}`, variant: "destructive" });
+        throw err;
     } finally {
         setLoading(false);
     }

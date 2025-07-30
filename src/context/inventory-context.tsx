@@ -296,7 +296,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
        toast({ title: "Error", description: "Failed to add item.", variant: "destructive" });
        console.error("Error adding item:", error);
-       return;
     }
   };
 
@@ -337,7 +336,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
         const prefix = `MIV-${year}-${month}-`;
 
-        // This query is simpler and less likely to require a composite index
         const q = query(
             collection(db, 'mivs'),
             where('id', '>=', prefix),
@@ -594,13 +592,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
                         
-                        transaction.update(itemRef, { 
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                        const currentToStock = itemDoc.data().stockByResidence?.[toResidenceId] || 0;
+
+                        transaction.update(itemRef, {
+                            [`stockByResidence.${fromResidenceId}`]: currentFromStock - item.quantity,
+                            [`stockByResidence.${toResidenceId}`]: currentToStock + item.quantity
                         });
-                        transaction.set(itemRef, 
-                            { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, 
-                            { merge: true }
-                        );
                     }
                     
                     const newTransfer: StockTransfer = {
@@ -685,15 +682,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     const itemDoc = await transaction.get(itemRef);
                     if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
                     
-                    const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
-                    if (currentStock < item.quantity) {
-                        throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                    const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                    if (currentFromStock < item.quantity) {
+                        throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                     }
                     
-                    // Decrement from source
-                    transaction.update(itemRef, { [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity) });
-                    // Increment at destination
-                    transaction.set(itemRef, { stockByResidence: { [toResidenceId]: increment(item.quantity) } }, { merge: true });
+                    const currentToStock = itemDoc.data().stockByResidence?.[toResidenceId] || 0;
+                    
+                    transaction.update(itemRef, { 
+                        [`stockByResidence.${fromResidenceId}`]: currentFromStock - item.quantity,
+                        [`stockByResidence.${toResidenceId}`]: currentToStock + item.quantity
+                    });
                 }
 
                 transaction.update(transferRef, {

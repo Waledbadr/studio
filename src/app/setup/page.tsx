@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc } from "firebase/firestore";
+import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc, getDoc } from "firebase/firestore";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Complex } from "@/context/residences-context";
@@ -21,6 +21,7 @@ export default function SetupPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
     const [isAddingRooms, setIsAddingRooms] = useState(false);
+    const [isFixingStock, setIsFixingStock] = useState(false);
     const [password, setPassword] = useState('');
     
     // In a real app, this should be an environment variable.
@@ -136,7 +137,6 @@ export default function SetupPage() {
                 "orders",
                 "inventoryTransactions",
                 "mivs",
-                "maintenanceRequests",
                 "stockTransfers",
                 "notifications"
             ];
@@ -244,6 +244,60 @@ export default function SetupPage() {
         }
     };
 
+    const fixStockData = async () => {
+        if (!db) {
+            toast({ title: "Firebase Error", description: "Firebase not configured.", variant: "destructive" });
+            return;
+        }
+        setIsFixingStock(true);
+        toast({ title: "Starting", description: "Checking inventory for stock issues..." });
+
+        try {
+            const batch = writeBatch(db);
+            const inventorySnapshot = await getDocs(collection(db, "inventory"));
+            let itemsFixed = 0;
+
+            inventorySnapshot.forEach(docSnap => {
+                const itemData = docSnap.data() as InventoryItem;
+                const stockByResidence = itemData.stockByResidence || {};
+                let needsUpdate = false;
+
+                const fixedStock: { [residenceId: string]: number } = {};
+                for (const residenceId in stockByResidence) {
+                    const stockValue = stockByResidence[residenceId];
+                    if (typeof stockValue !== 'number' || isNaN(stockValue)) {
+                        fixedStock[residenceId] = 0; // Reset invalid values
+                        needsUpdate = true;
+                    } else if (stockValue < 0) {
+                        fixedStock[residenceId] = 0; // Reset negative values
+                        needsUpdate = true;
+                    }
+                    else {
+                        fixedStock[residenceId] = stockValue;
+                    }
+                }
+
+                if (needsUpdate) {
+                    itemsFixed++;
+                    batch.update(docSnap.ref, { stockByResidence: fixedStock });
+                }
+            });
+            
+            if (itemsFixed > 0) {
+                await batch.commit();
+                toast({ title: "Success", description: `Corrected stock data for ${itemsFixed} items.` });
+            } else {
+                toast({ title: "No Issues Found", description: "All inventory stock data appears to be correct." });
+            }
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            toast({ title: "Error", description: `Failed to fix stock data: ${errorMessage}`, variant: "destructive" });
+        } finally {
+            setIsFixingStock(false);
+        }
+    };
+
 
     return (
         <div className="flex flex-col items-center justify-start h-full gap-8 pt-10">
@@ -278,6 +332,24 @@ export default function SetupPage() {
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
                         ) : (
                             'Add Rooms to Um Al-Salam'
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <Card className="w-full max-w-md border-orange-500">
+                <CardHeader>
+                    <CardTitle className="text-orange-500">Data Correction Tool</CardTitle>
+                    <CardDescription>
+                        Use this tool if you suspect data corruption (e.g., negative stock). This will scan all inventory items and reset any invalid or negative stock values to zero.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={fixStockData} disabled={isFixingStock} variant="secondary" className="w-full">
+                        {isFixingStock ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Correcting Data...</>
+                        ) : (
+                            'Fix Stock Data'
                         )}
                     </Button>
                 </CardContent>
