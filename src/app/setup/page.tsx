@@ -265,15 +265,13 @@ export default function SetupPage() {
                 const fixedStock: { [residenceId: string]: number } = {};
                 for (const residenceId in stockByResidence) {
                     const stockValue = stockByResidence[residenceId];
-                    if (typeof stockValue !== 'number' || isNaN(stockValue)) {
-                        fixedStock[residenceId] = 0; // Reset invalid values
+                    const numericStock = Number(stockValue);
+
+                    if (isNaN(numericStock) || numericStock < 0) {
+                        fixedStock[residenceId] = 0; // Reset invalid or negative values
                         needsUpdate = true;
-                    } else if (stockValue < 0) {
-                        fixedStock[residenceId] = 0; // Reset negative values
-                        needsUpdate = true;
-                    }
-                    else {
-                        fixedStock[residenceId] = stockValue;
+                    } else {
+                        fixedStock[residenceId] = numericStock;
                     }
                 }
 
@@ -341,7 +339,7 @@ export default function SetupPage() {
                 <CardHeader>
                     <CardTitle className="text-orange-500">Data Correction Tool</CardTitle>
                     <CardDescription>
-                        Use this tool if you suspect data corruption (e.g., negative stock). This will scan all inventory items and reset any invalid or negative stock values to zero.
+                        Use this tool if you suspect data corruption (e.g., negative or invalid stock). This will scan all inventory items and reset any invalid or negative stock values to zero.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

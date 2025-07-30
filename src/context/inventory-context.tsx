@@ -155,7 +155,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const inventoryData = snapshot.docs.map(doc => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
-          const totalStock = Object.values(stockByResidence).reduce((sum: number, current: any) => sum + (Number(current) || 0), 0);
+          // Ensure totalStock is a valid number, defaulting to 0 if not.
+          const totalStock = Object.values(stockByResidence).reduce((sum, current) => {
+              const num = Number(current);
+              return sum + (isNaN(num) ? 0 : num);
+          }, 0);
           return {
               id: doc.id,
               ...data,
