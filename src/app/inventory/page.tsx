@@ -51,9 +51,11 @@ export default function InventoryPage() {
 
   const [activeTab, setActiveTab] = useState<string>('all');
 
-  useEffect(() => {
-    if (userResidences.length > 0 && !userResidences.some(r => r.id === activeTab) && activeTab !== 'all') {
-      setActiveTab('all');
+   useEffect(() => {
+    if (userResidences.length > 0 && activeTab === 'all') {
+      // Do nothing, keep 'all' as active
+    } else if (userResidences.length > 0 && !userResidences.some(r => r.id === activeTab)) {
+        setActiveTab(userResidences[0].id);
     }
   }, [userResidences, activeTab]);
 
@@ -109,6 +111,16 @@ export default function InventoryPage() {
     router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
   };
 
+  const calculateStockForUser = (item: InventoryItem) => {
+    if (isAdmin || !currentUser) {
+      return item.stock; // Admin sees total stock
+    }
+    // Other users see sum of stock from their assigned residences
+    return currentUser.assignedResidences.reduce((acc, residenceId) => {
+      return acc + (item.stockByResidence?.[residenceId] || 0);
+    }, 0);
+  };
+
 
   const renderItemsTable = (residenceId: string | 'all') => {
     const isAllItemsTab = residenceId === 'all';
@@ -145,7 +157,7 @@ export default function InventoryPage() {
               <TableCell className="font-medium">{item.nameEn}</TableCell>
               <TableCell>{item.category}</TableCell>
               <TableCell>{item.unit}</TableCell>
-              <TableCell>{isAllItemsTab ? item.stock : getStockForResidence(item, residenceId)}</TableCell>
+              <TableCell>{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
