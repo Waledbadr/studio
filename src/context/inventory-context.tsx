@@ -538,7 +538,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
-    if (!db) return null;
+    if (!db) {
+        return null;
+    }
     try {
         const q = query(
             collection(db, "inventoryTransactions"),
@@ -583,19 +585,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         if (currentFromStock < item.quantity) {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
-
+                        
+                        transaction.update(itemRef, { 
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                        });
+                        
                         // Ensure 'to' residence has a stock entry before incrementing
                         const toStockUpdate = {
                              [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
                         };
-                         if(!itemDoc.data().stockByResidence?.[toResidenceId]) {
-                            toStockUpdate[`stockByResidence.${toResidenceId}`] = item.quantity;
-                        }
-                        
-                        transaction.update(itemRef, { 
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
-                            ...toStockUpdate
-                        });
+
+                        transaction.set(itemRef, toStockUpdate, { merge: true });
                     }
                      // Create a completed transfer record
                     const transferDocRef = doc(collection(db, 'stockTransfers'));
@@ -676,7 +676,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     // Decrement from source
                     transaction.update(itemRef, { [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity) });
                     // Increment at destination
-                    transaction.update(itemRef, { [`stockByResidence.${toResidenceId}`]: increment(item.quantity) });
+                    transaction.set(itemRef, { [`stockByResidence.${toResidenceId}`]: increment(item.quantity) }, { merge: true });
                 }
 
                 transaction.update(transferRef, {
