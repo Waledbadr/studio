@@ -326,22 +326,23 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const mivId = await generateNewMivId(transaction);
             const transactionTime = Timestamp.now();
             
-            // Create MIV document for ID generation
+            let totalItemsCount = 0;
+            voucherLocations.forEach(loc => totalItemsCount += loc.items.length);
+
             const mivDocRef = doc(db, 'mivs', mivId);
-            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId: residenceId, itemCount: voucherLocations.reduce((sum, loc) => sum + loc.items.length, 0) });
+            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId: residenceId, itemCount: totalItemsCount });
 
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
             
-            // Fetch all item documents within the transaction
             const itemSnapshots = await Promise.all(
                 uniqueItemIds.map(id => transaction.get(doc(db, "inventory", id)))
             );
 
             for (const location of voucherLocations) {
                 let locationName = location.locationName;
-                if (!location.isFacility) {
+                 if (!location.isFacility && location.buildingName && location.floorName && location.roomName) {
                    locationName = `${location.buildingName} -> ${location.floorName} -> ${location.roomName}`;
                 }
 
@@ -360,10 +361,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     
-                    // Update stock
                      transaction.set(itemDoc.ref, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) }, { merge: true });
 
-                    // Create transaction log
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
@@ -403,7 +402,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        // Sort on the client side to avoid needing a composite index
         transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
         
         return transactions;
@@ -427,7 +425,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const querySnapshot = await getDocs(q);
     const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
 
-    // Sort on the client-side to avoid composite index
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
@@ -495,9 +492,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         collection(db, "inventoryTransactions"),
         where("itemId", "==", itemId),
         where("locationId", "==", locationId),
-        where("type", "==", "OUT"),
-        orderBy("date", "desc"),
-        // limit(1) // This would require an index
+        where("type", "==", "OUT")
     );
     const querySnapshot = await getDocs(q);
 
@@ -505,7 +500,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return null;
     }
     
-    // Sort on client to avoid composite index requirement
     const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
     transactions.sort((a,b) => b.date.toMillis() - a.date.toMillis());
 
