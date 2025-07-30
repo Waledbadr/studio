@@ -52,10 +52,8 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<string>('all');
 
   useEffect(() => {
-    if (userResidences.length > 0 && activeTab === 'all') {
-      // Default state is fine
-    } else if (userResidences.length > 0) {
-        setActiveTab(userResidences[0].id)
+    if (userResidences.length > 0 && !userResidences.some(r => r.id === activeTab) && activeTab !== 'all') {
+      setActiveTab('all');
     }
   }, [userResidences, activeTab]);
 
