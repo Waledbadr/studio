@@ -22,7 +22,7 @@ interface TransferItem extends InventoryItem {
 }
 
 export default function StockTransferPage() {
-    const { items, getStockForResidence, loading, transferStock } = useInventory();
+    const { items, getStockForResidence, loading, createTransferRequest } = useInventory();
     const { residences } = useResidences();
     const { currentUser } = useUsers();
     const { toast } = useToast();
@@ -87,16 +87,27 @@ export default function StockTransferPage() {
     };
     
     const handleSubmitTransfer = async () => {
-        if (!fromResidenceId || !toResidenceId || transferItems.length === 0) {
-            toast({ title: "Invalid Transfer", description: "Please select source and destination, and add items to transfer.", variant: "destructive" });
+        if (!fromResidenceId || !toResidenceId || transferItems.length === 0 || !currentUser) {
+            toast({ title: "Invalid Transfer", description: "Please select source, destination, and add items to transfer.", variant: "destructive" });
             return;
         }
 
         setIsSubmitting(true);
         try {
-            await transferStock(fromResidenceId, toResidenceId, transferItems.map(item => ({ id: item.id, quantity: item.transferQuantity, nameEn: item.nameEn, nameAr: item.nameAr })));
-            toast({ title: "Success", description: "Stock transferred successfully." });
-            router.push('/inventory');
+            const fromResidenceName = residences.find(r => r.id === fromResidenceId)?.name || '';
+            const toResidenceName = residences.find(r => r.id === toResidenceId)?.name || '';
+
+            await createTransferRequest({
+                fromResidenceId,
+                fromResidenceName,
+                toResidenceId,
+                toResidenceName,
+                requestedById: currentUser.id,
+                items: transferItems.map(item => ({ id: item.id, quantity: item.transferQuantity, nameEn: item.nameEn, nameAr: item.nameAr }))
+            });
+
+            toast({ title: "Success", description: "Stock transfer request submitted for approval." });
+            router.push('/inventory/transfer/history');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
             toast({ title: "Error", description: `Transfer failed: ${errorMessage}`, variant: "destructive" });
@@ -109,12 +120,12 @@ export default function StockTransferPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Stock Transfer</h1>
-                    <p className="text-muted-foreground">Move inventory between residence storerooms.</p>
+                    <h1 className="text-2xl font-bold">New Stock Transfer Request</h1>
+                    <p className="text-muted-foreground">Create a request to move inventory between residences.</p>
                 </div>
                 <Button onClick={handleSubmitTransfer} disabled={isSubmitting || transferItems.length === 0}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeftRight className="mr-2 h-4 w-4" />}
-                    Confirm Transfer
+                    Submit Transfer Request
                 </Button>
             </div>
 
@@ -188,8 +199,8 @@ export default function StockTransferPage() {
                 {/* Right Side: Review Transfer */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>2. Review Transfer</CardTitle>
-                        <CardDescription>Adjust quantities before confirming the transfer.</CardDescription>
+                        <CardTitle>2. Review Request</CardTitle>
+                        <CardDescription>Adjust quantities before submitting the transfer request.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[550px]">

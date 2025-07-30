@@ -74,10 +74,29 @@ export interface MIVDetails {
     }
 }
 
+export interface StockTransfer {
+  id: string;
+  date: Timestamp;
+  fromResidenceId: string;
+  fromResidenceName: string;
+  toResidenceId: string;
+  toResidenceName: string;
+  requestedById: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+  items: { id: string; nameEn: string; nameAr: string; quantity: number; }[];
+  approvedById?: string;
+  approvedAt?: Timestamp;
+  rejectedById?: string;
+  rejectedAt?: Timestamp;
+}
+
+export type NewStockTransferPayload = Omit<StockTransfer, 'id' | 'date' | 'status'>;
+
 
 interface InventoryContextType {
   items: InventoryItem[];
   categories: string[];
+  transfers: StockTransfer[];
   loading: boolean;
   addItem: (item: Omit<InventoryItem, 'id' | 'stock'>) => Promise<InventoryItem | void>;
   updateItem: (item: InventoryItem) => Promise<void>;
@@ -86,7 +105,9 @@ interface InventoryContextType {
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
-  transferStock: (fromResidenceId: string, toResidenceId: string, items: {id: string, quantity: number, nameEn: string, nameAr: string}[]) => Promise<void>;
+  createTransferRequest: (payload: NewStockTransferPayload) => Promise<void>;
+  approveTransfer: (transferId: string, approverId: string) => Promise<void>;
+  rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
@@ -103,10 +124,12 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const inventoryUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const categoriesUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const transfersUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
 
   const loadInventory = useCallback(() => {
@@ -121,8 +144,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     isLoaded.current = true;
     setLoading(true);
 
-    const inventoryCollection = collection(db, "inventory");
-    inventoryUnsubscribeRef.current = onSnapshot(inventoryCollection, (snapshot) => {
+    inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
@@ -151,8 +173,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
     });
 
-    const categoriesCollection = collection(db, "inventory-categories");
-    categoriesUnsubscribeRef.current = onSnapshot(categoriesCollection, (snapshot) => {
+    categoriesUnsubscribeRef.current = onSnapshot(collection(db, "inventory-categories"), (snapshot) => {
       if (snapshot.docs.length > 0) {
         const categoriesData = snapshot.docs[0].data();
         setCategories(categoriesData.names || []);
@@ -161,6 +182,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
        console.error("Error fetching categories:", error);
        toast({ title: "Firestore Error", description: "Could not fetch categories data.", variant: "destructive" });
     });
+    
+    transfersUnsubscribeRef.current = onSnapshot(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')), (snapshot) => {
+        const transfersData = snapshot.docs.map(doc => doc.data() as StockTransfer);
+        setTransfers(transfersData);
+    }, (error) => {
+        console.error("Error fetching transfers:", error);
+        toast({ title: "Firestore Error", description: "Could not fetch stock transfers.", variant: "destructive" });
+    });
 
 
   }, [toast, categories.length]);
@@ -168,12 +197,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     loadInventory();
     return () => {
-      if (inventoryUnsubscribeRef.current) {
-        inventoryUnsubscribeRef.current();
-      }
-      if (categoriesUnsubscribeRef.current) {
-        categoriesUnsubscribeRef.current();
-      }
+      if (inventoryUnsubscribeRef.current) inventoryUnsubscribeRef.current();
+      if (categoriesUnsubscribeRef.current) categoriesUnsubscribeRef.current();
+      if (transfersUnsubscribeRef.current) transfersUnsubscribeRef.current();
       isLoaded.current = false;
     };
   }, [loadInventory]);
@@ -304,14 +330,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const prefix = `MIV-${year}-${month}-`;
 
         const mivsCollectionRef = collection(db, 'mivs');
-        const q = query(
-            mivsCollectionRef,
-            where('id', '>=', prefix),
-            where('id', '<', prefix + '\uf8ff'),
-            orderBy('id', 'desc'),
-            limit(1)
-        );
-
+        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
         const querySnapshot = await getDocs(q);
 
         let lastNum = 0;
@@ -339,7 +358,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
             
-            // --- STAGE 1: READS ---
             const itemSnapshots = new Map<string, DocumentSnapshot>();
             for (const id of uniqueItemIds) {
                 const itemRef = doc(db, "inventory", id);
@@ -358,7 +376,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
             
-            // --- STAGE 2: WRITES ---
             const transactionTime = Timestamp.now();
             let totalItemsCount = 0;
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
@@ -370,12 +387,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     if (issuedItem.issueQuantity <= 0) continue;
                     totalItemsCount += issuedItem.issueQuantity;
 
-                    // Update stock (decrement)
                     const itemRef = doc(db, "inventory", issuedItem.id);
                     const stockUpdateKey = `stockByResidence.${residenceId}`;
                     transaction.update(itemRef, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) });
 
-                    // Create inventory transaction log
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
@@ -516,6 +531,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             where("itemId", "==", itemId),
             where("locationId", "==", locationId),
             where("type", "==", "OUT"),
+            orderBy("date", "desc"),
+            limit(1)
         );
         const querySnapshot = await getDocs(q);
 
@@ -523,10 +540,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
-
-        return transactions[0]?.date || null;
+        return querySnapshot.docs[0].data().date as Timestamp;
 
     } catch (error) {
         console.error("Error fetching last issue date:", error);
@@ -535,81 +549,83 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const transferStock = async (fromResidenceId: string, toResidenceId: string, itemsToTransfer: {id: string, quantity: number, nameEn: string, nameAr: string}[]) => {
-     if (!db) {
-        throw new Error(firebaseErrorMessage);
-    }
+    const createTransferRequest = async (payload: NewStockTransferPayload) => {
+        if (!db) throw new Error(firebaseErrorMessage);
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            // Read all items first to check stock
-            for (const item of itemsToTransfer) {
-                const itemRef = doc(db, 'inventory', item.id);
-                const itemDoc = await transaction.get(itemRef);
-                if (!itemDoc.exists()) {
-                    throw new Error(`Item ${item.nameEn} not found.`);
+        try {
+            const transferDocRef = doc(collection(db, 'stockTransfers'));
+            const newTransfer: StockTransfer = {
+                ...payload,
+                id: transferDocRef.id,
+                date: Timestamp.now(),
+                status: 'Pending'
+            };
+            await setDoc(transferDocRef, newTransfer);
+            toast({ title: "Success", description: "Transfer request created and pending approval." });
+        } catch (error) {
+            console.error("Failed to create transfer request:", error);
+            throw error;
+        }
+    };
+
+    const approveTransfer = async (transferId: string, approverId: string) => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        const transferRef = doc(db, 'stockTransfers', transferId);
+        
+        try {
+            await runTransaction(db, async (transaction) => {
+                const transferDoc = await transaction.get(transferRef);
+                if (!transferDoc.exists() || transferDoc.data().status !== 'Pending') {
+                    throw new Error("Transfer request not found or already processed.");
                 }
-                const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
-                if (currentStock < item.quantity) {
-                    throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                const transferData = transferDoc.data() as StockTransfer;
+
+                const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
+
+                for (const item of itemsToTransfer) {
+                    const itemRef = doc(db, 'inventory', item.id);
+                    const itemDoc = await transaction.get(itemRef);
+                    if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
+                    
+                    const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                    if (currentStock < item.quantity) {
+                        throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                    }
+                    
+                    // Decrement from source
+                    transaction.update(itemRef, { [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity) });
+                    // Increment at destination
+                    transaction.update(itemRef, { [`stockByResidence.${toResidenceId}`]: increment(item.quantity) });
                 }
-            }
 
-            // All checks passed, now perform writes
-            const transactionTime = Timestamp.now();
-            const transferDocRef = doc(collection(db, "inventoryTransactions")); // Unique ID for this transfer operation
-
-            for (const item of itemsToTransfer) {
-                const itemRef = doc(db, 'inventory', item.id);
-
-                // Decrement from source
-                transaction.update(itemRef, {
-                    [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                transaction.update(transferRef, {
+                    status: 'Completed',
+                    approvedById: approverId,
+                    approvedAt: Timestamp.now()
                 });
-
-                // Increment at destination
-                transaction.update(itemRef, {
-                    [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
-                });
-
-                // Log transfer out
-                const outLogRef = doc(collection(db, "inventoryTransactions"));
-                transaction.set(outLogRef, {
-                    itemId: item.id,
-                    itemNameEn: item.nameEn,
-                    itemNameAr: item.nameAr,
-                    residenceId: fromResidenceId,
-                    date: transactionTime,
-                    type: 'TRANSFER_OUT',
-                    quantity: item.quantity,
-                    referenceDocId: transferDocRef.id,
-                    relatedResidenceId: toResidenceId,
-                });
-
-                // Log transfer in
-                const inLogRef = doc(collection(db, "inventoryTransactions"));
-                transaction.set(inLogRef, {
-                    itemId: item.id,
-                    itemNameEn: item.nameEn,
-                    itemNameAr: item.nameAr,
-                    residenceId: toResidenceId,
-                    date: transactionTime,
-                    type: 'TRANSFER_IN',
-                    quantity: item.quantity,
-                    referenceDocId: transferDocRef.id,
-                    relatedResidenceId: fromResidenceId,
-                });
-            }
-        });
-    } catch (error) {
-        console.error("Stock transfer failed:", error);
-        throw error;
-    }
-  }
+            });
+            toast({ title: "Success", description: "Transfer approved and stock updated." });
+        } catch (error) {
+            console.error("Failed to approve transfer:", error);
+            toast({ title: "Error", description: `Approval failed: ${error}`, variant: "destructive" });
+        }
+    };
+    
+    const rejectTransfer = async (transferId: string, rejecterId: string) => {
+         if (!db) throw new Error(firebaseErrorMessage);
+         const transferRef = doc(db, 'stockTransfers', transferId);
+         await updateDoc(transferRef, {
+             status: 'Rejected',
+             rejectedById: rejecterId,
+             rejectedAt: Timestamp.now()
+         });
+         toast({ title: "Success", description: "Transfer request has been rejected." });
+    };
 
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, transferStock }}>
+    <InventoryContext.Provider value={{ items, categories, transfers, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, createTransferRequest, approveTransfer, rejectTransfer }}>
       {children}
     </InventoryContext.Provider>
   );
