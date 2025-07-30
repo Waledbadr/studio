@@ -56,6 +56,7 @@ export interface MIV {
     date: Timestamp;
     residenceId: string;
     itemCount: number;
+    locationName: string;
 }
 
 export interface MIVDetails {
@@ -293,35 +294,35 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-  const generateNewMivId = async (db: Firestore): Promise<string> => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const prefix = `MIV-${year}-${month}-`;
+    const generateNewMivId = async (db: Firestore): Promise<string> => {
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(-2);
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const prefix = `MIV-${year}-${month}-`;
 
-    const mivsCollectionRef = collection(db, 'mivs');
-    const q = query(
-      mivsCollectionRef,
-      where('id', '>=', prefix),
-      where('id', '<', prefix + '\uf8ff'),
-      orderBy('id', 'desc'),
-      limit(1)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    let lastNum = 0;
-    if (!querySnapshot.empty) {
-        const lastId = querySnapshot.docs[0].id;
-        const numPart = parseInt(lastId.substring(prefix.length), 10);
-        if (!isNaN(numPart)) {
-            lastNum = numPart;
+        const mivsCollectionRef = collection(db, 'mivs');
+        const q = query(
+            mivsCollectionRef,
+            where('id', '>=', prefix),
+            where('id', '<', prefix + '\uf8ff'),
+            orderBy('id', 'desc'),
+            limit(1)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        let lastNum = 0;
+        if (!querySnapshot.empty) {
+            const lastId = querySnapshot.docs[0].id;
+            const numPart = parseInt(lastId.substring(prefix.length), 10);
+            if (!isNaN(numPart)) {
+                lastNum = numPart;
+            }
         }
-    }
 
-    const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
-    return `${prefix}${nextRequestNumber}`;
-  };
+        const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
+        return `${prefix}${nextRequestNumber}`;
+    };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
@@ -334,9 +335,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         await runTransaction(db, async (transaction) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
-
+            
             // --- STAGE 1: READS ---
-            // Read all necessary item documents from the database first.
             const itemSnapshots = new Map<string, DocumentSnapshot>();
             for (const id of uniqueItemIds) {
                 const itemRef = doc(db, "inventory", id);
@@ -347,7 +347,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 itemSnapshots.set(id, itemSnap);
             }
 
-            // Check for sufficient stock for all items before any writes.
             for (const item of allIssuedItems) {
                 const itemSnap = itemSnapshots.get(item.id);
                 const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
@@ -357,18 +356,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             }
             
             // --- STAGE 2: WRITES ---
-            // All reads are done, now we can perform writes.
             const transactionTime = Timestamp.now();
-            let totalItemsCount = allIssuedItems.length;
-
-            // 1. Create the MIV document.
-            const mivDocRef = doc(db, 'mivs', mivId);
-            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId, itemCount: totalItemsCount });
-
-            // 2. Update stock and create transaction logs for each issued item.
+            let totalItemsCount = 0;
+            let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
+            
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
+                    totalItemsCount += issuedItem.issueQuantity;
 
                     // Update stock (decrement)
                     const itemRef = doc(db, "inventory", issuedItem.id);
@@ -391,6 +386,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     } as Omit<InventoryTransaction, 'id'>);
                 }
             }
+            
+            const mivDocRef = doc(db, 'mivs', mivId);
+            transaction.set(mivDocRef, { 
+                id: mivId, 
+                date: transactionTime, 
+                residenceId, 
+                itemCount: totalItemsCount,
+                locationName: firstLocationName, // Storing main location for overview
+            });
         });
 
         toast({ title: "Success", description: "Voucher submitted successfully." });
@@ -503,12 +507,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return null;
     }
     try {
-        // Query for all 'OUT' transactions for a specific item at a specific location.
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
             where("locationId", "==", locationId),
-            where("type", "==", "OUT")
+            where("type", "==", "OUT"),
+            orderBy("date", "desc"),
+            limit(1)
         );
         const querySnapshot = await getDocs(q);
 
@@ -516,11 +521,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        // Map and sort client-side to find the most recent transaction date.
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
-        
-        const lastTransaction = transactions[0];
+        const lastTransaction = querySnapshot.docs[0].data() as InventoryTransaction;
         return lastTransaction?.date || null;
 
     } catch (error) {

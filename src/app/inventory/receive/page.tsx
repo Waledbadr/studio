@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, History } from "lucide-react";
 import { useResidences } from "@/context/residences-context";
 
 export default function ReceiveMaterialsPage() {
@@ -66,6 +66,11 @@ export default function ReceiveMaterialsPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Receive Materials (MRV)</h1>
                     <p className="text-muted-foreground">Select an approved request to receive its items.</p>
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
+                        <History className="mr-2 h-4 w-4" /> View Request History
+                    </Button>
                 </div>
             </div>
             

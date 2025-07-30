@@ -45,7 +45,7 @@ interface OrdersContextType {
   updateOrderStatus: (id: string, status: OrderStatus, approverId?: string) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
-  receiveOrderItems: (orderId: string, newlyReceivedItems: OrderItem[]) => Promise<void>;
+  receiveOrderItems: (orderId: string, newlyReceivedItems: Omit<OrderItem, 'quantity'>[], forceComplete: boolean) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -187,7 +187,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[]) => {
+  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -211,31 +211,33 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
             
             const transactionTime = Timestamp.now();
 
-            // Update inventory stock for each item and log transaction
-            for (const receivedItem of newlyReceivedItems) {
-                if (receivedItem.quantityReceived > 0) {
-                    const itemRef = doc(db, "inventory", receivedItem.id);
-                    const stockUpdateKey = `stockByResidence.${residenceId}`;
-                    
-                    // Increment stock
-                    transaction.set(itemRef, 
-                        { stockByResidence: { [residenceId]: increment(receivedItem.quantityReceived) } }, 
-                        { merge: true }
-                    );
+            if (newlyReceivedItems.length > 0) {
+                // Update inventory stock for each item and log transaction
+                for (const receivedItem of newlyReceivedItems) {
+                    if (receivedItem.quantityReceived > 0) {
+                        const itemRef = doc(db, "inventory", receivedItem.id);
+                        const stockUpdateKey = `stockByResidence.${residenceId}`;
+                        
+                        // Increment stock
+                        transaction.set(itemRef, 
+                            { stockByResidence: { [residenceId]: increment(receivedItem.quantityReceived) } }, 
+                            { merge: true }
+                        );
 
-                    // Log the transaction
-                    const transactionRef = doc(collection(db, "inventoryTransactions"));
-                    const newTransaction: Omit<InventoryTransaction, 'id'> = {
-                        itemId: receivedItem.id,
-                        itemNameEn: receivedItem.nameEn,
-                        itemNameAr: receivedItem.nameAr,
-                        residenceId: residenceId,
-                        date: transactionTime,
-                        type: 'IN',
-                        quantity: receivedItem.quantityReceived,
-                        referenceDocId: orderId,
-                    };
-                    transaction.set(transactionRef, newTransaction);
+                        // Log the transaction
+                        const transactionRef = doc(collection(db, "inventoryTransactions"));
+                        const newTransaction: Omit<InventoryTransaction, 'id'> = {
+                            itemId: receivedItem.id,
+                            itemNameEn: receivedItem.nameEn,
+                            itemNameAr: receivedItem.nameAr,
+                            residenceId: residenceId,
+                            date: transactionTime,
+                            type: 'IN',
+                            quantity: receivedItem.quantityReceived,
+                            referenceDocId: orderId,
+                        };
+                        transaction.set(transactionRef, newTransaction);
+                    }
                 }
             }
             
@@ -252,15 +254,17 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
             // Determine the new status
             let allItemsDelivered = true;
-            for (const requestedItem of orderData.items) {
-                const totalReceived = existingReceived.find(ri => ri.id === requestedItem.id)?.quantityReceived || 0;
-                if (totalReceived < requestedItem.quantity) {
-                    allItemsDelivered = false;
-                    break;
+            if (!forceComplete) {
+                for (const requestedItem of orderData.items) {
+                    const totalReceived = existingReceived.find(ri => ri.id === requestedItem.id)?.quantityReceived || 0;
+                    if (totalReceived < requestedItem.quantity) {
+                        allItemsDelivered = false;
+                        break;
+                    }
                 }
             }
             
-            const newStatus: OrderStatus = allItemsDelivered ? 'Delivered' : 'Partially Delivered';
+            const newStatus: OrderStatus = allItemsDelivered || forceComplete ? 'Delivered' : 'Partially Delivered';
 
             transaction.update(orderRef, {
                 itemsReceived: existingReceived,

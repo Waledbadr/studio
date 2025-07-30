@@ -8,12 +8,23 @@ import { useInventory } from '@/context/inventory-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageCheck, PackageX } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface ReceivedItem extends OrderItem {
     quantityReceived: number;
@@ -82,7 +93,7 @@ export default function ReceiveOrderPage() {
         );
     };
 
-    const handleConfirmReceipt = async () => {
+    const handleConfirmReceipt = async (forceComplete: boolean = false) => {
         if (!order || receivedItems.length === 0) {
             toast({ title: "Error", description: "No items to receive.", variant: "destructive" });
             return;
@@ -108,12 +119,12 @@ export default function ReceiveOrderPage() {
                 quantityReceived: item.quantityReceived,
             }));
         
-        if (itemsToProcess.length === 0) {
+        if (itemsToProcess.length === 0 && !forceComplete) {
             toast({ title: "No Change", description: "No new quantities were entered to receive." });
             return;
         }
 
-        await receiveOrderItems(order.id, itemsToProcess);
+        await receiveOrderItems(order.id, itemsToProcess, forceComplete);
         
         router.push('/inventory/orders');
     };
@@ -161,7 +172,32 @@ export default function ReceiveOrderPage() {
                     <Button variant="outline" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
                     </Button>
-                    <Button onClick={handleConfirmReceipt} disabled={ordersLoading}>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="secondary" disabled={ordersLoading}>
+                                 {ordersLoading ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /></>
+                                ) : (
+                                    <><PackageX className="mr-2 h-4 w-4" /> Receive & Close Order</>
+                                )}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure you want to close this order?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will receive the currently entered quantities and mark the order as "Delivered", even if not all items were fully received. This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleConfirmReceipt(true)}>
+                                    Confirm and Close
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading}>
                         {ordersLoading ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
                         ) : (

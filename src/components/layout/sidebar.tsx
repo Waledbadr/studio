@@ -36,9 +36,9 @@ export function AppSidebar() {
     { href: '/residences', label: dict.sidebar.residences, icon: Building },
     { href: '/maintenance', label: dict.sidebar.maintenance, icon: Wrench },
     { href: '/inventory', label: dict.sidebar.inventory, icon: ClipboardList, exact: true },
-    { href: '/inventory/orders', label: dict.sidebar.materialRequests, icon: ListOrdered },
-    { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, icon: PackageCheck },
-    { href: '/inventory/issue', label: dict.sidebar.issueMaterials, icon: ClipboardMinus, exact: true },
+    { href: '/inventory/orders', label: dict.sidebar.materialRequests, abbreviation: ' (MR)', icon: ListOrdered },
+    { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, abbreviation: ' (MRV)', icon: PackageCheck },
+    { href: '/inventory/issue', label: dict.sidebar.issueMaterials, abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
     { href: '/reports', label: dict.sidebar.reports, icon: AreaChart },
     { href: '/users', label: dict.sidebar.users, icon: Users },
     { href: '/tools', label: dict.sidebar.aiTools, icon: Bot },
@@ -68,7 +68,7 @@ export function AppSidebar() {
                 >
                   <Link href={item.href}>
                     <item.icon />
-                    <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>
                   </Link>
                 </SidebarMenuButton>
                  {item.href === '/reports' && (

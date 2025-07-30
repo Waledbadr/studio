@@ -43,6 +43,7 @@ export default function MIVHistoryPage() {
                 <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-16" /></TableCell>
             </TableRow>
         ))
@@ -65,6 +66,7 @@ export default function MIVHistoryPage() {
                                 <TableHead>MIV ID</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Issued From (Residence)</TableHead>
+                                <TableHead>Issued To (Location)</TableHead>
                                 <TableHead># of Items</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -74,11 +76,12 @@ export default function MIVHistoryPage() {
                                     <TableCell className="font-medium">{miv.id}</TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP p')}</TableCell>
                                     <TableCell>{getResidenceName(miv.residenceId)}</TableCell>
+                                    <TableCell>{miv.locationName}</TableCell>
                                     <TableCell>{miv.itemCount}</TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-48 text-center text-muted-foreground">No MIVs found.</TableCell>
+                                    <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">No MIVs found.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
