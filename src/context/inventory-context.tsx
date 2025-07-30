@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup } from "firebase/firestore";
+import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
 
 
@@ -292,7 +293,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-    const generateNewMivId = async (transaction: any): Promise<string> => {
+    const generateNewMivId = async (db: Firestore, transaction: any): Promise<string> => {
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -323,7 +324,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     
     try {
         await runTransaction(db, async (transaction) => {
-            const mivId = await generateNewMivId(transaction);
+            const mivId = await generateNewMivId(db, transaction);
             const transactionTime = Timestamp.now();
             
             let totalItemsCount = 0;
@@ -503,7 +504,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
     transactions.sort((a,b) => b.date.toMillis() - a.date.toMillis());
 
-    return transactions[0].date;
+    return transactions[0]?.date || null;
   };
 
 
