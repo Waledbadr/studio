@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,9 +34,10 @@ import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/context/language-context';
+import { AddMultipleRoomsDialog } from '@/components/residences';
 
 export default function ResidencesPage() {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const { dict } = useLanguage();
@@ -70,6 +71,11 @@ export default function ResidencesPage() {
   const [newRoomName, setNewRoomName] = useState('');
   const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
 
+  // State for Add Multiple Rooms Dialog
+  const [isAddMultipleRoomsDialogOpen, setIsAddMultipleRoomsDialogOpen] = useState(false);
+  const [multipleRoomsFloorInfo, setMultipleRoomsFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
+
+
   const groupedByCity = useMemo(() => {
     return residences.reduce((acc, complex) => {
       const city = complex.city || 'Uncategorized';
@@ -81,7 +87,7 @@ export default function ResidencesPage() {
     }, {} as Record<string, Complex[]>);
   }, [residences]);
 
-  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room', id: string, parentId?: string, grandParentId?: string) => {
+  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms', id: string, parentId?: string, grandParentId?: string) => {
     if (type === 'building') {
       setSelectedComplexId(id);
       setNewBuildingName('');
@@ -94,6 +100,9 @@ export default function ResidencesPage() {
       setSelectedFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
       setNewRoomName('');
       setIsAddRoomDialogOpen(true);
+    } else if (type === 'multipleRooms' && parentId && grandParentId) {
+        setMultipleRoomsFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
+        setIsAddMultipleRoomsDialogOpen(true);
     }
   };
 
@@ -328,6 +337,9 @@ export default function ResidencesPage() {
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('room', floor.id, building.id, complex.id)}>
                                                         <PlusCircle className="mr-2 h-4 w-4" /> Add Room
                                                     </Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('multipleRooms', floor.id, building.id, complex.id)}>
+                                                        <Plus className="mr-2 h-4 w-4" /> Add Multiple Rooms
+                                                    </Button>
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
                                                             <Button variant="destructive" size="icon" className="h-7 w-7"><Trash2 className="h-4 w-4" /></Button>
@@ -455,6 +467,14 @@ export default function ResidencesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Add Multiple Rooms Dialog */}
+      <AddMultipleRoomsDialog
+        isOpen={isAddMultipleRoomsDialogOpen}
+        onOpenChange={setIsAddMultipleRoomsDialogOpen}
+        floorInfo={multipleRoomsFloorInfo}
+        onAddRooms={addMultipleRooms}
+      />
       
       {/* Edit Complex Dialog */}
       <Dialog open={isEditComplexDialogOpen} onOpenChange={setIsEditComplexDialogOpen}>

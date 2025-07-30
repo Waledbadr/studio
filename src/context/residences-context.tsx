@@ -49,6 +49,7 @@ interface ResidencesContextType {
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
+  addMultipleRooms: (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => Promise<void>;
   deleteComplex: (id: string) => Promise<void>;
   deleteBuilding: (complexId: string, buildingId: string) => Promise<void>;
   deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
@@ -246,6 +247,69 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const addMultipleRooms = async (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+        
+        const complexData = complexDoc.data() as Complex;
+        
+        const building = complexData.buildings.find(b => b.id === buildingId);
+        const floor = building?.floors.find(f => f.id === floorId);
+
+        if (!floor) {
+             toast({ title: "Error", description: "Target floor not found.", variant: "destructive" });
+             return;
+        }
+
+        const existingRoomNames = new Set(floor.rooms.map(r => r.name.toLowerCase()));
+        
+        const newRooms: Room[] = roomNames
+            .map(name => name.trim())
+            .filter(name => name)
+            .filter(name => !existingRoomNames.has(name.toLowerCase()))
+            .map(name => ({ id: `room-${Date.now()}-${Math.random()}`, name: name }));
+        
+        const addedCount = newRooms.length;
+        const skippedCount = roomNames.length - addedCount;
+
+        if (addedCount === 0) {
+            toast({ title: "No rooms added", description: "All specified rooms already exist on this floor.", variant: "default" });
+            return;
+        }
+
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => 
+                    f.id === floorId ? {...f, rooms: [...f.rooms, ...newRooms]} : f
+                )
+            } : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+        
+        let toastDescription = `Added ${addedCount} new rooms.`;
+        if (skippedCount > 0) {
+            toastDescription += ` Skipped ${skippedCount} duplicate rooms.`
+        }
+
+        toast({ title: "Success", description: toastDescription });
+
+    } catch (error) {
+        console.error("Error adding multiple rooms:", error);
+        toast({ title: "Error", description: "Failed to add rooms.", variant: "destructive" });
+    }
+  };
+
   const deleteComplex = async (id: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
@@ -321,7 +385,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
+    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
       {children}
     </ResidencesContext.Provider>
   );
