@@ -22,7 +22,7 @@ import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/language-context';
 
 export function AppSidebar() {
-  const { dict } = useLanguage();
+  const { dict, locale } = useLanguage();
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
   const [isMounted, setIsMounted] = useState(false);
@@ -36,8 +36,7 @@ export function AppSidebar() {
     { href: '/residences', label: dict.sidebar.residences, icon: Building },
     { href: '/maintenance', label: dict.sidebar.maintenance, icon: Wrench },
     { href: '/inventory', label: dict.sidebar.inventory, icon: ClipboardList, exact: true },
-    { href: '/inventory/transfer', label: dict.sidebar.stockTransfer, icon: Move, exact: true },
-    { href: '/inventory/transfer/history', label: dict.sidebar.stockTransferHistory, icon: History, exact: true },
+    { href: '/inventory/transfer', label: dict.sidebar.stockTransfer, icon: Move },
     { href: '/inventory/orders', label: dict.sidebar.materialRequests, abbreviation: ' (MR)', icon: ListOrdered },
     { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, abbreviation: ' (MRV)', icon: PackageCheck },
     { href: '/inventory/issue', label: dict.sidebar.issueMaterials, abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
@@ -60,7 +59,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu key={dict.sidebar.dashboard}>
+        <SidebarMenu key={locale}>
           {menuItems.map((item) => (
              <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton

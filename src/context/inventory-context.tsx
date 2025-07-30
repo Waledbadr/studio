@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from "firebase/firestore";
 import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
+import type { User } from './users-context';
 
 
 export type ItemCategory = string;
@@ -105,7 +106,7 @@ interface InventoryContextType {
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
-  createTransferRequest: (payload: NewStockTransferPayload) => Promise<void>;
+  createTransferRequest: (payload: NewStockTransferPayload, currentUser: User) => Promise<void>;
   approveTransfer: (transferId: string, approverId: string) => Promise<void>;
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
@@ -329,10 +330,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
         const prefix = `MIV-${year}-${month}-`;
 
-        const mivsCollectionRef = collection(db, 'mivs');
-        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
-        const querySnapshot = await getDocs(q);
+        // This query is simpler and less likely to require a composite index
+        const q = query(
+            collection(db, 'mivs'),
+            where('id', '>=', prefix),
+            where('id', '<', prefix + '\uf8ff'),
+            orderBy('id', 'desc'),
+            limit(1)
+        );
 
+        const querySnapshot = await getDocs(q);
+        
         let lastNum = 0;
         if (!querySnapshot.empty) {
             const lastId = querySnapshot.docs[0].id;
@@ -374,8 +382,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 if (currentStock < item.issueQuantity) {
                     throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
                 }
+                 // Update stock
+                const itemRef = doc(db, "inventory", item.id);
+                const stockUpdateKey = `stockByResidence.${residenceId}`;
+                transaction.update(itemRef, { [stockUpdateKey]: increment(-item.issueQuantity) });
             }
             
+            // All reads and stock checks are done, now do all writes
             const transactionTime = Timestamp.now();
             let totalItemsCount = 0;
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
@@ -387,10 +400,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     if (issuedItem.issueQuantity <= 0) continue;
                     totalItemsCount += issuedItem.issueQuantity;
 
-                    const itemRef = doc(db, "inventory", issuedItem.id);
-                    const stockUpdateKey = `stockByResidence.${residenceId}`;
-                    transaction.update(itemRef, { [stockUpdateKey]: increment(-issuedItem.issueQuantity) });
-
+                    // Log transaction
                     const transactionRef = doc(collection(db, "inventoryTransactions"));
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
@@ -407,6 +417,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
             
+            // Write MIV master record
             transaction.set(mivDocRef, { 
                 id: mivId, 
                 date: transactionTime, 
@@ -522,17 +533,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
-    if (!db) {
-        return null;
-    }
+    if (!db) return null;
     try {
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
             where("locationId", "==", locationId),
             where("type", "==", "OUT"),
-            orderBy("date", "desc"),
-            limit(1)
         );
         const querySnapshot = await getDocs(q);
 
@@ -540,31 +547,77 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        return querySnapshot.docs[0].data().date as Timestamp;
+        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
 
+        return transactions[0].date;
     } catch (error) {
         console.error("Error fetching last issue date:", error);
-        // Fail silently to allow the user to proceed without the lifespan check if it fails
         return null;
     }
   };
 
-    const createTransferRequest = async (payload: NewStockTransferPayload) => {
+    const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
         if (!db) throw new Error(firebaseErrorMessage);
+        
+        const { fromResidenceId, toResidenceId, items: itemsToTransfer } = payload;
+        
+        const isInternalTransfer = currentUser.assignedResidences.includes(fromResidenceId) &&
+                                   currentUser.assignedResidences.includes(toResidenceId);
 
-        try {
-            const transferDocRef = doc(collection(db, 'stockTransfers'));
-            const newTransfer: StockTransfer = {
-                ...payload,
-                id: transferDocRef.id,
-                date: Timestamp.now(),
-                status: 'Pending'
-            };
-            await setDoc(transferDocRef, newTransfer);
-            toast({ title: "Success", description: "Transfer request created and pending approval." });
-        } catch (error) {
-            console.error("Failed to create transfer request:", error);
-            throw error;
+        if (isInternalTransfer) {
+            // Direct transfer, no approval needed
+            try {
+                await runTransaction(db, async (transaction) => {
+                    for (const item of itemsToTransfer) {
+                        const itemRef = doc(db, 'inventory', item.id);
+                        const itemDoc = await transaction.get(itemRef);
+                        if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
+                        
+                        const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                        if (currentStock < item.quantity) {
+                            throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                        }
+                        
+                        transaction.update(itemRef, { 
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
+                            [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                        });
+                    }
+                     // Create a completed transfer record
+                    const transferDocRef = doc(collection(db, 'stockTransfers'));
+                    const newTransfer: StockTransfer = {
+                        ...payload,
+                        id: transferDocRef.id,
+                        date: Timestamp.now(),
+                        status: 'Completed',
+                        approvedById: currentUser.id,
+                        approvedAt: Timestamp.now()
+                    };
+                    transaction.set(transferDocRef, newTransfer);
+                });
+                toast({ title: "Success", description: "Internal transfer completed successfully." });
+            } catch (error) {
+                 console.error("Failed to execute direct transfer:", error);
+                 toast({ title: "Error", description: `Transfer failed: ${error}`, variant: "destructive" });
+                 throw error;
+            }
+        } else {
+            // External transfer, requires approval
+            try {
+                const transferDocRef = doc(collection(db, 'stockTransfers'));
+                const newTransfer: StockTransfer = {
+                    ...payload,
+                    id: transferDocRef.id,
+                    date: Timestamp.now(),
+                    status: 'Pending'
+                };
+                await setDoc(transferDocRef, newTransfer);
+                toast({ title: "Success", description: "Transfer request created and pending approval." });
+            } catch (error) {
+                console.error("Failed to create transfer request:", error);
+                throw error;
+            }
         }
     };
 
