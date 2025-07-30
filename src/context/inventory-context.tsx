@@ -296,6 +296,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
        toast({ title: "Error", description: "Failed to add item.", variant: "destructive" });
        console.error("Error adding item:", error);
+       return;
     }
   };
 
