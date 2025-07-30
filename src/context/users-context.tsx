@@ -53,10 +53,12 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     unsubscribeRef.current = onSnapshot(usersCollection, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
       setUsers(usersData);
-      if (usersData.length > 0) {
-        if (!currentUser) {
-           setCurrentUser(usersData[0]);
-        }
+      
+      const storedUserId = localStorage.getItem('currentUser');
+      const activeUser = usersData.find(u => u.id === storedUserId) || usersData[0];
+
+      if (usersData.length > 0 && (!currentUser || !usersData.find(u => u.id === currentUser.id))) {
+           setCurrentUser(activeUser);
       }
       setLoading(false);
     }, (error) => {
@@ -116,6 +118,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const switchUser = (user: User) => {
     setCurrentUser(user);
+    localStorage.setItem('currentUser', user.id);
     toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
   };
   

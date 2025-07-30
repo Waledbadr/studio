@@ -8,6 +8,7 @@ import { UsersProvider } from '@/context/users-context';
 import { OrdersProvider } from '@/context/orders-context';
 import { MaintenanceProvider } from '@/context/maintenance-context';
 import { LanguageProvider } from '@/context/language-context';
+import { NotificationsProvider } from '@/context/notifications-context';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -32,15 +33,17 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <LanguageProvider>
           <ResidencesProvider>
-            <InventoryProvider>
-              <UsersProvider>
-                <OrdersProvider>
-                  <MaintenanceProvider>
-                    <AppLayout>{children}</AppLayout>
-                  </MaintenanceProvider>
-                </OrdersProvider>
-              </UsersProvider>
-            </InventoryProvider>
+            <UsersProvider>
+              <NotificationsProvider>
+                <InventoryProvider>
+                  <OrdersProvider>
+                    <MaintenanceProvider>
+                      <AppLayout>{children}</AppLayout>
+                    </MaintenanceProvider>
+                  </OrdersProvider>
+                </InventoryProvider>
+              </NotificationsProvider>
+            </UsersProvider>
           </ResidencesProvider>
         </LanguageProvider>
         <Toaster />

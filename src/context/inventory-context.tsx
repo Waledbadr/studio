@@ -8,6 +8,8 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, w
 import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
 import type { User } from './users-context';
+import { useResidences } from './residences-context';
+import { useNotifications } from './notifications-context';
 
 
 export type ItemCategory = string;
@@ -132,6 +134,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const categoriesUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const transfersUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
+  const { residences } = useResidences();
+  const { addNotification } = useNotifications();
+
 
   const loadInventory = useCallback(() => {
      if (isLoaded.current) return;
@@ -540,6 +545,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             where("itemId", "==", itemId),
             where("locationId", "==", locationId),
             where("type", "==", "OUT"),
+            orderBy("date", "desc"),
+            limit(1)
         );
         const querySnapshot = await getDocs(q);
 
@@ -547,10 +554,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+        return querySnapshot.docs[0].data().date as Timestamp;
 
-        return transactions[0].date;
     } catch (error) {
         console.error("Error fetching last issue date:", error);
         return null;
@@ -574,14 +579,22 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         const itemDoc = await transaction.get(itemRef);
                         if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
                         
-                        const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
-                        if (currentStock < item.quantity) {
-                            throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                        const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                        if (currentFromStock < item.quantity) {
+                            throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
+                        }
+
+                        // Ensure 'to' residence has a stock entry before incrementing
+                        const toStockUpdate = {
+                             [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                        };
+                         if(!itemDoc.data().stockByResidence?.[toResidenceId]) {
+                            toStockUpdate[`stockByResidence.${toResidenceId}`] = item.quantity;
                         }
                         
                         transaction.update(itemRef, { 
                             [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
-                            [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                            ...toStockUpdate
                         });
                     }
                      // Create a completed transfer record
@@ -613,6 +626,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     status: 'Pending'
                 };
                 await setDoc(transferDocRef, newTransfer);
+
+                // Create notification for the destination residence manager
+                const toResidence = residences.find(r => r.id === toResidenceId);
+                if (toResidence && toResidence.managerId && addNotification) {
+                     await addNotification({
+                        userId: toResidence.managerId,
+                        title: 'New Stock Transfer Request',
+                        message: `You have a new transfer request from ${payload.fromResidenceName}.`,
+                        type: 'transfer_request',
+                        href: `/inventory/transfer`,
+                        referenceId: newTransfer.id,
+                    });
+                }
+
                 toast({ title: "Success", description: "Transfer request created and pending approval." });
             } catch (error) {
                 console.error("Failed to create transfer request:", error);

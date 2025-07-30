@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Globe, UserCircle, Sun, Moon } from 'lucide-react';
+import { Bell, Globe, UserCircle, Sun, Moon, Check } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -11,13 +11,19 @@ import { useUsers } from '@/context/users-context';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/language-context';
+import { useNotifications } from '@/context/notifications-context';
+import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow } from 'date-fns';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { dict, toggleLanguage } = useLanguage();
   const { currentUser, users, switchUser } = useUsers();
+  const { notifications, markAsRead, markAllAsRead } = useNotifications();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,6 +46,11 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     router.push('/users');
   };
 
+  const handleNotificationClick = (notificationId: string, href: string) => {
+    markAsRead(notificationId);
+    router.push(href);
+  };
+
   return (
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
@@ -54,10 +65,32 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <Globe className="h-5 w-5" />
         <span className="sr-only">{dict.changeLanguage}</span>
       </Button>
-      <Button variant="ghost" size="icon" className="rounded-full">
-        <Bell className="h-5 w-5" />
-        <span className="sr-only">{dict.notifications}</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+           <Button variant="ghost" size="icon" className="rounded-full relative">
+                <Bell className="h-5 w-5" />
+                {isMounted && unreadCount > 0 && (
+                    <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 justify-center rounded-full p-0">{unreadCount}</Badge>
+                )}
+                <span className="sr-only">{dict.notifications}</span>
+            </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel className="flex justify-between items-center">
+                <span>{dict.notifications}</span>
+                {unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>Mark all as read</Button>}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notifications.length > 0 ? notifications.slice(0, 5).map(notification => (
+                <DropdownMenuItem key={notification.id} onSelect={() => handleNotificationClick(notification.id, notification.href)} className={cn("flex flex-col items-start gap-1 whitespace-normal", !notification.isRead && "bg-accent")}>
+                    <p className="font-semibold">{notification.title}</p>
+                    <p className="text-xs text-muted-foreground">{notification.message}</p>
+                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}</p>
+                </DropdownMenuItem>
+            )) : <p className="p-2 text-sm text-muted-foreground text-center">No notifications</p>}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-9 w-9 rounded-full">

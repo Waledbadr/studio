@@ -8,6 +8,8 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, up
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
+import { useNotifications } from './notifications-context';
+
 
 export interface OrderItem extends InventoryItem {
   quantity: number;
@@ -58,6 +60,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
+  const { addNotification } = useNotifications();
+
 
   const loadOrders = useCallback(() => {
     if (isLoaded.current) return;
@@ -175,11 +179,30 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     try {
         const orderDocRef = doc(db, "orders", id);
         const updatePayload: {status: OrderStatus, approvedById?: string} = { status };
+        
+        let requestedById: string | null = null;
         if (status === 'Approved' && approverId) {
+            const orderDoc = await getDoc(orderDocRef);
+            if (orderDoc.exists()) {
+                requestedById = orderDoc.data().requestedById;
+            }
             updatePayload.approvedById = approverId;
         }
 
         await updateDoc(orderDocRef, updatePayload);
+
+        // Send notification if the order was approved
+        if (status === 'Approved' && requestedById && addNotification) {
+            await addNotification({
+                userId: requestedById,
+                title: 'Material Request Approved',
+                message: `Your request #${id} has been approved.`,
+                type: 'order_approved',
+                href: `/inventory/orders/${id}`,
+                referenceId: id,
+            });
+        }
+        
         toast({ title: "Success", description: `Order status changed to ${status}.` });
     } catch (error) {
         console.error("Error updating order status:", error);
