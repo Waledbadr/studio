@@ -46,19 +46,27 @@ function ItemMovementContent() {
         return getStockForResidence(item, residenceId);
     }, [item, residenceId, getStockForResidence, items]);
 
+    const getRelatedResidenceName = (relatedId: string | undefined) => {
+        if (!relatedId) return '';
+        return residences.find(r => r.id === relatedId)?.name || 'Unknown';
+    }
+
 
     const transactionsWithBalance = useMemo(() => {
         if (transactionsLoading || !item || !residenceId) return [];
 
+        const isTransfer = (tx: InventoryTransaction) => tx.type === 'TRANSFER_IN' || tx.type === 'TRANSFER_OUT';
+
         const netMovement = transactions.reduce((acc, tx) => {
-            return acc + (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+            const quantity = (tx.type === 'IN' || tx.type === 'TRANSFER_IN') ? tx.quantity : -tx.quantity;
+            return acc + quantity;
         }, 0);
 
         const startingBalance = currentStock - netMovement;
         
         let runningBalance = startingBalance;
         return transactions.map(tx => {
-            runningBalance += (tx.type === 'IN' ? tx.quantity : -tx.quantity);
+            runningBalance += (tx.type === 'IN' || tx.type === 'TRANSFER_IN' ? tx.quantity : -tx.quantity);
             return { ...tx, balance: runningBalance };
         }).sort((a,b) => b.date.toMillis() - a.date.toMillis()); // Sort back to descending for display
 
@@ -115,6 +123,36 @@ function ItemMovementContent() {
         );
     }
 
+    const renderTransactionDetails = (tx: InventoryTransaction) => {
+        switch (tx.type) {
+            case 'IN':
+                return `Received via MRV: ${tx.referenceDocId}`;
+            case 'OUT':
+                return `Issued to: ${tx.locationName || 'N/A'}`;
+            case 'TRANSFER_IN':
+                return `Transfer from: ${getRelatedResidenceName(tx.relatedResidenceId)}`;
+            case 'TRANSFER_OUT':
+                return `Transfer to: ${getRelatedResidenceName(tx.relatedResidenceId)}`;
+            default:
+                return tx.referenceDocId;
+        }
+    }
+    
+     const renderTransactionType = (tx: InventoryTransaction) => {
+        switch (tx.type) {
+            case 'IN':
+                return <Badge variant='secondary'>Received</Badge>;
+            case 'OUT':
+                return <Badge variant='destructive'>Issued</Badge>;
+            case 'TRANSFER_IN':
+                return <Badge className="bg-blue-500 hover:bg-blue-500/80">Transfer In</Badge>;
+            case 'TRANSFER_OUT':
+                return <Badge className="bg-orange-500 hover:bg-orange-500/80">Transfer Out</Badge>;
+            default:
+                return <Badge>{tx.type}</Badge>;
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -141,7 +179,7 @@ function ItemMovementContent() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Date</TableHead>
-                                <TableHead>Reference</TableHead>
+                                <TableHead>Details</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead className="text-center">Quantity</TableHead>
                                 <TableHead className="text-right">Balance</TableHead>
@@ -153,14 +191,12 @@ function ItemMovementContent() {
                                     {transactionsWithBalance.length > 0 ? transactionsWithBalance.map((tx) => (
                                         <TableRow key={tx.id}>
                                             <TableCell>{format(tx.date.toDate(), 'PPP p')}</TableCell>
-                                            <TableCell className="font-medium">{tx.referenceDocId}</TableCell>
+                                            <TableCell className="font-medium">{renderTransactionDetails(tx)}</TableCell>
                                             <TableCell>
-                                                <Badge variant={tx.type === 'IN' ? 'secondary' : 'destructive'}>
-                                                    {tx.type === 'IN' ? 'Received' : 'Issued'}
-                                                </Badge>
+                                                {renderTransactionType(tx)}
                                             </TableCell>
-                                            <TableCell className={`text-center font-semibold ${tx.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
-                                             {`${tx.type === 'IN' ? '+' : '-'}${tx.quantity}`}
+                                            <TableCell className={`text-center font-semibold ${tx.type === 'IN' || tx.type === 'TRANSFER_IN' ? 'text-green-600' : 'text-red-600'}`}>
+                                             {`${tx.type === 'IN' || tx.type === 'TRANSFER_IN' ? '+' : '-'}${tx.quantity}`}
                                             </TableCell>
                                             <TableCell className="text-right font-bold">{tx.balance}</TableCell>
                                         </TableRow>

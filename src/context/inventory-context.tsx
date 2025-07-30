@@ -30,11 +30,12 @@ export interface InventoryTransaction {
     itemNameAr: string;
     residenceId: string;
     date: Timestamp;
-    type: 'IN' | 'OUT';
+    type: 'IN' | 'OUT' | 'TRANSFER_IN' | 'TRANSFER_OUT';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
     locationId?: string;
     locationName?: string;
+    relatedResidenceId?: string; // For transfers
 }
 
 export interface LocationWithItems<T> {
@@ -85,6 +86,7 @@ interface InventoryContextType {
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
+  transferStock: (fromResidenceId: string, toResidenceId: string, items: {id: string, quantity: number, nameEn: string, nameAr: string}[]) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
@@ -294,7 +296,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-    const generateNewMivId = async (db: Firestore): Promise<string> => {
+    const generateNewMivId = async (): Promise<string> => {
+        if (!db) throw new Error("Firebase not initialized");
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -330,7 +333,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-        const mivId = await generateNewMivId(db);
+        const mivId = await generateNewMivId();
         
         await runTransaction(db, async (transaction) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
@@ -360,6 +363,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             let totalItemsCount = 0;
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
             
+            const mivDocRef = doc(db, 'mivs', mivId);
+            
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
@@ -387,7 +392,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
             
-            const mivDocRef = doc(db, 'mivs', mivId);
             transaction.set(mivDocRef, { 
                 id: mivId, 
                 date: transactionTime, 
@@ -512,8 +516,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             where("itemId", "==", itemId),
             where("locationId", "==", locationId),
             where("type", "==", "OUT"),
-            orderBy("date", "desc"),
-            limit(1)
         );
         const querySnapshot = await getDocs(q);
 
@@ -521,8 +523,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        const lastTransaction = querySnapshot.docs[0].data() as InventoryTransaction;
-        return lastTransaction?.date || null;
+        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+
+        return transactions[0]?.date || null;
 
     } catch (error) {
         console.error("Error fetching last issue date:", error);
@@ -531,10 +535,81 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const transferStock = async (fromResidenceId: string, toResidenceId: string, itemsToTransfer: {id: string, quantity: number, nameEn: string, nameAr: string}[]) => {
+     if (!db) {
+        throw new Error(firebaseErrorMessage);
+    }
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            // Read all items first to check stock
+            for (const item of itemsToTransfer) {
+                const itemRef = doc(db, 'inventory', item.id);
+                const itemDoc = await transaction.get(itemRef);
+                if (!itemDoc.exists()) {
+                    throw new Error(`Item ${item.nameEn} not found.`);
+                }
+                const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                if (currentStock < item.quantity) {
+                    throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
+                }
+            }
+
+            // All checks passed, now perform writes
+            const transactionTime = Timestamp.now();
+            const transferDocRef = doc(collection(db, "inventoryTransactions")); // Unique ID for this transfer operation
+
+            for (const item of itemsToTransfer) {
+                const itemRef = doc(db, 'inventory', item.id);
+
+                // Decrement from source
+                transaction.update(itemRef, {
+                    [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
+                });
+
+                // Increment at destination
+                transaction.update(itemRef, {
+                    [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                });
+
+                // Log transfer out
+                const outLogRef = doc(collection(db, "inventoryTransactions"));
+                transaction.set(outLogRef, {
+                    itemId: item.id,
+                    itemNameEn: item.nameEn,
+                    itemNameAr: item.nameAr,
+                    residenceId: fromResidenceId,
+                    date: transactionTime,
+                    type: 'TRANSFER_OUT',
+                    quantity: item.quantity,
+                    referenceDocId: transferDocRef.id,
+                    relatedResidenceId: toResidenceId,
+                });
+
+                // Log transfer in
+                const inLogRef = doc(collection(db, "inventoryTransactions"));
+                transaction.set(inLogRef, {
+                    itemId: item.id,
+                    itemNameEn: item.nameEn,
+                    itemNameAr: item.nameAr,
+                    residenceId: toResidenceId,
+                    date: transactionTime,
+                    type: 'TRANSFER_IN',
+                    quantity: item.quantity,
+                    referenceDocId: transferDocRef.id,
+                    relatedResidenceId: fromResidenceId,
+                });
+            }
+        });
+    } catch (error) {
+        console.error("Stock transfer failed:", error);
+        throw error;
+    }
+  }
 
 
   return (
-    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions }}>
+    <InventoryContext.Provider value={{ items, categories, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, transferStock }}>
       {children}
     </InventoryContext.Provider>
   );
