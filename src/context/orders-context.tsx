@@ -47,7 +47,7 @@ interface OrdersContextType {
   updateOrderStatus: (id: string, status: OrderStatus, approverId?: string) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
-  receiveOrderItems: (orderId: string, newlyReceivedItems: Omit<OrderItem, 'quantity'>[], forceComplete: boolean) => Promise<void>;
+  receiveOrderItems: (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -129,6 +129,10 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     if (!db) {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
       return null;
+    }
+     if (!orderData) {
+        toast({ title: "Error", description: "Cannot create order with empty data.", variant: "destructive" });
+        return null;
     }
     setLoading(true);
     try {

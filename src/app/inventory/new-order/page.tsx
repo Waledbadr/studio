@@ -49,10 +49,10 @@ export default function NewOrderPage() {
         .filter((r): r is NonNullable<typeof r> => r !== undefined) || [];
 
     useEffect(() => {
-        if (userResidences.length === 1) {
+        if (userResidences.length === 1 && !selectedResidence) {
             setSelectedResidence(userResidences[0]);
         }
-    }, [currentUser, residences, userResidences]);
+    }, [currentUser, residences, userResidences, selectedResidence]);
 
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
@@ -178,7 +178,7 @@ export default function NewOrderPage() {
                     {userResidences.length > 1 ? (
                         <div className="flex items-center gap-4 mt-2">
                              <Label htmlFor="residence-select" className="text-muted-foreground">Request for residence:</Label>
-                             <Select onValueChange={handleResidenceChange} value={selectedResidence?.id}>
+                             <Select onValueChange={handleResidenceChange} value={selectedResidence?.id || ''}>
                                 <SelectTrigger id="residence-select" className="w-[250px]">
                                     <SelectValue placeholder="Select a residence" />
                                 </SelectTrigger>
