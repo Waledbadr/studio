@@ -34,6 +34,7 @@ export default function ReceiveOrderPage() {
             if (typeof id !== 'string') return;
             setLoading(true);
             const fetchedOrder = await getOrderById(id);
+            
             if (fetchedOrder) {
                 const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
                 if (!receivableStatuses.includes(fetchedOrder.status)) {
@@ -84,6 +85,17 @@ export default function ReceiveOrderPage() {
     const handleConfirmReceipt = async () => {
         if (!order || receivedItems.length === 0) {
             toast({ title: "Error", description: "No items to receive.", variant: "destructive" });
+            return;
+        }
+
+        const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
+        if (!receivableStatuses.includes(order.status)) {
+             toast({
+                title: "Invalid Status",
+                description: `This request has a status of "${order.status}" and can no longer be received.`,
+                variant: "destructive"
+            });
+            router.push('/inventory/receive');
             return;
         }
         

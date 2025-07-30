@@ -293,31 +293,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }
   
-    const generateNewMivId = async (): Promise<string> => {
-        if (!db) throw new Error("Firebase not initialized");
+  const generateNewMivId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
 
-        const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const prefix = `MIV-${year}-${month}-`;
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const prefix = `MIV-${year}-${month}-`;
 
-        const mivsCollectionRef = collection(db, 'mivs');
-        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
-        
-        const querySnapshot = await getDocs(q);
-        
-        let lastNum = 0;
-        if (!querySnapshot.empty) {
-            const lastId = querySnapshot.docs[0].id;
-            const numPart = parseInt(lastId.substring(prefix.length), 10);
-            if (!isNaN(numPart)) {
-                lastNum = numPart;
-            }
+    const mivsCollectionRef = collection(db, 'mivs');
+    const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'), orderBy('id', 'desc'), limit(1));
+    
+    const querySnapshot = await getDocs(q);
+    
+    let lastNum = 0;
+    if (!querySnapshot.empty) {
+        const lastId = querySnapshot.docs[0].id;
+        const numPart = parseInt(lastId.substring(prefix.length), 10);
+        if (!isNaN(numPart)) {
+            lastNum = numPart;
         }
+    }
 
-        const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
-        return `${prefix}${nextRequestNumber}`;
-    };
+    const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
+    return `${prefix}${nextRequestNumber}`;
+  };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
@@ -492,22 +492,30 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) {
         return null;
     }
-    const q = query(
-        collection(db, "inventoryTransactions"),
-        where("itemId", "==", itemId),
-        where("locationId", "==", locationId),
-        where("type", "==", "OUT"),
-        orderBy("date", "desc"),
-        limit(1)
-    );
-    const querySnapshot = await getDocs(q);
+    try {
+        const q = query(
+            collection(db, "inventoryTransactions"),
+            where("itemId", "==", itemId),
+            where("locationId", "==", locationId),
+            where("type", "==", "OUT")
+        );
+        const querySnapshot = await getDocs(q);
 
-    if (querySnapshot.empty) {
+        if (querySnapshot.empty) {
+            return null;
+        }
+        
+        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+        // Sort client-side to find the most recent one
+        transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+        
+        const lastTransaction = transactions[0];
+        return lastTransaction?.date || null;
+    } catch (error) {
+        console.error("Error fetching last issue date:", error);
+        // Fail silently to allow the user to proceed without the lifespan check
         return null;
     }
-    
-    const lastTransaction = querySnapshot.docs[0].data() as InventoryTransaction;
-    return lastTransaction?.date || null;
   };
 
 
