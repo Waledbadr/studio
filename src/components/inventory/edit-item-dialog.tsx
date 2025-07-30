@@ -78,7 +78,7 @@ export function EditItemDialog({
             return;
         }
         
-        let totalLifespanDays: number | undefined = undefined;
+        let totalLifespanDays = 0;
         if (lifespanValue) {
             const value = parseInt(lifespanValue, 10);
             if (isNaN(value)) {
