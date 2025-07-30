@@ -12,19 +12,32 @@ import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLoc
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 
 interface IssuedItem extends InventoryItem {
     issueQuantity: number;
 }
 
-type VoucherLocation = IVoucherLocation<IssuedItem>;
+interface VoucherLocation {
+    locationId: string;
+    locationName: string;
+    isFacility: boolean;
+    buildingId?: string;
+    buildingName?: string;
+    floorId?: string;
+    floorName?: string;
+    roomId?: string;
+    roomName?: string;
+    facilityId?: string;
+    items: IssuedItem[];
+}
 
 
 export default function IssueMaterialPage() {
@@ -37,9 +50,11 @@ export default function IssueMaterialPage() {
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
+    const [selectedFacilityId, setSelectedFacilityId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
@@ -53,7 +68,12 @@ export default function IssueMaterialPage() {
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
     
-    const isLocationSelected = useMemo(() => selectedBuildingId && selectedFloorId && selectedRoomId, [selectedBuildingId, selectedFloorId, selectedRoomId]);
+    const isLocationSelected = useMemo(() => {
+        if (locationType === 'unit') {
+            return !!(selectedBuildingId && selectedFloorId && selectedRoomId);
+        }
+        return !!selectedFacilityId;
+    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
@@ -64,8 +84,10 @@ export default function IssueMaterialPage() {
     useEffect(() => {
         setVoucherLocations([]);
         setSelectedBuildingId('');
+        setSelectedFacilityId('');
+        setLocationType('unit');
     }, [selectedComplexId]);
-
+    
     useEffect(() => {
         setSelectedFloorId('');
     }, [selectedBuildingId]);
@@ -75,14 +97,8 @@ export default function IssueMaterialPage() {
     }, [selectedFloorId]);
     
     const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
-        if (!isLocationSelected || !selectedComplex || !selectedBuilding || !selectedFloor) {
-            toast({ title: "No Location Selected", description: "Please select a building, floor, and room first.", variant: "destructive"});
-            return;
-        }
-        
-        const selectedRoom = selectedFloor.rooms.find(r => r.id === selectedRoomId);
-        if(!selectedRoom) {
-            toast({ title: "Room not found", description: "An error occurred with the selected room.", variant: "destructive"});
+        if (!isLocationSelected || !selectedComplex) {
+            toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
             return;
         }
 
@@ -92,7 +108,37 @@ export default function IssueMaterialPage() {
             return;
         }
 
-        const locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+        let locationId: string, locationName: string, isFacility: boolean;
+        let newLocationDetails: Partial<VoucherLocation> = {};
+
+        if (locationType === 'unit') {
+            const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
+            if (!selectedBuilding || !selectedFloor || !selectedRoom) {
+                toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                return;
+            }
+            locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+            locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+            isFacility = false;
+            newLocationDetails = {
+                buildingId: selectedBuildingId,
+                buildingName: selectedBuilding.name,
+                floorId: selectedFloorId,
+                floorName: selectedFloor.name,
+                roomId: selectedRoomId,
+                roomName: selectedRoom.name,
+            };
+        } else {
+            const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
+             if (!selectedFacility) {
+                toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+                return;
+            }
+            locationId = selectedFacilityId;
+            locationName = selectedFacility.name;
+            isFacility = true;
+            newLocationDetails = { facilityId: selectedFacilityId };
+        }
         
         // Lifespan check
         if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
@@ -132,13 +178,10 @@ export default function IssueMaterialPage() {
                 return newLocations;
             } else {
                 const newLocation: VoucherLocation = {
+                    ...newLocationDetails,
                     locationId,
-                    buildingId: selectedBuildingId,
-                    buildingName: selectedBuilding.name,
-                    floorId: selectedFloorId,
-                    floorName: selectedFloor.name,
-                    roomId: selectedRoomId,
-                    roomName: selectedRoom.name,
+                    locationName,
+                    isFacility,
                     items: [{ ...itemToAdd, issueQuantity: 1 }]
                 };
                 return [...prevLocations, newLocation];
@@ -186,21 +229,14 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-             const itemsToIssueForAPI = voucherLocations.flatMap(loc => 
-                loc.items.map(item => ({
-                    ...item,
-                    issueQuantity: item.issueQuantity,
-                    locationId: loc.locationId,
-                    locationName: `${loc.buildingName} -> ${loc.floorName} -> ${loc.roomName}`
-                }))
-            );
-
             await issueItemsFromStock(selectedComplexId, voucherLocations);
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');
             setSelectedFloorId('');
             setSelectedRoomId('');
+            setSelectedFacilityId('');
+            setLocationType('unit');
             router.push('/inventory/issue-history');
         } catch (error) {
             console.error("Failed to submit voucher:", error);
@@ -258,25 +294,49 @@ export default function IssueMaterialPage() {
                 <CardContent>
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-1 space-y-4">
-                            <h3 className="font-semibold">Select Location</h3>
-                             <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                <SelectContent>
-                                    {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                <SelectContent>
-                                    {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
-                                <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
-                                <SelectContent>
-                                    {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <h3 className="font-semibold">Select Location Type</h3>
+                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="unit" id="r_unit" />
+                                    <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="facility" id="r_facility" />
+                                    <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
+                                </div>
+                            </RadioGroup>
+                            
+                            {locationType === 'unit' ? (
+                                <div className="space-y-2 pt-2">
+                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ) : (
+                                 <div className="space-y-2 pt-2">
+                                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                 </div>
+                            )}
                         </div>
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>
@@ -319,7 +379,7 @@ export default function IssueMaterialPage() {
                             {voucherLocations.map(location => (
                                 <AccordionItem key={location.locationId} value={location.locationId}>
                                     <AccordionTrigger className="font-semibold text-lg">
-                                        {location.buildingName} &rarr; {location.floorName} &rarr; {location.roomName}
+                                        {location.locationName}
                                     </AccordionTrigger>
                                     <AccordionContent>
                                         <Table>

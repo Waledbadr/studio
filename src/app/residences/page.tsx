@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,16 +28,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room } from '@/context/residences-context';
+import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room, type Facility } from '@/context/residences-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/context/language-context';
 import { AddMultipleRoomsDialog } from '@/components/residences';
+import { Separator } from '@/components/ui/separator';
 
 export default function ResidencesPage() {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const { dict } = useLanguage();
@@ -49,20 +50,18 @@ export default function ResidencesPage() {
     loadUsersContext();
   }, [loadResidences, loadUsersContext]);
 
-  // State for Add Dialogs
+  // State for Dialogs
   const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
   const [newComplexName, setNewComplexName] = useState('');
   const [newComplexCity, setNewComplexCity] = useState('');
   const [newComplexManagerId, setNewComplexManagerId] = useState('');
 
-  // State for Edit Dialog
   const [isEditComplexDialogOpen, setIsEditComplexDialogOpen] = useState(false);
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
 
   const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
   const [newBuildingName, setNewBuildingName] = useState('');
-  const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
-
+  
   const [isAddFloorDialogOpen, setIsAddFloorDialogOpen] = useState(false);
   const [newFloorName, setNewFloorName] = useState('');
   const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{ complexId: string, buildingId: string } | null>(null);
@@ -71,9 +70,14 @@ export default function ResidencesPage() {
   const [newRoomName, setNewRoomName] = useState('');
   const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
 
-  // State for Add Multiple Rooms Dialog
   const [isAddMultipleRoomsDialogOpen, setIsAddMultipleRoomsDialogOpen] = useState(false);
   const [multipleRoomsFloorInfo, setMultipleRoomsFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
+  
+  const [isAddFacilityDialogOpen, setIsAddFacilityDialogOpen] = useState(false);
+  const [newFacilityName, setNewFacilityName] = useState('');
+  const [newFacilityType, setNewFacilityType] = useState('');
+  
+  const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
 
 
   const groupedByCity = useMemo(() => {
@@ -87,11 +91,15 @@ export default function ResidencesPage() {
     }, {} as Record<string, Complex[]>);
   }, [residences]);
 
-  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms', id: string, parentId?: string, grandParentId?: string) => {
+  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms' | 'facility', id: string, parentId?: string, grandParentId?: string) => {
+    setSelectedComplexId(id);
     if (type === 'building') {
-      setSelectedComplexId(id);
       setNewBuildingName('');
       setIsAddBuildingDialogOpen(true);
+    } else if (type === 'facility') {
+      setNewFacilityName('');
+      setNewFacilityType('');
+      setIsAddFacilityDialogOpen(true);
     } else if (type === 'floor' && parentId) {
       setSelectedBuildingInfo({ complexId: parentId, buildingId: id });
       setNewFloorName('');
@@ -146,6 +154,16 @@ export default function ResidencesPage() {
     addBuilding(selectedComplexId, newBuildingName);
     setNewBuildingName('');
     setIsAddBuildingDialogOpen(false);
+    setSelectedComplexId(null);
+  };
+
+  const handleAddFacility = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFacilityName.trim() || !newFacilityType.trim() || !selectedComplexId) return;
+    addFacility(selectedComplexId, newFacilityName, newFacilityType);
+    setNewFacilityName('');
+    setNewFacilityType('');
+    setIsAddFacilityDialogOpen(false);
     setSelectedComplexId(null);
   };
 
@@ -264,6 +282,9 @@ export default function ResidencesPage() {
                     </div>
                      {isAdmin && (
                         <div className="flex gap-2">
+                             <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('facility', complex.id)}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Facility
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => handleOpenAddDialog('building', complex.id)}>
                                 <PlusCircle className="mr-2 h-4 w-4" /> Add Building
                             </Button>
@@ -392,6 +413,40 @@ export default function ResidencesPage() {
                       </AccordionItem>
                     ))}
                   </Accordion>
+                  
+                  {complex.facilities && complex.facilities.length > 0 && (
+                      <>
+                        <Separator className="my-4" />
+                        <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> General Facilities</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 px-4">
+                           {complex.facilities.map((facility: Facility) => (
+                                <div key={facility.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm">
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{facility.name}</span>
+                                        <span className="text-xs text-muted-foreground">{facility.type}</span>
+                                    </div>
+                                    {isAdmin && (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>This will delete facility "{facility.name}".</AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => deleteFacility(complex.id, facility.id)}>Delete</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                      </>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -422,6 +477,33 @@ export default function ResidencesPage() {
         </DialogContent>
       </Dialog>
       
+       {/* Add Facility Dialog */}
+      <Dialog open={isAddFacilityDialogOpen} onOpenChange={setIsAddFacilityDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleAddFacility}>
+            <DialogHeader>
+              <DialogTitle>Add New Facility</DialogTitle>
+              <DialogDescription>
+                Add a general facility like a main store, office, or mosque to the complex.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="facility-name" className="text-right">Name</Label>
+                <Input id="facility-name" placeholder="e.g., Main Warehouse" className="col-span-3" value={newFacilityName} onChange={(e) => setNewFacilityName(e.target.value)} />
+              </div>
+               <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="facility-type" className="text-right">Type</Label>
+                <Input id="facility-type" placeholder="e.g., Warehouse, Office" className="col-span-3" value={newFacilityType} onChange={(e) => setNewFacilityType(e.target.value)} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Save Facility</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Floor Dialog */}
       <Dialog open={isAddFloorDialogOpen} onOpenChange={setIsAddFloorDialogOpen}>
         <DialogContent>

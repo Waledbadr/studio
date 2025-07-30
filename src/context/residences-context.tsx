@@ -25,12 +25,19 @@ export interface Building {
   floors: Floor[];
 }
 
+export interface Facility {
+  id: string;
+  name: string;
+  type: string; // e.g., Warehouse, Office, Clinic
+}
+
 export interface Complex {
   id: string;
   name: string;
   city: string;
   managerId: string;
   buildings: Building[];
+  facilities?: Facility[];
 }
 
 export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
@@ -50,10 +57,12 @@ interface ResidencesContextType {
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
   addMultipleRooms: (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => Promise<void>;
+  addFacility: (complexId: string, name: string, type: string) => Promise<void>;
   deleteComplex: (id: string) => Promise<void>;
   deleteBuilding: (complexId: string, buildingId: string) => Promise<void>;
   deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
   deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
+  deleteFacility: (complexId: string, facilityId: string) => Promise<void>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -113,7 +122,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     const docRef = doc(collection(db, "residences"));
-    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [] });
+    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [] });
     toast({ title: "Success", description: "New residential complex added." });
   };
   
@@ -310,6 +319,40 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const addFacility = async (complexId: string, name: string, type: string) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const trimmedName = name.trim();
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+        
+        const complexData = complexDoc.data() as Complex;
+        const facilities = complexData.facilities || [];
+
+        if (facilities.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+            toast({ title: "Error", description: "A facility with this name already exists in this complex.", variant: "destructive" });
+            return;
+        }
+
+        const newFacility: Facility = { id: `facility-${Date.now()}`, name: trimmedName, type };
+        const updatedFacilities = [...facilities, newFacility];
+        
+        await updateDoc(complexDocRef, { facilities: updatedFacilities });
+        toast({ title: "Success", description: "New facility added to the complex." });
+
+    } catch (error) {
+        console.error("Error adding facility:", error);
+        toast({ title: "Error", description: "Failed to add facility.", variant: "destructive" });
+    }
+  };
+
   const deleteComplex = async (id: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
@@ -378,6 +421,22 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(complexDocRef, { buildings: updatedBuildings });
     toast({ title: "Success", description: "Room deleted successfully." });
   };
+
+  const deleteFacility = async (complexId: string, facilityId: string) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    const complexDocRef = doc(db, "residences", complexId);
+    const complexDoc = await getDoc(complexDocRef);
+     if (!complexDoc.exists()) {
+        throw new Error("Complex not found");
+    }
+    const complexData = complexDoc.data() as Complex;
+    const updatedFacilities = (complexData.facilities || []).filter(f => f.id !== facilityId);
+    await updateDoc(complexDocRef, { facilities: updatedFacilities });
+    toast({ title: "Success", description: "Facility deleted successfully." });
+  };
   
   const buildings = useMemo(() => residences.flatMap(c => c.buildings), [residences]);
   const floors = useMemo(() => buildings.flatMap(b => b.floors), [buildings]);
@@ -385,7 +444,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, deleteComplex, deleteBuilding, deleteFloor, deleteRoom }}>
+    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, addFacility, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, deleteFacility }}>
       {children}
     </ResidencesContext.Provider>
   );
