@@ -38,12 +38,15 @@ export interface InventoryTransaction {
 
 export interface LocationWithItems<T> {
     locationId: string;
-    buildingId: string;
-    buildingName: string;
-    floorId: string;
-    floorName: string;
-    roomId: string;
-    roomName: string;
+    locationName: string;
+    isFacility: boolean;
+    buildingId?: string;
+    buildingName?: string;
+    floorId?: string;
+    floorName?: string;
+    roomId?: string;
+    roomName?: string;
+    facilityId?: string;
     items: T[];
 }
 
@@ -296,19 +299,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const prefix = `MIV-${year}-${month}-`;
 
         const mivsCollectionRef = collection(db, 'mivs');
-        const mivsQuery = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', `MIV-${year}-${(month + 1).toString().padStart(2, '0')}`));
+        const q = query(mivsCollectionRef, where('id', '>=', prefix), where('id', '<', prefix + '\uf8ff'));
         
-        // This query must be run within the transaction to get a consistent count
-        const querySnapshot = await transaction.get(query(mivsCollectionRef, where('id', '>=', prefix)));
+        const querySnapshot = await transaction.get(q);
         
         let maxNum = 0;
         querySnapshot.docs.forEach((docSnap: DocumentSnapshot) => {
             const docId = docSnap.id;
-            if (docId.startsWith(prefix)) {
-                const numPart = parseInt(docId.substring(prefix.length), 10);
-                if (!isNaN(numPart) && numPart > maxNum) {
-                    maxNum = numPart;
-                }
+            const numPart = parseInt(docId.substring(prefix.length), 10);
+            if (!isNaN(numPart) && numPart > maxNum) {
+                maxNum = numPart;
             }
         });
 
@@ -328,11 +328,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             
             // Create MIV document for ID generation
             const mivDocRef = doc(db, 'mivs', mivId);
-            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId: residenceId });
-
+            transaction.set(mivDocRef, { id: mivId, date: transactionTime, residenceId: residenceId, itemCount: voucherLocations.reduce((sum, loc) => sum + loc.items.length, 0) });
 
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
-            const itemRefs: DocumentReference<DocumentData>[] = [];
             
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
             
@@ -342,7 +340,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             );
 
             for (const location of voucherLocations) {
-                const locationName = `${location.buildingName} -> ${location.floorName} -> ${location.roomName}`;
+                let locationName = location.locationName;
+                if (!location.isFacility) {
+                   locationName = `${location.buildingName} -> ${location.floorName} -> ${location.roomName}`;
+                }
+
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
 
@@ -434,28 +436,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return [];
     }
-    const q = query(collection(db, "inventoryTransactions"), where("type", "==", "OUT"));
+    const mivsCollection = collection(db, "mivs");
+    const q = query(mivsCollection, orderBy("date", "desc"));
     const querySnapshot = await getDocs(q);
-    const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
     
-    const groupedByMivId = transactions.reduce((acc, tx) => {
-        const mivId = tx.referenceDocId;
-        if (!acc[mivId]) {
-            acc[mivId] = {
-                id: mivId,
-                date: tx.date,
-                residenceId: tx.residenceId,
-                itemCount: 0
-            };
-        }
-        acc[mivId].itemCount++;
-        return acc;
-    }, {} as Record<string, MIV>);
-
-    const mivList = Object.values(groupedByMivId);
-    mivList.sort((a, b) => b.date.toMillis() - a.date.toMillis());
-    
-    return mivList;
+    return querySnapshot.docs.map(doc => doc.data() as MIV);
   };
   
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
@@ -511,15 +496,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         where("itemId", "==", itemId),
         where("locationId", "==", locationId),
         where("type", "==", "OUT"),
+        orderBy("date", "desc"),
+        // limit(1) // This would require an index
     );
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
         return null;
     }
-
+    
+    // Sort on client to avoid composite index requirement
     const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-    transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    transactions.sort((a,b) => b.date.toMillis() - a.date.toMillis());
 
     return transactions[0].date;
   };

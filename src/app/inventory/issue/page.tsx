@@ -137,7 +137,7 @@ export default function IssueMaterialPage() {
             locationId = selectedFacilityId;
             locationName = selectedFacility.name;
             isFacility = true;
-            newLocationDetails = { facilityId: selectedFacilityId };
+            newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
         }
         
         // Lifespan check
