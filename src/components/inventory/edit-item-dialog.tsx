@@ -13,6 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useResidences } from '@/context/residences-context';
 import { ScrollArea } from '../ui/scroll-area';
 
+type LifespanUnit = 'days' | 'months' | 'years';
+
+
 interface EditItemDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
@@ -30,7 +33,8 @@ export function EditItemDialog({
     const [nameAr, setNameAr] = useState('');
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
-    const [lifespanDays, setLifespanDays] = useState<string | number>('');
+    const [lifespanValue, setLifespanValue] = useState<string>('');
+    const [lifespanUnit, setLifespanUnit] = useState<LifespanUnit>('days');
 
     
     const { toast } = useToast();
@@ -44,7 +48,22 @@ export function EditItemDialog({
             setNameAr(item.nameAr);
             setCategory(item.category);
             setUnit(item.unit);
-            setLifespanDays(item.lifespanDays || '');
+
+            if (item.lifespanDays) {
+                if (item.lifespanDays % 365 === 0) {
+                    setLifespanValue(String(item.lifespanDays / 365));
+                    setLifespanUnit('years');
+                } else if (item.lifespanDays % 30 === 0) {
+                    setLifespanValue(String(item.lifespanDays / 30));
+                    setLifespanUnit('months');
+                } else {
+                    setLifespanValue(String(item.lifespanDays));
+                    setLifespanUnit('days');
+                }
+            } else {
+                setLifespanValue('');
+                setLifespanUnit('days');
+            }
         }
     }, [item]);
 
@@ -55,11 +74,21 @@ export function EditItemDialog({
             toast({ title: "Error", description: "Please fill all fields.", variant: "destructive" });
             return;
         }
-
-        const lifespan = lifespanDays ? parseInt(String(lifespanDays), 10) : undefined;
-        if (lifespanDays && isNaN(lifespan!)) {
-            toast({ title: "Validation Error", description: "Lifespan must be a number.", variant: "destructive" });
-            return;
+        
+        let totalLifespanDays: number | undefined = undefined;
+        if (lifespanValue) {
+            const value = parseInt(lifespanValue, 10);
+            if (isNaN(value)) {
+                toast({ title: "Validation Error", description: "Lifespan value must be a number.", variant: "destructive" });
+                return;
+            }
+            if (lifespanUnit === 'months') {
+                totalLifespanDays = value * 30;
+            } else if (lifespanUnit === 'years') {
+                totalLifespanDays = value * 365;
+            } else {
+                totalLifespanDays = value;
+            }
         }
 
 
@@ -71,7 +100,7 @@ export function EditItemDialog({
                 nameEn: nameEn,
                 category: category,
                 unit: unit,
-                lifespanDays: lifespan
+                lifespanDays: totalLifespanDays
             };
 
             await onItemUpdated(updatedItem);
@@ -116,8 +145,20 @@ export function EditItemDialog({
                             <Input id="item-unit" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="item-lifespan" className="text-right">Lifespan (Days)</Label>
-                            <Input id="item-lifespan" type="number" placeholder="e.g., 365" className="col-span-3" value={lifespanDays} onChange={e => setLifespanDays(e.target.value)} />
+                            <Label htmlFor="item-lifespan" className="text-right">Lifespan</Label>
+                             <div className="col-span-3 grid grid-cols-3 gap-2">
+                                <Input id="item-lifespan" type="number" placeholder="e.g., 1" className="col-span-1" value={lifespanValue} onChange={e => setLifespanValue(e.target.value)} />
+                                <Select value={lifespanUnit} onValueChange={(value) => setLifespanUnit(value as LifespanUnit)}>
+                                    <SelectTrigger className="col-span-2">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="days">Days</SelectItem>
+                                        <SelectItem value="months">Months</SelectItem>
+                                        <SelectItem value="years">Years</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <div className="space-y-2 pt-2">
                              <Label>Stock by Residence</Label>

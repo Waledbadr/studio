@@ -12,6 +12,8 @@ import { translateItemName } from '@/ai/flows/translate-item-flow';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+type LifespanUnit = 'days' | 'months' | 'years';
+
 interface AddItemDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
@@ -32,7 +34,8 @@ export function AddItemDialog({
     const [name, setName] = useState(initialName);
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('');
-    const [lifespanDays, setLifespanDays] = useState('');
+    const [lifespanValue, setLifespanValue] = useState<string>('');
+    const [lifespanUnit, setLifespanUnit] = useState<LifespanUnit>('days');
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -43,7 +46,8 @@ export function AddItemDialog({
             setName(initialName);
             setCategory('');
             setUnit('');
-            setLifespanDays('');
+            setLifespanValue('');
+            setLifespanUnit('days');
         }
     }, [isOpen, initialName]);
 
@@ -58,10 +62,21 @@ export function AddItemDialog({
         startTransition(async () => {
             try {
                 const translationResult = await translateItemName({ name: name });
-                const lifespan = lifespanDays ? parseInt(lifespanDays, 10) : undefined;
-                if (lifespanDays && isNaN(lifespan!)) {
-                     toast({ title: "Validation Error", description: "Lifespan must be a number.", variant: "destructive" });
-                     return;
+
+                let totalLifespanDays: number | undefined = undefined;
+                if (lifespanValue) {
+                    const value = parseInt(lifespanValue, 10);
+                    if (isNaN(value)) {
+                        toast({ title: "Validation Error", description: "Lifespan value must be a number.", variant: "destructive" });
+                        return;
+                    }
+                    if (lifespanUnit === 'months') {
+                        totalLifespanDays = value * 30;
+                    } else if (lifespanUnit === 'years') {
+                        totalLifespanDays = value * 365;
+                    } else {
+                        totalLifespanDays = value;
+                    }
                 }
 
                 const newInventoryItem: Omit<InventoryItem, 'id' | 'stock'> = {
@@ -71,7 +86,7 @@ export function AddItemDialog({
                     category: category,
                     unit: unit,
                     stockByResidence: {},
-                    lifespanDays: lifespan
+                    lifespanDays: totalLifespanDays
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -120,8 +135,20 @@ export function AddItemDialog({
                         <Input id="item-unit" placeholder="e.g., Piece, Box" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="item-lifespan" className="text-right">Lifespan (Days)</Label>
-                        <Input id="item-lifespan" type="number" placeholder="e.g., 365" className="col-span-3" value={lifespanDays} onChange={e => setLifespanDays(e.target.value)} />
+                        <Label htmlFor="item-lifespan" className="text-right">Lifespan</Label>
+                        <div className="col-span-3 grid grid-cols-3 gap-2">
+                             <Input id="item-lifespan" type="number" placeholder="e.g., 1" className="col-span-1" value={lifespanValue} onChange={e => setLifespanValue(e.target.value)} />
+                             <Select value={lifespanUnit} onValueChange={(value) => setLifespanUnit(value as LifespanUnit)}>
+                                <SelectTrigger className="col-span-2">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="days">Days</SelectItem>
+                                    <SelectItem value="months">Months</SelectItem>
+                                    <SelectItem value="years">Years</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
