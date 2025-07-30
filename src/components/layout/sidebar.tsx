@@ -68,7 +68,7 @@ export function AppSidebar() {
                 >
                   <Link href={item.href}>
                     <item.icon />
-                    <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>
+                    {isMounted && <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation}</span>}
                   </Link>
                 </SidebarMenuButton>
                  {item.href === '/reports' && (
@@ -78,7 +78,7 @@ export function AppSidebar() {
                                 <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
                                      <Link href={subItem.href}>
                                         <subItem.icon />
-                                        <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
+                                        {isMounted && <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>}
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
