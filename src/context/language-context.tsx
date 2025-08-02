@@ -21,6 +21,10 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+    // Set CSS variable for font
+    const font = locale === 'ar' ? 'Tajawal' : 'Inter';
+    document.documentElement.style.setProperty('--font-body', font);
+    document.documentElement.style.setProperty('--font-headline', font);
   }, [locale]);
   
   const toggleLanguage = useCallback(() => {

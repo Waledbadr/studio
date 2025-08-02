@@ -101,7 +101,7 @@ export function AppSidebar() {
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-2">
+        <div className="flex items-center gap-2 p-2 rtl:flex-row-reverse">
             <Building className="h-8 w-8 text-primary" />
             <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
         </div>
@@ -158,7 +158,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="p-2">
              <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
-                 <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2 rtl:flex-row-reverse">
                      <Avatar className="size-8">
                        {isMounted && currentUser ? (
                          <>
@@ -169,7 +169,7 @@ export function AppSidebar() {
                         <AvatarFallback />
                        )}
                     </Avatar>
-                    <div className="group-data-[collapsible=icon]:hidden text-left">
+                    <div className="group-data-[collapsible=icon]:hidden text-left rtl:text-right">
                         <p className="font-semibold text-sm">{loading || !isMounted ? dict.loading : currentUser?.name}</p>
                         <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
                     </div>

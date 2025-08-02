@@ -56,7 +56,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   return (
-    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
+    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm rtl:flex-row-reverse sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
