@@ -617,7 +617,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const q = query(
-            collection(db, "inventoryTransactions"),
+            collectionGroup(db, "inventoryTransactions"),
             orderBy("date", "desc"),
             ...constraints
         );
@@ -709,25 +709,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
     if (!db) {
-        return null;
+      return null;
     }
     try {
-        const q = query(
-            collection(db, "inventoryTransactions"),
-            where("itemId", "==", itemId),
-            where("type", "==", "OUT"),
-            orderBy("date", "desc")
-        );
-        const querySnapshot = await getDocs(q);
+      const q = query(
+        collection(db, "inventoryTransactions"),
+        where("itemId", "==", itemId),
+        orderBy("date", "desc")
+      );
+      const querySnapshot = await getDocs(q);
 
-        if (querySnapshot.empty) {
-            return null;
-        }
-        
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        const specificLocationTx = transactions.find(tx => tx.locationId === locationId);
-        
-        return specificLocationTx ? specificLocationTx.date : null;
+      if (querySnapshot.empty) {
+        return null;
+      }
+      
+      const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+
+      // Filter client-side for type and location
+      const specificLocationTx = transactions.find(tx => tx.type === 'OUT' && tx.locationId === locationId);
+      
+      return specificLocationTx ? specificLocationTx.date : null;
 
     } catch (error) {
         console.error("Error fetching last issue date:", error);
