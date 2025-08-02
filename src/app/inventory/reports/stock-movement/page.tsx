@@ -99,19 +99,7 @@ export default function StockMovementReportPage() {
 
     try {
       const fetchedTransactions = await getAllInventoryTransactions(filters);
-      
-      // Client-side filtering for location hierarchy since it's complex for Firestore
-      const filtered = fetchedTransactions.filter(tx => {
-        if (!tx.locationId) return true; // Keep transactions without a specific location
-
-        if (filters.roomId && tx.locationId !== `room_${filters.roomId}`) return false;
-        if (filters.floorId && !filters.roomId && !tx.locationId.startsWith(`floor_${filters.floorId}`)) return false;
-        if (filters.buildingId && !filters.floorId && !tx.locationId.startsWith(`building_${filters.buildingId}`)) return false;
-
-        return true;
-      });
-
-      setTransactions(filtered);
+      setTransactions(fetchedTransactions);
     } catch (error) {
       console.error('Error generating report:', error);
       setError('Failed to generate report. Please try again.');
@@ -170,9 +158,7 @@ export default function StockMovementReportPage() {
   };
 
   const getLocationString = (transaction: any) => {
-    const parts = [];
-    if (transaction.locationName) parts.push(transaction.locationName);
-    return parts.join(' > ') || 'Location not specified';
+    return transaction.locationName || 'Location not specified';
   };
 
   const getMovementTypeColor = (type: string) => {
@@ -180,19 +166,19 @@ export default function StockMovementReportPage() {
       case 'RECEIVE':
       case 'TRANSFER_IN':
       case 'IN':
-        return 'text-green-600 bg-green-50';
+        return 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20';
       case 'ISSUE':
       case 'TRANSFER_OUT':
       case 'OUT':
       case 'DEPRECIATION':
-        return 'text-red-600 bg-red-50';
+        return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20';
       case 'ADJUSTMENT':
       case 'AUDIT':
-        return 'text-blue-600 bg-blue-50';
+        return 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20';
       case 'RETURN':
-        return 'text-orange-600 bg-orange-50';
+        return 'text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20';
       default:
-        return 'text-gray-600 bg-gray-50';
+        return 'text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700';
     }
   };
 
@@ -208,17 +194,17 @@ export default function StockMovementReportPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-100 dark:border-blue-800">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Stock Movement Report</h1>
-            <p className="text-gray-600 text-lg">
+            <h1 className="text-3xl font-bold text-foreground mb-2">Stock Movement Report</h1>
+            <p className="text-muted-foreground text-lg">
               Comprehensive analysis of inventory movements with advanced filtering capabilities
             </p>
           </div>
           <div className="hidden md:block">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <TrendingUp className="h-8 w-8 text-blue-600" />
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+              <TrendingUp className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
@@ -226,15 +212,15 @@ export default function StockMovementReportPage() {
 
       {/* Filters Card */}
       <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gray-50 border-b">
+        <CardHeader className="bg-muted/30 border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-semibold text-gray-800 flex items-center">
-              <Filter className="mr-3 h-6 w-6 text-blue-600" />
+            <CardTitle className="text-xl font-semibold text-foreground flex items-center">
+              <Filter className="mr-3 h-6 w-6 text-primary" />
               Report Filters
             </CardTitle>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Simple</span>
+                <span className="text-sm text-muted-foreground">Simple</span>
                 <button
                   onClick={() => {
                     setIsAdvancedMode(!isAdvancedMode);
@@ -252,22 +238,22 @@ export default function StockMovementReportPage() {
                     }
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    isAdvancedMode ? 'bg-blue-600' : 'bg-gray-200'
+                    isAdvancedMode ? 'bg-primary' : 'bg-muted'
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
                       isAdvancedMode ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
-                <span className="text-sm text-gray-600">Advanced</span>
+                <span className="text-sm text-muted-foreground">Advanced</span>
               </div>
               <Badge variant="outline" className="text-xs px-3 py-1">
                 {isAdvancedMode ? 'Advanced' : 'Simple'}
               </Badge>
               {!isAdvancedMode && (
-                <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200">
+                <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 border-green-200 dark:border-green-700">
                   Auto-filter ON
                 </Badge>
               )}
@@ -280,20 +266,20 @@ export default function StockMovementReportPage() {
             /* Simple Mode - Only Residence and Movement Type */
             <div className="space-y-6">
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                <h3 className="text-lg font-semibold text-gray-800">Basic Filters</h3>
-                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Simple Search</span>
+                <div className="w-1 h-6 bg-primary rounded-full"></div>
+                <h3 className="text-lg font-semibold text-foreground">Basic Filters</h3>
+                <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Simple Search</span>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Residence Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="residence" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="residence" className="text-sm font-medium">
                     Residence <span className="text-red-500">*</span>
                   </Label>
                   <select 
                     id="residence"
-                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-border bg-background px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.residenceId} 
                     onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                   >
@@ -311,10 +297,10 @@ export default function StockMovementReportPage() {
 
                 {/* Movement Type Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="movementType" className="text-sm font-medium text-gray-700">Movement Type</Label>
+                  <Label htmlFor="movementType" className="text-sm font-medium">Movement Type</Label>
                   <select
                     id="movementType"
-                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-border bg-background px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.movementType} 
                     onChange={(e) => handleFilterChange('movementType', e.target.value)}
                   >
@@ -339,20 +325,20 @@ export default function StockMovementReportPage() {
               {/* Location Hierarchy Section */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
-                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-gray-800">Location Hierarchy</h3>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Required</span>
+                  <div className="w-1 h-6 bg-primary rounded-full"></div>
+                  <h3 className="text-lg font-semibold text-foreground">Location Hierarchy</h3>
+                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Required</span>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Residence Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="residence" className="text-sm font-medium text-gray-700">
+                    <Label htmlFor="residence" className="text-sm font-medium">
                       Residence <span className="text-red-500">*</span>
                     </Label>
                     <select 
                       id="residence"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={filters.residenceId} 
                       onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                     >
@@ -370,10 +356,10 @@ export default function StockMovementReportPage() {
 
                   {/* Building Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="building" className="text-sm font-medium text-gray-700">Building</Label>
+                    <Label htmlFor="building" className="text-sm font-medium">Building</Label>
                     <select
                       id="building"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
                       value={filters.buildingId} 
                       onChange={(e) => handleFilterChange('buildingId', e.target.value)}
                       disabled={!filters.residenceId}
@@ -392,10 +378,10 @@ export default function StockMovementReportPage() {
 
                   {/* Floor Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="floor" className="text-sm font-medium text-gray-700">Floor</Label>
+                    <Label htmlFor="floor" className="text-sm font-medium">Floor</Label>
                     <select
                       id="floor"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
                       value={filters.floorId} 
                       onChange={(e) => handleFilterChange('floorId', e.target.value)}
                       disabled={!filters.buildingId}
@@ -414,10 +400,10 @@ export default function StockMovementReportPage() {
 
                   {/* Room Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="room" className="text-sm font-medium text-gray-700">Room</Label>
+                    <Label htmlFor="room" className="text-sm font-medium">Room</Label>
                     <select
                       id="room"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
                       value={filters.roomId} 
                       onChange={(e) => handleFilterChange('roomId', e.target.value)}
                       disabled={!filters.floorId}
@@ -440,17 +426,17 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-green-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-gray-800">Movement & Item Filters</h3>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
+                  <h3 className="text-lg font-semibold text-foreground">Movement & Item Filters</h3>
+                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Optional</span>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Movement Type Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="movementType" className="text-sm font-medium text-gray-700">Movement Type</Label>
+                    <Label htmlFor="movementType" className="text-sm font-medium">Movement Type</Label>
                     <select
                       id="movementType"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       value={filters.movementType} 
                       onChange={(e) => handleFilterChange('movementType', e.target.value)}
                     >
@@ -470,10 +456,10 @@ export default function StockMovementReportPage() {
 
                   {/* Item Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="itemId" className="text-sm font-medium text-gray-700">Specific Item</Label>
+                    <Label htmlFor="itemId" className="text-sm font-medium">Specific Item</Label>
                     <select
                       id="itemId"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       value={filters.itemId} 
                       onChange={(e) => handleFilterChange('itemId', e.target.value)}
                     >
@@ -495,30 +481,30 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-gray-800">Date Range</h3>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
+                  <h3 className="text-lg font-semibold text-foreground">Date Range</h3>
+                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Optional</span>
                 </div>
                 
                 <div className="space-y-4">
                   {/* Date Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-sm font-medium text-gray-700">Start Date</Label>
+                      <Label htmlFor="startDate" className="text-sm font-medium">Start Date</Label>
                       <input
                         id="startDate"
                         type="date"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         value={filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : ''}
                         onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value) : undefined)}
                       />
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-sm font-medium text-gray-700">End Date</Label>
+                      <Label htmlFor="endDate" className="text-sm font-medium">End Date</Label>
                       <input
                         id="endDate"
                         type="date"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         value={filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : ''}
                         onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value) : undefined)}
                       />
@@ -527,7 +513,7 @@ export default function StockMovementReportPage() {
                   
                   {/* Quick Date Range Buttons */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Quick Ranges</Label>
+                    <Label className="text-sm font-medium">Quick Ranges</Label>
                     <div className="flex flex-wrap gap-2">
                       <Button 
                         variant="outline" 
@@ -537,7 +523,7 @@ export default function StockMovementReportPage() {
                           handleFilterChange('startDate', today);
                           handleFilterChange('endDate', today);
                         }}
-                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
                       >
                         Today
                       </Button>
@@ -551,7 +537,7 @@ export default function StockMovementReportPage() {
                           handleFilterChange('startDate', weekStart);
                           handleFilterChange('endDate', today);
                         }}
-                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
                       >
                         This Week
                       </Button>
@@ -564,7 +550,7 @@ export default function StockMovementReportPage() {
                           handleFilterChange('startDate', monthStart);
                           handleFilterChange('endDate', today);
                         }}
-                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
                       >
                         This Month
                       </Button>
@@ -578,7 +564,7 @@ export default function StockMovementReportPage() {
                           handleFilterChange('startDate', monthStart);
                           handleFilterChange('endDate', monthEnd);
                         }}
-                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
                       >
                         Last Month
                       </Button>
@@ -589,7 +575,7 @@ export default function StockMovementReportPage() {
                           handleFilterChange('startDate', undefined);
                           handleFilterChange('endDate', undefined);
                         }}
-                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
                       >
                         Clear Dates
                       </Button>
@@ -602,12 +588,12 @@ export default function StockMovementReportPage() {
         </CardContent>
         
         {/* Action Footer */}
-        <div className="bg-gray-50 px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
+        <div className="bg-muted/30 px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
           <div className="flex items-center gap-4">
             <Button 
               onClick={handleGenerateReport} 
               disabled={isGenerating || !filters.residenceId}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 h-11 min-w-[160px] shadow-sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 py-2 h-11 min-w-[160px] shadow-sm"
             >
               {isGenerating ? (
                 <>
@@ -623,14 +609,14 @@ export default function StockMovementReportPage() {
             </Button>
             
             {transactions.length > 0 && (
-              <Button variant="outline" onClick={exportToCSV} className="border-gray-300 hover:bg-gray-50 h-11 shadow-sm">
+              <Button variant="outline" onClick={exportToCSV} className="border-border hover:bg-accent h-11 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
               </Button>
             )}
           </div>
           
-          <div className="text-sm text-gray-500 flex items-center gap-2">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
             {!filters.residenceId ? (
               <>
                 <span className="text-red-500 text-lg">*</span>
@@ -638,7 +624,7 @@ export default function StockMovementReportPage() {
               </>
             ) : (
               <span className="text-green-600 flex items-center">
-                ✓ {!isAdvancedMode ? "Auto-filtering enabled" : "Ready to generate report"}
+                ✓ {isAdvancedMode ? "Ready to generate report" : "Auto-filtering enabled"}
               </span>
             )}
           </div>
@@ -647,9 +633,9 @@ export default function StockMovementReportPage() {
 
       {/* Error Display */}
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-destructive/50 bg-destructive/10">
           <CardContent className="p-4">
-            <p className="text-red-600 text-sm">{error}</p>
+            <p className="text-destructive text-sm">{error}</p>
           </CardContent>
         </Card>
       )}
@@ -657,12 +643,12 @@ export default function StockMovementReportPage() {
       {/* Results Table */}
       {transactions.length > 0 && (
         <Card className="shadow-lg">
-          <CardHeader className="bg-gray-50 border-b">
+          <CardHeader className="bg-muted/30 border-b">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-semibold text-gray-800">
+              <CardTitle className="text-xl font-semibold text-foreground">
                 Report Results ({transactions.length} transactions)
               </CardTitle>
-              <Badge className="bg-blue-100 text-blue-800">
+              <Badge variant="secondary">
                 {format(new Date(), 'MMM dd, yyyy')}
               </Badge>
             </div>
@@ -670,19 +656,19 @@ export default function StockMovementReportPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto max-h-96">
               <Table>
-                <TableHeader className="sticky top-0 bg-gray-50">
+                <TableHeader className="sticky top-0 bg-muted/50">
                   <TableRow>
-                    <TableHead className="font-semibold text-gray-700">Date & Time</TableHead>
-                    <TableHead className="font-semibold text-gray-700">Item</TableHead>
-                    <TableHead className="font-semibold text-gray-700">Movement Type</TableHead>
-                    <TableHead className="font-semibold text-gray-700 text-right">Quantity</TableHead>
-                    <TableHead className="font-semibold text-gray-700">Location</TableHead>
-                    <TableHead className="font-semibold text-gray-700">Reference</TableHead>
+                    <TableHead className="font-semibold">Date & Time</TableHead>
+                    <TableHead className="font-semibold">Item</TableHead>
+                    <TableHead className="font-semibold">Movement Type</TableHead>
+                    <TableHead className="font-semibold text-right">Quantity</TableHead>
+                    <TableHead className="font-semibold">Location</TableHead>
+                    <TableHead className="font-semibold">Reference</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.map((transaction, index) => (
-                    <TableRow key={index} className="hover:bg-gray-50">
+                    <TableRow key={index} className="hover:bg-muted/50">
                       <TableCell className="font-mono text-sm">
                         {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
                       </TableCell>
@@ -697,10 +683,10 @@ export default function StockMovementReportPage() {
                       <TableCell className="text-right font-medium">
                         {transaction.quantity}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600">
+                      <TableCell className="text-sm text-muted-foreground">
                         {getLocationString(transaction)}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600 max-w-xs truncate">
+                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                         {transaction.referenceDocId || '-'}
                       </TableCell>
                     </TableRow>
