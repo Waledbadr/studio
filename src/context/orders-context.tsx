@@ -218,85 +218,76 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => {
+const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     setLoading(true);
 
-    const firestore = db; // Type assertion to help TypeScript
+    const firestore = db;
     const orderRef = doc(firestore, "orders", orderId);
 
     try {
         await runTransaction(firestore, async (transaction) => {
+            // --- STAGE 1: ALL READS ---
             const orderSnap = await transaction.get(orderRef);
             if (!orderSnap.exists()) {
                 throw new Error("Order not found");
             }
-
             const orderData = orderSnap.data() as Order;
             const residenceId = orderData.residenceId;
             if (!residenceId) {
                 throw new Error("Residence ID not found on order.");
             }
+
+            const itemsToProcess = newlyReceivedItems.filter(item => item.quantityReceived > 0);
+            const itemRefs = itemsToProcess.map(item => doc(firestore, "inventory", item.id));
+            const itemSnaps = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+            const missingItems: string[] = [];
             
-            const transactionTime = Timestamp.now();
-
-            if (newlyReceivedItems.length > 0) {
-                // Track missing items to report to user
-                const missingItems: string[] = [];
-                
-                console.log('Processing received items:', newlyReceivedItems.map(item => ({ id: item.id, name: item.nameEn })));
-                
-                // Update inventory stock for each item and log transaction
-                for (const receivedItem of newlyReceivedItems) {
-                    if (receivedItem.quantityReceived > 0) {
-                        const itemRef = doc(firestore, "inventory", receivedItem.id);
-                        const itemDoc = await transaction.get(itemRef);
-
-                        if (!itemDoc.exists()) {
-                            // Log missing item but don't crash the transaction
-                            console.warn(`Item ${receivedItem.nameEn} (ID: ${receivedItem.id}) not found in inventory.`);
-                            missingItems.push(`${receivedItem.nameEn} (ID: ${receivedItem.id})`);
-                            continue; // Skip this item and continue with others
-                        }
-
-                        const currentStock = itemDoc.data()?.stockByResidence?.[residenceId] || 0;
-                        const newStock = currentStock + receivedItem.quantityReceived;
-
-                        transaction.update(itemRef, {
-                            [`stockByResidence.${residenceId}`]: newStock
-                        });
-
-                        // Log the transaction
-                        const transactionRef = doc(collection(firestore, "inventoryTransactions"));
-                        transaction.set(transactionRef, {
-                            itemId: receivedItem.id,
-                            itemNameEn: receivedItem.nameEn,
-                            itemNameAr: receivedItem.nameAr,
-                            residenceId: residenceId,
-                            date: transactionTime,
-                            type: 'IN',
-                            quantity: receivedItem.quantityReceived,
-                            referenceDocId: orderId,
-                        } as Omit<InventoryTransaction, 'id'>);
-                    }
+            // --- STAGE 2: ALL VALIDATION (NO WRITES) ---
+            const itemDataMap = new Map<string, any>();
+            for(let i = 0; i < itemSnaps.length; i++) {
+                const itemSnap = itemSnaps[i];
+                const receivedItem = itemsToProcess[i];
+                if (!itemSnap.exists()) {
+                    missingItems.push(`${receivedItem.nameEn} (ID: ${receivedItem.id})`);
+                    continue; // Continue validation, don't throw yet
                 }
-                
-                // Show warning for missing items after transaction completes
-                if (missingItems.length > 0) {
-                    setTimeout(() => {
-                        toast({ 
-                            title: "Warning - Missing Items", 
-                            description: `The following items were not found in inventory: ${missingItems.join(', ')}. Please check your inventory setup.`,
-                            variant: "destructive"
-                        });
-                    }, 100);
+                itemDataMap.set(receivedItem.id, itemSnap.data());
+            }
+
+            if(missingItems.length > 0) {
+                 throw new Error(`The following items were not found in inventory: ${missingItems.join(', ')}. Please add them first.`);
+            }
+
+            // --- STAGE 3: ALL WRITES ---
+            const transactionTime = Timestamp.now();
+            
+            // Update inventory stock and log transactions
+            for (const receivedItem of itemsToProcess) {
+                const itemData = itemDataMap.get(receivedItem.id);
+                if (itemData) {
+                    const itemRef = doc(firestore, "inventory", receivedItem.id);
+                    const newStock = (itemData.stockByResidence?.[residenceId] || 0) + receivedItem.quantityReceived;
+                    transaction.update(itemRef, { [`stockByResidence.${residenceId}`]: newStock });
+
+                    const transactionRef = doc(collection(firestore, "inventoryTransactions"));
+                    transaction.set(transactionRef, {
+                        itemId: receivedItem.id,
+                        itemNameEn: receivedItem.nameEn,
+                        itemNameAr: receivedItem.nameAr,
+                        residenceId: residenceId,
+                        date: transactionTime,
+                        type: 'IN',
+                        quantity: receivedItem.quantityReceived,
+                        referenceDocId: orderId,
+                    } as Omit<InventoryTransaction, 'id'>);
                 }
             }
-            
-            // Update the order's received items and status
+
+            // Update order's received items and status
             const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
             for (const receivedItem of newlyReceivedItems) {
                 const existingItemIndex = existingReceived.findIndex(item => item.id === receivedItem.id);
@@ -307,7 +298,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
 
-            // Determine the new status
             let allItemsDelivered = true;
             if (!forceComplete) {
                 for (const requestedItem of orderData.items) {
@@ -318,7 +308,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
             }
-            
             const newStatus: OrderStatus = allItemsDelivered || forceComplete ? 'Delivered' : 'Partially Delivered';
 
             transaction.update(orderRef, {
@@ -332,11 +321,12 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error receiving order items:", error);
         const err = error as Error;
         toast({ title: "Transaction Error", description: `Failed to process receipt: ${err.message}`, variant: "destructive" });
-        throw err;
+        throw err; // Re-throw to prevent routing if transaction fails
     } finally {
         setLoading(false);
     }
 };
+
 
 
 
@@ -345,18 +335,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
       return null;
     }
-    try {
-        const orderDocRef = doc(db, "orders", id);
-        const docSnap = await getDoc(orderDocRef);
-        if (docSnap.exists()) {
-            return { id: docSnap.id, ...docSnap.data() } as Order;
-        } else {
-            toast({ title: "Error", description: "Order not found.", variant: "destructive" });
-            return null;
-        }
-    } catch(error) {
-        console.error("Error fetching order:", error);
-        toast({ title: "Error", description: "Failed to fetch order details.", variant: "destructive" });
+    const orderDocRef = doc(db, "orders", id);
+    const docSnap = await getDoc(orderDocRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Order;
+    } else {
         return null;
     }
   }

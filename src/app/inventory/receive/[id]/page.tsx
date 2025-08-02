@@ -25,6 +25,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface ReceivedItem extends OrderItem {
     quantityReceived: number;
@@ -34,46 +36,55 @@ interface ReceivedItem extends OrderItem {
 export default function ReceiveOrderPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { getOrderById, receiveOrderItems, loading: ordersLoading } = useOrders();
+    const { receiveOrderItems, loading: ordersLoading } = useOrders();
     const [order, setOrder] = useState<Order | null>(null);
     const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
 
-    useEffect(() => {
-        const fetchOrder = async () => {
-            if (typeof id !== 'string') return;
-            setLoading(true);
-            const fetchedOrder = await getOrderById(id);
-            
-            if (fetchedOrder) {
-                const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
-                if (!receivableStatuses.includes(fetchedOrder.status)) {
-                    toast({
-                        title: "Invalid Status",
-                        description: `This request has a status of "${fetchedOrder.status}" and cannot be received.`,
-                        variant: "destructive"
-                    });
-                    router.push('/inventory/receive');
-                    return;
-                }
-                setOrder(fetchedOrder);
-                
-                const initialReceivedItems = fetchedOrder.items.map(item => {
-                    const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
-                    const remainingToReceive = item.quantity - alreadyReceived;
-                    return {
-                        ...item,
-                        quantityReceived: remainingToReceive, // Default to receiving the remaining amount
-                        alreadyReceived: alreadyReceived,
-                    }
+    const fetchOrderForPage = useCallback(async (orderId: string) => {
+        if (!db) return;
+        setLoading(true);
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+
+        if (orderSnap.exists()) {
+             const fetchedOrder = { id: orderSnap.id, ...orderSnap.data() } as Order;
+             const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
+             
+             if (!receivableStatuses.includes(fetchedOrder.status)) {
+                toast({
+                    title: "Invalid Status",
+                    description: `This request has a status of "${fetchedOrder.status}" and cannot be received.`,
+                    variant: "destructive"
                 });
-                setReceivedItems(initialReceivedItems);
+                router.push('/inventory/receive');
+                return;
             }
-            setLoading(false);
-        };
-        fetchOrder();
-    }, [id, getOrderById, router, toast]);
+
+            setOrder(fetchedOrder);
+            const initialReceivedItems = fetchedOrder.items.map(item => {
+                const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
+                const remainingToReceive = item.quantity - alreadyReceived;
+                return {
+                    ...item,
+                    quantityReceived: remainingToReceive,
+                    alreadyReceived: alreadyReceived,
+                }
+            });
+            setReceivedItems(initialReceivedItems);
+        } else {
+             toast({ title: "Error", description: "Order not found.", variant: "destructive" });
+             router.push('/inventory/receive');
+        }
+        setLoading(false);
+    }, [router, toast]);
+
+    useEffect(() => {
+        if (typeof id === 'string') {
+            fetchOrderForPage(id);
+        }
+    }, [id, fetchOrderForPage]);
 
     const handleQuantityChange = (itemId: string, newQuantity: number) => {
         const itemInfo = receivedItems.find(item => item.id === itemId);
@@ -98,17 +109,6 @@ export default function ReceiveOrderPage() {
             toast({ title: "Error", description: "No items to receive.", variant: "destructive" });
             return;
         }
-
-        const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
-        if (!receivableStatuses.includes(order.status)) {
-             toast({
-                title: "Invalid Status",
-                description: `This request has a status of "${order.status}" and can no longer be received.`,
-                variant: "destructive"
-            });
-            router.push('/inventory/receive');
-            return;
-        }
         
         const itemsToProcess = receivedItems
             .filter(item => item.quantityReceived > 0)
@@ -124,9 +124,13 @@ export default function ReceiveOrderPage() {
             return;
         }
 
-        await receiveOrderItems(order.id, itemsToProcess, forceComplete);
-        
-        router.push('/inventory/orders');
+        try {
+            await receiveOrderItems(order.id, itemsToProcess, forceComplete);
+            router.push('/inventory/orders');
+        } catch (error) {
+            // Error toast is handled by the context
+            console.error(error);
+        }
     };
 
     if (loading) {
