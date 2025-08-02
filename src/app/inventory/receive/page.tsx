@@ -30,6 +30,15 @@ export default function ReceiveMaterialsPage() {
             setIsCompletedOpen(JSON.parse(savedState));
         }
     }, []);
+    
+    // UseEffect to load orders when the component mounts
+    useEffect(() => {
+        loadOrders();
+        if (residences.length === 0) {
+            loadResidences();
+        }
+    }, [loadOrders, loadResidences, residences.length]);
+
 
     // Save completed section state to localStorage
     const handleCompletedToggle = (open: boolean) => {
@@ -37,13 +46,6 @@ export default function ReceiveMaterialsPage() {
         localStorage.setItem('receive-completed-open', JSON.stringify(open));
     };
 
-
-    useEffect(() => {
-        loadOrders();
-        if (residences.length === 0) {
-            loadResidences();
-        }
-    }, [loadOrders, loadResidences, residences.length]);
 
     const userApprovedOrders = useMemo(() => {
         if (!currentUser) return [];

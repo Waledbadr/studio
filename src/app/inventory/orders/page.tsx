@@ -34,19 +34,21 @@ export default function PurchaseOrdersPage() {
             setIsCompletedOpen(JSON.parse(savedState));
         }
     }, []);
-
-    // Save completed section state to localStorage
-    const handleCompletedToggle = (open: boolean) => {
-        setIsCompletedOpen(open);
-        localStorage.setItem('orders-completed-open', JSON.stringify(open));
-    };
-
+    
+    // UseEffect to load orders when the component mounts
     useEffect(() => {
         loadOrders();
         if (residences.length === 0) {
             loadResidences();
         }
     }, [loadOrders, loadResidences, residences.length]);
+
+
+    // Save completed section state to localStorage
+    const handleCompletedToggle = (open: boolean) => {
+        setIsCompletedOpen(open);
+        localStorage.setItem('orders-completed-open', JSON.stringify(open));
+    };
 
     const filteredOrders = useMemo(() => {
         if (!currentUser) return [];

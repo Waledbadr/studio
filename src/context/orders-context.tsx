@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -60,28 +61,26 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
-  const isLoaded = useRef(false);
   const { addNotification } = useNotifications();
 
 
   const loadOrders = useCallback(() => {
-    if (isLoaded.current) return;
+    if (unsubscribeRef.current) {
+        unsubscribeRef.current(); // Unsubscribe from previous listener
+    }
+    
     if (!db) {
       console.error(firebaseErrorMessage);
-      setTimeout(() => {
-        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
-      }, 100)
+      toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
       setLoading(false);
       return;
     }
     
-    isLoaded.current = true;
     setLoading(true);
 
     const ordersCollection = collection(db, "orders");
-    unsubscribeRef.current = onSnapshot(ordersCollection, (snapshot) => {
+    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      ordersData.sort((a, b) => b.date.toMillis() - a.date.toMillis());
       setOrders(ordersData);
       setLoading(false);
     }, (error) => {
@@ -90,16 +89,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
   }, [toast]);
-
-  useEffect(() => {
-    loadOrders();
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        isLoaded.current = false;
-      }
-    };
-  }, [loadOrders]);
   
   const generateNewOrderId = async (): Promise<string> => {
     if (!db) {
@@ -243,25 +232,36 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             }
 
             const itemsToProcess = newlyReceivedItems.filter(item => item.quantityReceived > 0);
-             const itemRefs = itemsToProcess.map(item => {
-                const baseItemId = item.id.split('-')[0]; // Extract base ID
-                return doc(firestore, "inventory", baseItemId);
-            });
-            const itemSnaps = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
-            const missingItems: string[] = [];
             
-            // --- STAGE 2: ALL VALIDATION (NO WRITES) ---
-            const itemDataMap = new Map<string, any>();
-            for(let i = 0; i < itemSnaps.length; i++) {
-                const itemSnap = itemSnaps[i];
-                const receivedItem = itemsToProcess[i];
-                if (!itemSnap.exists()) {
-                    missingItems.push(`${receivedItem.nameEn} (ID: ${receivedItem.id})`);
-                    continue; // Continue validation, don't throw yet
+             // Use a Map to fetch each base item only once
+            const itemRefsToFetch = new Map<string, DocumentReference>();
+            for (const item of itemsToProcess) {
+                const baseItemId = item.id.split('-')[0]; // Extract base ID
+                if (!itemRefsToFetch.has(baseItemId)) {
+                    itemRefsToFetch.set(baseItemId, doc(firestore, "inventory", baseItemId));
                 }
-                itemDataMap.set(receivedItem.id, itemSnap.data());
             }
 
+            const uniqueItemRefs = Array.from(itemRefsToFetch.values());
+            const itemSnaps = await Promise.all(uniqueItemRefs.map(ref => transaction.get(ref)));
+
+            // --- STAGE 2: ALL VALIDATION (NO WRITES) ---
+            const itemDataMap = new Map<string, any>();
+             for (let i = 0; i < itemSnaps.length; i++) {
+                const itemSnap = itemSnaps[i];
+                if (itemSnap.exists()) {
+                    itemDataMap.set(itemSnap.id, itemSnap.data());
+                }
+            }
+
+            const missingItems: string[] = [];
+            for (const receivedItem of itemsToProcess) {
+                const baseItemId = receivedItem.id.split('-')[0];
+                if (!itemDataMap.has(baseItemId)) {
+                    missingItems.push(`${receivedItem.nameEn} (ID: ${baseItemId})`);
+                }
+            }
+            
             if(missingItems.length > 0) {
                  throw new Error(`The following items were not found in inventory: ${missingItems.join(', ')}. Please add them first.`);
             }
@@ -272,11 +272,13 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             // Update inventory stock and log transactions
             for (const receivedItem of itemsToProcess) {
                  const baseItemId = receivedItem.id.split('-')[0];
-                const itemData = itemDataMap.get(receivedItem.id);
+                const itemData = itemDataMap.get(baseItemId);
                 if (itemData) {
                     const itemRef = doc(firestore, "inventory", baseItemId);
-                    const newStock = (itemData.stockByResidence?.[residenceId] || 0) + receivedItem.quantityReceived;
-                    transaction.update(itemRef, { [`stockByResidence.${residenceId}`]: newStock });
+                    // Use increment for atomic updates
+                    transaction.update(itemRef, {
+                         [`stockByResidence.${residenceId}`]: increment(receivedItem.quantityReceived)
+                    });
 
                     const transactionRef = doc(collection(firestore, "inventoryTransactions"));
                     transaction.set(transactionRef, {
