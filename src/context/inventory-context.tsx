@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -198,7 +199,7 @@ interface InventoryContextType {
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
-  getAllInventoryTransactions: (filters: {residenceId: string, movementType?: string, startDate?: Date, endDate?: Date}) => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactions: (filters?: {residenceId?: string, movementType?: string, startDate?: Date, endDate?: Date}) => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -598,7 +599,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
-  const getAllInventoryTransactions = async (filters: {residenceId: string, movementType?: string, startDate?: Date, endDate?: Date}): Promise<InventoryTransaction[]> => {
+ const getAllInventoryTransactions = async (filters: {residenceId?: string, movementType?: string, startDate?: Date, endDate?: Date} = {}): Promise<InventoryTransaction[]> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return [];
@@ -610,12 +611,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             constraints.push(where('date', '>=', filters.startDate));
         }
         if (filters.endDate) {
-            // Add 1 day to the end date to include the whole day
             const endDate = new Date(filters.endDate);
             endDate.setDate(endDate.getDate() + 1);
             constraints.push(where('date', '<=', endDate));
         }
-
+        
         const q = query(
             collectionGroup(db, "inventoryTransactions"),
             orderBy("date", "desc"),
@@ -623,28 +623,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         );
         
         const querySnapshot = await getDocs(q);
-        const allTransactions = querySnapshot.docs.map(doc => ({
+        let allTransactions = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as InventoryTransaction));
         
-        // Client-side filtering
-        const filteredTransactions = allTransactions.filter(tx => {
-            if (filters.residenceId && tx.residenceId !== filters.residenceId) {
-                return false;
-            }
-            if(filters.movementType && tx.type !== filters.movementType) {
-                return false;
-            }
-            return true;
-        });
+        // Client-side filtering for non-indexed fields
+        if (filters.residenceId) {
+            allTransactions = allTransactions.filter(tx => tx.residenceId === filters.residenceId);
+        }
+        if(filters.movementType) {
+            allTransactions = allTransactions.filter(tx => tx.type === filters.movementType);
+        }
 
-        return filteredTransactions;
+        return allTransactions;
     } catch (error) {
         console.error('Error generating report:', error);
         toast({
-            title: "خطأ",
-            description: "حدث خطأ أثناء جلب سجلات المعاملات",
+            title: "Error",
+            description: `Error generating report: ${error}`,
             variant: "destructive"
         });
         return [];
