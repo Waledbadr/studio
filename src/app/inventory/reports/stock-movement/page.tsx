@@ -25,7 +25,7 @@ interface StockMovementFilters {
 
 export default function StockMovementReportPage() {
   const { getAllInventoryTransactions, items } = useInventory();
-  const { residences, buildings, floors, rooms } = useResidences();
+  const { residences } = useResidences();
 
   const [filters, setFilters] = useState<StockMovementFilters>({
     residenceId: '',
@@ -98,46 +98,20 @@ export default function StockMovementReportPage() {
     setError(null);
 
     try {
-      const allTransactions = await getAllInventoryTransactions();
+      const fetchedTransactions = await getAllInventoryTransactions(filters);
       
-      const filteredTransactions = allTransactions.filter(transaction => {
-        // Filter by residence
-        if (filters.residenceId && transaction.residenceId !== filters.residenceId) {
-          return false;
-        }
-        
-        // Filter by location (using locationId which contains building/floor/room info)
-        if (filters.buildingId || filters.floorId || filters.roomId) {
-          // For now, we'll skip these filters since the transaction structure 
-          // doesn't have direct building/floor/room IDs
-          // This would need to be implemented with a mapping between locationId and hierarchy
-        }
-        
-        // Filter by movement type (using 'type' property)
-        if (filters.movementType && transaction.type !== filters.movementType) {
-          return false;
-        }
-        
-        // Filter by item
-        if (filters.itemId && transaction.itemId !== filters.itemId) {
-          return false;
-        }
-        
-        // Filter by date range (using 'date' property)
-        if (filters.startDate || filters.endDate) {
-          const transactionDate = transaction.date.toDate();
-          if (filters.startDate && transactionDate < filters.startDate) {
-            return false;
-          }
-          if (filters.endDate && transactionDate > filters.endDate) {
-            return false;
-          }
-        }
-        
+      // Client-side filtering for location hierarchy since it's complex for Firestore
+      const filtered = fetchedTransactions.filter(tx => {
+        if (!tx.locationId) return true; // Keep transactions without a specific location
+
+        if (filters.roomId && tx.locationId !== `room_${filters.roomId}`) return false;
+        if (filters.floorId && !filters.roomId && !tx.locationId.startsWith(`floor_${filters.floorId}`)) return false;
+        if (filters.buildingId && !filters.floorId && !tx.locationId.startsWith(`building_${filters.buildingId}`)) return false;
+
         return true;
       });
 
-      setTransactions(filteredTransactions);
+      setTransactions(filtered);
     } catch (error) {
       console.error('Error generating report:', error);
       setError('Failed to generate report. Please try again.');

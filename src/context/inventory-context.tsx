@@ -198,7 +198,7 @@ interface InventoryContextType {
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
-  getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactions: (filters: {residenceId: string, movementType?: string, startDate?: Date, endDate?: Date}) => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -598,34 +598,58 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
-  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
+  const getAllInventoryTransactions = async (filters: {residenceId: string, movementType?: string, startDate?: Date, endDate?: Date}): Promise<InventoryTransaction[]> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return [];
     }
-    
-    try {
-        const q = query(
-            collection(db, "inventoryTransactions"), 
-            orderBy("date", "desc")
-        );
-        const querySnapshot = await getDocs(q);
-        const transactions = querySnapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            ...doc.data() 
-        } as InventoryTransaction));
 
-        return transactions;
+    try {
+        let constraints = [];
+        if (filters.startDate) {
+            constraints.push(where('date', '>=', filters.startDate));
+        }
+        if (filters.endDate) {
+            // Add 1 day to the end date to include the whole day
+            const endDate = new Date(filters.endDate);
+            endDate.setDate(endDate.getDate() + 1);
+            constraints.push(where('date', '<=', endDate));
+        }
+
+        const q = query(
+            collection(db, "inventoryTransactions"),
+            orderBy("date", "desc"),
+            ...constraints
+        );
+        
+        const querySnapshot = await getDocs(q);
+        const allTransactions = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as InventoryTransaction));
+        
+        // Client-side filtering
+        const filteredTransactions = allTransactions.filter(tx => {
+            if (filters.residenceId && tx.residenceId !== filters.residenceId) {
+                return false;
+            }
+            if(filters.movementType && tx.type !== filters.movementType) {
+                return false;
+            }
+            return true;
+        });
+
+        return filteredTransactions;
     } catch (error) {
-        console.error('Error fetching all inventory transactions:', error);
-        toast({ 
-            title: "خطأ", 
-            description: "حدث خطأ أثناء جلب سجلات المعاملات", 
-            variant: "destructive" 
+        console.error('Error generating report:', error);
+        toast({
+            title: "خطأ",
+            description: "حدث خطأ أثناء جلب سجلات المعاملات",
+            variant: "destructive"
         });
         return [];
     }
-  }
+  };
 
   const getMIVs = async (): Promise<MIV[]> => {
     if (!db) {
@@ -691,10 +715,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const q = query(
             collection(db, "inventoryTransactions"),
             where("itemId", "==", itemId),
-            where("locationId", "==", locationId),
             where("type", "==", "OUT"),
-            orderBy("date", "desc"),
-            limit(1)
+            orderBy("date", "desc")
         );
         const querySnapshot = await getDocs(q);
 
@@ -702,7 +724,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return null;
         }
         
-        return querySnapshot.docs[0].data().date as Timestamp;
+        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
+        const specificLocationTx = transactions.find(tx => tx.locationId === locationId);
+        
+        return specificLocationTx ? specificLocationTx.date : null;
 
     } catch (error) {
         console.error("Error fetching last issue date:", error);
@@ -788,7 +813,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             quantity: item.quantity,
                             referenceDocId: `internal-${Date.now()}`,
                             relatedResidenceId: toResidenceId,
-                            locationName: `Internal transfer to residence`
+                            locationName: `Internal transfer to residence (${toResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
 
                         // Create TRANSFER_IN transaction for destination residence
@@ -803,7 +828,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             quantity: item.quantity,
                             referenceDocId: `internal-${Date.now()}`,
                             relatedResidenceId: fromResidenceId,
-                            locationName: `Internal transfer from residence`
+                            locationName: `Internal transfer from residence (${fromResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
                     }
                     
