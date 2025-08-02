@@ -34,7 +34,7 @@ export interface InventoryTransaction {
     itemNameAr: string;
     residenceId: string;
     date: Timestamp;
-    type: 'IN' | 'OUT' | 'TRANSFER_IN' | 'TRANSFER_OUT';
+    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
     locationId?: string;
@@ -114,6 +114,7 @@ interface InventoryContextType {
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -492,6 +493,35 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
+  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+    }
+    
+    try {
+        const q = query(
+            collection(db, "inventoryTransactions"), 
+            orderBy("date", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        const transactions = querySnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+        } as InventoryTransaction));
+
+        return transactions;
+    } catch (error) {
+        console.error('Error fetching all inventory transactions:', error);
+        toast({ 
+            title: "خطأ", 
+            description: "حدث خطأ أثناء جلب سجلات المعاملات", 
+            variant: "destructive" 
+        });
+        return [];
+    }
+  }
+
   const getMIVs = async (): Promise<MIV[]> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
@@ -852,7 +882,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <InventoryContext.Provider value={{ items, categories, transfers, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, createTransferRequest, approveTransfer, rejectTransfer }}>
+    <InventoryContext.Provider value={{ items, categories, transfers, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getAllInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, createTransferRequest, approveTransfer, rejectTransfer }}>
       {children}
     </InventoryContext.Provider>
   );

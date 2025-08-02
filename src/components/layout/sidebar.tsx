@@ -12,7 +12,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck } from 'lucide-react';
+import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -47,6 +47,7 @@ export function AppSidebar() {
   ];
   
     const reportMenuItems = [
+        { href: '/inventory/reports/stock-movement', label: 'تقرير حركة المخزون', icon: TrendingUp },
         { href: '/inventory/reports/lifespan', label: dict.sidebar.lifespanReport, icon: History }
     ]
 
