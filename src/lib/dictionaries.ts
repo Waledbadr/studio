@@ -32,6 +32,7 @@ const en = {
         users: 'Users',
         aiTools: 'AI Tools',
         setup: 'Setup',
+        stockMovementReport: 'Stock Movement Report',
         lifespanReport: 'Lifespan Report'
     },
 
@@ -87,6 +88,7 @@ const ar: typeof en = {
         users: 'المستخدمون',
         aiTools: 'أدوات الذكاء الاصطناعي',
         setup: 'الإعدادات',
+        stockMovementReport: 'تقرير حركة المخزون',
         lifespanReport: 'تقرير العمر الافتراضي'
     },
 

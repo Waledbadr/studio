@@ -47,7 +47,7 @@ export function AppSidebar() {
   ];
   
     const reportMenuItems = [
-        { href: '/inventory/reports/stock-movement', label: 'تقرير حركة المخزون', icon: TrendingUp },
+        { href: '/inventory/reports/stock-movement', label: dict.sidebar.stockMovementReport, icon: TrendingUp },
         { href: '/inventory/reports/lifespan', label: dict.sidebar.lifespanReport, icon: History }
     ]
 
