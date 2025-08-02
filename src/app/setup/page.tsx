@@ -3,11 +3,19 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ThemeSelector } from "@/components/theme-selector";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
+<<<<<<< HEAD
 import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc, getDoc } from "firebase/firestore";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+=======
+import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc } from "firebase/firestore";
+import { useState, useEffect } from "react";
+import { Loader2, Palette, Database, Home } from "lucide-react";
+>>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
 import type { Complex } from "@/context/residences-context";
 import type { InventoryItem } from "@/context/inventory-context";
 import type { OrderItem } from "@/context/orders-context";
@@ -23,6 +31,14 @@ export default function SetupPage() {
     const [isAddingRooms, setIsAddingRooms] = useState(false);
     const [isFixingStock, setIsFixingStock] = useState(false);
     const [password, setPassword] = useState('');
+    const [activeTab, setActiveTab] = useState('database');
+    
+    // Check for theme tab in URL hash
+    useEffect(() => {
+        if (window.location.hash === '#themes') {
+            setActiveTab('themes');
+        }
+    }, []);
     
     // In a real app, this should be an environment variable.
     const RESET_PASSWORD = "reset123";
@@ -298,6 +314,7 @@ export default function SetupPage() {
 
 
     return (
+<<<<<<< HEAD
         <div className="flex flex-col items-center justify-start h-full gap-8 pt-10">
             <Card className="w-full max-w-md">
                 <CardHeader>
@@ -391,15 +408,137 @@ export default function SetupPage() {
                                 >
                                     {isResetting ? (
                                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
+=======
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold">System Setup & Configuration</h1>
+                <p className="text-muted-foreground">Configure your system settings and manage data</p>
+            </div>
+            
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="database" className="flex items-center gap-2">
+                        <Database className="h-4 w-4" />
+                        Database Setup
+                    </TabsTrigger>
+                    <TabsTrigger value="themes" className="flex items-center gap-2">
+                        <Palette className="h-4 w-4" />
+                        Theme Settings
+                    </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="themes" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Palette className="h-5 w-5" />
+                                Personalization Settings
+                            </CardTitle>
+                            <CardDescription>
+                                Customize the appearance of your application with different color themes and modes.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ThemeSelector />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                
+                <TabsContent value="database" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Database className="h-5 w-5" />
+                                    Initial Data Setup
+                                </CardTitle>
+                                <CardDescription>
+                                    This process checks if your database is empty and adds sample data. It creates sample inventory items and an initial **approved** purchase order. You must go to "Receive Materials" to complete the process and add stock.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button onClick={seedInitialData} disabled={isLoading} className="w-full">
+                                    {isLoading ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
+>>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
                                     ) : (
-                                        "Confirm Reset"
+                                        'Seed Database'
                                     )}
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </CardContent>
-            </Card>
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Home className="h-5 w-5" />
+                                    Add Specific Rooms
+                                </CardTitle>
+                                <CardDescription>
+                                    This will add a list of rooms to Floor 1, Building B1, in the "um alsalam" complex.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
+                                    {isAddingRooms ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
+                                    ) : (
+                                        'Add Rooms to Um Al-Salam'
+                                    )}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card className="border-destructive">
+                        <CardHeader>
+                            <CardTitle className="text-destructive">Advanced Settings - System Reset</CardTitle>
+                            <CardDescription>
+                                This will permanently delete all orders, transfers, maintenance requests, notifications and inventory transactions. It will also reset the stock of all inventory items to zero. User and residence data will not be affected. This action cannot be undone.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                     <Button variant="destructive" className="w-full">Reset System Data</Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action is irreversible. To confirm, please type the administrator password below.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                     <div className="grid gap-2">
+                                        <Label htmlFor="reset-password">Password</Label>
+                                        <Input 
+                                            id="reset-password"
+                                            type="password"
+                                            placeholder="Enter password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                        />
+                                    </div>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel onClick={() => setPassword('')}>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                            onClick={handleResetSystem}
+                                            disabled={isResetting || password !== RESET_PASSWORD}
+                                            className="bg-destructive hover:bg-destructive/90"
+                                        >
+                                            {isResetting ? (
+                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
+                                            ) : (
+                                                "Confirm Reset"
+                                            )}
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

@@ -6,19 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
 
 
 interface IssuedItem extends InventoryItem {
@@ -43,12 +45,55 @@ interface VoucherLocation {
 export default function IssueMaterialPage() {
     const { currentUser } = useUsers();
     const { residences, loading: residencesLoading } = useResidences();
-    const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation } = useInventory();
+    const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCompletedOpen, setIsCompletedOpen] = useState(false);
+    const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
+    const [loadingMIVs, setLoadingMIVs] = useState(false);
+
+    // Load completed section state from localStorage
+    useEffect(() => {
+        const savedState = localStorage.getItem('issue-completed-open');
+        if (savedState !== null) {
+            setIsCompletedOpen(JSON.parse(savedState));
+        }
+    }, []);
+
+    // Save completed section state to localStorage
+    const handleCompletedToggle = (open: boolean) => {
+        setIsCompletedOpen(open);
+        localStorage.setItem('issue-completed-open', JSON.stringify(open));
+    };
+
+    // Load recent MIVs
+    useEffect(() => {
+        const loadRecentMIVs = async () => {
+            if (!currentUser) return;
+            setLoadingMIVs(true);
+            try {
+                const allMIVs = await getMIVs();
+                // Filter by user permissions and get recent ones
+                let filteredMIVs = allMIVs;
+                if (currentUser.role !== 'Admin') {
+                    filteredMIVs = allMIVs.filter(miv => 
+                        currentUser.assignedResidences.includes(miv.residenceId)
+                    );
+                }
+                // Get last 10 MIVs
+                setRecentMIVs(filteredMIVs.slice(0, 10));
+            } catch (error) {
+                console.error('Error loading MIVs:', error);
+            } finally {
+                setLoadingMIVs(false);
+            }
+        };
+
+        loadRecentMIVs();
+    }, [currentUser, getMIVs]);
     
     const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
@@ -63,6 +108,17 @@ export default function IssueMaterialPage() {
         if (currentUser.role === 'Admin') return residences;
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
+
+    // Filter for dropdown (exclude main-warehouse)
+    const filteredResidences = useMemo(() => {
+        return userResidences.filter(r => r.id !== 'main-warehouse');
+    }, [userResidences]);
+
+    // Statistics
+    const activeMIVs = recentMIVs.filter(miv => miv.status === 'Pending');
+    const issuedMIVs = recentMIVs.filter(miv => miv.status === 'Issued');
+    const cancelledMIVs = recentMIVs.filter(miv => miv.status === 'Cancelled');
+    const totalMIVs = recentMIVs.length;
 
     const selectedComplex = useMemo(() => residences.find(c => c.id === selectedComplexId), [selectedComplexId, residences]);
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
@@ -273,6 +329,50 @@ export default function IssueMaterialPage() {
                 </div>
             </div>
 
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Pending Issue</CardTitle>
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{activeMIVs.length}</div>
+                        <p className="text-xs text-muted-foreground">Vouchers awaiting issue</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Issued Today</CardTitle>
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{issuedMIVs.length}</div>
+                        <p className="text-xs text-muted-foreground">Items distributed</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
+                        <XCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{cancelledMIVs.length}</div>
+                        <p className="text-xs text-muted-foreground">Cancelled vouchers</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Vouchers</CardTitle>
+                        <Archive className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{totalMIVs}</div>
+                        <p className="text-xs text-muted-foreground">All MIVs this period</p>
+                    </CardContent>
+                </Card>
+            </div>
+
             <Card>
                  <CardHeader>
                      <div className="flex justify-between items-center">
@@ -285,7 +385,7 @@ export default function IssueMaterialPage() {
                             <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
                                 <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
                                 <SelectContent>
-                                    {userResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                                    {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -428,6 +528,91 @@ export default function IssueMaterialPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Recent MIVs History */}
+            <Collapsible 
+                open={isCompletedOpen} 
+                onOpenChange={handleCompletedToggle}
+            >
+                <Card>
+                    <CollapsibleTrigger asChild>
+                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Archive className="h-5 w-5 text-muted-foreground" />
+                                        Recent MIVs History
+                                    </CardTitle>
+                                    <CardDescription>
+                                        View recently created material issue vouchers ({recentMIVs.length} total)
+                                    </CardDescription>
+                                </div>
+                                <ChevronDown className={`h-4 w-4 transition-transform ${isCompletedOpen ? 'rotate-180' : ''}`} />
+                            </div>
+                        </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                        <CardContent>
+                            {loadingMIVs ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    <span className="ml-2 text-muted-foreground">Loading recent MIVs...</span>
+                                </div>
+                            ) : recentMIVs.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Archive className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <p>No MIVs found for your assigned residences.</p>
+                                </div>
+                            ) : (
+                                <div className="rounded-md border">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>MIV #</TableHead>
+                                                <TableHead>Date</TableHead>
+                                                <TableHead>Residence</TableHead>
+                                                <TableHead>Items</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Created By</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {recentMIVs.map((miv) => (
+                                                <TableRow key={miv.id}>
+                                                    <TableCell className="font-medium">
+                                                        #{miv.id.slice(-6)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {new Date(miv.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {residences.find(r => r.id === miv.residenceId)?.name || 'Unknown'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {miv.totalItems || 0} items
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={
+                                                            miv.status === 'Issued' ? 'default' :
+                                                            miv.status === 'Pending' ? 'secondary' :
+                                                            'destructive'
+                                                        }>
+                                                            {miv.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {miv.createdBy || 'Unknown'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
 
         </div>
     );

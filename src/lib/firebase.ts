@@ -13,15 +13,24 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let app: FirebaseApp;
-let db: Firestore;
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
 
-try {
-  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  db = getFirestore(app);
-} catch (e) {
+// Check if Firebase config is properly set
+const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
+  value && typeof value === 'string' && !value.includes('your_') && value !== 'your_api_key_here'
+);
+
+if (isFirebaseConfigured) {
+  try {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    db = getFirestore(app);
+    console.log("Firebase initialized successfully");
+  } catch (e) {
     console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
+  }
+} else {
+  console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
 }
-
 
 export { app, db };

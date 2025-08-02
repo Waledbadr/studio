@@ -51,32 +51,32 @@ export default function ResidencesPage() {
   }, [loadResidences, loadUsersContext]);
 
   // State for Dialogs
-  const [isAddComplexDialogOpen, setIsAddComplexDialogOpen] = useState(false);
-  const [newComplexName, setNewComplexName] = useState('');
-  const [newComplexCity, setNewComplexCity] = useState('');
-  const [newComplexManagerId, setNewComplexManagerId] = useState('');
+  // State for Dialogs - Group related states together
+  const [dialogStates, setDialogStates] = useState({
+    isAddComplexDialogOpen: false,
+    isEditComplexDialogOpen: false,
+    isAddBuildingDialogOpen: false,
+    isAddFloorDialogOpen: false,
+    isAddRoomDialogOpen: false,
+    isAddMultipleRoomsDialogOpen: false,
+    isAddFacilityDialogOpen: false,
+  });
 
-  const [isEditComplexDialogOpen, setIsEditComplexDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    newComplexName: '',
+    newComplexCity: '',
+    newComplexManagerId: '',
+    newBuildingName: '',
+    newFloorName: '',
+    newRoomName: '',
+    newFacilityName: '',
+    newFacilityType: '',
+  });
+
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
-
-  const [isAddBuildingDialogOpen, setIsAddBuildingDialogOpen] = useState(false);
-  const [newBuildingName, setNewBuildingName] = useState('');
-  
-  const [isAddFloorDialogOpen, setIsAddFloorDialogOpen] = useState(false);
-  const [newFloorName, setNewFloorName] = useState('');
   const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{ complexId: string, buildingId: string } | null>(null);
-
-  const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
-  const [newRoomName, setNewRoomName] = useState('');
   const [selectedFloorInfo, setSelectedFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
-
-  const [isAddMultipleRoomsDialogOpen, setIsAddMultipleRoomsDialogOpen] = useState(false);
   const [multipleRoomsFloorInfo, setMultipleRoomsFloorInfo] = useState<{ complexId: string, buildingId: string, floorId: string } | null>(null);
-  
-  const [isAddFacilityDialogOpen, setIsAddFacilityDialogOpen] = useState(false);
-  const [newFacilityName, setNewFacilityName] = useState('');
-  const [newFacilityType, setNewFacilityType] = useState('');
-  
   const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
 
   const userVisibleResidences = useMemo(() => {
@@ -100,42 +100,39 @@ export default function ResidencesPage() {
   const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms' | 'facility', id: string, parentId?: string, grandParentId?: string) => {
     setSelectedComplexId(id);
     if (type === 'building') {
-      setNewBuildingName('');
-      setIsAddBuildingDialogOpen(true);
+      setFormData(prev => ({ ...prev, newBuildingName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddBuildingDialogOpen: true }));
     } else if (type === 'facility') {
-      setNewFacilityName('');
-      setNewFacilityType('');
-      setIsAddFacilityDialogOpen(true);
+      setFormData(prev => ({ ...prev, newFacilityName: '', newFacilityType: '' }));
+      setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: true }));
     } else if (type === 'floor' && parentId) {
       setSelectedBuildingInfo({ complexId: parentId, buildingId: id });
-      setNewFloorName('');
-      setIsAddFloorDialogOpen(true);
+      setFormData(prev => ({ ...prev, newFloorName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddFloorDialogOpen: true }));
     } else if (type === 'room' && parentId && grandParentId) {
       setSelectedFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
-      setNewRoomName('');
-      setIsAddRoomDialogOpen(true);
+      setFormData(prev => ({ ...prev, newRoomName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddRoomDialogOpen: true }));
     } else if (type === 'multipleRooms' && parentId && grandParentId) {
         setMultipleRoomsFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
-        setIsAddMultipleRoomsDialogOpen(true);
+        setDialogStates(prev => ({ ...prev, isAddMultipleRoomsDialogOpen: true }));
     }
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComplexName.trim() || !newComplexCity.trim() || !newComplexManagerId) {
+    if (!formData.newComplexName.trim() || !formData.newComplexCity.trim() || !formData.newComplexManagerId) {
         toast({ title: 'Error', description: 'Please fill all fields, including manager.', variant: 'destructive' });
         return;
     }
-    addComplex(newComplexName, newComplexCity, newComplexManagerId);
-    setNewComplexName('');
-    setNewComplexCity('');
-    setNewComplexManagerId('');
-    setIsAddComplexDialogOpen(false);
+    addComplex(formData.newComplexName, formData.newComplexCity, formData.newComplexManagerId);
+    setFormData(prev => ({ ...prev, newComplexName: '', newComplexCity: '', newComplexManagerId: '' }));
+    setDialogStates(prev => ({ ...prev, isAddComplexDialogOpen: false }));
   };
   
   const handleOpenEditDialog = (complex: Complex) => {
     setEditingComplex(complex);
-    setIsEditComplexDialogOpen(true);
+    setDialogStates(prev => ({ ...prev, isEditComplexDialogOpen: true }));
   };
   
   const handleUpdateComplex = (e: React.FormEvent) => {
@@ -150,46 +147,45 @@ export default function ResidencesPage() {
         city: editingComplex.city,
         managerId: editingComplex.managerId,
     });
-    setIsEditComplexDialogOpen(false);
+    setDialogStates(prev => ({ ...prev, isEditComplexDialogOpen: false }));
     setEditingComplex(null);
   };
 
   const handleAddBuilding = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBuildingName.trim() || !selectedComplexId) return;
-    addBuilding(selectedComplexId, newBuildingName);
-    setNewBuildingName('');
-    setIsAddBuildingDialogOpen(false);
+    if (!formData.newBuildingName.trim() || !selectedComplexId) return;
+    addBuilding(selectedComplexId, formData.newBuildingName);
+    setFormData(prev => ({ ...prev, newBuildingName: '' }));
+    setDialogStates(prev => ({ ...prev, isAddBuildingDialogOpen: false }));
     setSelectedComplexId(null);
   };
 
   const handleAddFacility = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFacilityName.trim() || !newFacilityType.trim() || !selectedComplexId) return;
-    addFacility(selectedComplexId, newFacilityName, newFacilityType);
-    setNewFacilityName('');
-    setNewFacilityType('');
-    setIsAddFacilityDialogOpen(false);
+    if (!formData.newFacilityName.trim() || !formData.newFacilityType.trim() || !selectedComplexId) return;
+    addFacility(selectedComplexId, formData.newFacilityName, formData.newFacilityType);
+    setFormData(prev => ({ ...prev, newFacilityName: '', newFacilityType: '' }));
+    setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: false }));
     setSelectedComplexId(null);
   };
 
   const handleAddFloor = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFloorName.trim() || !selectedBuildingInfo) return;
+    if (!formData.newFloorName.trim() || !selectedBuildingInfo) return;
     const { complexId, buildingId } = selectedBuildingInfo;
-    addFloor(complexId, buildingId, newFloorName);
-    setNewFloorName('');
-    setIsAddFloorDialogOpen(false);
+    addFloor(complexId, buildingId, formData.newFloorName);
+    setFormData(prev => ({ ...prev, newFloorName: '' }));
+    setDialogStates(prev => ({ ...prev, isAddFloorDialogOpen: false }));
     setSelectedBuildingInfo(null);
   };
 
   const handleAddRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName.trim() || !selectedFloorInfo) return;
+    if (!formData.newRoomName.trim() || !selectedFloorInfo) return;
     const { complexId, buildingId, floorId } = selectedFloorInfo;
-    addRoom(complexId, buildingId, floorId, newRoomName);
-    setNewRoomName('');
-    setIsAddRoomDialogOpen(false);
+    addRoom(complexId, buildingId, floorId, formData.newRoomName);
+    setFormData(prev => ({ ...prev, newRoomName: '' }));
+    setDialogStates(prev => ({ ...prev, isAddRoomDialogOpen: false }));
     setSelectedFloorInfo(null);
   };
   
@@ -230,7 +226,7 @@ export default function ResidencesPage() {
           <p className="text-muted-foreground">Manage your residential complexes, buildings, and units.</p>
         </div>
         {isAdmin && (
-            <Dialog open={isAddComplexDialogOpen} onOpenChange={setIsAddComplexDialogOpen}>
+            <Dialog open={dialogStates.isAddComplexDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddComplexDialogOpen: open }))}>
             <DialogTrigger asChild>
                 <Button>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Complex
@@ -245,15 +241,15 @@ export default function ResidencesPage() {
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="complex-name" className="text-right">Name</Label>
-                    <Input id="complex-name" placeholder="e.g., Seaside Residences" className="col-span-3" value={newComplexName} onChange={(e) => setNewComplexName(e.target.value)} />
+                    <Input id="complex-name" placeholder="e.g., Seaside Residences" className="col-span-3" value={formData.newComplexName} onChange={(e) => setFormData(prev => ({ ...prev, newComplexName: e.target.value }))} />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="complex-city" className="text-right">City</Label>
-                    <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={newComplexCity} onChange={(e) => setNewComplexCity(e.target.value)} />
+                    <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={formData.newComplexCity} onChange={(e) => setFormData(prev => ({ ...prev, newComplexCity: e.target.value }))} />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="complex-manager" className="text-right">Manager</Label>
-                        <Select onValueChange={setNewComplexManagerId} value={newComplexManagerId}>
+                        <Select onValueChange={(value) => setFormData(prev => ({ ...prev, newComplexManagerId: value }))} value={formData.newComplexManagerId}>
                             <SelectTrigger className="col-span-3">
                                 <SelectValue placeholder="Select a manager" />
                             </SelectTrigger>
@@ -461,7 +457,7 @@ export default function ResidencesPage() {
       ))}
 
       {/* Add Building Dialog */}
-      <Dialog open={isAddBuildingDialogOpen} onOpenChange={setIsAddBuildingDialogOpen}>
+      <Dialog open={dialogStates.isAddBuildingDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddBuildingDialogOpen: open }))}>
         <DialogContent>
           <form onSubmit={handleAddBuilding}>
             <DialogHeader>
@@ -473,7 +469,7 @@ export default function ResidencesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="building-name" className="text-right">Name</Label>
-                <Input id="building-name" placeholder="e.g., Building C" className="col-span-3" value={newBuildingName} onChange={(e) => setNewBuildingName(e.target.value)} />
+                <Input id="building-name" placeholder="e.g., Building C" className="col-span-3" value={formData.newBuildingName} onChange={(e) => setFormData(prev => ({ ...prev, newBuildingName: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
@@ -484,7 +480,7 @@ export default function ResidencesPage() {
       </Dialog>
       
        {/* Add Facility Dialog */}
-      <Dialog open={isAddFacilityDialogOpen} onOpenChange={setIsAddFacilityDialogOpen}>
+      <Dialog open={dialogStates.isAddFacilityDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: open }))}>
         <DialogContent>
           <form onSubmit={handleAddFacility}>
             <DialogHeader>
@@ -496,11 +492,11 @@ export default function ResidencesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="facility-name" className="text-right">Name</Label>
-                <Input id="facility-name" placeholder="e.g., Main Warehouse" className="col-span-3" value={newFacilityName} onChange={(e) => setNewFacilityName(e.target.value)} />
+                <Input id="facility-name" placeholder="e.g., Main Warehouse" className="col-span-3" value={formData.newFacilityName} onChange={(e) => setFormData(prev => ({ ...prev, newFacilityName: e.target.value }))} />
               </div>
                <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="facility-type" className="text-right">Type</Label>
-                <Input id="facility-type" placeholder="e.g., Warehouse, Office" className="col-span-3" value={newFacilityType} onChange={(e) => setNewFacilityType(e.target.value)} />
+                <Input id="facility-type" placeholder="e.g., Warehouse, Office" className="col-span-3" value={formData.newFacilityType} onChange={(e) => setFormData(prev => ({ ...prev, newFacilityType: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
@@ -511,7 +507,7 @@ export default function ResidencesPage() {
       </Dialog>
 
       {/* Add Floor Dialog */}
-      <Dialog open={isAddFloorDialogOpen} onOpenChange={setIsAddFloorDialogOpen}>
+      <Dialog open={dialogStates.isAddFloorDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddFloorDialogOpen: open }))}>
         <DialogContent>
           <form onSubmit={handleAddFloor}>
             <DialogHeader>
@@ -523,7 +519,7 @@ export default function ResidencesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="floor-name" className="text-right">Name</Label>
-                <Input id="floor-name" placeholder="e.g., Floor 3" className="col-span-3" value={newFloorName} onChange={(e) => setNewFloorName(e.target.value)} />
+                <Input id="floor-name" placeholder="e.g., Floor 3" className="col-span-3" value={formData.newFloorName} onChange={(e) => setFormData(prev => ({ ...prev, newFloorName: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
@@ -534,7 +530,7 @@ export default function ResidencesPage() {
       </Dialog>
 
       {/* Add Room Dialog */}
-      <Dialog open={isAddRoomDialogOpen} onOpenChange={setIsAddRoomDialogOpen}>
+      <Dialog open={dialogStates.isAddRoomDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddRoomDialogOpen: open }))}>
         <DialogContent>
           <form onSubmit={handleAddRoom}>
             <DialogHeader>
@@ -546,7 +542,7 @@ export default function ResidencesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="room-name" className="text-right">Name</Label>
-                <Input id="room-name" placeholder="e.g., Room 301" className="col-span-3" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} />
+                <Input id="room-name" placeholder="e.g., Room 301" className="col-span-3" value={formData.newRoomName} onChange={(e) => setFormData(prev => ({ ...prev, newRoomName: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
@@ -558,14 +554,14 @@ export default function ResidencesPage() {
 
       {/* Add Multiple Rooms Dialog */}
       <AddMultipleRoomsDialog
-        isOpen={isAddMultipleRoomsDialogOpen}
-        onOpenChange={setIsAddMultipleRoomsDialogOpen}
+        isOpen={dialogStates.isAddMultipleRoomsDialogOpen}
+        onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddMultipleRoomsDialogOpen: open }))}
         floorInfo={multipleRoomsFloorInfo}
         onAddRooms={addMultipleRooms}
       />
       
       {/* Edit Complex Dialog */}
-      <Dialog open={isEditComplexDialogOpen} onOpenChange={setIsEditComplexDialogOpen}>
+      <Dialog open={dialogStates.isEditComplexDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isEditComplexDialogOpen: open }))}>
           <DialogContent>
               <form onSubmit={handleUpdateComplex}>
                   <DialogHeader>
@@ -609,7 +605,7 @@ export default function ResidencesPage() {
                       </div>
                   </div>
                   <DialogFooter>
-                      <Button type="button" variant="ghost" onClick={() => setIsEditComplexDialogOpen(false)}>Cancel</Button>
+                      <Button type="button" variant="ghost" onClick={() => setDialogStates(prev => ({ ...prev, isEditComplexDialogOpen: false }))}>Cancel</Button>
                       <Button type="submit">Save Changes</Button>
                   </DialogFooter>
               </form>

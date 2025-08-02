@@ -67,7 +67,16 @@ interface ResidencesContextType {
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const firebaseErrorMessage = "Firebase is not configured. Using local storage. To enable cloud sync, please configure Firebase in .env.local";
+
+// Helper function to save residences to localStorage
+const saveToLocalStorage = (residences: Complex[]) => {
+  try {
+    localStorage.setItem('estatecare_residences', JSON.stringify(residences));
+  } catch (error) {
+    console.error("Error saving to localStorage:", error);
+  }
+};
 
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
@@ -78,10 +87,22 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const loadResidences = useCallback(() => {
     if (isLoaded.current) return;
+    
     if (!db) {
-        console.error(firebaseErrorMessage);
-        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+        console.log("Firebase not configured, using local storage");
+        
+        // Load from localStorage
+        try {
+            const storedResidences = localStorage.getItem('estatecare_residences');
+            const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
+            setResidences(residencesData);
+        } catch (error) {
+            console.error("Error loading from localStorage:", error);
+            setResidences([]);
+        }
+        
         setLoading(false);
+        isLoaded.current = true;
         return;
     }
     
@@ -112,15 +133,35 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }, [loadResidences]);
 
   const addComplex = async (name: string, city: string, managerId: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
     const trimmedName = name.trim();
     if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
         toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
         return;
     }
+    
+    if (!db) {
+        // Use localStorage when Firebase is not available
+        try {
+            const newComplex: Complex = {
+                id: `complex-${Date.now()}`,
+                name: trimmedName,
+                city: city.trim(),
+                managerId,
+                buildings: [],
+                facilities: []
+            };
+            
+            const updatedResidences = [...residences, newComplex];
+            setResidences(updatedResidences);
+            saveToLocalStorage(updatedResidences);
+            toast({ title: "Success", description: "New residential complex added (locally)." });
+        } catch (error) {
+            console.error("Error saving to localStorage:", error);
+            toast({ title: "Error", description: "Failed to add complex locally.", variant: "destructive" });
+        }
+        return;
+    }
+    
     const docRef = doc(collection(db, "residences"));
     await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [] });
     toast({ title: "Success", description: "New residential complex added." });
@@ -142,12 +183,41 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addBuilding = async (complexId: string, name: string) => {
-     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    const trimmedName = name.trim();
+    
+    // Find the complex first
+    const targetComplex = residences.find(c => c.id === complexId);
+    if (!targetComplex) {
+        toast({ title: "Error", description: "Complex not found.", variant: "destructive" });
         return;
     }
+    
+    if (targetComplex.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
+        return;
+    }
+     
+    if (!db) {
+        // Use localStorage when Firebase is not available
+        try {
+            const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+            const updatedResidences = residences.map(c => 
+                c.id === complexId 
+                    ? { ...c, buildings: [...c.buildings, newBuilding] }
+                    : c
+            );
+            
+            setResidences(updatedResidences);
+            saveToLocalStorage(updatedResidences);
+            toast({ title: "Success", description: "New building added to the complex (locally)." });
+        } catch (error) {
+            console.error("Error saving to localStorage:", error);
+            toast({ title: "Error", description: "Failed to add building locally.", variant: "destructive" });
+        }
+        return;
+    }
+
     try {
-        const trimmedName = name.trim();
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
@@ -156,11 +226,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const complexData = complexDoc.data() as Complex;
-        if (complexData.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
-            toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
-            return;
-        }
-
         const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
         const updatedBuildings = [...complexData.buildings, newBuilding];
         
@@ -355,7 +420,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteComplex = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        // Use localStorage when Firebase is not available
+        try {
+            const updatedResidences = residences.filter(r => r.id !== id);
+            setResidences(updatedResidences);
+            saveToLocalStorage(updatedResidences);
+            toast({ title: "Success", description: "Complex deleted successfully (locally)." });
+        } catch (error) {
+            console.error("Error deleting from localStorage:", error);
+            toast({ title: "Error", description: "Failed to delete complex locally.", variant: "destructive" });
+        }
         return;
     }
     await deleteDoc(doc(db, "residences", id));

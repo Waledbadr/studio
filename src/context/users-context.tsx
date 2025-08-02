@@ -6,12 +6,18 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc } from "firebase/firestore";
 
+export interface UserThemeSettings {
+  colorTheme: string; // theme ID (blue, emerald, purple, etc.)
+  mode: 'light' | 'dark' | 'system';
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: "Admin" | "Supervisor" | "Technician";
   assignedResidences: string[];
+  themeSettings?: UserThemeSettings;
 }
 
 interface UsersContextType {
@@ -39,10 +45,41 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const loadUsers = useCallback(() => {
     if (isLoaded.current) return;
+    
     if (!db) {
-      console.error(firebaseErrorMessage);
-      toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+      console.log("Firebase not configured, using local storage");
+      
+      // Load from localStorage
+      try {
+        const storedUsers = localStorage.getItem('estatecare_users');
+        const usersData = storedUsers ? JSON.parse(storedUsers) : [];
+        setUsers(usersData);
+        
+        const storedUserId = localStorage.getItem('currentUser');
+        const activeUser = usersData.find((u: User) => u.id === storedUserId) || usersData[0];
+        
+        if (usersData.length > 0) {
+          const newCurrentUser = activeUser;
+          setCurrentUser(newCurrentUser);
+          
+          // Apply user's theme settings if they exist
+          if (newCurrentUser && newCurrentUser.themeSettings) {
+            localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
+            localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
+            
+            // Trigger a custom event to notify ThemeProvider
+            window.dispatchEvent(new CustomEvent('userThemeChanged', {
+              detail: newCurrentUser.themeSettings
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Error loading from localStorage:", error);
+        setUsers([]);
+      }
+      
       setLoading(false);
+      isLoaded.current = true;
       return;
     }
     
@@ -58,7 +95,19 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       const activeUser = usersData.find(u => u.id === storedUserId) || usersData[0];
 
       if (usersData.length > 0 && (!currentUser || !usersData.find(u => u.id === currentUser.id))) {
-           setCurrentUser(activeUser);
+           const newCurrentUser = activeUser;
+           setCurrentUser(newCurrentUser);
+           
+           // Apply user's theme settings if they exist
+           if (newCurrentUser && newCurrentUser.themeSettings) {
+             localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
+             localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
+             
+             // Trigger a custom event to notify ThemeProvider
+             window.dispatchEvent(new CustomEvent('userThemeChanged', {
+               detail: newCurrentUser.themeSettings
+             }));
+           }
       }
       setLoading(false);
     }, (error) => {
@@ -80,7 +129,31 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const saveUser = async (user: Omit<User, 'id'> | User) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        // Use localStorage when Firebase is not available
+        try {
+            const storedUsers = localStorage.getItem('estatecare_users');
+            const usersData = storedUsers ? JSON.parse(storedUsers) : [];
+            
+            if ('id' in user && user.id) {
+                // Update existing user
+                const updatedUsers = usersData.map((u: User) => 
+                    u.id === user.id ? user : u
+                );
+                localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+                setUsers(updatedUsers);
+                toast({ title: "Success", description: "User updated successfully (locally)." });
+            } else {
+                // Add new user
+                const newUser = { ...user, id: `user-${Date.now()}` };
+                const updatedUsers = [...usersData, newUser];
+                localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+                setUsers(updatedUsers);
+                toast({ title: "Success", description: "New user added (locally)." });
+            }
+        } catch (error) {
+            console.error("Error saving to localStorage:", error);
+            toast({ title: "Error", description: "Failed to save user locally.", variant: "destructive" });
+        }
         return;
     }
 
@@ -104,7 +177,18 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteUser = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        // Use localStorage when Firebase is not available
+        try {
+            const storedUsers = localStorage.getItem('estatecare_users');
+            const usersData = storedUsers ? JSON.parse(storedUsers) : [];
+            const updatedUsers = usersData.filter((u: User) => u.id !== id);
+            localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+            setUsers(updatedUsers);
+            toast({ title: "Success", description: "User deleted successfully (locally)." });
+        } catch (error) {
+            console.error("Error deleting from localStorage:", error);
+            toast({ title: "Error", description: "Failed to delete user locally.", variant: "destructive" });
+        }
         return;
     }
     try {
@@ -119,6 +203,18 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const switchUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('currentUser', user.id);
+    
+    // Apply user's theme settings if they exist
+    if (user.themeSettings) {
+      localStorage.setItem('colorTheme', user.themeSettings.colorTheme);
+      localStorage.setItem('themeMode', user.themeSettings.mode);
+      
+      // Trigger a custom event to notify ThemeProvider
+      window.dispatchEvent(new CustomEvent('userThemeChanged', {
+        detail: user.themeSettings
+      }));
+    }
+    
     toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
   };
   
