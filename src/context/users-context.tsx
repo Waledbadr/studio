@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc } from "firebase/firestore";
+import { useLanguage } from './language-context';
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -18,6 +19,7 @@ export interface User {
   role: "Admin" | "Supervisor" | "Technician";
   assignedResidences: string[];
   themeSettings?: UserThemeSettings;
+  language?: 'en' | 'ar';
 }
 
 interface UsersContextType {
@@ -40,6 +42,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { setLocale } = useLanguage();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
 
@@ -62,15 +65,13 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
           const newCurrentUser = activeUser;
           setCurrentUser(newCurrentUser);
           
-          // Apply user's theme settings if they exist
-          if (newCurrentUser && newCurrentUser.themeSettings) {
+          if (newCurrentUser?.language) {
+            setLocale(newCurrentUser.language);
+          }
+          if (newCurrentUser?.themeSettings) {
             localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
             localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
-            
-            // Trigger a custom event to notify ThemeProvider
-            window.dispatchEvent(new CustomEvent('userThemeChanged', {
-              detail: newCurrentUser.themeSettings
-            }));
+            window.dispatchEvent(new CustomEvent('userThemeChanged', { detail: newCurrentUser.themeSettings }));
           }
         }
       } catch (error) {
@@ -98,15 +99,13 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
            const newCurrentUser = activeUser;
            setCurrentUser(newCurrentUser);
            
-           // Apply user's theme settings if they exist
-           if (newCurrentUser && newCurrentUser.themeSettings) {
+           if (newCurrentUser?.language) {
+            setLocale(newCurrentUser.language);
+           }
+           if (newCurrentUser?.themeSettings) {
              localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
              localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
-             
-             // Trigger a custom event to notify ThemeProvider
-             window.dispatchEvent(new CustomEvent('userThemeChanged', {
-               detail: newCurrentUser.themeSettings
-             }));
+             window.dispatchEvent(new CustomEvent('userThemeChanged', { detail: newCurrentUser.themeSettings }));
            }
       }
       setLoading(false);
@@ -115,7 +114,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Firestore Error", description: "Could not fetch users data.", variant: "destructive" });
       setLoading(false);
     });
-  }, [toast, currentUser]);
+  }, [toast, currentUser, setLocale]);
 
   useEffect(() => {
     loadUsers();
@@ -204,16 +203,20 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setCurrentUser(user);
     localStorage.setItem('currentUser', user.id);
     
-    // Apply user's theme settings if they exist
-    if (user.themeSettings) {
-      localStorage.setItem('colorTheme', user.themeSettings.colorTheme);
-      localStorage.setItem('themeMode', user.themeSettings.mode);
-      
-      // Trigger a custom event to notify ThemeProvider
-      window.dispatchEvent(new CustomEvent('userThemeChanged', {
-        detail: user.themeSettings
-      }));
+    // Apply user's language setting
+    if (user.language) {
+        setLocale(user.language);
     }
+
+    // Apply user's theme settings if they exist, otherwise use defaults
+    const themeSettings = user.themeSettings || { colorTheme: 'blue', mode: 'system' };
+    localStorage.setItem('colorTheme', themeSettings.colorTheme);
+    localStorage.setItem('themeMode', themeSettings.mode);
+    
+    // Trigger a custom event to notify ThemeProvider
+    window.dispatchEvent(new CustomEvent('userThemeChanged', {
+      detail: themeSettings
+    }));
     
     toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
   };
