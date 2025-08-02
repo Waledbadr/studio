@@ -41,7 +41,6 @@ const formSchema = z.object({
   assignedResidences: z.array(z.string()).refine(value => value.some(item => item), {
     message: "You have to select at least one residence.",
   }),
-  language: z.enum(["en", "ar"]).optional(),
   themeSettings: z.object({
       colorTheme: z.string(),
       mode: z.enum(['light', 'dark', 'system']),
@@ -70,7 +69,6 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
       email: "",
       role: "Technician",
       assignedResidences: [],
-      language: 'en',
       themeSettings: {
           colorTheme: 'blue',
           mode: 'system',
@@ -93,7 +91,6 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
           email: user.email,
           role: user.role,
           assignedResidences: user.assignedResidences || [],
-          language: user.language || 'en',
           themeSettings: user.themeSettings || { colorTheme: 'blue', mode: 'system' },
         });
       } else {
@@ -103,7 +100,6 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
           email: "",
           role: "Technician",
           assignedResidences: [],
-          language: 'en',
           themeSettings: { colorTheme: 'blue', mode: 'system' },
         });
       }
@@ -117,7 +113,6 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
         email: data.email,
         role: data.role,
         assignedResidences: data.assignedResidences,
-        language: data.language,
         themeSettings: data.themeSettings as UserThemeSettings,
     };
     onSave(userToSave);
@@ -238,25 +233,6 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                     <Palette className="h-4 w-4" /> User Preferences
                 </FormLabel>
                  <div className="grid grid-cols-2 gap-4">
-                     <FormField
-                        control={form.control}
-                        name="language"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Language</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value="en">English</SelectItem>
-                                    <SelectItem value="ar">العربية</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
                     <FormField
                         control={form.control}
                         name="themeSettings.mode"

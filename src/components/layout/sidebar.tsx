@@ -19,10 +19,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
-import { useLanguage } from '@/context/language-context';
 
 export function AppSidebar() {
-  const { dict, locale } = useLanguage();
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
   const [isMounted, setIsMounted] = useState(false);
@@ -50,50 +48,50 @@ export function AppSidebar() {
   const menuStructure: MenuSection[] = [
     // Main Section
     {
-      title: dict.sidebar.main,
+      title: 'Main',
       items: [
-        { href: '/', label: dict.sidebar.dashboard, icon: Home },
-        { href: '/maintenance', label: dict.sidebar.maintenance, icon: Wrench },
+        { href: '/', label: 'Dashboard', icon: Home },
+        { href: '/maintenance', label: 'Maintenance', icon: Wrench },
       ]
     },
     // Stock Management Section
     {
-      title: dict.sidebar.stockManagement,
+      title: 'Stock Management',
       items: [
-        { href: '/inventory', label: dict.sidebar.inventory, icon: ClipboardList, exact: true },
-        { href: '/inventory/inventory-audit', label: dict.sidebar.stockReconciliation, icon: FileCheck },
-        { href: '/inventory/depreciation', label: dict.sidebar.depreciation, icon: AlertTriangle },
-        { href: '/inventory/transfer', label: dict.sidebar.stockTransfer, icon: Move },
+        { href: '/inventory', label: 'Inventory', icon: ClipboardList, exact: true },
+        { href: '/inventory/inventory-audit', label: 'Stock Reconciliation', icon: FileCheck },
+        { href: '/inventory/depreciation', label: 'Depreciation', icon: AlertTriangle },
+        { href: '/inventory/transfer', label: 'Stock Transfer', icon: Move },
       ]
     },
     // Material Movement Section
     {
-      title: dict.sidebar.materialMovement,
+      title: 'Material Movement',
       items: [
-        { href: '/inventory/orders', label: dict.sidebar.materialRequests, abbreviation: ' (MR)', icon: ListOrdered },
-        { href: '/inventory/receive', label: dict.sidebar.receiveMaterials, abbreviation: ' (MRV)', icon: PackageCheck },
-        { href: '/inventory/issue', label: dict.sidebar.issueMaterials, abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
+        { href: '/inventory/orders', label: 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
+        { href: '/inventory/receive', label: 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
+        { href: '/inventory/issue', label: 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
       ]
     },
     // Reports Section
     {
-      title: dict.sidebar.reports,
+      title: 'Reports',
       items: [
-        { href: '/reports', label: dict.sidebar.reports, icon: AreaChart },
+        { href: '/reports', label: 'Reports', icon: AreaChart },
       ],
       subItems: [
-        { href: '/inventory/reports/stock-movement', label: dict.sidebar.stockMovementReport, icon: TrendingUp },
-        { href: '/inventory/reports/lifespan', label: dict.sidebar.lifespanReport, icon: History }
+        { href: '/inventory/reports/stock-movement', label: 'Stock Movement Report', icon: TrendingUp },
+        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History }
       ]
     },
     // Settings Section
     {
-      title: dict.sidebar.settings,
+      title: 'Settings',
       items: [
-        { href: '/residences', label: dict.sidebar.residences, icon: Building },
-        { href: '/users', label: dict.sidebar.users, icon: Users },
-        { href: '/tools', label: dict.sidebar.aiTools, icon: Bot },
-        { href: '/setup', label: dict.sidebar.setup, icon: Settings },
+        { href: '/residences', label: 'Residences', icon: Building },
+        { href: '/users', label: 'Users', icon: Users },
+        { href: '/tools', label: 'AI Tools', icon: Bot },
+        { href: '/setup', label: 'Setup', icon: Settings },
       ]
     },
   ];
@@ -101,13 +99,13 @@ export function AppSidebar() {
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-2 rtl:flex-row-reverse">
+        <div className="flex items-center gap-2 p-2">
             <Building className="h-8 w-8 text-primary" />
             <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu key={locale}>
+        <SidebarMenu>
           {menuStructure.map((section, sectionIndex) => (
             <div key={`section-${sectionIndex}`}>
               {/* Section Title */}
@@ -158,7 +156,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="p-2">
              <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
-                 <div className="flex items-center gap-2 rtl:flex-row-reverse">
+                 <div className="flex items-center gap-2">
                      <Avatar className="size-8">
                        {isMounted && currentUser ? (
                          <>
@@ -169,8 +167,8 @@ export function AppSidebar() {
                         <AvatarFallback />
                        )}
                     </Avatar>
-                    <div className="group-data-[collapsible=icon]:hidden text-left rtl:text-right">
-                        <p className="font-semibold text-sm">{loading || !isMounted ? dict.loading : currentUser?.name}</p>
+                    <div className="group-data-[collapsible=icon]:hidden text-left">
+                        <p className="font-semibold text-sm">{loading || !isMounted ? 'Loading...' : currentUser?.name}</p>
                         <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
                     </div>
                  </div>

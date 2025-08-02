@@ -8,7 +8,6 @@ import { InventoryProvider } from '@/context/inventory-context';
 import { UsersProvider } from '@/context/users-context';
 import { OrdersProvider } from '@/context/orders-context';
 import { MaintenanceProvider } from '@/context/maintenance-context';
-import { LanguageProvider } from '@/context/language-context';
 import { NotificationsProvider } from '@/context/notifications-context';
 
 export const metadata: Metadata = {
@@ -55,13 +54,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
       <body className="font-body antialiased">
         <ThemeProvider>
-          <LanguageProvider>
             <ResidencesProvider>
               <UsersProvider>
                 <NotificationsProvider>
@@ -75,7 +73,6 @@ export default function RootLayout({
                 </NotificationsProvider>
               </UsersProvider>
             </ResidencesProvider>
-          </LanguageProvider>
         </ThemeProvider>
         <Toaster />
       </body>

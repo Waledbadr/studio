@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
-import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +29,6 @@ interface InventoryAudit {
 export default function InventoryAuditPage() {
   const { items, loading } = useInventory();
   const { residences } = useResidences();
-  const { dict } = useLanguage();
   const [audits, setAudits] = useState<InventoryAudit[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(true);
 
@@ -45,7 +43,7 @@ export default function InventoryAuditPage() {
         startDate: new Date('2025-01-15'),
         endDate: new Date('2025-01-20'),
         status: 'COMPLETED',
-        createdBy: 'أحمد محمد',
+        createdBy: 'Ahmed Mohamed',
         itemsAudited: 150,
         totalItems: 150,
         discrepancies: 5,
@@ -57,7 +55,7 @@ export default function InventoryAuditPage() {
         residenceName: 'Building B',
         startDate: new Date('2025-01-25'),
         status: 'IN_PROGRESS',
-        createdBy: 'فاطمة أحمد',
+        createdBy: 'Fatima Ahmed',
         itemsAudited: 75,
         totalItems: 120,
         discrepancies: 2,
@@ -69,7 +67,7 @@ export default function InventoryAuditPage() {
         residenceName: 'Building A',
         startDate: new Date('2025-02-01'),
         status: 'PENDING_APPROVAL',
-        createdBy: 'محمد علي',
+        createdBy: 'Mohammed Ali',
         itemsAudited: 200,
         totalItems: 200,
         discrepancies: 8,
@@ -130,7 +128,7 @@ export default function InventoryAuditPage() {
       <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-6 border border-green-100 dark:border-green-800">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{dict.sidebar.stockReconciliation}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Stock Reconciliation</h1>
             <p className="text-gray-600 dark:text-gray-300 text-lg">
               Compare actual physical inventory with system records and reconcile discrepancies
             </p>

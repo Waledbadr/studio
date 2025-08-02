@@ -10,7 +10,6 @@ import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useLanguage } from '@/context/language-context';
 import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +17,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '../ui/skeleton';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  const { dict, toggleLanguage } = useLanguage();
   const { currentUser, users, switchUser } = useUsers();
   const { notifications, markAsRead, markAllAsRead } = useNotifications();
   const { mode, setMode, resolvedMode, isLoaded } = useTheme();
@@ -36,16 +34,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     router.push('/setup#themes');
   };
 
-  const quickToggleMode = () => {
-    if (mode === 'light') {
-      setMode('dark');
-    } else if (mode === 'dark') {
-      setMode('system');
-    } else {
-      setMode('light');
-    }
-  };
-
   const handleProfileClick = () => {
     router.push('/users');
   };
@@ -56,7 +44,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   return (
-    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm rtl:flex-row-reverse sm:px-6", className)} {...props}>
+    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
@@ -69,34 +57,30 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>إعدادات الثيم</DropdownMenuLabel>
+          <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setMode('light')}>
             <Sun className="mr-2 h-4 w-4" />
-            الوضع الفاتح
-            {mode === 'light' && <Check className="mr-2 h-4 w-4" />}
+            Light
+            {mode === 'light' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('dark')}>
             <Moon className="mr-2 h-4 w-4" />
-            الوضع الداكن
-            {mode === 'dark' && <Check className="mr-2 h-4 w-4" />}
+            Dark
+            {mode === 'dark' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('system')}>
             <Monitor className="mr-2 h-4 w-4" />
-            حسب النظام
-            {mode === 'system' && <Check className="mr-2 h-4 w-4" />}
+            System
+            {mode === 'system' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleThemeSettingsClick}>
             <Palette className="mr-2 h-4 w-4" />
-            إعدادات الألوان
+            Color Settings
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-       <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
-        <Globe className="h-5 w-5" />
-        <span className="sr-only">{dict.changeLanguage}</span>
-      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
            <Button variant="ghost" size="icon" className="rounded-full relative">
@@ -104,12 +88,12 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                 {isMounted && unreadCount > 0 && (
                     <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 justify-center rounded-full p-0">{unreadCount}</Badge>
                 )}
-                <span className="sr-only">{dict.notifications}</span>
+                <span className="sr-only">Notifications</span>
             </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel className="flex justify-between items-center">
-                <span>{dict.notifications}</span>
+                <span>Notifications</span>
                 {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>Mark all as read</Button>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -139,19 +123,19 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : dict.myAccount}</DropdownMenuLabel>
+            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : 'My Account'}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
-            <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
+            <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Switch User</DropdownMenuLabel>
             {isMounted && users ? users.map(user => (
                 <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
                     {user.name} ({user.role})
                 </DropdownMenuItem>
-            )) : <DropdownMenuItem disabled>{dict.loading}</DropdownMenuItem> }
+            )) : <DropdownMenuItem disabled>Loading...</DropdownMenuItem> }
             <DropdownMenuSeparator />
-            <DropdownMenuItem>{dict.logout}</DropdownMenuItem>
+            <DropdownMenuItem>Logout</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

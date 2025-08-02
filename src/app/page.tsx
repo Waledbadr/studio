@@ -14,10 +14,8 @@ import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { useUsers } from "@/context/users-context";
-import { useLanguage } from "@/context/language-context";
 
 export default function DashboardPage() {
-  const { dict } = useLanguage();
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
   const { orders, loading: ordersLoading, loadOrders } = useOrders();
   const { getMIVs, loading: inventoryLoading } = useInventory();
@@ -64,32 +62,32 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{dict.dashboard.totalRequests}</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">{dict.dashboard.totalMaintenanceRequests}</p>
+            <p className="text-xs text-muted-foreground">Total maintenance requests</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{dict.dashboard.pending}</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{pendingRequests}</div>}
-            <p className="text-xs text-muted-foreground">{dict.dashboard.requestsNeedAttention}</p>
+            <p className="text-xs text-muted-foreground">Requests that need attention</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{dict.dashboard.completed}</CardTitle>
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRequests}</div>}
-            <p className="text-xs text-muted-foreground">{dict.dashboard.completedRequests}</p>
+            <p className="text-xs text-muted-foreground">Completed requests</p>
           </CardContent>
         </Card>
       </div>
@@ -98,18 +96,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> {dict.dashboard.recentMaintenance}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/maintenance">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noMaintenanceRequestsFound}</div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
                 : (
                     <Table>
-                        <TableHeader><TableRow><TableHead>{dict.location}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaintenance.map(req => (
                                 <TableRow key={req.id}>
@@ -131,18 +129,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> {dict.dashboard.recentMaterialRequests}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent Material Requests</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/orders">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/orders">View All<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noMaterialRequestsFound}</div>
+                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">No material requests found.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaterialRequests.map(order => (
                                 <TableRow key={order.id}>
@@ -172,18 +170,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> {dict.dashboard.recentReceipts}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent Receipts</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/receive">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/receive">View All<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noRecentReceiptsFound}</div>
+                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent receipts found.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId}</TableHead><TableHead>{dict.status}</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentReceipts.map(order => (
                                 <TableRow key={order.id}>
@@ -205,18 +203,18 @@ export default function DashboardPage() {
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> {dict.dashboard.recentIssues}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent Issues</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/inventory/issue-history">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                  {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard.noRecentIssuesFound}.</div>
+                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent issues found.</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>{dict.mivId}</TableHead><TableHead>{dict.date}</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>MIV ID</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentIssues.map(miv => (
                                 <TableRow key={miv.id}>
