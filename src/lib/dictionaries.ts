@@ -19,21 +19,38 @@ const en = {
 
     // Sidebar
     sidebar: {
+        // Main Section
+        main: 'Main',
         dashboard: 'Dashboard',
-        residences: 'Residences',
         maintenance: 'Maintenance',
+        
+        // Stock Management Section
+        stockManagement: 'Stock Management',
         inventory: 'Inventory',
+        stockReconciliation: 'Stock Reconciliation',
+        depreciation: 'Depreciation',
         stockTransfer: 'Stock Transfer',
-        stockTransferHistory: 'Transfer History',
+        
+        // Material Movement Section
+        materialMovement: 'Material Movement',
         materialRequests: 'Material Requests',
         receiveMaterials: 'Receive Materials',
         issueMaterials: 'Issue Materials',
+        
+        // Reports Section
         reports: 'Reports',
+        stockMovementReport: 'Stock Movement Report',
+        lifespanReport: 'Lifespan Report',
+        
+        // Settings Section
+        settings: 'Settings',
+        residences: 'Residences',
         users: 'Users',
         aiTools: 'AI Tools',
         setup: 'Setup',
-        stockMovementReport: 'Stock Movement Report',
-        lifespanReport: 'Lifespan Report'
+        
+        // Legacy items
+        stockTransferHistory: 'Transfer History'
     },
 
     // Dashboard Page
@@ -75,21 +92,38 @@ const ar: typeof en = {
 
     // Sidebar
     sidebar: {
+        // Main Section
+        main: 'الرئيسي',
         dashboard: 'الرئيسية',
-        residences: 'المجمعات السكنية',
         maintenance: 'الصيانة',
+        
+        // Stock Management Section
+        stockManagement: 'إدارة المخزون',
         inventory: 'المخزون',
+        stockReconciliation: 'تسوية المخزون',
+        depreciation: 'الإهلاك',
         stockTransfer: 'تحويل مخزني',
-        stockTransferHistory: 'سجل التحويلات',
+        
+        // Material Movement Section
+        materialMovement: 'حركة المواد',
         materialRequests: 'طلبات المواد',
         receiveMaterials: 'استلام المواد',
         issueMaterials: 'صرف المواد',
+        
+        // Reports Section
         reports: 'التقارير',
+        stockMovementReport: 'تقرير حركة المخزون',
+        lifespanReport: 'تقرير العمر الافتراضي',
+        
+        // Settings Section
+        settings: 'الإعدادات',
+        residences: 'المجمعات السكنية',
         users: 'المستخدمون',
         aiTools: 'أدوات الذكاء الاصطناعي',
         setup: 'الإعدادات',
-        stockMovementReport: 'تقرير حركة المخزون',
-        lifespanReport: 'تقرير العمر الافتراضي'
+        
+        // Legacy items
+        stockTransferHistory: 'سجل التحويلات'
     },
 
     // Dashboard Page

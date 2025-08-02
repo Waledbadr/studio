@@ -225,10 +225,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
 
-    const orderRef = doc(db, "orders", orderId);
+    const firestore = db; // Type assertion to help TypeScript
+    const orderRef = doc(firestore, "orders", orderId);
 
     try {
-        await runTransaction(db, async (transaction) => {
+        await runTransaction(firestore, async (transaction) => {
             const orderSnap = await transaction.get(orderRef);
             if (!orderSnap.exists()) {
                 throw new Error("Order not found");
@@ -243,14 +244,22 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
             const transactionTime = Timestamp.now();
 
             if (newlyReceivedItems.length > 0) {
+                // Track missing items to report to user
+                const missingItems: string[] = [];
+                
+                console.log('Processing received items:', newlyReceivedItems.map(item => ({ id: item.id, name: item.nameEn })));
+                
                 // Update inventory stock for each item and log transaction
                 for (const receivedItem of newlyReceivedItems) {
                     if (receivedItem.quantityReceived > 0) {
-                        const itemRef = doc(db, "inventory", receivedItem.id);
+                        const itemRef = doc(firestore, "inventory", receivedItem.id);
                         const itemDoc = await transaction.get(itemRef);
 
                         if (!itemDoc.exists()) {
-                             throw new Error(`Item ${receivedItem.nameEn} not found in inventory.`);
+                            // Log missing item but don't crash the transaction
+                            console.warn(`Item ${receivedItem.nameEn} (ID: ${receivedItem.id}) not found in inventory.`);
+                            missingItems.push(`${receivedItem.nameEn} (ID: ${receivedItem.id})`);
+                            continue; // Skip this item and continue with others
                         }
 
                         const currentStock = itemDoc.data()?.stockByResidence?.[residenceId] || 0;
@@ -260,10 +269,9 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                             [`stockByResidence.${residenceId}`]: newStock
                         });
 
-
                         // Log the transaction
-                        const transactionRef = doc(collection(db, "inventoryTransactions"));
-                        const newTransaction: Omit<InventoryTransaction, 'id'> = {
+                        const transactionRef = doc(collection(firestore, "inventoryTransactions"));
+                        transaction.set(transactionRef, {
                             itemId: receivedItem.id,
                             itemNameEn: receivedItem.nameEn,
                             itemNameAr: receivedItem.nameAr,
@@ -272,9 +280,19 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
                             type: 'IN',
                             quantity: receivedItem.quantityReceived,
                             referenceDocId: orderId,
-                        };
-                        transaction.set(transactionRef, newTransaction);
+                        } as Omit<InventoryTransaction, 'id'>);
                     }
+                }
+                
+                // Show warning for missing items after transaction completes
+                if (missingItems.length > 0) {
+                    setTimeout(() => {
+                        toast({ 
+                            title: "Warning - Missing Items", 
+                            description: `The following items were not found in inventory: ${missingItems.join(', ')}. Please check your inventory setup.`,
+                            variant: "destructive"
+                        });
+                    }, 100);
                 }
             }
             

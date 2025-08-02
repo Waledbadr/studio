@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +41,7 @@ export default function StockMovementReportPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
 
   // Handle filter changes
   const handleFilterChange = (key: keyof StockMovementFilters, value: any) => {
@@ -87,7 +88,7 @@ export default function StockMovementReportPage() {
   }, [items]);
 
   // Generate report
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = useCallback(async () => {
     if (!filters.residenceId) {
       setError('Please select a residence');
       return;
@@ -143,7 +144,15 @@ export default function StockMovementReportPage() {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [filters, getAllInventoryTransactions]);
+
+  // Auto-filter effect for simple mode
+  useEffect(() => {
+    if (!isAdvancedMode && filters.residenceId) {
+      // Auto-generate report when residence changes in simple mode
+      handleGenerateReport();
+    }
+  }, [filters.residenceId, filters.movementType, isAdvancedMode, handleGenerateReport]);
 
   // Export to CSV
   const exportToCSV = () => {
@@ -180,6 +189,8 @@ export default function StockMovementReportPage() {
       case 'RETURN': return 'Return';
       case 'IN': return 'Stock In';
       case 'OUT': return 'Stock Out';
+      case 'DEPRECIATION': return 'Depreciation';
+      case 'AUDIT': return 'Audit Adjustment';
       default: return type;
     }
   };
@@ -199,8 +210,10 @@ export default function StockMovementReportPage() {
       case 'ISSUE':
       case 'TRANSFER_OUT':
       case 'OUT':
+      case 'DEPRECIATION':
         return 'text-red-600 bg-red-50';
       case 'ADJUSTMENT':
+      case 'AUDIT':
         return 'text-blue-600 bg-blue-50';
       case 'RETURN':
         return 'text-orange-600 bg-orange-50';
@@ -245,272 +258,373 @@ export default function StockMovementReportPage() {
               <Filter className="mr-3 h-6 w-6 text-blue-600" />
               Report Filters
             </CardTitle>
-            <Badge variant="outline" className="text-xs px-3 py-1">
-              Advanced
-            </Badge>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Simple</span>
+                <button
+                  onClick={() => {
+                    setIsAdvancedMode(!isAdvancedMode);
+                    // Clear advanced filters when switching to simple mode
+                    if (isAdvancedMode) {
+                      setFilters(prev => ({
+                        ...prev,
+                        buildingId: '',
+                        floorId: '',
+                        roomId: '',
+                        itemId: '',
+                        startDate: undefined,
+                        endDate: undefined
+                      }));
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    isAdvancedMode ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isAdvancedMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <span className="text-sm text-gray-600">Advanced</span>
+              </div>
+              <Badge variant="outline" className="text-xs px-3 py-1">
+                {isAdvancedMode ? 'Advanced' : 'Simple'}
+              </Badge>
+              {!isAdvancedMode && (
+                <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200">
+                  Auto-filter ON
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         
         <CardContent className="p-6 space-y-8">
-          {/* Location Hierarchy Section */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-800">Location Hierarchy</h3>
-              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Required</span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Residence Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="residence" className="text-sm font-medium text-gray-700">
-                  Residence <span className="text-red-500">*</span>
-                </Label>
-                <select 
-                  id="residence"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={filters.residenceId} 
-                  onChange={(e) => handleFilterChange('residenceId', e.target.value)}
-                >
-                  <option value="">Select Residence</option>
-                  {residences.map(residence => {
-                    if (!residence?.id) return null;
-                    return (
-                      <option key={residence.id} value={residence.id}>
-                        {residence.name || `Residence ${residence.id}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Building Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="building" className="text-sm font-medium text-gray-700">Building</Label>
-                <select
-                  id="building"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                  value={filters.buildingId} 
-                  onChange={(e) => handleFilterChange('buildingId', e.target.value)}
-                  disabled={!filters.residenceId}
-                >
-                  <option value="">All Buildings</option>
-                  {availableBuildings.map(building => {
-                    if (!building?.id) return null;
-                    return (
-                      <option key={building.id} value={building.id}>
-                        {building.name || `Building ${building.id}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Floor Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="floor" className="text-sm font-medium text-gray-700">Floor</Label>
-                <select
-                  id="floor"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                  value={filters.floorId} 
-                  onChange={(e) => handleFilterChange('floorId', e.target.value)}
-                  disabled={!filters.buildingId}
-                >
-                  <option value="">All Floors</option>
-                  {availableFloors.map(floor => {
-                    if (!floor?.id) return null;
-                    return (
-                      <option key={floor.id} value={floor.id}>
-                        {floor.name || `Floor ${floor.id}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Room Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="room" className="text-sm font-medium text-gray-700">Room</Label>
-                <select
-                  id="room"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                  value={filters.roomId} 
-                  onChange={(e) => handleFilterChange('roomId', e.target.value)}
-                  disabled={!filters.floorId}
-                >
-                  <option value="">All Rooms</option>
-                  {availableRooms.map(room => {
-                    if (!room?.id) return null;
-                    return (
-                      <option key={room.id} value={room.id}>
-                        {room.name || `Room ${room.id}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Movement & Item Filters Section */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-1 h-6 bg-green-500 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-800">Movement & Item Filters</h3>
-              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Movement Type Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="movementType" className="text-sm font-medium text-gray-700">Movement Type</Label>
-                <select
-                  id="movementType"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  value={filters.movementType} 
-                  onChange={(e) => handleFilterChange('movementType', e.target.value)}
-                >
-                  <option value="">All Movement Types</option>
-                  <option value="RECEIVE">Receive</option>
-                  <option value="ISSUE">Issue</option>
-                  <option value="TRANSFER_IN">Transfer In</option>
-                  <option value="TRANSFER_OUT">Transfer Out</option>
-                  <option value="ADJUSTMENT">Adjustment</option>
-                  <option value="RETURN">Return</option>
-                  <option value="IN">Stock In</option>
-                  <option value="OUT">Stock Out</option>
-                </select>
-              </div>
-
-              {/* Item Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="itemId" className="text-sm font-medium text-gray-700">Specific Item</Label>
-                <select
-                  id="itemId"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  value={filters.itemId} 
-                  onChange={(e) => handleFilterChange('itemId', e.target.value)}
-                >
-                  <option value="">All Items</option>
-                  {availableItems.map((item: any) => {
-                    if (!item?.id) return null;
-                    return (
-                      <option key={item.id} value={item.id}>
-                        {item.name || `Item ${item.id}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Date Range Section */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-800">Date Range</h3>
-              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
-            </div>
-            
-            <div className="space-y-4">
-              {/* Date Inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate" className="text-sm font-medium text-gray-700">Start Date</Label>
-                  <input
-                    id="startDate"
-                    type="date"
-                    className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    value={filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value) : undefined)}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="endDate" className="text-sm font-medium text-gray-700">End Date</Label>
-                  <input
-                    id="endDate"
-                    type="date"
-                    className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    value={filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value) : undefined)}
-                  />
-                </div>
+          {!isAdvancedMode ? (
+            /* Simple Mode - Only Residence and Movement Type */
+            <div className="space-y-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                <h3 className="text-lg font-semibold text-gray-800">Basic Filters</h3>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Simple Search</span>
               </div>
               
-              {/* Quick Date Range Buttons */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">Quick Ranges</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const today = new Date();
-                      handleFilterChange('startDate', today);
-                      handleFilterChange('endDate', today);
-                    }}
-                    className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Residence Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="residence" className="text-sm font-medium text-gray-700">
+                    Residence <span className="text-red-500">*</span>
+                  </Label>
+                  <select 
+                    id="residence"
+                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={filters.residenceId} 
+                    onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                   >
-                    Today
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const today = new Date();
-                      const weekStart = new Date(today);
-                      weekStart.setDate(today.getDate() - today.getDay());
-                      handleFilterChange('startDate', weekStart);
-                      handleFilterChange('endDate', today);
-                    }}
-                    className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                    <option value="">Select Residence</option>
+                    {residences.map(residence => {
+                      if (!residence?.id) return null;
+                      return (
+                        <option key={residence.id} value={residence.id}>
+                          {residence.name || `Residence ${residence.id}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Movement Type Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="movementType" className="text-sm font-medium text-gray-700">Movement Type</Label>
+                  <select
+                    id="movementType"
+                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={filters.movementType} 
+                    onChange={(e) => handleFilterChange('movementType', e.target.value)}
                   >
-                    This Week
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const today = new Date();
-                      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                      handleFilterChange('startDate', monthStart);
-                      handleFilterChange('endDate', today);
-                    }}
-                    className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
-                  >
-                    This Month
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const today = new Date();
-                      const monthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                      const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-                      handleFilterChange('startDate', monthStart);
-                      handleFilterChange('endDate', monthEnd);
-                    }}
-                    className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
-                  >
-                    Last Month
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      handleFilterChange('startDate', undefined);
-                      handleFilterChange('endDate', undefined);
-                    }}
-                    className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
-                  >
-                    Clear Dates
-                  </Button>
+                    <option value="">All Movement Types</option>
+                    <option value="RECEIVE">Receive</option>
+                    <option value="ISSUE">Issue</option>
+                    <option value="TRANSFER_IN">Transfer In</option>
+                    <option value="TRANSFER_OUT">Transfer Out</option>
+                    <option value="ADJUSTMENT">Adjustment</option>
+                    <option value="RETURN">Return</option>
+                    <option value="IN">Stock In</option>
+                    <option value="OUT">Stock Out</option>
+                    <option value="DEPRECIATION">Depreciation</option>
+                    <option value="AUDIT">Audit Adjustment</option>
+                  </select>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Advanced Mode - All Filters */
+            <>
+              {/* Location Hierarchy Section */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-lg font-semibold text-gray-800">Location Hierarchy</h3>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Required</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Residence Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="residence" className="text-sm font-medium text-gray-700">
+                      Residence <span className="text-red-500">*</span>
+                    </Label>
+                    <select 
+                      id="residence"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={filters.residenceId} 
+                      onChange={(e) => handleFilterChange('residenceId', e.target.value)}
+                    >
+                      <option value="">Select Residence</option>
+                      {residences.map(residence => {
+                        if (!residence?.id) return null;
+                        return (
+                          <option key={residence.id} value={residence.id}>
+                            {residence.name || `Residence ${residence.id}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Building Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="building" className="text-sm font-medium text-gray-700">Building</Label>
+                    <select
+                      id="building"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      value={filters.buildingId} 
+                      onChange={(e) => handleFilterChange('buildingId', e.target.value)}
+                      disabled={!filters.residenceId}
+                    >
+                      <option value="">All Buildings</option>
+                      {availableBuildings.map(building => {
+                        if (!building?.id) return null;
+                        return (
+                          <option key={building.id} value={building.id}>
+                            {building.name || `Building ${building.id}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Floor Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="floor" className="text-sm font-medium text-gray-700">Floor</Label>
+                    <select
+                      id="floor"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      value={filters.floorId} 
+                      onChange={(e) => handleFilterChange('floorId', e.target.value)}
+                      disabled={!filters.buildingId}
+                    >
+                      <option value="">All Floors</option>
+                      {availableFloors.map(floor => {
+                        if (!floor?.id) return null;
+                        return (
+                          <option key={floor.id} value={floor.id}>
+                            {floor.name || `Floor ${floor.id}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Room Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="room" className="text-sm font-medium text-gray-700">Room</Label>
+                    <select
+                      id="room"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      value={filters.roomId} 
+                      onChange={(e) => handleFilterChange('roomId', e.target.value)}
+                      disabled={!filters.floorId}
+                    >
+                      <option value="">All Rooms</option>
+                      {availableRooms.map(room => {
+                        if (!room?.id) return null;
+                        return (
+                          <option key={room.id} value={room.id}>
+                            {room.name || `Room ${room.id}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Movement & Item Filters Section */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+                  <h3 className="text-lg font-semibold text-gray-800">Movement & Item Filters</h3>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Movement Type Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="movementType" className="text-sm font-medium text-gray-700">Movement Type</Label>
+                    <select
+                      id="movementType"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      value={filters.movementType} 
+                      onChange={(e) => handleFilterChange('movementType', e.target.value)}
+                    >
+                      <option value="">All Movement Types</option>
+                      <option value="RECEIVE">Receive</option>
+                      <option value="ISSUE">Issue</option>
+                      <option value="TRANSFER_IN">Transfer In</option>
+                      <option value="TRANSFER_OUT">Transfer Out</option>
+                      <option value="ADJUSTMENT">Adjustment</option>
+                      <option value="RETURN">Return</option>
+                      <option value="IN">Stock In</option>
+                      <option value="OUT">Stock Out</option>
+                      <option value="DEPRECIATION">Depreciation</option>
+                      <option value="AUDIT">Audit Adjustment</option>
+                    </select>
+                  </div>
+
+                  {/* Item Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="itemId" className="text-sm font-medium text-gray-700">Specific Item</Label>
+                    <select
+                      id="itemId"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      value={filters.itemId} 
+                      onChange={(e) => handleFilterChange('itemId', e.target.value)}
+                    >
+                      <option value="">All Items</option>
+                      {availableItems.map((item: any) => {
+                        if (!item?.id) return null;
+                        return (
+                          <option key={item.id} value={item.id}>
+                            {item.name || `Item ${item.id}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Range Section */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+                  <h3 className="text-lg font-semibold text-gray-800">Date Range</h3>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Date Inputs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startDate" className="text-sm font-medium text-gray-700">Start Date</Label>
+                      <input
+                        id="startDate"
+                        type="date"
+                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        value={filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : ''}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value) : undefined)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="endDate" className="text-sm font-medium text-gray-700">End Date</Label>
+                      <input
+                        id="endDate"
+                        type="date"
+                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        value={filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : ''}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value) : undefined)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Quick Date Range Buttons */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Quick Ranges</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          handleFilterChange('startDate', today);
+                          handleFilterChange('endDate', today);
+                        }}
+                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                      >
+                        Today
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          const weekStart = new Date(today);
+                          weekStart.setDate(today.getDate() - today.getDay());
+                          handleFilterChange('startDate', weekStart);
+                          handleFilterChange('endDate', today);
+                        }}
+                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                      >
+                        This Week
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                          handleFilterChange('startDate', monthStart);
+                          handleFilterChange('endDate', today);
+                        }}
+                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                      >
+                        This Month
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          const monthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                          const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                          handleFilterChange('startDate', monthStart);
+                          handleFilterChange('endDate', monthEnd);
+                        }}
+                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                      >
+                        Last Month
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          handleFilterChange('startDate', undefined);
+                          handleFilterChange('endDate', undefined);
+                        }}
+                        className="text-xs border-purple-200 hover:bg-purple-50 hover:border-purple-300 h-9"
+                      >
+                        Clear Dates
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
         
         {/* Action Footer */}
@@ -529,7 +643,7 @@ export default function StockMovementReportPage() {
               ) : (
                 <>
                   <TrendingUp className="mr-2 h-5 w-5" />
-                  Generate Report
+                  {!isAdvancedMode ? "Refresh Report" : "Generate Report"}
                 </>
               )}
             </Button>
@@ -550,7 +664,7 @@ export default function StockMovementReportPage() {
               </>
             ) : (
               <span className="text-green-600 flex items-center">
-                ✓ Ready to generate report
+                ✓ {!isAdvancedMode ? "Auto-filtering enabled" : "Ready to generate report"}
               </span>
             )}
           </div>

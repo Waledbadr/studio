@@ -34,12 +34,23 @@ export interface InventoryTransaction {
     itemNameAr: string;
     residenceId: string;
     date: Timestamp;
-    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT';
+    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT' | 'DEPRECIATION' | 'AUDIT';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
     locationId?: string;
     locationName?: string;
     relatedResidenceId?: string; // For transfers
+    depreciationReason?: string; // For depreciation transactions
+}
+
+export interface DepreciationRequest {
+    itemId: string;
+    residenceId: string;
+    locationId: string;
+    locationName: string;
+    quantity: number;
+    reason: string;
+    notes?: string;
 }
 
 export interface LocationWithItems<T> {
@@ -96,11 +107,84 @@ export interface StockTransfer {
 
 export type NewStockTransferPayload = Omit<StockTransfer, 'id' | 'date' | 'status'>;
 
+// Inventory Audit interfaces
+export interface InventoryAudit {
+  id: string;
+  name: string;
+  description?: string;
+  residenceId: string;
+  residenceName: string;
+  status: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  createdBy: string;
+  createdAt: Timestamp;
+  startDate?: Timestamp;
+  endDate?: Timestamp;
+  scope: {
+    locations: string[]; // locationId:locationName format
+    categories: string[];
+    includeAllItems: boolean;
+    specificItems: string[];
+  };
+  settings: {
+    requireDoubleCheck: boolean;
+    requirePhotos: boolean;
+    autoGenerateReport: boolean;
+    emailReport: boolean;
+  };
+  summary?: {
+    totalItems: number;
+    completedItems: number;
+    discrepanciesCount: number;
+    adjustmentsMade: number;
+  };
+}
+
+export interface AuditItem {
+  id: string;
+  auditId: string;
+  itemId: string;
+  itemName: string;
+  itemNameAr: string;
+  category: string;
+  unit: string;
+  locationId: string;
+  locationName: string;
+  systemStock: number;
+  physicalStock: number | null;
+  difference: number;
+  status: 'PENDING' | 'COUNTED' | 'VERIFIED' | 'DISCREPANCY' | 'ADJUSTED';
+  notes: string;
+  countedBy?: string;
+  countedAt?: Timestamp;
+  verifiedBy?: string;
+  verifiedAt?: Timestamp;
+  adjustmentAction?: 'APPROVE' | 'REJECT' | 'MODIFY';
+  adjustmentReason?: string;
+  newPhysicalCount?: number;
+}
+
+export interface AuditAdjustment {
+  id: string;
+  auditId: string;
+  itemId: string;
+  itemNameAr: string;
+  locationId: string;
+  locationName: string;
+  oldStock: number;
+  newStock: number;
+  difference: number;
+  unit: string;
+  reason: string;
+  adjustedBy: string;
+  adjustedAt: Timestamp;
+}
+
 
 interface InventoryContextType {
   items: InventoryItem[];
   categories: string[];
   transfers: StockTransfer[];
+  audits: InventoryAudit[];
   loading: boolean;
   addItem: (item: Omit<InventoryItem, 'id' | 'stock'>) => Promise<InventoryItem | void>;
   updateItem: (item: InventoryItem) => Promise<void>;
@@ -119,6 +203,16 @@ interface InventoryContextType {
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
   getLastIssueDateForItemAtLocation: (itemId: string, locationId: string) => Promise<Timestamp | null>;
+  depreciateItems: (depreciationRequest: DepreciationRequest) => Promise<void>;
+  // Audit functions
+  createAudit: (audit: Omit<InventoryAudit, 'id' | 'createdAt' | 'summary'>) => Promise<string>;
+  getAudits: () => Promise<InventoryAudit[]>;
+  getAuditById: (auditId: string) => Promise<InventoryAudit | null>;
+  updateAuditStatus: (auditId: string, status: InventoryAudit['status']) => Promise<void>;
+  getAuditItems: (auditId: string) => Promise<AuditItem[]>;
+  updateAuditItem: (auditItem: AuditItem) => Promise<void>;
+  submitAuditCount: (auditId: string, itemId: string, physicalStock: number, notes: string, countedBy: string) => Promise<void>;
+  completeAudit: (auditId: string, adjustments: AuditAdjustment[], generalNotes: string) => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -130,11 +224,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
+  const [audits, setAudits] = useState<InventoryAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const inventoryUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const categoriesUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const transfersUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const auditsUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
@@ -157,7 +253,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
           // Ensure totalStock is a valid number, defaulting to 0 if not.
-          const totalStock = Object.values(stockByResidence).reduce((sum, current) => {
+          const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
               const num = Number(current);
               return sum + (isNaN(num) ? 0 : num);
           }, 0);
@@ -203,6 +299,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Firestore Error", description: "Could not fetch stock transfers.", variant: "destructive" });
     });
 
+    auditsUnsubscribeRef.current = onSnapshot(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')), (snapshot) => {
+        const auditsData = snapshot.docs.map(doc => doc.data() as InventoryAudit);
+        setAudits(auditsData);
+    }, (error) => {
+        console.error("Error fetching audits:", error);
+        toast({ title: "Firestore Error", description: "Could not fetch audits.", variant: "destructive" });
+    });
+
 
   }, [toast, categories.length]);
   
@@ -212,6 +316,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       if (inventoryUnsubscribeRef.current) inventoryUnsubscribeRef.current();
       if (categoriesUnsubscribeRef.current) categoriesUnsubscribeRef.current();
       if (transfersUnsubscribeRef.current) transfersUnsubscribeRef.current();
+      if (auditsUnsubscribeRef.current) auditsUnsubscribeRef.current();
       isLoaded.current = false;
     };
   }, [loadInventory]);
@@ -880,9 +985,359 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
          toast({ title: "Success", description: "Transfer request has been rejected." });
     };
 
+    const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            await runTransaction(db, async (transaction) => {
+                // Get the item to verify it exists and get its names
+                const itemRef = doc(db!, "inventory", depreciationRequest.itemId);
+                const itemSnap = await transaction.get(itemRef);
+                
+                if (!itemSnap.exists()) {
+                    throw new Error("Item not found");
+                }
+                
+                const itemData = itemSnap.data() as InventoryItem;
+                
+                // Check if there's enough stock
+                const currentStock = itemData.stockByResidence?.[depreciationRequest.residenceId] || 0;
+                if (currentStock < depreciationRequest.quantity) {
+                    throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
+                }
+                
+                // Update stock for the residence
+                const newStockByResidence = { ...itemData.stockByResidence };
+                newStockByResidence[depreciationRequest.residenceId] = currentStock - depreciationRequest.quantity;
+                
+                // Calculate new total stock
+                const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
+                    const num = Number(stock);
+                    return sum + (isNaN(num) ? 0 : num);
+                }, 0);
+                
+                // Update item document
+                transaction.update(itemRef, {
+                    stock: newTotalStock,
+                    stockByResidence: newStockByResidence
+                });
+                
+                // Create depreciation transaction
+                const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
+                const transactionData: Omit<InventoryTransaction, 'id'> = {
+                    itemId: depreciationRequest.itemId,
+                    itemNameEn: itemData.nameEn,
+                    itemNameAr: itemData.nameAr,
+                    residenceId: depreciationRequest.residenceId,
+                    date: Timestamp.now(),
+                    type: 'DEPRECIATION',
+                    quantity: depreciationRequest.quantity,
+                    referenceDocId: `DEP-${Date.now()}`,
+                    locationId: depreciationRequest.locationId,
+                    locationName: depreciationRequest.locationName,
+                    depreciationReason: depreciationRequest.reason
+                };
+                
+                transaction.set(depreciationTransactionRef, transactionData);
+            });
+            
+            toast({ 
+                title: "Success", 
+                description: `Successfully depreciated ${depreciationRequest.quantity} items. Reason: ${depreciationRequest.reason}` 
+            });
+        } catch (error) {
+            console.error("Failed to depreciate items:", error);
+            const err = error as Error;
+            toast({ 
+                title: "Error", 
+                description: `Depreciation failed: ${err.message}`, 
+                variant: "destructive" 
+            });
+            throw error;
+        }
+    };
+
+    // Audit functions
+    const createAudit = async (auditData: Omit<InventoryAudit, 'id' | 'createdAt' | 'summary'>): Promise<string> => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            const auditRef = doc(collection(db, 'inventoryAudits'));
+            const audit: InventoryAudit = {
+                ...auditData,
+                id: auditRef.id,
+                createdAt: Timestamp.now(),
+                summary: {
+                    totalItems: 0,
+                    completedItems: 0,
+                    discrepanciesCount: 0,
+                    adjustmentsMade: 0
+                }
+            };
+            
+            await setDoc(auditRef, audit);
+            toast({ title: "Success", description: "Audit created successfully." });
+            return audit.id;
+        } catch (error) {
+            console.error("Error creating audit:", error);
+            toast({ title: "Error", description: "Failed to create audit.", variant: "destructive" });
+            throw error;
+        }
+    };
+
+    const getAudits = async (): Promise<InventoryAudit[]> => {
+        if (!db) {
+            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            return [];
+        }
+        
+        try {
+            const q = query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => doc.data() as InventoryAudit);
+        } catch (error) {
+            console.error('Error fetching audits:', error);
+            toast({ title: "Error", description: "Failed to fetch audits.", variant: "destructive" });
+            return [];
+        }
+    };
+
+    const getAuditById = async (auditId: string): Promise<InventoryAudit | null> => {
+        if (!db) {
+            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            return null;
+        }
+        
+        try {
+            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const auditSnap = await getDoc(auditRef);
+            
+            if (!auditSnap.exists()) {
+                return null;
+            }
+            
+            return auditSnap.data() as InventoryAudit;
+        } catch (error) {
+            console.error('Error fetching audit:', error);
+            toast({ title: "Error", description: "Failed to fetch audit.", variant: "destructive" });
+            return null;
+        }
+    };
+
+    const updateAuditStatus = async (auditId: string, status: InventoryAudit['status']): Promise<void> => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const updateData: any = { status };
+            
+            if (status === 'IN_PROGRESS') {
+                updateData.startDate = Timestamp.now();
+            } else if (status === 'COMPLETED') {
+                updateData.endDate = Timestamp.now();
+            }
+            
+            await updateDoc(auditRef, updateData);
+            toast({ title: "Success", description: "Audit status updated." });
+        } catch (error) {
+            console.error('Error updating audit status:', error);
+            toast({ title: "Error", description: "Failed to update audit status.", variant: "destructive" });
+            throw error;
+        }
+    };
+
+    const getAuditItems = async (auditId: string): Promise<AuditItem[]> => {
+        if (!db) {
+            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            return [];
+        }
+        
+        try {
+            const q = query(collection(db, 'auditItems'), where('auditId', '==', auditId));
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => doc.data() as AuditItem);
+        } catch (error) {
+            console.error('Error fetching audit items:', error);
+            toast({ title: "Error", description: "Failed to fetch audit items.", variant: "destructive" });
+            return [];
+        }
+    };
+
+    const updateAuditItem = async (auditItem: AuditItem): Promise<void> => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            const itemRef = doc(db, 'auditItems', auditItem.id);
+            await updateDoc(itemRef, { ...auditItem });
+        } catch (error) {
+            console.error('Error updating audit item:', error);
+            toast({ title: "Error", description: "Failed to update audit item.", variant: "destructive" });
+            throw error;
+        }
+    };
+
+    const submitAuditCount = async (
+        auditId: string, 
+        itemId: string, 
+        physicalStock: number, 
+        notes: string, 
+        countedBy: string
+    ): Promise<void> => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            const q = query(
+                collection(db, 'auditItems'), 
+                where('auditId', '==', auditId),
+                where('itemId', '==', itemId)
+            );
+            const querySnapshot = await getDocs(q);
+            
+            if (querySnapshot.empty) {
+                throw new Error('Audit item not found');
+            }
+            
+            const auditItemDoc = querySnapshot.docs[0];
+            const auditItem = auditItemDoc.data() as AuditItem;
+            
+            const difference = physicalStock - auditItem.systemStock;
+            const status = difference === 0 ? 'VERIFIED' : 'DISCREPANCY';
+            
+            await updateDoc(auditItemDoc.ref, {
+                physicalStock,
+                difference,
+                status,
+                notes,
+                countedBy,
+                countedAt: Timestamp.now()
+            });
+            
+            toast({ title: "Success", description: "Count submitted successfully." });
+        } catch (error) {
+            console.error('Error submitting audit count:', error);
+            toast({ title: "Error", description: "Failed to submit count.", variant: "destructive" });
+            throw error;
+        }
+    };
+
+    const completeAudit = async (
+        auditId: string, 
+        adjustments: AuditAdjustment[], 
+        generalNotes: string
+    ): Promise<void> => {
+        if (!db) throw new Error(firebaseErrorMessage);
+        
+        try {
+            await runTransaction(db, async (transaction) => {
+                // Update audit status
+                const auditRef = doc(db!, 'inventoryAudits', auditId);
+                transaction.update(auditRef, {
+                    status: 'COMPLETED',
+                    endDate: Timestamp.now(),
+                    'summary.adjustmentsMade': adjustments.length
+                });
+                
+                // Apply stock adjustments
+                for (const adjustment of adjustments) {
+                    const itemRef = doc(db!, 'inventory', adjustment.itemId);
+                    const itemSnap = await transaction.get(itemRef);
+                    
+                    if (itemSnap.exists()) {
+                        const itemData = itemSnap.data() as InventoryItem;
+                        const currentResidenceStock = itemData.stockByResidence?.[adjustment.locationId] || 0;
+                        const newResidenceStock = adjustment.newStock;
+                        
+                        // Update stock by residence
+                        const newStockByResidence = { ...itemData.stockByResidence };
+                        newStockByResidence[adjustment.locationId] = newResidenceStock;
+                        
+                        // Calculate new total stock
+                        const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
+                            const num = Number(stock);
+                            return sum + (isNaN(num) ? 0 : num);
+                        }, 0);
+                        
+                        transaction.update(itemRef, {
+                            stock: newTotalStock,
+                            stockByResidence: newStockByResidence
+                        });
+                        
+                        // Create adjustment transaction
+                        const adjustmentTransactionRef = doc(collection(db!, "inventoryTransactions"));
+                        const transactionData: Omit<InventoryTransaction, 'id'> = {
+                            itemId: adjustment.itemId,
+                            itemNameEn: itemData.nameEn,
+                            itemNameAr: itemData.nameAr,
+                            residenceId: adjustment.locationId,
+                            date: Timestamp.now(),
+                            type: 'ADJUSTMENT',
+                            quantity: Math.abs(adjustment.difference),
+                            referenceDocId: auditId,
+                            locationId: adjustment.locationId,
+                            locationName: adjustment.locationName
+                        };
+                        
+                        transaction.set(adjustmentTransactionRef, transactionData);
+                    }
+                }
+                
+                // Store adjustments
+                for (const adjustment of adjustments) {
+                    const adjustmentRef = doc(collection(db!, 'auditAdjustments'));
+                    transaction.set(adjustmentRef, {
+                        ...adjustment,
+                        id: adjustmentRef.id,
+                        adjustedAt: Timestamp.now()
+                    });
+                }
+            });
+            
+            toast({ 
+                title: "Success", 
+                description: `Audit completed successfully. ${adjustments.length} adjustments applied.` 
+            });
+        } catch (error) {
+            console.error('Error completing audit:', error);
+            toast({ title: "Error", description: "Failed to complete audit.", variant: "destructive" });
+            throw error;
+        }
+    };
+
 
   return (
-    <InventoryContext.Provider value={{ items, categories, transfers, loading, addItem, updateItem, deleteItem, loadInventory, addCategory, updateCategory, getStockForResidence, issueItemsFromStock, getInventoryTransactions, getAllInventoryTransactions, getMIVs, getMIVById, getLastIssueDateForItemAtLocation, getAllIssueTransactions, createTransferRequest, approveTransfer, rejectTransfer }}>
+    <InventoryContext.Provider value={{ 
+      items, 
+      categories, 
+      transfers, 
+      audits, 
+      loading, 
+      addItem, 
+      updateItem, 
+      deleteItem, 
+      loadInventory, 
+      addCategory, 
+      updateCategory, 
+      getStockForResidence, 
+      issueItemsFromStock, 
+      getInventoryTransactions, 
+      getAllInventoryTransactions, 
+      getMIVs, 
+      getMIVById, 
+      getLastIssueDateForItemAtLocation, 
+      getAllIssueTransactions, 
+      createTransferRequest, 
+      approveTransfer, 
+      rejectTransfer, 
+      depreciateItems,
+      createAudit,
+      getAudits,
+      getAuditById,
+      updateAuditStatus,
+      getAuditItems,
+      updateAuditItem,
+      submitAuditCount,
+      completeAudit
+    }}>
       {children}
     </InventoryContext.Provider>
   );
