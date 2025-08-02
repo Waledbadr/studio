@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -242,7 +243,10 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             }
 
             const itemsToProcess = newlyReceivedItems.filter(item => item.quantityReceived > 0);
-            const itemRefs = itemsToProcess.map(item => doc(firestore, "inventory", item.id));
+             const itemRefs = itemsToProcess.map(item => {
+                const baseItemId = item.id.split('-')[0]; // Extract base ID
+                return doc(firestore, "inventory", baseItemId);
+            });
             const itemSnaps = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
             const missingItems: string[] = [];
             
@@ -267,15 +271,16 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             
             // Update inventory stock and log transactions
             for (const receivedItem of itemsToProcess) {
+                 const baseItemId = receivedItem.id.split('-')[0];
                 const itemData = itemDataMap.get(receivedItem.id);
                 if (itemData) {
-                    const itemRef = doc(firestore, "inventory", receivedItem.id);
+                    const itemRef = doc(firestore, "inventory", baseItemId);
                     const newStock = (itemData.stockByResidence?.[residenceId] || 0) + receivedItem.quantityReceived;
                     transaction.update(itemRef, { [`stockByResidence.${residenceId}`]: newStock });
 
                     const transactionRef = doc(collection(firestore, "inventoryTransactions"));
                     transaction.set(transactionRef, {
-                        itemId: receivedItem.id,
+                        itemId: baseItemId,
                         itemNameEn: receivedItem.nameEn,
                         itemNameAr: receivedItem.nameAr,
                         residenceId: residenceId,
