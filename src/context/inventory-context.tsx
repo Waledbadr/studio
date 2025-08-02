@@ -199,7 +199,7 @@ interface InventoryContextType {
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
-  getAllInventoryTransactions: (filters?: {residenceId?: string, movementType?: string, startDate?: Date, endDate?: Date}) => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -599,49 +599,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
 
- const getAllInventoryTransactions = async (filters: {residenceId?: string, movementType?: string, startDate?: Date, endDate?: Date} = {}): Promise<InventoryTransaction[]> => {
+ const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return [];
     }
 
     try {
-        let constraints = [];
-        if (filters.startDate) {
-            constraints.push(where('date', '>=', filters.startDate));
-        }
-        if (filters.endDate) {
-            const endDate = new Date(filters.endDate);
-            endDate.setDate(endDate.getDate() + 1);
-            constraints.push(where('date', '<=', endDate));
-        }
-        
-        const q = query(
-            collectionGroup(db, "inventoryTransactions"),
-            orderBy("date", "desc"),
-            ...constraints
-        );
-        
+        const q = query(collectionGroup(db, "inventoryTransactions"));
         const querySnapshot = await getDocs(q);
-        let allTransactions = querySnapshot.docs.map(doc => ({
+        
+        return querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as InventoryTransaction));
-        
-        // Client-side filtering for non-indexed fields
-        if (filters.residenceId) {
-            allTransactions = allTransactions.filter(tx => tx.residenceId === filters.residenceId);
-        }
-        if(filters.movementType) {
-            allTransactions = allTransactions.filter(tx => tx.type === filters.movementType);
-        }
 
-        return allTransactions;
     } catch (error) {
-        console.error('Error generating report:', error);
+        console.error('Error fetching all transactions:', error);
         toast({
             title: "Error",
-            description: `Error generating report: ${error}`,
+            description: `Error fetching transactions: ${error}`,
             variant: "destructive"
         });
         return [];

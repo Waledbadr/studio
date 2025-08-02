@@ -38,10 +38,27 @@ export default function StockMovementReportPage() {
     endDate: undefined
   });
 
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+
+  // Fetch all transactions once
+  useEffect(() => {
+    const fetchAll = async () => {
+        setIsGenerating(true);
+        try {
+            const all = await getAllInventoryTransactions();
+            setAllTransactions(all);
+        } catch(e) {
+            setError('Failed to load transaction data.');
+        } finally {
+            setIsGenerating(false);
+        }
+    }
+    fetchAll();
+  }, [getAllInventoryTransactions]);
+
 
   // Handle filter changes
   const handleFilterChange = (key: keyof StockMovementFilters, value: any) => {
@@ -96,42 +113,62 @@ export default function StockMovementReportPage() {
 
     setIsGenerating(true);
     setError(null);
+    
+    // Client-side filtering
+    const filtered = allTransactions.filter(transaction => {
+        let keep = true;
 
-    try {
-      const fetchedTransactions = await getAllInventoryTransactions(filters);
-      setTransactions(fetchedTransactions);
-    } catch (error) {
-      console.error('Error generating report:', error);
-      setError('Failed to generate report. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [filters, getAllInventoryTransactions]);
+        if (filters.residenceId && transaction.residenceId !== filters.residenceId) keep = false;
+        if (filters.movementType && transaction.type !== filters.movementType) keep = false;
+        if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
 
-  // Auto-filter effect for simple mode
-  useEffect(() => {
-    if (!isAdvancedMode && filters.residenceId) {
-      // Auto-generate report when residence changes in simple mode
-      handleGenerateReport();
-    }
-  }, [filters.residenceId, filters.movementType, isAdvancedMode, handleGenerateReport]);
+        // Date filtering
+        if (filters.startDate) {
+            const startDate = new Date(filters.startDate);
+            startDate.setHours(0, 0, 0, 0);
+            if (transaction.date.toDate() < startDate) keep = false;
+        }
+        if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (transaction.date.toDate() > endDate) keep = false;
+        }
+        
+        // Note: Building/Floor/Room filtering would require more data on the transaction object
+        // This is a limitation of the current data model. We can filter by locationName if available.
+        if (filters.roomId) {
+            if (!transaction.locationName?.includes(availableRooms.find(r => r.id === filters.roomId)?.name || '')) keep = false;
+        } else if (filters.floorId) {
+             if (!transaction.locationName?.includes(availableFloors.find(f => f.id === filters.floorId)?.name || '')) keep = false;
+        } else if (filters.buildingId) {
+             if (!transaction.locationName?.includes(availableBuildings.find(b => b.id === filters.buildingId)?.name || '')) keep = false;
+        }
+        
+        return keep;
+    });
+
+    setFilteredTransactions(filtered);
+    setIsGenerating(false);
+
+  }, [filters, allTransactions, availableRooms, availableFloors, availableBuildings]);
+
 
   // Export to CSV
   const exportToCSV = () => {
     const headers = ['Date', 'Item', 'Movement Type', 'Quantity', 'Location', 'Notes'];
     const csvContent = [
       headers.join(','),
-      ...transactions.map(transaction => [
+      ...filteredTransactions.map(transaction => [
         format(transaction.date.toDate(), 'yyyy-MM-dd HH:mm'),
-        transaction.itemNameEn || 'Unknown Item',
+        `"${transaction.itemNameEn || 'Unknown Item'}"`,
         getMovementTypeLabel(transaction.type),
         transaction.quantity,
-        getLocationString(transaction),
-        transaction.referenceDocId || ''
+        `"${getLocationString(transaction)}"`,
+        `"${transaction.referenceDocId || ''}"`
       ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -166,6 +203,7 @@ export default function StockMovementReportPage() {
       case 'RECEIVE':
       case 'TRANSFER_IN':
       case 'IN':
+      case 'RETURN':
         return 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20';
       case 'ISSUE':
       case 'TRANSFER_OUT':
@@ -175,14 +213,12 @@ export default function StockMovementReportPage() {
       case 'ADJUSTMENT':
       case 'AUDIT':
         return 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20';
-      case 'RETURN':
-        return 'text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20';
       default:
         return 'text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700';
     }
   };
 
-  if (!residences.length) {
+  if (!residences.length && !isGenerating) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
@@ -218,110 +254,10 @@ export default function StockMovementReportPage() {
               <Filter className="mr-3 h-6 w-6 text-primary" />
               Report Filters
             </CardTitle>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Simple</span>
-                <button
-                  onClick={() => {
-                    setIsAdvancedMode(!isAdvancedMode);
-                    // Clear advanced filters when switching to simple mode
-                    if (isAdvancedMode) {
-                      setFilters(prev => ({
-                        ...prev,
-                        buildingId: '',
-                        floorId: '',
-                        roomId: '',
-                        itemId: '',
-                        startDate: undefined,
-                        endDate: undefined
-                      }));
-                    }
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    isAdvancedMode ? 'bg-primary' : 'bg-muted'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
-                      isAdvancedMode ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <span className="text-sm text-muted-foreground">Advanced</span>
-              </div>
-              <Badge variant="outline" className="text-xs px-3 py-1">
-                {isAdvancedMode ? 'Advanced' : 'Simple'}
-              </Badge>
-              {!isAdvancedMode && (
-                <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 border-green-200 dark:border-green-700">
-                  Auto-filter ON
-                </Badge>
-              )}
-            </div>
           </div>
         </CardHeader>
         
         <CardContent className="p-6 space-y-8">
-          {!isAdvancedMode ? (
-            /* Simple Mode - Only Residence and Movement Type */
-            <div className="space-y-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-1 h-6 bg-primary rounded-full"></div>
-                <h3 className="text-lg font-semibold text-foreground">Basic Filters</h3>
-                <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Simple Search</span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Residence Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="residence" className="text-sm font-medium">
-                    Residence <span className="text-red-500">*</span>
-                  </Label>
-                  <select 
-                    id="residence"
-                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-border bg-background px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    value={filters.residenceId} 
-                    onChange={(e) => handleFilterChange('residenceId', e.target.value)}
-                  >
-                    <option value="">Select Residence</option>
-                    {residences.map(residence => {
-                      if (!residence?.id) return null;
-                      return (
-                        <option key={residence.id} value={residence.id}>
-                          {residence.name || `Residence ${residence.id}`}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                {/* Movement Type Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="movementType" className="text-sm font-medium">Movement Type</Label>
-                  <select
-                    id="movementType"
-                    className="flex h-12 w-full items-center justify-between rounded-lg border-2 border-border bg-background px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    value={filters.movementType} 
-                    onChange={(e) => handleFilterChange('movementType', e.target.value)}
-                  >
-                    <option value="">All Movement Types</option>
-                    <option value="RECEIVE">Receive</option>
-                    <option value="ISSUE">Issue</option>
-                    <option value="TRANSFER_IN">Transfer In</option>
-                    <option value="TRANSFER_OUT">Transfer Out</option>
-                    <option value="ADJUSTMENT">Adjustment</option>
-                    <option value="RETURN">Return</option>
-                    <option value="IN">Stock In</option>
-                    <option value="OUT">Stock Out</option>
-                    <option value="DEPRECIATION">Depreciation</option>
-                    <option value="AUDIT">Audit Adjustment</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Advanced Mode - All Filters */
-            <>
               {/* Location Hierarchy Section */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
@@ -468,7 +404,7 @@ export default function StockMovementReportPage() {
                         if (!item?.id) return null;
                         return (
                           <option key={item.id} value={item.id}>
-                            {item.name || `Item ${item.id}`}
+                            {item.nameEn}
                           </option>
                         );
                       })}
@@ -511,80 +447,8 @@ export default function StockMovementReportPage() {
                     </div>
                   </div>
                   
-                  {/* Quick Date Range Buttons */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Quick Ranges</Label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const today = new Date();
-                          handleFilterChange('startDate', today);
-                          handleFilterChange('endDate', today);
-                        }}
-                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
-                      >
-                        Today
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const today = new Date();
-                          const weekStart = new Date(today);
-                          weekStart.setDate(today.getDate() - today.getDay());
-                          handleFilterChange('startDate', weekStart);
-                          handleFilterChange('endDate', today);
-                        }}
-                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
-                      >
-                        This Week
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const today = new Date();
-                          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                          handleFilterChange('startDate', monthStart);
-                          handleFilterChange('endDate', today);
-                        }}
-                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
-                      >
-                        This Month
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const today = new Date();
-                          const monthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                          const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-                          handleFilterChange('startDate', monthStart);
-                          handleFilterChange('endDate', monthEnd);
-                        }}
-                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
-                      >
-                        Last Month
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          handleFilterChange('startDate', undefined);
-                          handleFilterChange('endDate', undefined);
-                        }}
-                        className="text-xs border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-600 h-9"
-                      >
-                        Clear Dates
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </div>
-            </>
-          )}
         </CardContent>
         
         {/* Action Footer */}
@@ -603,12 +467,12 @@ export default function StockMovementReportPage() {
               ) : (
                 <>
                   <TrendingUp className="mr-2 h-5 w-5" />
-                  {!isAdvancedMode ? "Refresh Report" : "Generate Report"}
+                  Generate Report
                 </>
               )}
             </Button>
             
-            {transactions.length > 0 && (
+            {filteredTransactions.length > 0 && (
               <Button variant="outline" onClick={exportToCSV} className="border-border hover:bg-accent h-11 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
@@ -624,7 +488,7 @@ export default function StockMovementReportPage() {
               </>
             ) : (
               <span className="text-green-600 flex items-center">
-                ✓ {isAdvancedMode ? "Ready to generate report" : "Auto-filtering enabled"}
+                ✓ Ready to generate report
               </span>
             )}
           </div>
@@ -641,12 +505,12 @@ export default function StockMovementReportPage() {
       )}
 
       {/* Results Table */}
-      {transactions.length > 0 && (
+      {filteredTransactions.length > 0 && (
         <Card className="shadow-lg">
           <CardHeader className="bg-muted/30 border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-semibold text-foreground">
-                Report Results ({transactions.length} transactions)
+                Report Results ({filteredTransactions.length} transactions)
               </CardTitle>
               <Badge variant="secondary">
                 {format(new Date(), 'MMM dd, yyyy')}
@@ -667,7 +531,7 @@ export default function StockMovementReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((transaction, index) => (
+                  {filteredTransactions.map((transaction, index) => (
                     <TableRow key={index} className="hover:bg-muted/50">
                       <TableCell className="font-mono text-sm">
                         {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
@@ -699,7 +563,7 @@ export default function StockMovementReportPage() {
       )}
 
       {/* No Results */}
-      {!isGenerating && transactions.length === 0 && filters.residenceId && (
+      {!isGenerating && filteredTransactions.length === 0 && filters.residenceId && (
         <Card>
           <CardContent className="p-8 text-center">
             <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
