@@ -3,6 +3,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent flash of incorrect theme */
+html {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }

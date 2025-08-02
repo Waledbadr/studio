@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Globe, UserCircle, Sun, Moon, Check } from 'lucide-react';
+import { Bell, Globe, UserCircle, Sun, Moon, Check, Monitor, Palette } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/language-context';
 import { useNotifications } from '@/context/notifications-context';
+import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -19,28 +20,30 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const { dict, toggleLanguage } = useLanguage();
   const { currentUser, users, switchUser } = useUsers();
   const { notifications, markAsRead, markAllAsRead } = useNotifications();
+  const { mode, setMode, resolvedMode, isLoaded } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
     setIsMounted(true);
-    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    const initialTheme = storedTheme || 'dark';
-    setTheme(initialTheme);
-    document.documentElement.classList.add(initialTheme);
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.remove('light', 'dark');
-    document.documentElement.classList.add(newTheme);
+
+  const handleThemeSettingsClick = () => {
+    router.push('/setup#themes');
   };
 
+  const quickToggleMode = () => {
+    if (mode === 'light') {
+      setMode('dark');
+    } else if (mode === 'dark') {
+      setMode('system');
+    } else {
+      setMode('light');
+    }
+  };
 
   const handleProfileClick = () => {
     router.push('/users');
@@ -57,10 +60,38 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
       </div>
-       <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleTheme}>
-        {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-        <span className="sr-only">Toggle theme</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="rounded-full">
+            {resolvedMode === 'light' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            <span className="sr-only">Theme settings</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>إعدادات الثيم</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setMode('light')}>
+            <Sun className="mr-2 h-4 w-4" />
+            الوضع الفاتح
+            {mode === 'light' && <Check className="mr-2 h-4 w-4" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setMode('dark')}>
+            <Moon className="mr-2 h-4 w-4" />
+            الوضع الداكن
+            {mode === 'dark' && <Check className="mr-2 h-4 w-4" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setMode('system')}>
+            <Monitor className="mr-2 h-4 w-4" />
+            حسب النظام
+            {mode === 'system' && <Check className="mr-2 h-4 w-4" />}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleThemeSettingsClick}>
+            <Palette className="mr-2 h-4 w-4" />
+            إعدادات الألوان
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
        <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
         <Globe className="h-5 w-5" />
         <span className="sr-only">{dict.changeLanguage}</span>

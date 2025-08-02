@@ -371,9 +371,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
             
+            // Step 1: Read all items first
             const itemSnapshots = new Map<string, DocumentSnapshot>();
             for (const id of uniqueItemIds) {
-                const itemRef = doc(db, "inventory", id);
+                const itemRef = doc(db!, "inventory", id);
                 const itemSnap = await transaction.get(itemRef);
                 if (!itemSnap.exists()) {
                     throw new Error(`Item with ID ${id} not found.`);
@@ -381,24 +382,30 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 itemSnapshots.set(id, itemSnap);
             }
 
+            // Step 2: Validate all items and prepare stock updates
+            const stockUpdates: Array<{ itemId: string, issueQuantity: number }> = [];
             for (const item of allIssuedItems) {
                 const itemSnap = itemSnapshots.get(item.id);
                 const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
                 if (currentStock < item.issueQuantity) {
                     throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
                 }
-                 // Update stock
-                const itemRef = doc(db, "inventory", item.id);
-                const stockUpdateKey = `stockByResidence.${residenceId}`;
-                transaction.update(itemRef, { [stockUpdateKey]: increment(-item.issueQuantity) });
+                stockUpdates.push({ itemId: item.id, issueQuantity: item.issueQuantity });
             }
             
-            // All reads and stock checks are done, now do all writes
+            // Step 3: Perform all writes after all reads and validations are complete
+            // Update stock for all items
+            for (const update of stockUpdates) {
+                const itemRef = doc(db!, "inventory", update.itemId);
+                const stockUpdateKey = `stockByResidence.${residenceId}`;
+                transaction.update(itemRef, { [stockUpdateKey]: increment(-update.issueQuantity) });
+            }
+            
             const transactionTime = Timestamp.now();
             let totalItemsCount = 0;
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
             
-            const mivDocRef = doc(db, 'mivs', mivId);
+            const mivDocRef = doc(db!, 'mivs', mivId);
             
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
@@ -406,7 +413,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     totalItemsCount += issuedItem.issueQuantity;
 
                     // Log transaction
-                    const transactionRef = doc(collection(db, "inventoryTransactions"));
+                    const transactionRef = doc(collection(db!, "inventoryTransactions"));
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
                         itemNameEn: issuedItem.nameEn,
@@ -574,38 +581,96 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             // Direct transfer, no approval needed
             try {
                 await runTransaction(db, async (transaction) => {
-                    for (const item of itemsToTransfer) {
-                        const itemRef = doc(db, 'inventory', item.id);
-                        const itemDoc = await transaction.get(itemRef);
-                        if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
+                    // Step 1: Read all items first
+                    const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
+                    const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+                    
+                    // Validate all items and prepare updates
+                    const updates: Array<{ ref: any, updates: any }> = [];
+                    
+                    for (let i = 0; i < itemsToTransfer.length; i++) {
+                        const item = itemsToTransfer[i];
+                        const itemDoc = itemDocs[i];
+                        
+                        if (!itemDoc.exists()) {
+                            throw new Error(`Item ${item.nameEn} not found.`);
+                        }
                         
                         const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
                         if (currentFromStock < item.quantity) {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
 
-                        // Ensure 'to' residence has a stock entry before incrementing
-                        const toStockUpdate = {
-                             [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                        // Prepare update object
+                        const updateData: any = {
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
                         };
-                         if(!itemDoc.data().stockByResidence?.[toResidenceId]) {
-                            toStockUpdate[`stockByResidence.${toResidenceId}`] = item.quantity;
+                        
+                        // Handle 'to' residence stock
+                        if (!itemDoc.data().stockByResidence?.[toResidenceId]) {
+                            updateData[`stockByResidence.${toResidenceId}`] = item.quantity;
+                        } else {
+                            updateData[`stockByResidence.${toResidenceId}`] = increment(item.quantity);
                         }
                         
-                        transaction.update(itemRef, { 
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
-                            ...toStockUpdate
+                        updates.push({
+                            ref: itemRefs[i],
+                            updates: updateData
                         });
                     }
-                     // Create a completed transfer record
-                    const transferDocRef = doc(collection(db, 'stockTransfers'));
+                    
+                    // Step 2: Perform all writes after all reads are complete
+                    const transactionTime = Timestamp.now();
+                    
+                    // Update stock for all items
+                    for (const update of updates) {
+                        transaction.update(update.ref, update.updates);
+                    }
+                    
+                    // Log transfer transactions for each item
+                    for (let i = 0; i < itemsToTransfer.length; i++) {
+                        const item = itemsToTransfer[i];
+                        
+                        // Create TRANSFER_OUT transaction for source residence
+                        const transferOutRef = doc(collection(db!, "inventoryTransactions"));
+                        transaction.set(transferOutRef, {
+                            itemId: item.id,
+                            itemNameEn: item.nameEn,
+                            itemNameAr: item.nameAr,
+                            residenceId: fromResidenceId,
+                            date: transactionTime,
+                            type: 'TRANSFER_OUT',
+                            quantity: item.quantity,
+                            referenceDocId: `internal-${Date.now()}`,
+                            relatedResidenceId: toResidenceId,
+                            locationName: `Internal transfer to residence`
+                        } as Omit<InventoryTransaction, 'id'>);
+
+                        // Create TRANSFER_IN transaction for destination residence
+                        const transferInRef = doc(collection(db!, "inventoryTransactions"));
+                        transaction.set(transferInRef, {
+                            itemId: item.id,
+                            itemNameEn: item.nameEn,
+                            itemNameAr: item.nameAr,
+                            residenceId: toResidenceId,
+                            date: transactionTime,
+                            type: 'TRANSFER_IN',
+                            quantity: item.quantity,
+                            referenceDocId: `internal-${Date.now()}`,
+                            relatedResidenceId: fromResidenceId,
+                            locationName: `Internal transfer from residence`
+                        } as Omit<InventoryTransaction, 'id'>);
+                    }
+                    
+                    // Create a completed transfer record
+                    const transferDocRef = doc(collection(db!, 'stockTransfers'));
                     const newTransfer: StockTransfer = {
                         ...payload,
                         id: transferDocRef.id,
-                        date: Timestamp.now(),
+                        date: transactionTime,
                         status: 'Completed',
                         approvedById: currentUser.id,
-                        approvedAt: Timestamp.now()
+                        approvedAt: transactionTime
                     };
                     transaction.set(transferDocRef, newTransfer);
                 });
@@ -655,6 +720,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         
         try {
             await runTransaction(db, async (transaction) => {
+                // Step 1: Read all data first
                 const transferDoc = await transaction.get(transferRef);
                 if (!transferDoc.exists() || transferDoc.data().status !== 'Pending') {
                     throw new Error("Transfer request not found or already processed.");
@@ -663,20 +729,77 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
                 const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
 
-                for (const item of itemsToTransfer) {
-                    const itemRef = doc(db, 'inventory', item.id);
-                    const itemDoc = await transaction.get(itemRef);
-                    if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
+                // Read all items first
+                const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
+                const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+
+                // Validate all items and stock levels
+                const updates: Array<{ ref: any, updates: any }> = [];
+                
+                for (let i = 0; i < itemsToTransfer.length; i++) {
+                    const item = itemsToTransfer[i];
+                    const itemDoc = itemDocs[i];
+                    
+                    if (!itemDoc.exists()) {
+                        throw new Error(`Item ${item.nameEn} not found.`);
+                    }
                     
                     const currentStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
                     if (currentStock < item.quantity) {
                         throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.quantity}`);
                     }
                     
-                    // Decrement from source
-                    transaction.update(itemRef, { [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity) });
-                    // Increment at destination
-                    transaction.update(itemRef, { [`stockByResidence.${toResidenceId}`]: increment(item.quantity) });
+                    // Prepare updates for later
+                    updates.push({
+                        ref: itemRefs[i],
+                        updates: {
+                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
+                            [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
+                        }
+                    });
+                }
+
+                // Step 2: Perform all writes after all reads are complete
+                const transactionTime = Timestamp.now();
+                
+                // Update stock for all items
+                for (const update of updates) {
+                    transaction.update(update.ref, update.updates);
+                }
+
+                // Log transfer transactions for each item
+                for (let i = 0; i < itemsToTransfer.length; i++) {
+                    const item = itemsToTransfer[i];
+                    
+                    // Create TRANSFER_OUT transaction for source residence
+                    const transferOutRef = doc(collection(db!, "inventoryTransactions"));
+                    transaction.set(transferOutRef, {
+                        itemId: item.id,
+                        itemNameEn: item.nameEn,
+                        itemNameAr: item.nameAr,
+                        residenceId: fromResidenceId,
+                        date: transactionTime,
+                        type: 'TRANSFER_OUT',
+                        quantity: item.quantity,
+                        referenceDocId: transferId,
+                        relatedResidenceId: toResidenceId,
+                        locationName: `Transfer to residence`
+                    } as Omit<InventoryTransaction, 'id'>);
+
+                    // Create TRANSFER_IN transaction for destination residence
+                    const transferInRef = doc(collection(db!, "inventoryTransactions"));
+                    transaction.set(transferInRef, {
+                        itemId: item.id,
+                        itemNameEn: item.nameEn,
+                        itemNameAr: item.nameAr,
+                        residenceId: toResidenceId,
+                        date: transactionTime,
+                        type: 'TRANSFER_IN',
+                        quantity: item.quantity,
+                        referenceDocId: transferId,
+                        relatedResidenceId: fromResidenceId,
+                        locationName: `Transfer from residence`
+                    } as Omit<InventoryTransaction, 'id'>);
                 }
 
                 transaction.update(transferRef, {

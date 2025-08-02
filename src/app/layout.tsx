@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeProvider } from '@/components/theme-provider';
 import { ResidencesProvider } from '@/context/residences-context';
 import { InventoryProvider } from '@/context/inventory-context';
 import { UsersProvider } from '@/context/users-context';
@@ -23,6 +24,34 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const colorTheme = localStorage.getItem('colorTheme') || 'blue';
+                  const themeMode = localStorage.getItem('themeMode') || 'system';
+                  
+                  let resolvedMode = themeMode;
+                  if (themeMode === 'system') {
+                    resolvedMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  }
+                  
+                  const root = document.documentElement;
+                  // Remove any existing theme classes first
+                  root.classList.remove('light', 'dark');
+                  // Add the correct theme class
+                  root.classList.add(resolvedMode);
+                  // Set a data attribute to indicate theme is set
+                  root.setAttribute('data-theme-set', 'true');
+                } catch (e) {
+                  // Fallback to dark theme if localStorage fails
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -31,21 +60,23 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <LanguageProvider>
-          <ResidencesProvider>
-            <UsersProvider>
-              <NotificationsProvider>
-                <InventoryProvider>
-                  <OrdersProvider>
-                    <MaintenanceProvider>
-                      <AppLayout>{children}</AppLayout>
-                    </MaintenanceProvider>
-                  </OrdersProvider>
-                </InventoryProvider>
-              </NotificationsProvider>
-            </UsersProvider>
-          </ResidencesProvider>
-        </LanguageProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <ResidencesProvider>
+              <UsersProvider>
+                <NotificationsProvider>
+                  <InventoryProvider>
+                    <OrdersProvider>
+                      <MaintenanceProvider>
+                        <AppLayout>{children}</AppLayout>
+                      </MaintenanceProvider>
+                    </OrdersProvider>
+                  </InventoryProvider>
+                </NotificationsProvider>
+              </UsersProvider>
+            </ResidencesProvider>
+          </LanguageProvider>
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>
