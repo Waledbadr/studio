@@ -20,7 +20,7 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 
 export default function InventoryPage() {
-  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } from useInventory();
+  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
   const router = useRouter();

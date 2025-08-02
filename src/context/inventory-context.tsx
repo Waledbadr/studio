@@ -591,14 +591,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             // Direct transfer, no approval needed
             try {
                 await runTransaction(db, async (transaction) => {
-<<<<<<< HEAD
-                    const transferDocRef = doc(collection(db, 'stockTransfers'));
-
-                    for (const item of itemsToTransfer) {
-                        const itemRef = doc(db, 'inventory', item.id);
-                        const itemDoc = await transaction.get(itemRef);
-                        if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
-=======
                     // Step 1: Read all items first
                     const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
                     const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
@@ -613,23 +605,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         if (!itemDoc.exists()) {
                             throw new Error(`Item ${item.nameEn} not found.`);
                         }
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
                         
                         const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
                         if (currentFromStock < item.quantity) {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
-<<<<<<< HEAD
-                        
-                        const currentToStock = itemDoc.data().stockByResidence?.[toResidenceId] || 0;
-
-                        transaction.update(itemRef, {
-                            [`stockByResidence.${fromResidenceId}`]: currentFromStock - item.quantity,
-                            [`stockByResidence.${toResidenceId}`]: currentToStock + item.quantity
-                        });
-                    }
-                    
-=======
 
                         // Prepare update object
                         const updateData: any = {
@@ -694,7 +674,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     
                     // Create a completed transfer record
                     const transferDocRef = doc(collection(db!, 'stockTransfers'));
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
                     const newTransfer: StockTransfer = {
                         ...payload,
                         id: transferDocRef.id,
@@ -793,14 +772,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                     }
                     
-<<<<<<< HEAD
-                    const currentToStock = itemDoc.data().stockByResidence?.[toResidenceId] || 0;
-                    
-                    transaction.update(itemRef, { 
-                        [`stockByResidence.${fromResidenceId}`]: currentFromStock - item.quantity,
-                        [`stockByResidence.${toResidenceId}`]: currentToStock + item.quantity
-                    });
-=======
                     // Prepare updates for later
                     updates.push({
                         ref: itemRefs[i],
@@ -852,7 +823,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         relatedResidenceId: fromResidenceId,
                         locationName: `Transfer from residence`
                     } as Omit<InventoryTransaction, 'id'>);
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
                 }
 
                 transaction.update(transferRef, {

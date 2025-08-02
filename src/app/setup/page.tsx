@@ -7,15 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeSelector } from "@/components/theme-selector";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-<<<<<<< HEAD
 import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc, getDoc } from "firebase/firestore";
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
-=======
-import { collection, writeBatch, doc, getDocs, setDoc, Timestamp, query, where, updateDoc } from "firebase/firestore";
 import { useState, useEffect } from "react";
 import { Loader2, Palette, Database, Home } from "lucide-react";
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
 import type { Complex } from "@/context/residences-context";
 import type { InventoryItem } from "@/context/inventory-context";
 import type { OrderItem } from "@/context/orders-context";
@@ -41,7 +35,7 @@ export default function SetupPage() {
     }, []);
     
     // In a real app, this should be an environment variable.
-    const RESET_PASSWORD = "reset123";
+    const RESET_PASSWORD = "RESET123";
 
     const seedInitialData = async () => {
         if (!db) {
@@ -314,101 +308,6 @@ export default function SetupPage() {
 
 
     return (
-<<<<<<< HEAD
-        <div className="flex flex-col items-center justify-start h-full gap-8 pt-10">
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle>Initial Data Setup</CardTitle>
-                    <CardDescription>
-                        This process checks if your database is empty and adds sample data. It creates sample inventory items and an initial **approved** purchase order. You must go to "Receive Materials" to complete the process and add stock.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={seedInitialData} disabled={isLoading} className="w-full">
-                        {isLoading ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
-                        ) : (
-                            'Seed Database'
-                        )}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle>Add Specific Rooms</CardTitle>
-                    <CardDescription>
-                        This will add a list of rooms to Floor 1, Building B1, in the "um alsalam" complex.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
-                        {isAddingRooms ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
-                        ) : (
-                            'Add Rooms to Um Al-Salam'
-                        )}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card className="w-full max-w-md border-orange-500">
-                <CardHeader>
-                    <CardTitle className="text-orange-500">Data Correction Tool</CardTitle>
-                    <CardDescription>
-                        Use this tool if you suspect data corruption (e.g., negative or invalid stock). This will scan all inventory items and reset any invalid or negative stock values to zero.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={fixStockData} disabled={isFixingStock} variant="secondary" className="w-full">
-                        {isFixingStock ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Correcting Data...</>
-                        ) : (
-                            'Fix Stock Data'
-                        )}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card className="w-full max-w-md border-destructive">
-                <CardHeader>
-                    <CardTitle className="text-destructive">Advanced Settings - System Reset</CardTitle>
-                    <CardDescription>
-                        This will permanently delete all orders, transfers, maintenance requests, notifications and inventory transactions. It will also reset the stock of all inventory items to zero. User and residence data will not be affected. This action cannot be undone.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                             <Button variant="destructive" className="w-full">Reset System Data</Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action is irreversible. To confirm, please type the administrator password below.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                             <div className="grid gap-2">
-                                <Label htmlFor="reset-password">Password</Label>
-                                <Input 
-                                    id="reset-password"
-                                    type="password"
-                                    placeholder="Enter password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                            </div>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setPassword('')}>Cancel</AlertDialogCancel>
-                                <AlertDialogAction 
-                                    onClick={handleResetSystem}
-                                    disabled={isResetting || password !== RESET_PASSWORD}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                >
-                                    {isResetting ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
-=======
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold">System Setup & Configuration</h1>
@@ -460,7 +359,6 @@ export default function SetupPage() {
                                 <Button onClick={seedInitialData} disabled={isLoading} className="w-full">
                                     {isLoading ? (
                                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
                                     ) : (
                                         'Seed Database'
                                     )}
@@ -478,65 +376,87 @@ export default function SetupPage() {
                                     This will add a list of rooms to Floor 1, Building B1, in the "um alsalam" complex.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="space-y-4">
                                 <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
                                     {isAddingRooms ? (
                                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
                                     ) : (
-                                        'Add Rooms to Um Al-Salam'
+                                        'Add Rooms to B1'
+                                    )}
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-destructive">Reset Database</CardTitle>
+                                <CardDescription>
+                                    **Warning:** This will permanently delete all data in the database. This action cannot be undone.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" className="w-full">
+                                            Reset All Data
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action cannot be undone. This will permanently delete all data from the database, including inventory, orders, transfers, and all other records.
+                                                <br /><br />
+                                                Please type <strong>RESET123</strong> to confirm:
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <Label htmlFor="reset-password">Confirmation Password</Label>
+                                            <Input
+                                                id="reset-password"
+                                                type="password"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                placeholder="Type RESET123 to confirm"
+                                            />
+                                        </div>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={handleResetSystem}
+                                                disabled={isResetting || password !== RESET_PASSWORD}
+                                                className="bg-destructive hover:bg-destructive/90"
+                                            >
+                                                {isResetting ? (
+                                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
+                                                ) : (
+                                                    'Reset Database'
+                                                )}
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-yellow-600">Fix Stock Issues</CardTitle>
+                                <CardDescription>
+                                    Use this tool if you're experiencing stock calculation issues. It will recalculate stock levels based on transaction history.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button onClick={fixStockData} disabled={isFixingStock} className="w-full" variant="outline">
+                                    {isFixingStock ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Fixing Stock...</>
+                                    ) : (
+                                        'Fix Stock Issues'
                                     )}
                                 </Button>
                             </CardContent>
                         </Card>
                     </div>
-
-                    <Card className="border-destructive">
-                        <CardHeader>
-                            <CardTitle className="text-destructive">Advanced Settings - System Reset</CardTitle>
-                            <CardDescription>
-                                This will permanently delete all orders, transfers, maintenance requests, notifications and inventory transactions. It will also reset the stock of all inventory items to zero. User and residence data will not be affected. This action cannot be undone.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                     <Button variant="destructive" className="w-full">Reset System Data</Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This action is irreversible. To confirm, please type the administrator password below.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                     <div className="grid gap-2">
-                                        <Label htmlFor="reset-password">Password</Label>
-                                        <Input 
-                                            id="reset-password"
-                                            type="password"
-                                            placeholder="Enter password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                        />
-                                    </div>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel onClick={() => setPassword('')}>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction 
-                                            onClick={handleResetSystem}
-                                            disabled={isResetting || password !== RESET_PASSWORD}
-                                            className="bg-destructive hover:bg-destructive/90"
-                                        >
-                                            {isResetting ? (
-                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
-                                            ) : (
-                                                "Confirm Reset"
-                                            )}
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </CardContent>
-                    </Card>
                 </TabsContent>
             </Tabs>
         </div>

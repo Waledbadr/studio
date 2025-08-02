@@ -24,27 +24,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const { mode, setMode, resolvedMode, isLoaded } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-<<<<<<< HEAD
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-
-  useEffect(() => {
-    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    const initialTheme = storedTheme || 'dark';
-    setTheme(initialTheme);
-    document.documentElement.classList.remove('light', 'dark');
-    document.documentElement.classList.add(initialTheme);
-    setIsMounted(true);
-  }, []);
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.remove('light', 'dark');
-    document.documentElement.classList.add(newTheme);
-=======
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -55,7 +34,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   const handleThemeSettingsClick = () => {
     router.push('/setup#themes');
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
   };
 
   const quickToggleMode = () => {
@@ -83,16 +61,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <div className="flex-1">
         {/* Can add breadcrumbs here */}
       </div>
-<<<<<<< HEAD
-       <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleTheme}>
-        {isMounted ? (
-          theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />
-        ) : (
-          <div className="h-5 w-5" /> // Empty placeholder
-        )}
-        <span className="sr-only">Toggle theme</span>
-      </Button>
-=======
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
@@ -125,7 +93,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
->>>>>>> 2e04f9a5af956bc1ddb3f34b23aee0d0b61c0692
        <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleLanguage}>
         <Globe className="h-5 w-5" />
         <span className="sr-only">{dict.changeLanguage}</span>
