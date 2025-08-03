@@ -8,12 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer, Pencil } from 'lucide-react';
+import { ArrowLeft, Printer, Pencil, MessageSquare } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
 import type { OrderItem } from '@/context/orders-context';
 import { useInventory } from '@/context/inventory-context';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 
 export default function OrderDetailPage() {
@@ -188,6 +189,16 @@ export default function OrderDetailPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="pt-6">
+                     {order.notes && (
+                        <Card className="mb-6 bg-muted/50">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">General Notes</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground">{order.notes}</p>
+                            </CardContent>
+                        </Card>
+                    )}
                     <Table className="print-table">
                         <TableHeader>
                             <TableRow>
@@ -208,7 +219,21 @@ export default function OrderDetailPage() {
                                     </TableRow>
                                     {items.map((item: OrderItem) => (
                                         <TableRow key={item.id}>
-                                            <TableCell>{item.nameAr}</TableCell>
+                                            <TableCell>
+                                                {item.nameAr}
+                                                {item.notes && (
+                                                     <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 no-print">
+                                                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80">
+                                                             <p className="text-sm">{item.notes}</p>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                )}
+                                            </TableCell>
                                             <TableCell>{item.nameEn}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>

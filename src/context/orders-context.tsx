@@ -1,6 +1,5 @@
 
 
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -15,6 +14,7 @@ import { useNotifications } from './notifications-context';
 
 export interface OrderItem extends InventoryItem {
   quantity: number;
+  notes?: string;
 }
 
 export interface ReceivedOrderItem {
@@ -34,10 +34,11 @@ export interface Order {
   items: OrderItem[];
   itemsReceived?: ReceivedOrderItem[]; // Tracks total received quantities per item
   status: OrderStatus;
+  notes?: string;
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived' | 'approvedById'>;
-type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId'>;
+type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId' | 'notes'>;
 
 
 interface OrdersContextType {

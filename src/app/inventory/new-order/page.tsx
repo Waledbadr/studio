@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import type { Complex } from '@/context/residences-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
 
 
 export default function NewOrderPage() {
@@ -31,6 +33,7 @@ export default function NewOrderPage() {
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [selectedResidence, setSelectedResidence] = useState<Complex | undefined>(undefined);
+    const [generalNotes, setGeneralNotes] = useState('');
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
@@ -70,7 +73,7 @@ export default function NewOrderPage() {
                     item.id === orderItemId ? {...item, quantity: item.quantity + 1} : item
                 );
             } else {
-                return [...currentOrderItems, { ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1 }];
+                return [...currentOrderItems, { ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }];
             }
         });
     }, []);
@@ -83,6 +86,10 @@ export default function NewOrderPage() {
         const quantity = isNaN(newQuantity) || newQuantity < 1 ? 1 : newQuantity;
         
         setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
+    }
+
+    const handleNotesChange = (id: string, notes: string) => {
+        setOrderItems(orderItems.map(item => item.id === id ? { ...item, notes } : item));
     }
     
     const handleSubmitOrder = async () => {
@@ -106,6 +113,7 @@ export default function NewOrderPage() {
             residenceId: selectedResidence.id,
             items: orderItems,
             requestedById: currentUser.id,
+            notes: generalNotes,
         };
         
         const newOrderId = await createOrder(newOrderData);
@@ -279,7 +287,7 @@ export default function NewOrderPage() {
                                     <TableRow>
                                         <TableHead>Item</TableHead>
                                         <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                        <TableHead className="text-right w-[50px]">Action</TableHead>
+                                        <TableHead className="text-right w-[100px]">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -301,9 +309,31 @@ export default function NewOrderPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MessageSquare className="h-4 w-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80">
+                                                            <div className="grid gap-4">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="font-medium leading-none">Item Notes</h4>
+                                                                    <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={item.notes || ''}
+                                                                    onChange={(e) => handleNotesChange(item.id, e.target.value)}
+                                                                    placeholder="e.g., Please provide the new model."
+                                                                />
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     )) : (
@@ -314,6 +344,15 @@ export default function NewOrderPage() {
                                 </TableBody>
                             </Table>
                         </ScrollArea>
+                         <div className="mt-6 space-y-2">
+                            <Label htmlFor="general-notes">General Notes</Label>
+                            <Textarea
+                                id="general-notes"
+                                placeholder="Add any general notes for the entire request..."
+                                value={generalNotes}
+                                onChange={(e) => setGeneralNotes(e.target.value)}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
            </div>

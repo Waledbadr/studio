@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,6 +17,8 @@ import { useOrders, type Order, type OrderItem } from '@/context/orders-context'
 import { useRouter, useParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useResidences } from '@/context/residences-context';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
 
 
 export default function EditOrderPage() {
@@ -25,6 +27,7 @@ export default function EditOrderPage() {
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [residenceName, setResidenceName] = useState('');
     const [residenceId, setResidenceId] = useState('');
+    const [generalNotes, setGeneralNotes] = useState('');
 
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +51,7 @@ export default function EditOrderPage() {
                 setOrderItems(order.items);
                 setResidenceName(order.residence);
                 setResidenceId(order.residenceId);
+                setGeneralNotes(order.notes || '');
             }
             setPageLoading(false);
         };
@@ -66,7 +70,7 @@ export default function EditOrderPage() {
                 );
             } else {
                 // Otherwise, add it to the order with quantity 1
-                return [...currentOrderItems, { ...itemToAdd, quantity: 1 }];
+                return [...currentOrderItems, { ...itemToAdd, quantity: 1, notes: '' }];
             }
         });
     }, []);
@@ -80,6 +84,10 @@ export default function EditOrderPage() {
         
         setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
     }
+
+    const handleNotesChange = (id: string, notes: string) => {
+        setOrderItems(orderItems.map(item => item.id === id ? { ...item, notes } : item));
+    };
     
     const handleUpdateOrder = async () => {
         if (orderItems.length === 0) {
@@ -91,6 +99,7 @@ export default function EditOrderPage() {
             residence: residenceName,
             residenceId: residenceId,
             items: orderItems,
+            notes: generalNotes,
         };
         
         await updateOrder(id as string, updatedOrderData);
@@ -244,7 +253,7 @@ export default function EditOrderPage() {
                                     <TableRow>
                                         <TableHead>Item</TableHead>
                                         <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                        <TableHead className="text-right w-[50px]">Action</TableHead>
+                                        <TableHead className="text-right w-[100px]">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -266,9 +275,31 @@ export default function EditOrderPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                                </Button>
+                                                 <div className="flex items-center justify-end gap-1">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MessageSquare className="h-4 w-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80">
+                                                            <div className="grid gap-4">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="font-medium leading-none">Item Notes</h4>
+                                                                    <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={item.notes || ''}
+                                                                    onChange={(e) => handleNotesChange(item.id, e.target.value)}
+                                                                    placeholder="e.g., Please provide the new model."
+                                                                />
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     )) : (
@@ -279,6 +310,15 @@ export default function EditOrderPage() {
                                 </TableBody>
                             </Table>
                         </ScrollArea>
+                        <div className="mt-6 space-y-2">
+                            <Label htmlFor="general-notes">General Notes</Label>
+                            <Textarea
+                                id="general-notes"
+                                placeholder="Add any general notes for the entire request..."
+                                value={generalNotes}
+                                onChange={(e) => setGeneralNotes(e.target.value)}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
            </div>
