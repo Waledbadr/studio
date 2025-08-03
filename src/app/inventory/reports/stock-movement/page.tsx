@@ -40,10 +40,21 @@ export default function StockMovementReportPage() {
     endDate: undefined
   });
 
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
+  const [isFetchingInitial, setIsFetchingInitial] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setIsFetchingInitial(true);
+      const transactions = await getAllInventoryTransactions();
+      setAllTransactions(transactions);
+      setIsFetchingInitial(false);
+    };
+    fetchAllData();
+  }, [getAllInventoryTransactions]);
 
   const userResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -96,60 +107,58 @@ export default function StockMovementReportPage() {
   }, [items]);
 
   // Generate report
-  const handleGenerateReport = useCallback(async () => {
-    if (!filters.residenceId) {
-      setError('Please select a residence');
-      return;
-    }
-
+  const handleGenerateReport = useCallback(() => {
     setIsGenerating(true);
-    setError(null);
     setHasGenerated(false);
     
-    try {
-        const fetchedTransactions = await getAllInventoryTransactions();
+    // Get a list of residence IDs the user is allowed to see based on the filter
+    const allowedResidenceIds = new Set(
+        filters.residenceId 
+        ? [filters.residenceId] 
+        : userResidences.map(r => r.id)
+    );
 
-        // Client-side filtering
-        const filtered = fetchedTransactions.filter(transaction => {
-            let keep = true;
+    const filtered = allTransactions.filter(transaction => {
+        let keep = true;
 
-            if (filters.residenceId && transaction.residenceId !== filters.residenceId) keep = false;
-            if (filters.movementType && transaction.type !== filters.movementType) keep = false;
-            if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
+        // Filter by user's assigned residences if no specific residence is selected
+        if (!allowedResidenceIds.has(transaction.residenceId)) keep = false;
+        
+        if (filters.movementType && transaction.type !== filters.movementType) keep = false;
+        if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
 
-            // Date filtering
-            if (filters.startDate) {
-                const startDate = new Date(filters.startDate);
-                startDate.setHours(0, 0, 0, 0);
-                if (transaction.date.toDate() < startDate) keep = false;
-            }
-            if (filters.endDate) {
-                const endDate = new Date(filters.endDate);
-                endDate.setHours(23, 59, 59, 999);
-                if (transaction.date.toDate() > endDate) keep = false;
-            }
-            
-            // Location filtering
+        // Date filtering
+        if (filters.startDate) {
+            const startDate = new Date(filters.startDate);
+            startDate.setHours(0, 0, 0, 0);
+            if (transaction.date.toDate() < startDate) keep = false;
+        }
+        if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (transaction.date.toDate() > endDate) keep = false;
+        }
+        
+        // Location filtering (only if a specific residence is selected)
+        if (filters.residenceId) {
             const roomName = filters.roomId ? availableRooms.find(r => r.id === filters.roomId)?.name : '';
             const floorName = filters.floorId ? availableFloors.find(f => f.id === filters.floorId)?.name : '';
             const buildingName = filters.buildingId ? availableBuildings.find(b => b.id === filters.buildingId)?.name : '';
             
+            // These filters should only apply if a value is selected
             if (roomName && !transaction.locationName?.includes(roomName)) keep = false;
-            if (floorName && !transaction.locationName?.includes(floorName)) keep = false;
-            if (buildingName && !transaction.locationName?.includes(buildingName)) keep = false;
-            
-            return keep;
-        });
+            else if (floorName && !roomName && !transaction.locationName?.includes(floorName)) keep = false;
+            else if (buildingName && !floorName && !roomName && !transaction.locationName?.includes(buildingName)) keep = false;
+        }
+        
+        return keep;
+    });
 
-        setFilteredTransactions(filtered);
-    } catch(e) {
-        setError('Failed to load transaction data.');
-    } finally {
-        setIsGenerating(false);
-        setHasGenerated(true);
-    }
+    setFilteredTransactions(filtered);
+    setIsGenerating(false);
+    setHasGenerated(true);
 
-  }, [filters, getAllInventoryTransactions, availableRooms, availableFloors, availableBuildings]);
+  }, [filters, allTransactions, userResidences, availableRooms, availableFloors, availableBuildings]);
 
 
   // Export to CSV
@@ -215,7 +224,7 @@ export default function StockMovementReportPage() {
     }
   };
 
-  if (!userResidences.length && !isGenerating) {
+  if (isFetchingInitial) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
@@ -260,14 +269,13 @@ export default function StockMovementReportPage() {
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-primary rounded-full"></div>
                   <h3 className="text-lg font-semibold text-foreground">Location Hierarchy</h3>
-                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Required</span>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Residence Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="residence" className="text-sm font-medium">
-                      Residence <span className="text-red-500">*</span>
+                      Residence
                     </Label>
                     <select 
                       id="residence"
@@ -275,7 +283,7 @@ export default function StockMovementReportPage() {
                       value={filters.residenceId} 
                       onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                     >
-                      <option value="">Select Residence</option>
+                      <option value="">All Assigned Residences</option>
                       {userResidences.map(residence => {
                         if (!residence?.id) return null;
                         return (
@@ -360,7 +368,6 @@ export default function StockMovementReportPage() {
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-green-500 rounded-full"></div>
                   <h3 className="text-lg font-semibold text-foreground">Movement & Item Filters</h3>
-                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Optional</span>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -413,7 +420,6 @@ export default function StockMovementReportPage() {
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
                   <h3 className="text-lg font-semibold text-foreground">Date Range</h3>
-                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">Optional</span>
                 </div>
                 
                 <div className="space-y-4">
@@ -451,7 +457,7 @@ export default function StockMovementReportPage() {
           <div className="flex items-center gap-4">
             <Button 
               onClick={handleGenerateReport} 
-              disabled={isGenerating || !filters.residenceId}
+              disabled={isGenerating}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 py-2 h-11 min-w-[160px] shadow-sm"
             >
               {isGenerating ? (
@@ -476,28 +482,12 @@ export default function StockMovementReportPage() {
           </div>
           
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            {!filters.residenceId ? (
-              <>
-                <span className="text-red-500 text-lg">*</span>
-                <span>Please select a residence to proceed</span>
-              </>
-            ) : (
-              <span className="text-green-600 flex items-center">
-                ✓ Ready to generate report
-              </span>
-            )}
+            <span className="text-green-600 flex items-center">
+              ✓ Ready to generate report
+            </span>
           </div>
         </div>
       </Card>
-
-      {/* Error Display */}
-      {error && (
-        <Card className="border-destructive/50 bg-destructive/10">
-          <CardContent className="p-4">
-            <p className="text-destructive text-sm">{error}</p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Results Table */}
       {hasGenerated && !isGenerating && (
