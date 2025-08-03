@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface TransferItem extends InventoryItem {
     transferQuantity: number;
@@ -29,6 +30,7 @@ export default function NewStockTransferPage() {
     const { toast } = useToast();
     const router = useRouter();
 
+    const [transferType, setTransferType] = useState<'internal' | 'external'>('internal');
     const [fromResidenceId, setFromResidenceId] = useState<string>('');
     const [toResidenceId, setToResidenceId] = useState<string>('');
     const [transferItems, setTransferItems] = useState<TransferItem[]>([]);
@@ -51,12 +53,18 @@ export default function NewStockTransferPage() {
             );
     }, [fromResidenceId, items, getStockForResidence, searchQuery]);
     
-    const isInternalTransfer = useMemo(() => {
-        if (!fromResidenceId || !toResidenceId || !currentUser) return null;
-        const isFromAssigned = currentUser.assignedResidences.includes(fromResidenceId);
-        const isToAssigned = currentUser.assignedResidences.includes(toResidenceId);
-        return isFromAssigned && isToAssigned;
-    }, [fromResidenceId, toResidenceId, currentUser]);
+    const availableToResidences = useMemo(() => {
+        if (!fromResidenceId) return [];
+        
+        if (transferType === 'internal') {
+            // Internal: Show other residences assigned to the user
+            return userResidences.filter(r => r.id !== fromResidenceId);
+        } else {
+            // External: Show residences NOT assigned to the user
+            const assignedIds = new Set(userResidences.map(r => r.id));
+            return residences.filter(r => r.id !== fromResidenceId && !assignedIds.has(r.id));
+        }
+    }, [fromResidenceId, residences, userResidences, transferType]);
 
     const handleAddItemToTransfer = (item: InventoryItem) => {
         const existingItem = transferItems.find(i => i.id === item.id);
@@ -92,6 +100,12 @@ export default function NewStockTransferPage() {
         if (id === toResidenceId) {
             setToResidenceId('');
         }
+    };
+    
+    const handleTransferTypeChange = (type: 'internal' | 'external') => {
+        setTransferType(type);
+        // Reset destination when type changes
+        setToResidenceId('');
     };
     
     const handleSubmitTransfer = async () => {
@@ -143,6 +157,20 @@ export default function NewStockTransferPage() {
                         <CardTitle>1. Select Residences & Items</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                             <Label>Transfer Type</Label>
+                             <RadioGroup value={transferType} onValueChange={handleTransferTypeChange} className="flex gap-4">
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="internal" id="r_internal" />
+                                    <Label htmlFor="r_internal">Internal (Within my residences)</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="external" id="r_external" />
+                                    <Label htmlFor="r_external">External (To other residences)</Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+                        
                         <div className="flex gap-4 items-end">
                             <div className="flex-1 space-y-2">
                                 <Label htmlFor="from-residence">Transfer From</Label>
@@ -159,22 +187,16 @@ export default function NewStockTransferPage() {
                                 <Select value={toResidenceId} onValueChange={setToResidenceId} disabled={!fromResidenceId}>
                                     <SelectTrigger id="to-residence"><SelectValue placeholder="Select destination..." /></SelectTrigger>
                                     <SelectContent>
-                                        {residences.filter(r => r.id !== fromResidenceId).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                        {availableToResidences.length > 0 ? (
+                                            availableToResidences.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)
+                                        ) : (
+                                            <div className="p-2 text-sm text-muted-foreground">No available residences for this transfer type.</div>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
                         
-                        {isInternalTransfer !== null && (
-                            <div className="pt-2">
-                                {isInternalTransfer ? (
-                                    <Badge className="bg-green-100 text-green-800 border-green-200">Internal Transfer (Processed Immediately)</Badge>
-                                ) : (
-                                    <Badge className="bg-orange-100 text-orange-800 border-orange-200">External (Requires Approval)</Badge>
-                                )}
-                            </div>
-                        )}
-
                         <div className="relative pt-4">
                             <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
                             <Input
