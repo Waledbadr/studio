@@ -41,24 +41,8 @@ export default function StockMovementReportPage() {
   const [allTransactions, setAllTransactions] = useState<any[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch all transactions once
-  useEffect(() => {
-    const fetchAll = async () => {
-        setIsGenerating(true);
-        try {
-            const all = await getAllInventoryTransactions();
-            setAllTransactions(all);
-        } catch(e) {
-            setError('Failed to load transaction data.');
-        } finally {
-            setIsGenerating(false);
-        }
-    }
-    fetchAll();
-  }, [getAllInventoryTransactions]);
-
 
   // Handle filter changes
   const handleFilterChange = (key: keyof StockMovementFilters, value: any) => {
@@ -114,43 +98,51 @@ export default function StockMovementReportPage() {
     setIsGenerating(true);
     setError(null);
     
-    // Client-side filtering
-    const filtered = allTransactions.filter(transaction => {
-        let keep = true;
+    try {
+        const fetchedTransactions = await getAllInventoryTransactions();
 
-        if (filters.residenceId && transaction.residenceId !== filters.residenceId) keep = false;
-        if (filters.movementType && transaction.type !== filters.movementType) keep = false;
-        if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
+        // Client-side filtering
+        const filtered = fetchedTransactions.filter(transaction => {
+            let keep = true;
 
-        // Date filtering
-        if (filters.startDate) {
-            const startDate = new Date(filters.startDate);
-            startDate.setHours(0, 0, 0, 0);
-            if (transaction.date.toDate() < startDate) keep = false;
-        }
-        if (filters.endDate) {
-            const endDate = new Date(filters.endDate);
-            endDate.setHours(23, 59, 59, 999);
-            if (transaction.date.toDate() > endDate) keep = false;
-        }
-        
-        // Note: Building/Floor/Room filtering would require more data on the transaction object
-        // This is a limitation of the current data model. We can filter by locationName if available.
-        if (filters.roomId) {
-            if (!transaction.locationName?.includes(availableRooms.find(r => r.id === filters.roomId)?.name || '')) keep = false;
-        } else if (filters.floorId) {
-             if (!transaction.locationName?.includes(availableFloors.find(f => f.id === filters.floorId)?.name || '')) keep = false;
-        } else if (filters.buildingId) {
-             if (!transaction.locationName?.includes(availableBuildings.find(b => b.id === filters.buildingId)?.name || '')) keep = false;
-        }
-        
-        return keep;
-    });
+            if (filters.residenceId && transaction.residenceId !== filters.residenceId) keep = false;
+            if (filters.movementType && transaction.type !== filters.movementType) keep = false;
+            if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
 
-    setFilteredTransactions(filtered);
-    setIsGenerating(false);
+            // Date filtering
+            if (filters.startDate) {
+                const startDate = new Date(filters.startDate);
+                startDate.setHours(0, 0, 0, 0);
+                if (transaction.date.toDate() < startDate) keep = false;
+            }
+            if (filters.endDate) {
+                const endDate = new Date(filters.endDate);
+                endDate.setHours(23, 59, 59, 999);
+                if (transaction.date.toDate() > endDate) keep = false;
+            }
+            
+            // Note: Building/Floor/Room filtering would require more data on the transaction object
+            // This is a limitation of the current data model. We can filter by locationName if available.
+            if (filters.roomId) {
+                if (!transaction.locationName?.includes(availableRooms.find(r => r.id === filters.roomId)?.name || '')) keep = false;
+            } else if (filters.floorId) {
+                if (!transaction.locationName?.includes(availableFloors.find(f => f.id === filters.floorId)?.name || '')) keep = false;
+            } else if (filters.buildingId) {
+                if (!transaction.locationName?.includes(availableBuildings.find(b => b.id === filters.buildingId)?.name || '')) keep = false;
+            }
+            
+            return keep;
+        });
 
-  }, [filters, allTransactions, availableRooms, availableFloors, availableBuildings]);
+        setFilteredTransactions(filtered);
+    } catch(e) {
+        setError('Failed to load transaction data.');
+    } finally {
+        setIsGenerating(false);
+        setHasGenerated(true);
+    }
+
+  }, [filters, getAllInventoryTransactions, availableRooms, availableFloors, availableBuildings]);
 
 
   // Export to CSV
@@ -190,6 +182,7 @@ export default function StockMovementReportPage() {
       case 'OUT': return 'Stock Out';
       case 'DEPRECIATION': return 'Depreciation';
       case 'AUDIT': return 'Audit Adjustment';
+      case 'SCRAP': return 'Scrap';
       default: return type;
     }
   };
@@ -209,6 +202,7 @@ export default function StockMovementReportPage() {
       case 'TRANSFER_OUT':
       case 'OUT':
       case 'DEPRECIATION':
+      case 'SCRAP':
         return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20';
       case 'ADJUSTMENT':
       case 'AUDIT':
@@ -248,7 +242,7 @@ export default function StockMovementReportPage() {
 
       {/* Filters Card */}
       <Card className="shadow-lg border-0">
-        <CardHeader className="bg-muted/30 border-b">
+        <CardHeader className="bg-muted/30 dark:bg-card border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-semibold text-foreground flex items-center">
               <Filter className="mr-3 h-6 w-6 text-primary" />
@@ -452,7 +446,7 @@ export default function StockMovementReportPage() {
         </CardContent>
         
         {/* Action Footer */}
-        <div className="bg-muted/30 px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
+        <div className="bg-muted/30 dark:bg-card px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
           <div className="flex items-center gap-4">
             <Button 
               onClick={handleGenerateReport} 
@@ -505,9 +499,9 @@ export default function StockMovementReportPage() {
       )}
 
       {/* Results Table */}
-      {filteredTransactions.length > 0 && (
+      {hasGenerated && !isGenerating && (
         <Card className="shadow-lg">
-          <CardHeader className="bg-muted/30 border-b">
+          <CardHeader className="bg-muted/30 dark:bg-card border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-semibold text-foreground">
                 Report Results ({filteredTransactions.length} transactions)
@@ -518,62 +512,60 @@ export default function StockMovementReportPage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto max-h-96">
-              <Table>
-                <TableHeader className="sticky top-0 bg-muted/50">
-                  <TableRow>
-                    <TableHead className="font-semibold">Date & Time</TableHead>
-                    <TableHead className="font-semibold">Item</TableHead>
-                    <TableHead className="font-semibold">Movement Type</TableHead>
-                    <TableHead className="font-semibold text-right">Quantity</TableHead>
-                    <TableHead className="font-semibold">Location</TableHead>
-                    <TableHead className="font-semibold">Reference</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.map((transaction, index) => (
-                    <TableRow key={index} className="hover:bg-muted/50">
-                      <TableCell className="font-mono text-sm">
-                        {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {transaction.itemNameEn || 'Unknown Item'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
-                          {getMovementTypeLabel(transaction.type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {transaction.quantity}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {getLocationString(transaction)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                        {transaction.referenceDocId || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+             {filteredTransactions.length > 0 ? (
+                <div className="overflow-x-auto max-h-[500px]">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-muted/50 dark:bg-card">
+                      <TableRow>
+                        <TableHead className="font-semibold">Date & Time</TableHead>
+                        <TableHead className="font-semibold">Item</TableHead>
+                        <TableHead className="font-semibold">Movement Type</TableHead>
+                        <TableHead className="font-semibold text-right">Quantity</TableHead>
+                        <TableHead className="font-semibold">Location</TableHead>
+                        <TableHead className="font-semibold">Reference</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTransactions.map((transaction, index) => (
+                        <TableRow key={index} className="hover:bg-muted/50 dark:hover:bg-muted/20">
+                          <TableCell className="font-mono text-sm">
+                            {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {transaction.itemNameEn || 'Unknown Item'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
+                              {getMovementTypeLabel(transaction.type)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {transaction.quantity}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getLocationString(transaction)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {transaction.referenceDocId || '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+             ) : (
+                <div className="p-8 text-center">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
+                    <p className="text-muted-foreground">
+                    No transactions were found matching the specified criteria. Try adjusting the filters.
+                    </p>
+                </div>
+             )}
           </CardContent>
         </Card>
       )}
 
-      {/* No Results */}
-      {!isGenerating && filteredTransactions.length === 0 && filters.residenceId && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
-            <p className="text-muted-foreground">
-              No transactions were found matching the specified criteria. Try adjusting the filters.
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
