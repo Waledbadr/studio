@@ -389,6 +389,7 @@ export default function StockMovementReportPage() {
                       <option value="RETURN">Return</option>
                       <option value="DEPRECIATION">Depreciation</option>
                       <option value="AUDIT">Audit Adjustment</option>
+                      <option value="SCRAP">Scrap</option>
                     </select>
                   </div>
 
