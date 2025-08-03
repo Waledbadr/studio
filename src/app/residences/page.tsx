@@ -33,15 +33,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useLanguage } from '@/context/language-context';
 import { AddMultipleRoomsDialog } from '@/components/residences';
 import { Separator } from '@/components/ui/separator';
 
 export default function ResidencesPage() {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility } from useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
-  const { dict } = useLanguage();
   const isAdmin = currentUser?.role === 'Admin';
 
 
