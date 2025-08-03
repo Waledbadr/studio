@@ -35,7 +35,7 @@ export interface InventoryTransaction {
     itemNameAr: string;
     residenceId: string;
     date: Timestamp;
-    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT' | 'DEPRECIATION' | 'AUDIT';
+    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT' | 'DEPRECIATION' | 'AUDIT' | 'SCRAP';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
     locationId?: string;
@@ -1007,20 +1007,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 }
                 
                 // Update stock for the residence
-                const newStockByResidence = { ...itemData.stockByResidence };
-                newStockByResidence[depreciationRequest.residenceId] = currentStock - depreciationRequest.quantity;
-                
-                // Calculate new total stock
-                const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
-                    const num = Number(stock);
-                    return sum + (isNaN(num) ? 0 : num);
-                }, 0);
-                
-                // Update item document
-                transaction.update(itemRef, {
-                    stock: newTotalStock,
-                    stockByResidence: newStockByResidence
-                });
+                const stockUpdateKey = `stockByResidence.${depreciationRequest.residenceId}`;
+                transaction.update(itemRef, { [stockUpdateKey]: increment(-depreciationRequest.quantity) });
                 
                 // Create depreciation transaction
                 const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
@@ -1244,22 +1232,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     
                     if (itemSnap.exists()) {
                         const itemData = itemSnap.data() as InventoryItem;
-                        const currentResidenceStock = itemData.stockByResidence?.[adjustment.locationId] || 0;
-                        const newResidenceStock = adjustment.newStock;
                         
                         // Update stock by residence
-                        const newStockByResidence = { ...itemData.stockByResidence };
-                        newStockByResidence[adjustment.locationId] = newResidenceStock;
-                        
-                        // Calculate new total stock
-                        const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
-                            const num = Number(stock);
-                            return sum + (isNaN(num) ? 0 : num);
-                        }, 0);
-                        
+                        const stockUpdateKey = `stockByResidence.${adjustment.locationId}`;
                         transaction.update(itemRef, {
-                            stock: newTotalStock,
-                            stockByResidence: newStockByResidence
+                             [stockUpdateKey]: increment(adjustment.difference)
                         });
                         
                         // Create adjustment transaction
@@ -1268,9 +1245,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             itemId: adjustment.itemId,
                             itemNameEn: itemData.nameEn,
                             itemNameAr: itemData.nameAr,
-                            residenceId: adjustment.locationId,
+                            residenceId: adjustment.locationId, // Assuming locationId is residenceId here
                             date: Timestamp.now(),
-                            type: 'ADJUSTMENT',
+                            type: 'AUDIT',
                             quantity: Math.abs(adjustment.difference),
                             referenceDocId: auditId,
                             locationId: adjustment.locationId,
