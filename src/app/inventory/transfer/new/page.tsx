@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
 interface TransferItem extends InventoryItem {
     transferQuantity: number;
@@ -50,6 +51,13 @@ export default function NewStockTransferPage() {
             );
     }, [fromResidenceId, items, getStockForResidence, searchQuery]);
     
+    const isInternalTransfer = useMemo(() => {
+        if (!fromResidenceId || !toResidenceId || !currentUser) return null;
+        const isFromAssigned = currentUser.assignedResidences.includes(fromResidenceId);
+        const isToAssigned = currentUser.assignedResidences.includes(toResidenceId);
+        return isFromAssigned && isToAssigned;
+    }, [fromResidenceId, toResidenceId, currentUser]);
+
     const handleAddItemToTransfer = (item: InventoryItem) => {
         const existingItem = transferItems.find(i => i.id === item.id);
         if (existingItem) {
@@ -156,6 +164,16 @@ export default function NewStockTransferPage() {
                                 </Select>
                             </div>
                         </div>
+                        
+                        {isInternalTransfer !== null && (
+                            <div className="pt-2">
+                                {isInternalTransfer ? (
+                                    <Badge className="bg-green-100 text-green-800 border-green-200">Internal Transfer (Processed Immediately)</Badge>
+                                ) : (
+                                    <Badge className="bg-orange-100 text-orange-800 border-orange-200">External (Requires Approval)</Badge>
+                                )}
+                            </div>
+                        )}
 
                         <div className="relative pt-4">
                             <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
