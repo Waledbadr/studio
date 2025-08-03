@@ -110,12 +110,13 @@ export default function OrderDetailPage() {
     return (
         <div className="space-y-6">
              <style jsx global>{`
+                @page {
+                    size: A4;
+                    margin: 10mm;
+                }
                 @media print {
-                  body * {
-                    visibility: hidden;
-                  }
-                  .printable-area, .printable-area * {
-                    visibility: visible;
+                  body {
+                    -webkit-print-color-adjust: exact;
                   }
                   .printable-area {
                     position: absolute;
@@ -123,26 +124,33 @@ export default function OrderDetailPage() {
                     top: 0;
                     width: 100%;
                     height: auto;
-                    box-shadow: none !important;
-                    border: none !important;
-                    padding: 1rem !important;
+                    padding: 0 !important;
                     margin: 0 !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    background-color: white !important;
+                    color: black !important;
                   }
-                  .printable-area .print-title {
-                      font-size: 2rem !important;
-                  }
-                   .printable-area .print-table th, .printable-area .print-table td {
-                        padding-top: 0.25rem;
-                        padding-bottom: 0.25rem;
-                        padding-left: 0.5rem;
-                        padding-right: 0.5rem;
-                   }
-                   .printable-area .print-table {
-                       border-top: 1px solid #e5e7eb;
-                       border-bottom: 1px solid #e5e7eb;
-                   }
                    .no-print {
                        display: none !important;
+                   }
+                   .print-title {
+                       font-size: 2rem !important;
+                   }
+                   .print-table th, .print-table td {
+                        padding-top: 0.25rem !important;
+                        padding-bottom: 0.25rem !important;
+                        padding-left: 0.5rem !important;
+                        padding-right: 0.5rem !important;
+                        border-color: #e5e7eb !important;
+                        color: black !important;
+                   }
+                   .print-table {
+                       border-top: 1px solid #e5e7eb !important;
+                       border-bottom: 1px solid #e5e7eb !important;
+                   }
+                   .print-bg-muted {
+                       background-color: #f3f4f6 !important;
                    }
                 }
             `}</style>
@@ -190,7 +198,7 @@ export default function OrderDetailPage() {
                 </CardHeader>
                 <CardContent className="pt-6">
                      {order.notes && (
-                        <Card className="mb-6 bg-muted/50">
+                        <Card className="mb-6 bg-muted/50 print-bg-muted">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base">General Notes</CardTitle>
                             </CardHeader>
@@ -202,8 +210,8 @@ export default function OrderDetailPage() {
                     <Table className="print-table">
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Item Name (Arabic)</TableHead>
-                                <TableHead>Item Name (English)</TableHead>
+                                <TableHead className="w-[40%]">Item</TableHead>
+                                <TableHead>Notes</TableHead>
                                 <TableHead>Unit</TableHead>
                                 <TableHead className="text-right">Quantity</TableHead>
                                 <TableHead className="text-center">Stock</TableHead>
@@ -212,29 +220,17 @@ export default function OrderDetailPage() {
                         <TableBody>
                             {Object.entries(groupedItems).map(([category, items]) => (
                                 <React.Fragment key={category}>
-                                    <TableRow className="bg-muted/50 hover:bg-muted/50 print:bg-gray-100">
+                                    <TableRow className="bg-muted/50 hover:bg-muted/50 print-bg-muted">
                                         <TableCell colSpan={5} className="font-semibold text-primary capitalize py-2">
                                             {category}
                                         </TableCell>
                                     </TableRow>
                                     {items.map((item: OrderItem) => (
                                         <TableRow key={item.id}>
-                                            <TableCell>
-                                                {item.nameAr}
-                                                {item.notes && (
-                                                     <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 no-print">
-                                                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80">
-                                                             <p className="text-sm">{item.notes}</p>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                )}
+                                            <TableCell className="font-medium">
+                                                {item.nameAr} / {item.nameEn}
                                             </TableCell>
-                                            <TableCell>{item.nameEn}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{item.notes || '-'}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>
                                             <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
