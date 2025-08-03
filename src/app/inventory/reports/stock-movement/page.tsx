@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -26,6 +27,7 @@ interface StockMovementFilters {
 export default function StockMovementReportPage() {
   const { getAllInventoryTransactions, items } = useInventory();
   const { residences } = useResidences();
+  const { currentUser } = useUsers();
 
   const [filters, setFilters] = useState<StockMovementFilters>({
     residenceId: '',
@@ -38,11 +40,16 @@ export default function StockMovementReportPage() {
     endDate: undefined
   });
 
-  const [allTransactions, setAllTransactions] = useState<any[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const userResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
 
   // Handle filter changes
   const handleFilterChange = (key: keyof StockMovementFilters, value: any) => {
@@ -68,9 +75,9 @@ export default function StockMovementReportPage() {
   // Get available options based on current filters
   const availableBuildings = useMemo(() => {
     if (!filters.residenceId) return [];
-    const residence = residences.find(r => r.id === filters.residenceId);
+    const residence = userResidences.find(r => r.id === filters.residenceId);
     return residence?.buildings || [];
-  }, [residences, filters.residenceId]);
+  }, [userResidences, filters.residenceId]);
 
   const availableFloors = useMemo(() => {
     if (!filters.buildingId) return [];
@@ -97,6 +104,7 @@ export default function StockMovementReportPage() {
 
     setIsGenerating(true);
     setError(null);
+    setHasGenerated(false);
     
     try {
         const fetchedTransactions = await getAllInventoryTransactions();
@@ -121,15 +129,14 @@ export default function StockMovementReportPage() {
                 if (transaction.date.toDate() > endDate) keep = false;
             }
             
-            // Note: Building/Floor/Room filtering would require more data on the transaction object
-            // This is a limitation of the current data model. We can filter by locationName if available.
-            if (filters.roomId) {
-                if (!transaction.locationName?.includes(availableRooms.find(r => r.id === filters.roomId)?.name || '')) keep = false;
-            } else if (filters.floorId) {
-                if (!transaction.locationName?.includes(availableFloors.find(f => f.id === filters.floorId)?.name || '')) keep = false;
-            } else if (filters.buildingId) {
-                if (!transaction.locationName?.includes(availableBuildings.find(b => b.id === filters.buildingId)?.name || '')) keep = false;
-            }
+            // Location filtering
+            const roomName = filters.roomId ? availableRooms.find(r => r.id === filters.roomId)?.name : '';
+            const floorName = filters.floorId ? availableFloors.find(f => f.id === filters.floorId)?.name : '';
+            const buildingName = filters.buildingId ? availableBuildings.find(b => b.id === filters.buildingId)?.name : '';
+            
+            if (roomName && !transaction.locationName?.includes(roomName)) keep = false;
+            if (floorName && !transaction.locationName?.includes(floorName)) keep = false;
+            if (buildingName && !transaction.locationName?.includes(buildingName)) keep = false;
             
             return keep;
         });
@@ -172,14 +179,12 @@ export default function StockMovementReportPage() {
   // Helper functions
   const getMovementTypeLabel = (type: string) => {
     switch (type) {
-      case 'RECEIVE': return 'Receive';
-      case 'ISSUE': return 'Issue';
+      case 'IN': return 'Stock In';
+      case 'OUT': return 'Stock Out';
       case 'TRANSFER_IN': return 'Transfer In';
       case 'TRANSFER_OUT': return 'Transfer Out';
       case 'ADJUSTMENT': return 'Adjustment';
       case 'RETURN': return 'Return';
-      case 'IN': return 'Stock In';
-      case 'OUT': return 'Stock Out';
       case 'DEPRECIATION': return 'Depreciation';
       case 'AUDIT': return 'Audit Adjustment';
       case 'SCRAP': return 'Scrap';
@@ -193,12 +198,10 @@ export default function StockMovementReportPage() {
 
   const getMovementTypeColor = (type: string) => {
     switch (type) {
-      case 'RECEIVE':
       case 'TRANSFER_IN':
       case 'IN':
       case 'RETURN':
         return 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20';
-      case 'ISSUE':
       case 'TRANSFER_OUT':
       case 'OUT':
       case 'DEPRECIATION':
@@ -212,7 +215,7 @@ export default function StockMovementReportPage() {
     }
   };
 
-  if (!residences.length && !isGenerating) {
+  if (!userResidences.length && !isGenerating) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
@@ -273,7 +276,7 @@ export default function StockMovementReportPage() {
                       onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                     >
                       <option value="">Select Residence</option>
-                      {residences.map(residence => {
+                      {userResidences.map(residence => {
                         if (!residence?.id) return null;
                         return (
                           <option key={residence.id} value={residence.id}>
@@ -371,14 +374,12 @@ export default function StockMovementReportPage() {
                       onChange={(e) => handleFilterChange('movementType', e.target.value)}
                     >
                       <option value="">All Movement Types</option>
-                      <option value="RECEIVE">Receive</option>
-                      <option value="ISSUE">Issue</option>
+                      <option value="IN">Stock In</option>
+                      <option value="OUT">Stock Out</option>
                       <option value="TRANSFER_IN">Transfer In</option>
                       <option value="TRANSFER_OUT">Transfer Out</option>
                       <option value="ADJUSTMENT">Adjustment</option>
                       <option value="RETURN">Return</option>
-                      <option value="IN">Stock In</option>
-                      <option value="OUT">Stock Out</option>
                       <option value="DEPRECIATION">Depreciation</option>
                       <option value="AUDIT">Audit Adjustment</option>
                     </select>
@@ -466,7 +467,7 @@ export default function StockMovementReportPage() {
               )}
             </Button>
             
-            {filteredTransactions.length > 0 && (
+            {hasGenerated && filteredTransactions.length > 0 && (
               <Button variant="outline" onClick={exportToCSV} className="border-border hover:bg-accent h-11 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
@@ -565,7 +566,17 @@ export default function StockMovementReportPage() {
           </CardContent>
         </Card>
       )}
-
+      
+      {isGenerating && (
+        <Card>
+          <CardContent className="p-8 text-center">
+              <div className="flex justify-center items-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-b-transparent border-primary" />
+                  <p className="ml-4 text-lg font-semibold">Generating Report...</p>
+              </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

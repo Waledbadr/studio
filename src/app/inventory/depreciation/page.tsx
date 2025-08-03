@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -24,6 +25,7 @@ interface DepreciationForm extends Omit<DepreciationRequest, 'locationId' | 'loc
 export default function DepreciationPage() {
   const { items, depreciateItems, getStockForResidence, getAllInventoryTransactions } = useInventory();
   const { residences } = useResidences();
+  const { currentUser } = useUsers();
 
   const [form, setForm] = useState<DepreciationForm>({
     itemId: '',
@@ -40,12 +42,18 @@ export default function DepreciationPage() {
   const [recentDepreciations, setRecentDepreciations] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+  const userResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
+
   // Get available options based on current selections
   const availableBuildings = useMemo(() => {
     if (!form.residenceId) return [];
-    const residence = residences.find(r => r.id === form.residenceId);
+    const residence = userResidences.find(r => r.id === form.residenceId);
     return residence?.buildings || [];
-  }, [residences, form.residenceId]);
+  }, [userResidences, form.residenceId]);
 
   const availableFloors = useMemo(() => {
     if (!form.buildingId) return [];
@@ -115,7 +123,7 @@ export default function DepreciationPage() {
 
   const getLocationString = () => {
     const parts = [];
-    const residence = residences.find(r => r.id === form.residenceId);
+    const residence = userResidences.find(r => r.id === form.residenceId);
     const building = availableBuildings.find(b => b.id === form.buildingId);
     const floor = availableFloors.find(f => f.id === form.floorId);
     const room = availableRooms.find(r => r.id === form.roomId);
@@ -201,7 +209,7 @@ export default function DepreciationPage() {
     'Other'
   ];
 
-  if (!residences.length || !items.length) {
+  if (!userResidences.length || !items.length) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
@@ -262,7 +270,7 @@ export default function DepreciationPage() {
                         required
                       >
                         <option value="">Select Residence</option>
-                        {residences.map(residence => (
+                        {userResidences.map(residence => (
                           <option key={residence.id} value={residence.id}>
                             {residence.name}
                           </option>
