@@ -688,8 +688,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const q = query(
         collection(db, "inventoryTransactions"),
-        where("itemId", "==", itemId),
-        orderBy("date", "desc")
+        where("itemId", "==", itemId)
       );
       const querySnapshot = await getDocs(q);
 
@@ -699,8 +698,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       
       const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
 
-      // Filter client-side for type and location
-      const specificLocationTx = transactions.find(tx => tx.type === 'OUT' && tx.locationId === locationId);
+      // Filter and sort client-side for type and location
+      const specificLocationTx = transactions
+        .filter(tx => tx.type === 'OUT' && tx.locationId === locationId)
+        .sort((a, b) => b.date.toMillis() - a.date.toMillis()) // Sort by date descending
+        .find(tx => true); // Get the first (most recent) transaction
       
       return specificLocationTx ? specificLocationTx.date : null;
 
