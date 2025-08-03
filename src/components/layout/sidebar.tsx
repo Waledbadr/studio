@@ -88,7 +88,7 @@ export function AppSidebar() {
     {
       title: 'Settings',
       items: [
-        { href: '/residences', label: 'Residences', icon: Building },
+        { href: '/residences/enhanced', label: 'Residences', icon: Building },
         { href: '/users', label: 'Users', icon: Users },
         { href: '/tools', label: 'AI Tools', icon: Bot },
         { href: '/setup', label: 'Setup', icon: Settings },

@@ -38,6 +38,11 @@ interface VoucherLocation {
     roomId?: string;
     roomName?: string;
     facilityId?: string;
+    serviceId?: string;
+    serviceName?: string;
+    subFacilityId?: string;
+    subFacilityName?: string;
+    serviceLocation?: string;
     items: IssuedItem[];
 }
 
@@ -95,11 +100,13 @@ export default function IssueMaterialPage() {
         loadRecentMIVs();
     }, [currentUser, getMIVs]);
     
-    const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
+    const [locationType, setLocationType] = useState<'unit' | 'facility' | 'service'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [selectedFacilityId, setSelectedFacilityId] = useState('');
+    const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [selectedSubFacilityId, setSelectedSubFacilityId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
@@ -124,12 +131,76 @@ export default function IssueMaterialPage() {
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
     
+    // Collect all services from all levels
+    const allAvailableServices = useMemo(() => {
+        if (!selectedComplex) return [];
+        
+        const services: any[] = [];
+        
+        // Complex-level services
+        if (selectedComplex.services) {
+            services.push(...selectedComplex.services);
+        }
+        
+        // Building-level services
+        selectedComplex.buildings?.forEach(building => {
+            if (building.services) {
+                services.push(...building.services.map(s => ({
+                    ...s,
+                    _location: `${building.name}`,
+                    _locationId: `building-${building.id}`
+                })));
+            }
+            
+            // Floor-level services
+            building.floors?.forEach(floor => {
+                if (floor.services) {
+                    services.push(...floor.services.map(s => ({
+                        ...s,
+                        _location: `${building.name} -> ${floor.name}`,
+                        _locationId: `floor-${building.id}-${floor.id}`
+                    })));
+                }
+                
+                // Room-level services (only check selected room to keep it simple)
+                if (selectedRoomId) {
+                    const selectedRoom = floor.rooms?.find(r => r.id === selectedRoomId);
+                    if (selectedRoom?.services) {
+                        services.push(...selectedRoom.services.map(s => ({
+                            ...s,
+                            _location: `${building.name} -> ${floor.name} -> ${selectedRoom.name}`,
+                            _locationId: `room-${building.id}-${floor.id}-${selectedRoom.id}`
+                        })));
+                    }
+                }
+            });
+        });
+        
+        console.log('🔍 All available services:', services);
+        return services;
+    }, [selectedComplex, selectedRoomId]);
+    
     const isLocationSelected = useMemo(() => {
         if (locationType === 'unit') {
             return !!(selectedBuildingId && selectedFloorId && selectedRoomId);
+        } else if (locationType === 'facility') {
+            return !!selectedFacilityId;
+        } else if (locationType === 'service') {
+            if (!selectedServiceId) return false;
+            
+            // Find the selected service
+            const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
+            
+            // If service has sub-facilities, require one to be selected
+            if (selectedService?.subFacilities && selectedService.subFacilities.length > 0) {
+                return !!selectedSubFacilityId;
+            }
+            
+            // If service has no sub-facilities, just service selection is enough
+            return true;
         }
-        return !!selectedFacilityId;
-    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
+        return false;
+    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId, selectedServiceId, selectedSubFacilityId, allAvailableServices]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
@@ -141,6 +212,8 @@ export default function IssueMaterialPage() {
         setVoucherLocations([]);
         setSelectedBuildingId('');
         setSelectedFacilityId('');
+        setSelectedServiceId('');
+        setSelectedSubFacilityId('');
         setLocationType('unit');
     }, [selectedComplexId]);
     
@@ -151,6 +224,16 @@ export default function IssueMaterialPage() {
     useEffect(() => {
         setSelectedRoomId('');
     }, [selectedFloorId]);
+
+    // Reset selections when location type changes
+    useEffect(() => {
+        setSelectedBuildingId('');
+        setSelectedFloorId('');
+        setSelectedRoomId('');
+        setSelectedFacilityId('');
+        setSelectedServiceId('');
+        setSelectedSubFacilityId('');
+    }, [locationType]);
     
     const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
         if (!isLocationSelected || !selectedComplex) {
@@ -184,7 +267,7 @@ export default function IssueMaterialPage() {
                 roomId: selectedRoomId,
                 roomName: selectedRoom.name,
             };
-        } else {
+        } else if (locationType === 'facility') {
             const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
              if (!selectedFacility) {
                 toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
@@ -194,6 +277,47 @@ export default function IssueMaterialPage() {
             locationName = selectedFacility.name;
             isFacility = true;
             newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
+        } else if (locationType === 'service') {
+            const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
+            
+            if (!selectedService) {
+                toast({ title: "Service not found", description: "An error occurred with the selected service.", variant: "destructive"});
+                return;
+            }
+            
+            // Check if service has sub-facilities and one is selected
+            if (selectedService.subFacilities && selectedService.subFacilities.length > 0) {
+                const selectedSubFacility = selectedService.subFacilities.find((sf: any) => sf.id === selectedSubFacilityId);
+                
+                if (!selectedSubFacility) {
+                    toast({ title: "Sub-facility required", description: "Please select a sub-facility for this service.", variant: "destructive"});
+                    return;
+                }
+                
+                locationId = `service-${selectedServiceId}-${selectedSubFacilityId}`;
+                locationName = `${selectedService.name} -> ${selectedSubFacility.name}${selectedSubFacility.number ? ` (${selectedSubFacility.number})` : ''}`;
+                newLocationDetails = {
+                    serviceId: selectedServiceId,
+                    serviceName: selectedService.name,
+                    subFacilityId: selectedSubFacilityId,
+                    subFacilityName: selectedSubFacility.name,
+                    serviceLocation: selectedService._location || 'Complex Level'
+                };
+            } else {
+                // Service without sub-facilities
+                locationId = `service-${selectedServiceId}`;
+                locationName = selectedService.name + (selectedService._location ? ` (${selectedService._location})` : '');
+                newLocationDetails = {
+                    serviceId: selectedServiceId,
+                    serviceName: selectedService.name,
+                    serviceLocation: selectedService._location || 'Complex Level'
+                };
+            }
+            
+            isFacility = false;
+        } else {
+            toast({ title: "Invalid Location Type", description: "Please select a valid location type.", variant: "destructive"});
+            return;
         }
         
         // Lifespan check
@@ -395,7 +519,7 @@ export default function IssueMaterialPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-1 space-y-4">
                             <h3 className="font-semibold">Select Location Type</h3>
-                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
+                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility' | 'service')} className="flex gap-4" disabled={!selectedComplexId}>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="unit" id="r_unit" />
                                     <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
@@ -403,6 +527,10 @@ export default function IssueMaterialPage() {
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="facility" id="r_facility" />
                                     <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="service" id="r_service" />
+                                    <Label htmlFor="r_service" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Services</Label>
                                 </div>
                             </RadioGroup>
                             
@@ -427,7 +555,7 @@ export default function IssueMaterialPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                            ) : (
+                            ) : locationType === 'facility' ? (
                                  <div className="space-y-2 pt-2">
                                     <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
                                         <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
@@ -436,7 +564,70 @@ export default function IssueMaterialPage() {
                                         </SelectContent>
                                     </Select>
                                  </div>
-                            )}
+                            ) : locationType === 'service' ? (
+                                <div className="space-y-2 pt-2">
+                                    <Select value={selectedServiceId} onValueChange={setSelectedServiceId} disabled={!selectedComplexId || !allAvailableServices.length}>
+                                        <SelectTrigger><SelectValue placeholder={!allAvailableServices.length ? "No services available" : "Select Service"} /></SelectTrigger>
+                                        <SelectContent>
+                                            {allAvailableServices.length > 0 ? (
+                                                allAvailableServices.map((s: any) => (
+                                                    <SelectItem key={`${s._locationId || 'complex'}-${s.id}`} value={`${s._locationId || 'complex'}-${s.id}`}>
+                                                        {s.name} {s._location ? `(${s._location})` : ''}
+                                                    </SelectItem>
+                                                ))
+                                            ) : (
+                                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                                    No services available - Add services in Residences page
+                                                </div>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={selectedSubFacilityId} onValueChange={setSelectedSubFacilityId} disabled={!selectedServiceId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={(() => {
+                                                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
+                                                if (!selectedServiceId) return "Select Sub-facility (Optional)";
+                                                if (!selectedService?.subFacilities || selectedService.subFacilities.length === 0) {
+                                                    return "No sub-facilities available";
+                                                }
+                                                return "Select Sub-facility (Required)";
+                                            })()} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(() => {
+                                                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
+                                                return selectedService?.subFacilities?.length > 0 ? (
+                                                    selectedService.subFacilities.map((sf: any) => (
+                                                        <SelectItem key={sf.id} value={sf.id}>{sf.name} {sf.number ? `(${sf.number})` : ''}</SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                                        {!selectedServiceId ? "Select a service first" : "✅ This service has no sub-facilities - You can proceed to add items"}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </SelectContent>
+                                    </Select>
+                                    {/* Debug info */}
+                                    {selectedComplexId && (
+                                        <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
+                                            <p>Services found: {allAvailableServices.length}</p>
+                                            {allAvailableServices.length === 0 && (
+                                                <p className="text-orange-600">⚠️ No services found. Add services in Residences page first.</p>
+                                            )}
+                                            {allAvailableServices.length > 0 && (
+                                                <div className="mt-1">
+                                                    <p className="text-green-600">✅ Available:</p>
+                                                    {allAvailableServices.slice(0, 3).map((s: any, i: number) => (
+                                                        <p key={i} className="text-xs">• {s.name} {s._location ? `(${s._location})` : ''}</p>
+                                                    ))}
+                                                    {allAvailableServices.length > 3 && <p className="text-xs">...and {allAvailableServices.length - 3} more</p>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : null}
                         </div>
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>

@@ -471,16 +471,23 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
+    console.log('🔍 Starting issueItemsFromStock with:', { residenceId, voucherLocations });
+    
     if (!db) {
+        console.error('❌ Firebase not initialized');
         throw new Error(firebaseErrorMessage);
     }
 
     try {
         const mivId = await generateNewMivId();
+        console.log('🆔 Generated MIV ID:', mivId);
         
         await runTransaction(db, async (transaction) => {
             const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
             const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
+            
+            console.log('📦 All issued items:', allIssuedItems);
+            console.log('🔍 Unique item IDs:', uniqueItemIds);
             
             // Step 1: Read all items first
             const itemSnapshots = new Map<string, DocumentSnapshot>();
@@ -488,9 +495,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const itemRef = doc(db!, "inventory", id);
                 const itemSnap = await transaction.get(itemRef);
                 if (!itemSnap.exists()) {
+                    console.error(`❌ Item not found: ${id}`);
                     throw new Error(`Item with ID ${id} not found.`);
                 }
                 itemSnapshots.set(id, itemSnap);
+                console.log(`✅ Item loaded: ${id}`, itemSnap.data());
             }
 
             // Step 2: Validate all items and prepare stock updates
@@ -498,17 +507,23 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             for (const item of allIssuedItems) {
                 const itemSnap = itemSnapshots.get(item.id);
                 const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
+                console.log(`📊 Stock check for ${item.nameEn}: Available=${currentStock}, Required=${item.issueQuantity}`);
+                
                 if (currentStock < item.issueQuantity) {
+                    console.error(`❌ Insufficient stock for ${item.nameEn}: ${currentStock} < ${item.issueQuantity}`);
                     throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
                 }
                 stockUpdates.push({ itemId: item.id, issueQuantity: item.issueQuantity });
             }
+            
+            console.log('✅ All stock validation passed, proceeding with updates...');
             
             // Step 3: Perform all writes after all reads and validations are complete
             // Update stock for all items
             for (const update of stockUpdates) {
                 const itemRef = doc(db!, "inventory", update.itemId);
                 const stockUpdateKey = `stockByResidence.${residenceId}`;
+                console.log(`🔄 Updating stock for ${update.itemId}: -${update.issueQuantity}`);
                 transaction.update(itemRef, { [stockUpdateKey]: increment(-update.issueQuantity) });
             }
             
@@ -525,6 +540,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
                     // Log transaction
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
+                    console.log(`📝 Creating transaction for ${issuedItem.nameEn} in ${location.locationName}`);
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
                         itemNameEn: issuedItem.nameEn,
@@ -541,6 +557,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             }
             
             // Write MIV master record
+            console.log('📄 Creating MIV master record with:', { 
+                id: mivId, 
+                residenceId, 
+                itemCount: totalItemsCount,
+                locationName: firstLocationName 
+            });
             transaction.set(mivDocRef, { 
                 id: mivId, 
                 date: transactionTime, 
@@ -550,9 +572,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             });
         });
 
+        console.log('✅ Transaction completed successfully');
         toast({ title: "Success", description: "Voucher submitted successfully." });
     } catch (error) {
-        console.error("Transaction failed: ", error);
+        console.error("❌ Transaction failed: ", error);
         throw error;
     }
   };

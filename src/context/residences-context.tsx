@@ -8,27 +8,51 @@ import { useToast } from "@/hooks/use-toast";
 
 
 // Define types for our data structure
+export interface SubFacility {
+  id: string;
+  name: string;
+  number?: string; // e.g., bathroom number
+  status: 'Active' | 'Inactive' | 'Maintenance';
+  notes?: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  type: string; // e.g., 'Bathroom', 'Kitchen', 'Laundry', 'Storage'
+  category: 'Essential' | 'Amenity' | 'Utility'; // Classification of service
+  subFacilities: SubFacility[];
+  status: 'Active' | 'Inactive' | 'Maintenance';
+  addedDate: Date;
+  lastMaintenanceDate?: Date;
+  notes?: string;
+}
+
 export interface Room {
   id: string;
   name: string;
+  services?: Service[]; // Room-level services
 }
 
 export interface Floor {
   id: string;
   name: string;
   rooms: Room[];
+  services?: Service[]; // Floor-level services
 }
 
 export interface Building {
   id: string;
   name: string;
   floors: Floor[];
+  services?: Service[]; // Building-level services
 }
 
 export interface Facility {
   id: string;
   name: string;
   type: string; // e.g., Warehouse, Office, Clinic
+  services?: Service[]; // Facility-level services
 }
 
 export interface Complex {
@@ -38,6 +62,7 @@ export interface Complex {
   managerId: string;
   buildings: Building[];
   facilities?: Facility[];
+  services?: Service[];
 }
 
 export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
@@ -63,6 +88,29 @@ interface ResidencesContextType {
   deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
   deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
   deleteFacility: (complexId: string, facilityId: string) => Promise<void>;
+  
+  // Service management functions
+  addServiceToBuilding: (complexId: string, buildingId: string, service: Omit<Service, 'id' | 'addedDate'>) => Promise<void>;
+  addServiceToFloor: (complexId: string, buildingId: string, floorId: string, service: Omit<Service, 'id' | 'addedDate'>) => Promise<void>;
+  addServiceToRoom: (complexId: string, buildingId: string, floorId: string, roomId: string, service: Omit<Service, 'id' | 'addedDate'>) => Promise<void>;
+  addServiceToFacility: (complexId: string, facilityId: string, service: Omit<Service, 'id' | 'addedDate'>) => Promise<void>;
+  
+  // Sub-facility management functions
+  addSubFacilityToService: (location: ServiceLocation, serviceId: string, subFacility: Omit<SubFacility, 'id'>) => Promise<void>;
+  updateSubFacility: (location: ServiceLocation, serviceId: string, subFacilityId: string, updates: Partial<SubFacility>) => Promise<void>;
+  deleteSubFacility: (location: ServiceLocation, serviceId: string, subFacilityId: string) => Promise<void>;
+  
+  // Service operations
+  updateService: (location: ServiceLocation, serviceId: string, updates: Partial<Service>) => Promise<void>;
+  deleteService: (location: ServiceLocation, serviceId: string) => Promise<void>;
+}
+
+export interface ServiceLocation {
+  complexId: string;
+  buildingId?: string;
+  floorId?: string;
+  roomId?: string;
+  facilityId?: string;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -511,6 +559,633 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(complexDocRef, { facilities: updatedFacilities });
     toast({ title: "Success", description: "Facility deleted successfully." });
   };
+
+  // Service management functions
+  const addServiceToBuilding = async (complexId: string, buildingId: string, service: Omit<Service, 'id' | 'addedDate'>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        const newService: Service = { 
+            ...service, 
+            id: `service-${Date.now()}`, 
+            addedDate: new Date(),
+            subFacilities: service.subFacilities || []
+        };
+
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId 
+                ? { ...b, services: [...(b.services || []), newService] }
+                : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+        toast({ title: "Success", description: "Service added to building successfully." });
+
+    } catch (error) {
+        console.error("Error adding service to building:", error);
+        toast({ title: "Error", description: "Failed to add service to building.", variant: "destructive" });
+    }
+  };
+
+  const addServiceToFloor = async (complexId: string, buildingId: string, floorId: string, service: Omit<Service, 'id' | 'addedDate'>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        const newService: Service = { 
+            ...service, 
+            id: `service-${Date.now()}`, 
+            addedDate: new Date(),
+            subFacilities: service.subFacilities || []
+        };
+
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => 
+                    f.id === floorId 
+                        ? { ...f, services: [...(f.services || []), newService] }
+                        : f
+                )
+            } : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+        toast({ title: "Success", description: "Service added to floor successfully." });
+
+    } catch (error) {
+        console.error("Error adding service to floor:", error);
+        toast({ title: "Error", description: "Failed to add service to floor.", variant: "destructive" });
+    }
+  };
+
+  const addServiceToRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string, service: Omit<Service, 'id' | 'addedDate'>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        const newService: Service = { 
+            ...service, 
+            id: `service-${Date.now()}`, 
+            addedDate: new Date(),
+            subFacilities: service.subFacilities || []
+        };
+
+        const updatedBuildings = complexData.buildings.map(b => 
+            b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => 
+                    f.id === floorId ? {
+                        ...f,
+                        rooms: f.rooms.map(r => 
+                            r.id === roomId 
+                                ? { ...r, services: [...(r.services || []), newService] }
+                                : r
+                        )
+                    } : f
+                )
+            } : b
+        );
+
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+        toast({ title: "Success", description: "Service added to room successfully." });
+
+    } catch (error) {
+        console.error("Error adding service to room:", error);
+        toast({ title: "Error", description: "Failed to add service to room.", variant: "destructive" });
+    }
+  };
+
+  const addServiceToFacility = async (complexId: string, facilityId: string, service: Omit<Service, 'id' | 'addedDate'>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        const newService: Service = { 
+            ...service, 
+            id: `service-${Date.now()}`, 
+            addedDate: new Date(),
+            subFacilities: service.subFacilities || []
+        };
+
+        const updatedFacilities = (complexData.facilities || []).map(f => 
+            f.id === facilityId 
+                ? { ...f, services: [...(f.services || []), newService] }
+                : f
+        );
+
+        await updateDoc(complexDocRef, { facilities: updatedFacilities });
+        toast({ title: "Success", description: "Service added to facility successfully." });
+
+    } catch (error) {
+        console.error("Error adding service to facility:", error);
+        toast({ title: "Error", description: "Failed to add service to facility.", variant: "destructive" });
+    }
+  };
+
+  // Sub-facility management functions
+  const addSubFacilityToService = async (location: ServiceLocation, serviceId: string, subFacility: Omit<SubFacility, 'id'>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", location.complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        const newSubFacility: SubFacility = { 
+            ...subFacility, 
+            id: `subfacility-${Date.now()}`
+        };
+
+        let updated = false;
+
+        if (location.facilityId) {
+            // Add to facility service
+            const updatedFacilities = (complexData.facilities || []).map(f => 
+                f.id === location.facilityId ? {
+                    ...f,
+                    services: (f.services || []).map(s => 
+                        s.id === serviceId 
+                            ? { ...s, subFacilities: [...s.subFacilities, newSubFacility] }
+                            : s
+                    )
+                } : f
+            );
+            await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            updated = true;
+        } else if (location.buildingId) {
+            const updatedBuildings = complexData.buildings.map(b => {
+                if (b.id !== location.buildingId) return b;
+                
+                if (location.roomId && location.floorId) {
+                    // Add to room service
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                rooms: f.rooms.map(r => 
+                                    r.id === location.roomId ? {
+                                        ...r,
+                                        services: (r.services || []).map(s => 
+                                            s.id === serviceId 
+                                                ? { ...s, subFacilities: [...s.subFacilities, newSubFacility] }
+                                                : s
+                                        )
+                                    } : r
+                                )
+                            } : f
+                        )
+                    };
+                } else if (location.floorId) {
+                    // Add to floor service
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                services: (f.services || []).map(s => 
+                                    s.id === serviceId 
+                                        ? { ...s, subFacilities: [...s.subFacilities, newSubFacility] }
+                                        : s
+                                )
+                            } : f
+                        )
+                    };
+                } else {
+                    // Add to building service
+                    return {
+                        ...b,
+                        services: (b.services || []).map(s => 
+                            s.id === serviceId 
+                                ? { ...s, subFacilities: [...s.subFacilities, newSubFacility] }
+                                : s
+                        )
+                    };
+                }
+            });
+            await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            updated = true;
+        }
+
+        if (updated) {
+            toast({ title: "Success", description: "Sub-facility added successfully." });
+        } else {
+            throw new Error("Invalid location provided");
+        }
+
+    } catch (error) {
+        console.error("Error adding sub-facility:", error);
+        toast({ title: "Error", description: "Failed to add sub-facility.", variant: "destructive" });
+    }
+  };
+
+  const updateSubFacility = async (location: ServiceLocation, serviceId: string, subFacilityId: string, updates: Partial<SubFacility>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", location.complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        let updated = false;
+
+        if (location.facilityId) {
+            const updatedFacilities = (complexData.facilities || []).map(f => 
+                f.id === location.facilityId ? {
+                    ...f,
+                    services: (f.services || []).map(s => 
+                        s.id === serviceId ? {
+                            ...s,
+                            subFacilities: s.subFacilities.map(sf => 
+                                sf.id === subFacilityId ? { ...sf, ...updates } : sf
+                            )
+                        } : s
+                    )
+                } : f
+            );
+            await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            updated = true;
+        } else if (location.buildingId) {
+            const updatedBuildings = complexData.buildings.map(b => {
+                if (b.id !== location.buildingId) return b;
+                
+                if (location.roomId && location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                rooms: f.rooms.map(r => 
+                                    r.id === location.roomId ? {
+                                        ...r,
+                                        services: (r.services || []).map(s => 
+                                            s.id === serviceId ? {
+                                                ...s,
+                                                subFacilities: s.subFacilities.map(sf => 
+                                                    sf.id === subFacilityId ? { ...sf, ...updates } : sf
+                                                )
+                                            } : s
+                                        )
+                                    } : r
+                                )
+                            } : f
+                        )
+                    };
+                } else if (location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                services: (f.services || []).map(s => 
+                                    s.id === serviceId ? {
+                                        ...s,
+                                        subFacilities: s.subFacilities.map(sf => 
+                                            sf.id === subFacilityId ? { ...sf, ...updates } : sf
+                                        )
+                                    } : s
+                                )
+                            } : f
+                        )
+                    };
+                } else {
+                    return {
+                        ...b,
+                        services: (b.services || []).map(s => 
+                            s.id === serviceId ? {
+                                ...s,
+                                subFacilities: s.subFacilities.map(sf => 
+                                    sf.id === subFacilityId ? { ...sf, ...updates } : sf
+                                )
+                            } : s
+                        )
+                    };
+                }
+            });
+            await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            updated = true;
+        }
+
+        if (updated) {
+            toast({ title: "Success", description: "Sub-facility updated successfully." });
+        } else {
+            throw new Error("Invalid location provided");
+        }
+
+    } catch (error) {
+        console.error("Error updating sub-facility:", error);
+        toast({ title: "Error", description: "Failed to update sub-facility.", variant: "destructive" });
+    }
+  };
+
+  const deleteSubFacility = async (location: ServiceLocation, serviceId: string, subFacilityId: string) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", location.complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        let updated = false;
+
+        if (location.facilityId) {
+            const updatedFacilities = (complexData.facilities || []).map(f => 
+                f.id === location.facilityId ? {
+                    ...f,
+                    services: (f.services || []).map(s => 
+                        s.id === serviceId ? {
+                            ...s,
+                            subFacilities: s.subFacilities.filter(sf => sf.id !== subFacilityId)
+                        } : s
+                    )
+                } : f
+            );
+            await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            updated = true;
+        } else if (location.buildingId) {
+            const updatedBuildings = complexData.buildings.map(b => {
+                if (b.id !== location.buildingId) return b;
+                
+                if (location.roomId && location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                rooms: f.rooms.map(r => 
+                                    r.id === location.roomId ? {
+                                        ...r,
+                                        services: (r.services || []).map(s => 
+                                            s.id === serviceId ? {
+                                                ...s,
+                                                subFacilities: s.subFacilities.filter(sf => sf.id !== subFacilityId)
+                                            } : s
+                                        )
+                                    } : r
+                                )
+                            } : f
+                        )
+                    };
+                } else if (location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                services: (f.services || []).map(s => 
+                                    s.id === serviceId ? {
+                                        ...s,
+                                        subFacilities: s.subFacilities.filter(sf => sf.id !== subFacilityId)
+                                    } : s
+                                )
+                            } : f
+                        )
+                    };
+                } else {
+                    return {
+                        ...b,
+                        services: (b.services || []).map(s => 
+                            s.id === serviceId ? {
+                                ...s,
+                                subFacilities: s.subFacilities.filter(sf => sf.id !== subFacilityId)
+                            } : s
+                        )
+                    };
+                }
+            });
+            await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            updated = true;
+        }
+
+        if (updated) {
+            toast({ title: "Success", description: "Sub-facility deleted successfully." });
+        } else {
+            throw new Error("Invalid location provided");
+        }
+
+    } catch (error) {
+        console.error("Error deleting sub-facility:", error);
+        toast({ title: "Error", description: "Failed to delete sub-facility.", variant: "destructive" });
+    }
+  };
+
+  const updateService = async (location: ServiceLocation, serviceId: string, updates: Partial<Service>) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", location.complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        let updated = false;
+
+        if (location.facilityId) {
+            const updatedFacilities = (complexData.facilities || []).map(f => 
+                f.id === location.facilityId ? {
+                    ...f,
+                    services: (f.services || []).map(s => 
+                        s.id === serviceId ? { ...s, ...updates } : s
+                    )
+                } : f
+            );
+            await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            updated = true;
+        } else if (location.buildingId) {
+            const updatedBuildings = complexData.buildings.map(b => {
+                if (b.id !== location.buildingId) return b;
+                
+                if (location.roomId && location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                rooms: f.rooms.map(r => 
+                                    r.id === location.roomId ? {
+                                        ...r,
+                                        services: (r.services || []).map(s => 
+                                            s.id === serviceId ? { ...s, ...updates } : s
+                                        )
+                                    } : r
+                                )
+                            } : f
+                        )
+                    };
+                } else if (location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                services: (f.services || []).map(s => 
+                                    s.id === serviceId ? { ...s, ...updates } : s
+                                )
+                            } : f
+                        )
+                    };
+                } else {
+                    return {
+                        ...b,
+                        services: (b.services || []).map(s => 
+                            s.id === serviceId ? { ...s, ...updates } : s
+                        )
+                    };
+                }
+            });
+            await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            updated = true;
+        }
+
+        if (updated) {
+            toast({ title: "Success", description: "Service updated successfully." });
+        } else {
+            throw new Error("Invalid location provided");
+        }
+
+    } catch (error) {
+        console.error("Error updating service:", error);
+        toast({ title: "Error", description: "Failed to update service.", variant: "destructive" });
+    }
+  };
+
+  const deleteService = async (location: ServiceLocation, serviceId: string) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        const complexDocRef = doc(db, "residences", location.complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) {
+            throw new Error("Complex not found");
+        }
+
+        const complexData = complexDoc.data() as Complex;
+        let updated = false;
+
+        if (location.facilityId) {
+            const updatedFacilities = (complexData.facilities || []).map(f => 
+                f.id === location.facilityId ? {
+                    ...f,
+                    services: (f.services || []).filter(s => s.id !== serviceId)
+                } : f
+            );
+            await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            updated = true;
+        } else if (location.buildingId) {
+            const updatedBuildings = complexData.buildings.map(b => {
+                if (b.id !== location.buildingId) return b;
+                
+                if (location.roomId && location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                rooms: f.rooms.map(r => 
+                                    r.id === location.roomId ? {
+                                        ...r,
+                                        services: (r.services || []).filter(s => s.id !== serviceId)
+                                    } : r
+                                )
+                            } : f
+                        )
+                    };
+                } else if (location.floorId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => 
+                            f.id === location.floorId ? {
+                                ...f,
+                                services: (f.services || []).filter(s => s.id !== serviceId)
+                            } : f
+                        )
+                    };
+                } else {
+                    return {
+                        ...b,
+                        services: (b.services || []).filter(s => s.id !== serviceId)
+                    };
+                }
+            });
+            await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            updated = true;
+        }
+
+        if (updated) {
+            toast({ title: "Success", description: "Service deleted successfully." });
+        } else {
+            throw new Error("Invalid location provided");
+        }
+
+    } catch (error) {
+        console.error("Error deleting service:", error);
+        toast({ title: "Error", description: "Failed to delete service.", variant: "destructive" });
+    }
+  };
   
   const buildings = useMemo(() => residences?.flatMap(c => c.buildings) || [], [residences]);
   const floors = useMemo(() => buildings?.flatMap(b => b.floors) || [], [buildings]);
@@ -518,7 +1193,35 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, addFacility, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, deleteFacility }}>
+    <ResidencesContext.Provider value={{ 
+      residences, 
+      buildings, 
+      floors, 
+      rooms, 
+      loading, 
+      loadResidences, 
+      addComplex, 
+      updateComplex, 
+      addBuilding, 
+      addFloor, 
+      addRoom, 
+      addMultipleRooms, 
+      addFacility, 
+      deleteComplex, 
+      deleteBuilding, 
+      deleteFloor, 
+      deleteRoom, 
+      deleteFacility,
+      addServiceToBuilding,
+      addServiceToFloor,
+      addServiceToRoom,
+      addServiceToFacility,
+      addSubFacilityToService,
+      updateSubFacility,
+      deleteSubFacility,
+      updateService,
+      deleteService
+    }}>
       {children}
     </ResidencesContext.Provider>
   );
