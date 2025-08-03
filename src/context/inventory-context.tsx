@@ -687,7 +687,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const q = query(
-        collection(db, "inventoryTransactions"),
+        collectionGroup(db, "inventoryTransactions"),
         where("itemId", "==", itemId),
         orderBy("date", "desc")
       );
