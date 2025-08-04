@@ -37,10 +37,15 @@
         }
       ]
     },
+
     {
-      "collectionGroup": "stockTransfers",
+      "collectionGroup": "inventoryTransactions",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "itemId",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "date",
           "order": "DESCENDING"
@@ -48,11 +53,15 @@
       ]
     },
     {
-      "collectionGroup": "inventoryTransactions",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "date",
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
       ]
