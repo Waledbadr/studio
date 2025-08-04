@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useTransition } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,6 +48,7 @@ export default function IssueMaterialPage() {
     const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,12 +125,25 @@ export default function IssueMaterialPage() {
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
     
+    const availableFacilities = useMemo(() => {
+        if (!selectedComplex) return [];
+        let facilities = [...(selectedComplex.facilities || [])];
+        if (selectedBuilding) {
+            facilities = [...facilities, ...(selectedBuilding.facilities || [])];
+        }
+        if (selectedFloor) {
+            facilities = [...facilities, ...(selectedFloor.facilities || [])];
+        }
+        return facilities;
+    }, [selectedComplex, selectedBuilding, selectedFloor]);
+
+
     const isLocationSelected = useMemo(() => {
         if (locationType === 'unit') {
-            return !!(selectedBuildingId && selectedFloorId && selectedRoomId);
+            return !!(selectedComplexId && selectedBuildingId && selectedFloorId && selectedRoomId);
         }
-        return !!selectedFacilityId;
-    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
+        return !!(selectedComplexId && selectedFacilityId);
+    }, [locationType, selectedComplexId, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
@@ -152,98 +166,101 @@ export default function IssueMaterialPage() {
         setSelectedRoomId('');
     }, [selectedFloorId]);
     
-    const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
-        if (!isLocationSelected || !selectedComplex) {
-            toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
-            return;
-        }
-
-        const stock = getStockForResidence(itemToAdd, selectedComplexId);
-        if (stock < 1) {
-            toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
-            return;
-        }
-
-        let locationId: string, locationName: string, isFacility: boolean;
-        let newLocationDetails: Partial<VoucherLocation> = {};
-
-        if (locationType === 'unit') {
-            const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
-            if (!selectedBuilding || !selectedFloor || !selectedRoom) {
-                toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+        startTransition(async () => {
+            if (!isLocationSelected || !selectedComplex) {
+                toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
                 return;
             }
-            locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
-            locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
-            isFacility = false;
-            newLocationDetails = {
-                buildingId: selectedBuildingId,
-                buildingName: selectedBuilding.name,
-                floorId: selectedFloorId,
-                floorName: selectedFloor.name,
-                roomId: selectedRoomId,
-                roomName: selectedRoom.name,
-            };
-        } else {
-            const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
-             if (!selectedFacility) {
-                toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+
+            const stock = getStockForResidence(itemToAdd, selectedComplexId);
+            if (stock < 1) {
+                toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
                 return;
             }
-            locationId = selectedFacilityId;
-            locationName = selectedFacility.name;
-            isFacility = true;
-            newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
-        }
-        
-        // Lifespan check
-        if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
-            const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
-            if (lastIssueDate) {
-                const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
-                if (daysSinceLastIssue < itemToAdd.lifespanDays) {
-                    toast({
-                        title: "Lifespan Warning",
-                        description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
-                        variant: "default",
-                        duration: 8000,
-                        className: "bg-yellow-100 border-yellow-400 text-yellow-800"
-                    });
-                }
-            }
-        }
-        
-        setVoucherLocations(prevLocations => {
-            const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
-            
-            if (existingLocationIndex > -1) {
-                const newLocations = [...prevLocations];
-                const targetLocation = newLocations[existingLocationIndex];
-                const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
-                if (existingItemIndex > -1) {
-                    const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                    if(currentQty < stock) {
-                        targetLocation.items[existingItemIndex].issueQuantity += 1;
-                    } else {
-                         toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
-                    }
-                } else {
-                    targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+            let locationId: string, locationName: string, isFacility: boolean;
+            let newLocationDetails: Partial<VoucherLocation> = {};
+
+            if (locationType === 'unit') {
+                const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
+                if (!selectedBuilding || !selectedFloor || !selectedRoom) {
+                    toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                    return;
                 }
-                return newLocations;
-            } else {
-                const newLocation: VoucherLocation = {
-                    ...newLocationDetails,
-                    locationId,
-                    locationName,
-                    isFacility,
-                    items: [{ ...itemToAdd, issueQuantity: 1 }]
+                locationId = selectedRoom.id;
+                locationName = `${selectedComplex.name} -> ${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+                isFacility = false;
+                newLocationDetails = {
+                    buildingId: selectedBuildingId,
+                    buildingName: selectedBuilding.name,
+                    floorId: selectedFloorId,
+                    floorName: selectedFloor.name,
+                    roomId: selectedRoomId,
+                    roomName: selectedRoom.name,
                 };
-                return [...prevLocations, newLocation];
+            } else {
+                const selectedFacility = availableFacilities.find(f => f.id === selectedFacilityId);
+                 if (!selectedFacility) {
+                    toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+                    return;
+                }
+                locationId = selectedFacility.id;
+                locationName = `${selectedComplex.name} -> ${selectedFacility.name}`;
+                isFacility = true;
+                newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
             }
+            
+            // Lifespan check
+            if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
+                const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
+                if (lastIssueDate) {
+                    const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                    if (daysSinceLastIssue < itemToAdd.lifespanDays) {
+                        toast({
+                            title: "Lifespan Warning",
+                            description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
+                            variant: "default",
+                            duration: 8000,
+                            className: "bg-yellow-100 border-yellow-400 text-yellow-800"
+                        });
+                    }
+                }
+            }
+            
+            setVoucherLocations(prevLocations => {
+                const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
+                
+                if (existingLocationIndex > -1) {
+                    const newLocations = [...prevLocations];
+                    const targetLocation = newLocations[existingLocationIndex];
+                    const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
+
+                    if (existingItemIndex > -1) {
+                        const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
+                        if(currentQty < stock) {
+                            targetLocation.items[existingItemIndex].issueQuantity += 1;
+                        } else {
+                             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                        }
+                    } else {
+                        targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                    }
+                    return newLocations;
+                } else {
+                    const newLocation: VoucherLocation = {
+                        ...newLocationDetails,
+                        locationId,
+                        locationName,
+                        isFacility,
+                        items: [{ ...itemToAdd, issueQuantity: 1 }]
+                    };
+                    return [...prevLocations, newLocation];
+                }
+            });
         });
     };
+
 
     const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
          const itemInfo = allItems.find(i => i.id === itemId);
@@ -395,7 +412,7 @@ export default function IssueMaterialPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-1 space-y-4">
                             <h3 className="font-semibold">Select Location Type</h3>
-                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
+                             <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="unit" id="r_unit" />
                                     <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
@@ -406,37 +423,35 @@ export default function IssueMaterialPage() {
                                 </div>
                             </RadioGroup>
                             
-                            {locationType === 'unit' ? (
-                                <div className="space-y-2 pt-2">
-                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                            <div className="space-y-2 pt-2">
+                                <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
+                                    <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
+                                    <SelectContent>
+                                        {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
+                                    <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
+                                    <SelectContent>
+                                        {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                {locationType === 'unit' ? (
                                     <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
                                         <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
                                         <SelectContent>
                                             {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                            ) : (
-                                 <div className="space-y-2 pt-2">
-                                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
+                                ) : (
+                                     <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
                                         <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
                                         <SelectContent>
-                                            {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                            {availableFacilities.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
-                                 </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>
@@ -449,7 +464,7 @@ export default function IssueMaterialPage() {
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                     <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
+                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending}>
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
                                             </div>
