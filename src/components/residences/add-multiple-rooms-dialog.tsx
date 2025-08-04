@@ -39,8 +39,7 @@ export function AddMultipleRoomsDialog({
     }
   }, [isOpen]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     if (!floorInfo) return;
     
     // Split by commas, newlines, or spaces, then filter out empty strings
@@ -60,31 +59,29 @@ export function AddMultipleRoomsDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSave}>
-          <DialogHeader>
-            <DialogTitle>Add Multiple Rooms</DialogTitle>
-            <DialogDescription>
-              Paste or type a list of room names. Separate them with commas, spaces, or new lines.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <Label htmlFor="room-list" className="sr-only">Room List</Label>
-            <Textarea
-              id="room-list"
-              placeholder="e.g., 101, 102, 103&#10;G-01 G-02&#10;Office 1"
-              className="min-h-[200px]"
-              value={roomList}
-              onChange={(e) => setRoomList(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Rooms
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogHeader>
+          <DialogTitle>Add Multiple Rooms</DialogTitle>
+          <DialogDescription>
+            Paste or type a list of room names. Separate them with commas, spaces, or new lines.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <Label htmlFor="room-list" className="sr-only">Room List</Label>
+          <Textarea
+            id="room-list"
+            placeholder="e.g., 101, 102, 103&#10;G-01 G-02&#10;Office 1"
+            className="min-h-[200px]"
+            value={roomList}
+            onChange={(e) => setRoomList(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Rooms
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
