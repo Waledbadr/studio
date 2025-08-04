@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
+import { Badge } from '../ui/badge';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -96,12 +97,21 @@ export function AppSidebar() {
     },
   ];
 
+  const environment = process.env.NODE_ENV;
+
   return (
     <>
       <SidebarHeader>
         <div className="flex items-center gap-2 p-2">
             <Building className="h-8 w-8 text-primary" />
-            <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
+            <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+                <span className="text-xl font-semibold">EstateCare</span>
+                {environment && (
+                    <Badge variant={environment === 'development' ? 'destructive' : 'secondary'} className="w-fit text-xs capitalize">
+                       {environment}
+                    </Badge>
+                )}
+            </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
