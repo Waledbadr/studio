@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, BedDouble, Bath, CookingPot, Warehouse, Users } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, BedDouble, Bath, CookingPot, Warehouse, Users as UsersIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,16 +36,40 @@ import { useToast } from '@/hooks/use-toast';
 import { AddMultipleRoomsDialog } from '@/components/residences';
 import { Separator } from '@/components/ui/separator';
 
-type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms' | 'addFacility';
-type FacilityLevel = 'complex' | 'building' | 'floor';
+type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms';
 
 const facilityIcons: { [key: string]: React.ElementType } = {
   'bathroom': Bath,
   'kitchen': CookingPot,
   'storeroom': Warehouse,
-  'management': Users,
+  'management': UsersIcon,
   'default': ConciergeBell
 };
+
+
+const AddFacilityForm = ({ onAdd }: { onAdd: (name: string) => void }) => {
+    const [name, setName] = useState('');
+
+    const handleAdd = () => {
+        if (name.trim()) {
+            onAdd(name.trim());
+            setName('');
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-2">
+            <Input 
+                placeholder="e.g., Guest Bathroom #3" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="h-8 text-xs"
+            />
+            <Button size="sm" onClick={handleAdd} className="h-8">Add</Button>
+        </div>
+    );
+};
+
 
 export default function ResidencesPage() {
   const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility } = useResidences();
@@ -65,7 +89,6 @@ export default function ResidencesPage() {
     addFloor: false,
     addRoom: false,
     addMultipleRooms: false,
-    addFacility: false,
   });
 
   const [formData, setFormData] = useState({
@@ -75,14 +98,10 @@ export default function ResidencesPage() {
     newBuildingName: '',
     newFloorName: '',
     newRoomName: '',
-    newFacilityName: '',
-    newFacilityType: '',
-    newFacilityQuantity: 1,
   });
 
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
   const [contextIds, setContextIds] = useState<{ complexId?: string, buildingId?: string, floorId?: string }>({});
-  const [facilityLevel, setFacilityLevel] = useState<FacilityLevel>('complex');
 
   const userVisibleResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -118,16 +137,14 @@ export default function ResidencesPage() {
     }, { complexes: 0, buildings: 0, floors: 0, rooms: 0, facilities: 0 });
   }, [userVisibleResidences]);
 
-  const openDialog = (type: DialogType, ids: Partial<typeof contextIds> = {}, level?: FacilityLevel) => {
+  const openDialog = (type: DialogType, ids: Partial<typeof contextIds> = {}) => {
     setDialogStates(prev => ({ ...prev, [type]: true }));
     setContextIds(ids);
-    if (level) setFacilityLevel(level);
   };
   
   const closeDialog = (type: DialogType) => {
     setDialogStates(prev => ({ ...prev, [type]: false }));
     setContextIds({});
-    setFormData(prev => ({...prev, newFacilityName: '', newFacilityType: '', newFacilityQuantity: 1}));
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
@@ -186,24 +203,13 @@ export default function ResidencesPage() {
     closeDialog('addRoom');
   };
   
-    const handleAddFacility = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!formData.newFacilityName.trim() || !contextIds.complexId) return;
-        addFacility(
-            contextIds.complexId,
-            facilityLevel,
-            formData.newFacilityName,
-            formData.newFacilityType,
-            formData.newFacilityQuantity,
-            contextIds.buildingId,
-            contextIds.floorId
-        );
-        closeDialog('addFacility');
-    };
+  const handleAddFacility = (level: 'complex' | 'building' | 'floor', name: string, complexId: string, buildingId?: string, floorId?: string) => {
+    addFacility(complexId, level, name, 'default', 1, buildingId, floorId);
+  };
 
-    const handleDeleteFacility = (complexId: string, facilityId: string, level: FacilityLevel, buildingId?: string, floorId?: string) => {
-        deleteFacility(complexId, facilityId, level, buildingId, floorId);
-    };
+  const handleDeleteFacility = (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => {
+      deleteFacility(complexId, facilityId, level, buildingId, floorId);
+  };
 
   const getManagerName = (managerId: string) => {
     const manager = users.find(u => u.id === managerId);
@@ -213,7 +219,7 @@ export default function ResidencesPage() {
   const FacilityItem = ({ facility, onDelete }: { facility: Facility, onDelete: () => void }) => {
     const Icon = facilityIcons[facility.type.toLowerCase()] || facilityIcons.default;
     return (
-      <div className="flex items-center justify-between p-2 bg-background rounded-md text-sm">
+      <div className="flex items-center justify-between p-2 bg-background rounded-md text-sm border">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-muted-foreground" />
           {facility.name}
@@ -238,6 +244,18 @@ export default function ResidencesPage() {
       </div>
     );
   };
+  
+  const FacilitySection = ({ facilities, onAdd, onDelete }: { facilities: Facility[] | undefined, onAdd: (name: string) => void, onDelete: (facilityId: string) => void }) => (
+    <div className="space-y-2 mt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+        {(facilities || []).map(facility => (
+          <FacilityItem key={facility.id} facility={facility} onDelete={() => onDelete(facility.id)} />
+        ))}
+      </div>
+      {isAdmin && <AddFacilityForm onAdd={onAdd} />}
+    </div>
+  );
+
 
   if (loading || usersLoading) {
     return (
@@ -336,9 +354,6 @@ export default function ResidencesPage() {
                     </div>
                      {isAdmin && (
                         <div className="flex gap-2">
-                             <Button variant="outline" size="sm" onClick={() => openDialog('addFacility', {complexId: complex.id}, 'complex')}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add Facility
-                            </Button>
                             <Button variant="outline" size="sm" onClick={() => openDialog('addBuilding', {complexId: complex.id})}>
                                 <PlusCircle className="mr-2 h-4 w-4" /> Add Building
                             </Button>
@@ -380,9 +395,6 @@ export default function ResidencesPage() {
                            <div className="pl-4 border-l-2 border-primary/20 space-y-3">
                                 {isAdmin && (
                                     <div className="flex justify-end gap-2 mb-2">
-                                        <Button variant="outline" size="sm" onClick={() => openDialog('addFacility', {complexId: complex.id, buildingId: building.id}, 'building')}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Facility
-                                        </Button>
                                         <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Add Floor
                                         </Button>
@@ -403,11 +415,14 @@ export default function ResidencesPage() {
                                         </AlertDialog>
                                     </div>
                                 )}
-                                {(building.facilities && building.facilities.length > 0) && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                        {building.facilities.map(facility => <FacilityItem key={facility.id} facility={facility} onDelete={() => handleDeleteFacility(complex.id, facility.id, 'building', building.id)} />)}
-                                    </div>
-                                )}
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Building Facilities</Label>
+                                  <FacilitySection 
+                                      facilities={building.facilities}
+                                      onAdd={(name) => handleAddFacility('building', name, complex.id, building.id)}
+                                      onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
+                                  />
+                                </div>
                                 {building.floors.map((floor: Floor) => (
                                     <div key={floor.id} className="p-3 rounded-md bg-muted/50">
                                          <div className="flex justify-between items-center mb-2">
@@ -417,9 +432,6 @@ export default function ResidencesPage() {
                                             </div>
                                             {isAdmin && (
                                                 <div className="flex gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => openDialog('addFacility', {complexId: complex.id, buildingId: building.id, floorId: floor.id}, 'floor')}>
-                                                        <Plus className="mr-2 h-4 w-4" /> Add Facility
-                                                    </Button>
                                                     <Button variant="outline" size="sm" onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
                                                         <PlusCircle className="mr-2 h-4 w-4" /> Add Room
                                                     </Button>
@@ -444,35 +456,42 @@ export default function ResidencesPage() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pl-6">
-                                            {floor.rooms.map((room: Room) => (
-                                                 <div key={room.id} className="flex items-center justify-between p-2 bg-background rounded-md text-sm">
-                                                    <div className="flex items-center gap-2">
-                                                      <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                                      {room.name}
-                                                    </div>
-                                                     {isAdmin && (
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                                <AlertDialogDescription>This will delete room "{room.name}".</AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
-                                                     )}
-                                                  </div>
-                                            ))}
-                                            {(floor.facilities && floor.facilities.length > 0) && (
-                                                floor.facilities.map(facility => <FacilityItem key={facility.id} facility={facility} onDelete={() => handleDeleteFacility(complex.id, facility.id, 'floor', building.id, floor.id)} />)
-                                            )}
+                                        <div className="pl-6 space-y-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                                {floor.rooms.map((room: Room) => (
+                                                     <div key={room.id} className="flex items-center justify-between p-2 bg-background rounded-md text-sm border">
+                                                        <div className="flex items-center gap-2">
+                                                          <DoorOpen className="h-4 w-4 text-muted-foreground" />
+                                                          {room.name}
+                                                        </div>
+                                                         {isAdmin && (
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>This will delete room "{room.name}".</AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                         )}
+                                                      </div>
+                                                ))}
+                                            </div>
+                                             <div>
+                                                <Label className="text-xs text-muted-foreground">Floor Facilities</Label>
+                                                <FacilitySection 
+                                                    facilities={floor.facilities}
+                                                    onAdd={(name) => handleAddFacility('floor', name, complex.id, building.id, floor.id)}
+                                                    onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -486,11 +505,11 @@ export default function ResidencesPage() {
                       <>
                         <Separator className="my-4" />
                         <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> General Facilities</h4>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 px-4">
-                           {complex.facilities.map((facility: Facility) => (
-                                <FacilityItem key={facility.id} facility={facility} onDelete={() => handleDeleteFacility(complex.id, facility.id, 'complex')} />
-                            ))}
-                        </div>
+                        <FacilitySection 
+                            facilities={complex.facilities}
+                            onAdd={(name) => handleAddFacility('complex', name, complex.id)}
+                            onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
+                        />
                       </>
                   )}
                 </CardContent>
@@ -523,44 +542,6 @@ export default function ResidencesPage() {
         </DialogContent>
       </Dialog>
       
-       {/* Add Facility Dialog */}
-      <Dialog open={dialogStates.addFacility} onOpenChange={(open) => open ? openDialog('addFacility') : closeDialog('addFacility')}>
-        <DialogContent>
-          <form onSubmit={handleAddFacility}>
-            <DialogHeader>
-              <DialogTitle>Add New Facility</DialogTitle>
-              <DialogDescription>Add a facility to the selected level.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="facility-name" className="text-right">Name</Label>
-                <Input id="facility-name" placeholder="e.g., Main Warehouse" className="col-span-3" value={formData.newFacilityName} onChange={(e) => setFormData(prev => ({ ...prev, newFacilityName: e.target.value }))} />
-              </div>
-               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="facility-type" className="text-right">Type</Label>
-                 <Select value={formData.newFacilityType} onValueChange={(value) => setFormData(prev => ({...prev, newFacilityType: value}))}>
-                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select type..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="Bathroom">Bathroom</SelectItem>
-                        <SelectItem value="Kitchen">Kitchen</SelectItem>
-                        <SelectItem value="Storeroom">Storeroom</SelectItem>
-                        <SelectItem value="Management">Management</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="facility-quantity" className="text-right">Quantity</Label>
-                <Input id="facility-quantity" type="number" min="1" className="col-span-3" value={formData.newFacilityQuantity} onChange={(e) => setFormData(prev => ({ ...prev, newFacilityQuantity: parseInt(e.target.value) || 1 }))} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Save Facility</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       {/* Add Floor Dialog */}
       <Dialog open={dialogStates.addFloor} onOpenChange={(open) => open ? openDialog('addFloor') : closeDialog('addFloor')}>
         <DialogContent>

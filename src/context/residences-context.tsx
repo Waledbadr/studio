@@ -388,11 +388,20 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             if (!complexDoc.exists()) throw new Error("Complex not found");
             const complexData = complexDoc.data() as Complex;
             
+            const match = name.match(/^(.*)#(\d+)$/);
+            let baseName = name;
+            let count = 1;
+
+            if (match) {
+                baseName = match[1].trim();
+                count = parseInt(match[2], 10);
+            }
+
             const newFacilities: Facility[] = [];
-            for (let i = 1; i <= quantity; i++) {
-                const facilityName = quantity > 1 ? `${name.trim()} ${i}` : name.trim();
+            for (let i = 1; i <= count; i++) {
+                const facilityName = count > 1 ? `${baseName} ${i}` : baseName;
                 newFacilities.push({
-                    id: `facility-${Date.now()}-${i}`,
+                    id: `facility-${Date.now()}-${Math.random()}`,
                     name: facilityName,
                     type: type.trim()
                 });
@@ -430,7 +439,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
                 await updateDoc(complexDocRef, { buildings: updatedBuildings });
             }
 
-            toast({ title: "Success", description: `Added ${quantity} new facility/facilities.` });
+            toast({ title: "Success", description: `Added ${count} new facility/facilities.` });
 
         } catch (error) {
             console.error("Error adding facility:", error);
