@@ -12,21 +12,25 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, Boxes, ArrowUpDown, Package2 } from 'lucide-react';
+import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, Boxes, ArrowUpDown, Package2, GitBranch, Clock } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { CurrentTime } from '../ui/current-time';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
+import { getFormattedGitInfo } from '@/lib/git-info';
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
   const [isMounted, setIsMounted] = useState(false);
+  const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
+    setGitInfo(getFormattedGitInfo());
   }, []);
 
   // Define menu item types
@@ -99,9 +103,28 @@ export function AppSidebar() {
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-2">
-            <Building className="h-8 w-8 text-primary" />
-            <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
+        <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+                <Building className="h-8 w-8 text-primary" />
+                <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
+            </div>
+            {/* Git Info */}
+            {isMounted && gitInfo && (
+              <div className="group-data-[collapsible=icon]:hidden space-y-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <GitBranch className="h-3 w-3" />
+                  <span className="text-primary font-medium">{gitInfo.branch}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span className="font-medium">{gitInfo.lastUpdateRelative}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-emerald-600 dark:text-emerald-400">{gitInfo.lastUpdateWithTime}</span>
+                </div>
+                <CurrentTime />
+              </div>
+            )}
         </div>
       </SidebarHeader>
       <SidebarContent>
