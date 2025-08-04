@@ -13,22 +13,24 @@ export interface Room {
   name: string;
 }
 
+export interface Facility {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface Floor {
   id: string;
   name: string;
   rooms: Room[];
+  facilities?: Facility[];
 }
 
 export interface Building {
   id: string;
   name: string;
   floors: Floor[];
-}
-
-export interface Facility {
-  id: string;
-  name: string;
-  type: string; // e.g., Warehouse, Office, Clinic
+  facilities?: Facility[];
 }
 
 export interface Complex {
@@ -57,12 +59,12 @@ interface ResidencesContextType {
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
   addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
   addMultipleRooms: (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => Promise<void>;
-  addFacility: (complexId: string, name: string, type: string) => Promise<void>;
+  addFacility: (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => Promise<void>;
   deleteComplex: (id: string) => Promise<void>;
   deleteBuilding: (complexId: string, buildingId: string) => Promise<void>;
   deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
   deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
-  deleteFacility: (complexId: string, facilityId: string) => Promise<void>;
+  deleteFacility: (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => Promise<void>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -185,7 +187,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const addBuilding = async (complexId: string, name: string) => {
     const trimmedName = name.trim();
     
-    // Find the complex first
     const targetComplex = residences.find(c => c.id === complexId);
     if (!targetComplex) {
         toast({ title: "Error", description: "Complex not found.", variant: "destructive" });
@@ -198,9 +199,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
      
     if (!db) {
-        // Use localStorage when Firebase is not available
         try {
-            const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+            const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
             const updatedResidences = residences.map(c => 
                 c.id === complexId 
                     ? { ...c, buildings: [...c.buildings, newBuilding] }
@@ -221,12 +221,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
-        if (!complexDoc.exists()) {
-            throw new Error("Complex not found");
-        }
+        if (!complexDoc.exists()) throw new Error("Complex not found");
 
         const complexData = complexDoc.data() as Complex;
-        const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [] };
+        const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
         const updatedBuildings = [...complexData.buildings, newBuilding];
         
         await updateDoc(complexDocRef, { buildings: updatedBuildings });
@@ -248,9 +246,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
-        if (!complexDoc.exists()) {
-            throw new Error("Complex not found");
-        }
+        if (!complexDoc.exists()) throw new Error("Complex not found");
 
         const complexData = complexDoc.data() as Complex;
         const targetBuilding = complexData.buildings.find(b => b.id === buildingId);
@@ -260,7 +256,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [] };
+        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
 
         const updatedBuildings = complexData.buildings.map(b => 
             b.id === buildingId 
@@ -287,9 +283,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
-        if (!complexDoc.exists()) {
-            throw new Error("Complex not found");
-        }
+        if (!complexDoc.exists()) throw new Error("Complex not found");
         
         const complexData = complexDoc.data() as Complex;
         
@@ -330,9 +324,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
-        if (!complexDoc.exists()) {
-            throw new Error("Complex not found");
-        }
+        if (!complexDoc.exists()) throw new Error("Complex not found");
         
         const complexData = complexDoc.data() as Complex;
         
@@ -384,43 +376,70 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addFacility = async (complexId: string, name: string, type: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    try {
-        const trimmedName = name.trim();
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-
-        if (!complexDoc.exists()) {
-            throw new Error("Complex not found");
-        }
-        
-        const complexData = complexDoc.data() as Complex;
-        const facilities = complexData.facilities || [];
-
-        if (facilities.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
-            toast({ title: "Error", description: "A facility with this name already exists in this complex.", variant: "destructive" });
+    const addFacility = async (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => {
+        if (!db) {
+            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
             return;
         }
+        try {
+            const complexDocRef = doc(db, "residences", complexId);
+            const complexDoc = await getDoc(complexDocRef);
 
-        const newFacility: Facility = { id: `facility-${Date.now()}`, name: trimmedName, type };
-        const updatedFacilities = [...facilities, newFacility];
-        
-        await updateDoc(complexDocRef, { facilities: updatedFacilities });
-        toast({ title: "Success", description: "New facility added to the complex." });
+            if (!complexDoc.exists()) throw new Error("Complex not found");
+            const complexData = complexDoc.data() as Complex;
+            
+            const newFacilities: Facility[] = [];
+            for (let i = 1; i <= quantity; i++) {
+                const facilityName = quantity > 1 ? `${name.trim()} ${i}` : name.trim();
+                newFacilities.push({
+                    id: `facility-${Date.now()}-${i}`,
+                    name: facilityName,
+                    type: type.trim()
+                });
+            }
 
-    } catch (error) {
-        console.error("Error adding facility:", error);
-        toast({ title: "Error", description: "Failed to add facility.", variant: "destructive" });
-    }
-  };
+            if (level === 'complex') {
+                const existingFacilities = complexData.facilities || [];
+                const updatedFacilities = [...existingFacilities, ...newFacilities];
+                await updateDoc(complexDocRef, { facilities: updatedFacilities });
+            } else if (level === 'building' && buildingId) {
+                const updatedBuildings = complexData.buildings.map(b => {
+                    if (b.id === buildingId) {
+                        const existingFacilities = b.facilities || [];
+                        return { ...b, facilities: [...existingFacilities, ...newFacilities] };
+                    }
+                    return b;
+                });
+                await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            } else if (level === 'floor' && buildingId && floorId) {
+                const updatedBuildings = complexData.buildings.map(b => {
+                    if (b.id === buildingId) {
+                        return {
+                            ...b,
+                            floors: b.floors.map(f => {
+                                if (f.id === floorId) {
+                                    const existingFacilities = f.facilities || [];
+                                    return { ...f, facilities: [...existingFacilities, ...newFacilities] };
+                                }
+                                return f;
+                            })
+                        };
+                    }
+                    return b;
+                });
+                await updateDoc(complexDocRef, { buildings: updatedBuildings });
+            }
+
+            toast({ title: "Success", description: `Added ${quantity} new facility/facilities.` });
+
+        } catch (error) {
+            console.error("Error adding facility:", error);
+            toast({ title: "Error", description: "Failed to add facility.", variant: "destructive" });
+        }
+    };
 
   const deleteComplex = async (id: string) => {
     if (!db) {
-        // Use localStorage when Firebase is not available
         try {
             const updatedResidences = residences.filter(r => r.id !== id);
             setResidences(updatedResidences);
@@ -437,15 +456,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteBuilding = async (complexId: string, buildingId: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
+    if (!db) return;
     const complexDocRef = doc(db, "residences", complexId);
     const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) {
-        throw new Error("Complex not found");
-    }
+     if (!complexDoc.exists()) throw new Error("Complex not found");
     const complexData = complexDoc.data() as Complex;
     const updatedBuildings = complexData.buildings.filter(b => b.id !== buildingId);
     await updateDoc(complexDocRef, { buildings: updatedBuildings });
@@ -453,15 +467,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
+    if (!db) return;
     const complexDocRef = doc(db, "residences", complexId);
     const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) {
-        throw new Error("Complex not found");
-    }
+     if (!complexDoc.exists()) throw new Error("Complex not found");
     const complexData = complexDoc.data() as Complex;
     const updatedBuildings = complexData.buildings.map(b => 
         b.id === buildingId ? {
@@ -474,15 +483,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
+    if (!db) return;
     const complexDocRef = doc(db, "residences", complexId);
     const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) {
-        throw new Error("Complex not found");
-    }
+     if (!complexDoc.exists()) throw new Error("Complex not found");
     const complexData = complexDoc.data() as Complex;
     const updatedBuildings = complexData.buildings.map(b => 
         b.id === buildingId ? {
@@ -496,21 +500,45 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     toast({ title: "Success", description: "Room deleted successfully." });
   };
 
-  const deleteFacility = async (complexId: string, facilityId: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    const complexDocRef = doc(db, "residences", complexId);
-    const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) {
-        throw new Error("Complex not found");
-    }
-    const complexData = complexDoc.data() as Complex;
-    const updatedFacilities = (complexData.facilities || []).filter(f => f.id !== facilityId);
-    await updateDoc(complexDocRef, { facilities: updatedFacilities });
-    toast({ title: "Success", description: "Facility deleted successfully." });
-  };
+    const deleteFacility = async (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => {
+        if (!db) return;
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+        if (!complexDoc.exists()) throw new Error("Complex not found");
+        const complexData = complexDoc.data() as Complex;
+        
+        let updatePayload: Partial<Complex> = {};
+
+        if (level === 'complex') {
+            updatePayload.facilities = (complexData.facilities || []).filter(f => f.id !== facilityId);
+        } else if (level === 'building' && buildingId) {
+            updatePayload.buildings = complexData.buildings.map(b => {
+                if (b.id === buildingId) {
+                    return { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) };
+                }
+                return b;
+            });
+        } else if (level === 'floor' && buildingId && floorId) {
+            updatePayload.buildings = complexData.buildings.map(b => {
+                if (b.id === buildingId) {
+                    return {
+                        ...b,
+                        floors: b.floors.map(f => {
+                            if (f.id === floorId) {
+                                return { ...f, facilities: (f.facilities || []).filter(fac => fac.id !== facilityId) };
+                            }
+                            return f;
+                        })
+                    };
+                }
+                return b;
+            });
+        }
+
+        await updateDoc(complexDocRef, updatePayload);
+        toast({ title: "Success", description: "Facility deleted successfully." });
+    };
+
   
   const buildings = useMemo(() => residences?.flatMap(c => c.buildings) || [], [residences]);
   const floors = useMemo(() => buildings?.flatMap(b => b.floors) || [], [buildings]);
