@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useTransition } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -59,6 +59,7 @@ export default function IssueMaterialPage() {
     const [isCompletedOpen, setIsCompletedOpen] = useState(false);
     const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
     const [loadingMIVs, setLoadingMIVs] = useState(false);
+    const [isPending, startTransition] = useTransition();
 
     // Load completed section state from localStorage
     useEffect(() => {
@@ -236,136 +237,138 @@ export default function IssueMaterialPage() {
     }, [locationType]);
     
     const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
-        if (!isLocationSelected || !selectedComplex) {
-            toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
-            return;
-        }
-
-        const stock = getStockForResidence(itemToAdd, selectedComplexId);
-        if (stock < 1) {
-            toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
-            return;
-        }
-
-        let locationId: string, locationName: string, isFacility: boolean;
-        let newLocationDetails: Partial<VoucherLocation> = {};
-
-        if (locationType === 'unit') {
-            const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
-            if (!selectedBuilding || !selectedFloor || !selectedRoom) {
-                toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+        startTransition(async () => {
+            if (!isLocationSelected || !selectedComplex) {
+                toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
                 return;
             }
-            locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
-            locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
-            isFacility = false;
-            newLocationDetails = {
-                buildingId: selectedBuildingId,
-                buildingName: selectedBuilding.name,
-                floorId: selectedFloorId,
-                floorName: selectedFloor.name,
-                roomId: selectedRoomId,
-                roomName: selectedRoom.name,
-            };
-        } else if (locationType === 'facility') {
-            const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
-             if (!selectedFacility) {
-                toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+
+            const stock = getStockForResidence(itemToAdd, selectedComplexId);
+            if (stock < 1) {
+                toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
                 return;
             }
-            locationId = selectedFacilityId;
-            locationName = selectedFacility.name;
-            isFacility = true;
-            newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
-        } else if (locationType === 'service') {
-            const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
-            
-            if (!selectedService) {
-                toast({ title: "Service not found", description: "An error occurred with the selected service.", variant: "destructive"});
-                return;
-            }
-            
-            // Check if service has sub-facilities and one is selected
-            if (selectedService.subFacilities && selectedService.subFacilities.length > 0) {
-                const selectedSubFacility = selectedService.subFacilities.find((sf: any) => sf.id === selectedSubFacilityId);
+
+            let locationId: string, locationName: string, isFacility: boolean;
+            let newLocationDetails: Partial<VoucherLocation> = {};
+
+            if (locationType === 'unit') {
+                const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
+                if (!selectedBuilding || !selectedFloor || !selectedRoom) {
+                    toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                    return;
+                }
+                locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+                locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+                isFacility = false;
+                newLocationDetails = {
+                    buildingId: selectedBuildingId,
+                    buildingName: selectedBuilding.name,
+                    floorId: selectedFloorId,
+                    floorName: selectedFloor.name,
+                    roomId: selectedRoomId,
+                    roomName: selectedRoom.name,
+                };
+            } else if (locationType === 'facility') {
+                const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
+                 if (!selectedFacility) {
+                    toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+                    return;
+                }
+                locationId = selectedFacilityId;
+                locationName = selectedFacility.name;
+                isFacility = true;
+                newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
+            } else if (locationType === 'service') {
+                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
                 
-                if (!selectedSubFacility) {
-                    toast({ title: "Sub-facility required", description: "Please select a sub-facility for this service.", variant: "destructive"});
+                if (!selectedService) {
+                    toast({ title: "Service not found", description: "An error occurred with the selected service.", variant: "destructive"});
                     return;
                 }
                 
-                locationId = `service-${selectedServiceId}-${selectedSubFacilityId}`;
-                locationName = `${selectedService.name} -> ${selectedSubFacility.name}${selectedSubFacility.number ? ` (${selectedSubFacility.number})` : ''}`;
-                newLocationDetails = {
-                    serviceId: selectedServiceId,
-                    serviceName: selectedService.name,
-                    subFacilityId: selectedSubFacilityId,
-                    subFacilityName: selectedSubFacility.name,
-                    serviceLocation: selectedService._location || 'Complex Level'
-                };
-            } else {
-                // Service without sub-facilities
-                locationId = `service-${selectedServiceId}`;
-                locationName = selectedService.name + (selectedService._location ? ` (${selectedService._location})` : '');
-                newLocationDetails = {
-                    serviceId: selectedServiceId,
-                    serviceName: selectedService.name,
-                    serviceLocation: selectedService._location || 'Complex Level'
-                };
-            }
-            
-            isFacility = false;
-        } else {
-            toast({ title: "Invalid Location Type", description: "Please select a valid location type.", variant: "destructive"});
-            return;
-        }
-        
-        // Lifespan check
-        if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
-            const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
-            if (lastIssueDate) {
-                const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
-                if (daysSinceLastIssue < itemToAdd.lifespanDays) {
-                    toast({
-                        title: "Lifespan Warning",
-                        description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
-                        variant: "default",
-                        duration: 8000,
-                        className: "bg-yellow-100 border-yellow-400 text-yellow-800"
-                    });
-                }
-            }
-        }
-        
-        setVoucherLocations(prevLocations => {
-            const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
-            
-            if (existingLocationIndex > -1) {
-                const newLocations = [...prevLocations];
-                const targetLocation = newLocations[existingLocationIndex];
-                const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
-
-                if (existingItemIndex > -1) {
-                    const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                    if(currentQty < stock) {
-                        targetLocation.items[existingItemIndex].issueQuantity += 1;
-                    } else {
-                         toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                // Check if service has sub-facilities and one is selected
+                if (selectedService.subFacilities && selectedService.subFacilities.length > 0) {
+                    const selectedSubFacility = selectedService.subFacilities.find((sf: any) => sf.id === selectedSubFacilityId);
+                    
+                    if (!selectedSubFacility) {
+                        toast({ title: "Sub-facility required", description: "Please select a sub-facility for this service.", variant: "destructive"});
+                        return;
                     }
+                    
+                    locationId = `service-${selectedServiceId}-${selectedSubFacilityId}`;
+                    locationName = `${selectedService.name} -> ${selectedSubFacility.name}${selectedSubFacility.number ? ` (${selectedSubFacility.number})` : ''}`;
+                    newLocationDetails = {
+                        serviceId: selectedServiceId,
+                        serviceName: selectedService.name,
+                        subFacilityId: selectedSubFacilityId,
+                        subFacilityName: selectedSubFacility.name,
+                        serviceLocation: selectedService._location || 'Complex Level'
+                    };
                 } else {
-                    targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                    // Service without sub-facilities
+                    locationId = `service-${selectedServiceId}`;
+                    locationName = selectedService.name + (selectedService._location ? ` (${selectedService._location})` : '');
+                    newLocationDetails = {
+                        serviceId: selectedServiceId,
+                        serviceName: selectedService.name,
+                        serviceLocation: selectedService._location || 'Complex Level'
+                    };
                 }
-                return newLocations;
+                
+                isFacility = false;
             } else {
-                const newLocation: VoucherLocation = {
-                    ...newLocationDetails,
-                    locationId,
-                    locationName,
-                    isFacility,
-                    items: [{ ...itemToAdd, issueQuantity: 1 }]
-                };
-                return [...prevLocations, newLocation];
+                toast({ title: "Invalid Location Type", description: "Please select a valid location type.", variant: "destructive"});
+                return;
             }
+            
+            // Lifespan check
+            if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
+                const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
+                if (lastIssueDate) {
+                    const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                    if (daysSinceLastIssue < itemToAdd.lifespanDays) {
+                        toast({
+                            title: "Lifespan Warning",
+                            description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
+                            variant: "default",
+                            duration: 8000,
+                            className: "bg-yellow-100 border-yellow-400 text-yellow-800"
+                        });
+                    }
+                }
+            }
+            
+            setVoucherLocations(prevLocations => {
+                const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
+                
+                if (existingLocationIndex > -1) {
+                    const newLocations = [...prevLocations];
+                    const targetLocation = newLocations[existingLocationIndex];
+                    const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
+
+                    if (existingItemIndex > -1) {
+                        const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
+                        if(currentQty < stock) {
+                            targetLocation.items[existingItemIndex].issueQuantity += 1;
+                        } else {
+                             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                        }
+                    } else {
+                        targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                    }
+                    return newLocations;
+                } else {
+                    const newLocation: VoucherLocation = {
+                        ...newLocationDetails,
+                        locationId,
+                        locationName,
+                        isFacility,
+                        items: [{ ...itemToAdd, issueQuantity: 1 }]
+                    };
+                    return [...prevLocations, newLocation];
+                }
+            });
         });
     };
 
@@ -640,7 +643,7 @@ export default function IssueMaterialPage() {
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                     <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
+                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending}>
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
                                             </div>
