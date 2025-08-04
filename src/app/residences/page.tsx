@@ -36,7 +36,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AddMultipleRoomsDialog } from '@/components/residences';
 import { Separator } from '@/components/ui/separator';
 
-type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms';
+type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms' | 'addFacility';
 
 const facilityIcons: { [key: string]: React.ElementType } = {
   'bathroom': Bath,
@@ -47,26 +47,71 @@ const facilityIcons: { [key: string]: React.ElementType } = {
 };
 
 
-const AddFacilityForm = ({ onAdd }: { onAdd: (name: string) => void }) => {
+const AddFacilityDialog = ({ 
+    isOpen, 
+    onOpenChange, 
+    context, 
+    onAdd 
+}: { 
+    isOpen: boolean; 
+    onOpenChange: (open: boolean) => void; 
+    context: { level: 'complex' | 'building' | 'floor', complexId: string, buildingId?: string, floorId?: string };
+    onAdd: (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => void;
+}) => {
     const [name, setName] = useState('');
+    const [type, setType] = useState('default');
+    const [quantity, setQuantity] = useState(1);
 
     const handleAdd = () => {
         if (name.trim()) {
-            onAdd(name.trim());
+            onAdd(context.complexId, context.level, name.trim(), type, quantity, context.buildingId, context.floorId);
             setName('');
+            setType('default');
+            setQuantity(1);
+            onOpenChange(false);
         }
     };
-
+    
     return (
-        <div className="flex items-center gap-2">
-            <Input 
-                placeholder="e.g., Guest Bathroom #3" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-8 text-xs"
-            />
-            <Button size="sm" onClick={handleAdd} className="h-8">Add</Button>
-        </div>
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add New Facility</DialogTitle>
+                    <DialogDescription>
+                        Add a new facility to the selected level. Use quantity for numbered items (e.g., Bathroom #3 becomes Bathroom 1, 2, 3).
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="facility-name">Facility Name</Label>
+                        <Input id="facility-name" placeholder="e.g., Guest Bathroom" value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="facility-type">Facility Type</Label>
+                        <Select value={type} onValueChange={setType}>
+                            <SelectTrigger id="facility-type">
+                                <SelectValue placeholder="Select type"/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="default">General</SelectItem>
+                                <SelectItem value="bathroom">Bathroom</SelectItem>
+                                <SelectItem value="kitchen">Kitchen</SelectItem>
+                                <SelectItem value="storeroom">Storeroom</SelectItem>
+                                <SelectItem value="management">Management</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="facility-quantity">Quantity</Label>
+                        <Input id="facility-quantity" type="number" min="1" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={handleAdd}>Add Facility</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
 
@@ -89,6 +134,7 @@ export default function ResidencesPage() {
     addFloor: false,
     addRoom: false,
     addMultipleRooms: false,
+    addFacility: false,
   });
 
   const [formData, setFormData] = useState({
@@ -101,7 +147,7 @@ export default function ResidencesPage() {
   });
 
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
-  const [contextIds, setContextIds] = useState<{ complexId?: string, buildingId?: string, floorId?: string }>({});
+  const [contextIds, setContextIds] = useState<{ level: 'complex' | 'building' | 'floor', complexId: string, buildingId?: string, floorId?: string } | null>(null);
 
   const userVisibleResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -139,12 +185,12 @@ export default function ResidencesPage() {
 
   const openDialog = (type: DialogType, ids: Partial<typeof contextIds> = {}) => {
     setDialogStates(prev => ({ ...prev, [type]: true }));
-    setContextIds(ids);
+    setContextIds(ids as any);
   };
   
   const closeDialog = (type: DialogType) => {
     setDialogStates(prev => ({ ...prev, [type]: false }));
-    setContextIds({});
+    setContextIds(null);
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
@@ -181,7 +227,7 @@ export default function ResidencesPage() {
 
   const handleAddBuilding = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.newBuildingName.trim() || !contextIds.complexId) return;
+    if (!formData.newBuildingName.trim() || !contextIds?.complexId) return;
     addBuilding(contextIds.complexId, formData.newBuildingName);
     setFormData(prev => ({ ...prev, newBuildingName: '' }));
     closeDialog('addBuilding');
@@ -189,7 +235,7 @@ export default function ResidencesPage() {
 
   const handleAddFloor = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.newFloorName.trim() || !contextIds.complexId || !contextIds.buildingId) return;
+    if (!formData.newFloorName.trim() || !contextIds?.complexId || !contextIds?.buildingId) return;
     addFloor(contextIds.complexId, contextIds.buildingId, formData.newFloorName);
     setFormData(prev => ({ ...prev, newFloorName: '' }));
     closeDialog('addFloor');
@@ -197,14 +243,10 @@ export default function ResidencesPage() {
 
   const handleAddRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.newRoomName.trim() || !contextIds.complexId || !contextIds.buildingId || !contextIds.floorId) return;
+    if (!formData.newRoomName.trim() || !contextIds?.complexId || !contextIds?.buildingId || !contextIds?.floorId) return;
     addRoom(contextIds.complexId, contextIds.buildingId, contextIds.floorId, formData.newRoomName);
     setFormData(prev => ({ ...prev, newRoomName: '' }));
     closeDialog('addRoom');
-  };
-  
-  const handleAddFacility = (level: 'complex' | 'building' | 'floor', name: string, complexId: string, buildingId?: string, floorId?: string) => {
-    addFacility(complexId, level, name, 'default', 1, buildingId, floorId);
   };
 
   const handleDeleteFacility = (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => {
@@ -245,14 +287,26 @@ export default function ResidencesPage() {
     );
   };
   
-  const FacilitySection = ({ facilities, onAdd, onDelete }: { facilities: Facility[] | undefined, onAdd: (name: string) => void, onDelete: (facilityId: string) => void }) => (
+  const FacilitySection = ({ 
+      facilities, 
+      onAdd,
+      onDelete
+  }: { 
+      facilities: Facility[] | undefined, 
+      onAdd: () => void, 
+      onDelete: (facilityId: string) => void 
+  }) => (
     <div className="space-y-2 mt-2">
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
         {(facilities || []).map(facility => (
           <FacilityItem key={facility.id} facility={facility} onDelete={() => onDelete(facility.id)} />
         ))}
+         {isAdmin && (
+            <Button variant="outline" size="sm" className="h-full border-dashed" onClick={onAdd}>
+                <Plus className="h-4 w-4 mr-2"/> Add
+            </Button>
+         )}
       </div>
-      {isAdmin && <AddFacilityForm onAdd={onAdd} />}
     </div>
   );
 
@@ -419,7 +473,7 @@ export default function ResidencesPage() {
                                   <Label className="text-xs text-muted-foreground">Building Facilities</Label>
                                   <FacilitySection 
                                       facilities={building.facilities}
-                                      onAdd={(name) => handleAddFacility('building', name, complex.id, building.id)}
+                                      onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
                                       onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
                                   />
                                 </div>
@@ -488,7 +542,7 @@ export default function ResidencesPage() {
                                                 <Label className="text-xs text-muted-foreground">Floor Facilities</Label>
                                                 <FacilitySection 
                                                     facilities={floor.facilities}
-                                                    onAdd={(name) => handleAddFacility('floor', name, complex.id, building.id, floor.id)}
+                                                    onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
                                                     onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
                                                 />
                                             </div>
@@ -501,17 +555,17 @@ export default function ResidencesPage() {
                     ))}
                   </Accordion>
                   
-                  {(complex.facilities && complex.facilities.length > 0) && (
+                  {(complex.facilities && complex.facilities.length > 0) || isAdmin ? (
                       <>
                         <Separator className="my-4" />
                         <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> General Facilities</h4>
                         <FacilitySection 
                             facilities={complex.facilities}
-                            onAdd={(name) => handleAddFacility('complex', name, complex.id)}
+                            onAdd={() => openDialog('addFacility', { level: 'complex', complexId: complex.id })}
                             onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
                         />
                       </>
-                  )}
+                  ) : null}
                 </CardContent>
               </Card>
             ))}
@@ -592,7 +646,7 @@ export default function ResidencesPage() {
       <AddMultipleRoomsDialog
         isOpen={dialogStates.addMultipleRooms}
         onOpenChange={(open) => open ? openDialog('addMultipleRooms') : closeDialog('addMultipleRooms')}
-        floorInfo={contextIds.floorId ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId } : null}
+        floorInfo={contextIds && contextIds.level === 'floor' ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId! } : null}
         onAddRooms={addMultipleRooms}
       />
       
@@ -647,6 +701,16 @@ export default function ResidencesPage() {
               </form>
           </DialogContent>
       </Dialog>
+      
+      {/* Add Facility Dialog */}
+      {contextIds && (
+        <AddFacilityDialog 
+            isOpen={dialogStates.addFacility}
+            onOpenChange={(open) => open ? openDialog('addFacility') : closeDialog('addFacility')}
+            context={contextIds}
+            onAdd={addFacility}
+        />
+      )}
     </div>
   );
 }
