@@ -16,6 +16,22 @@ import { Textarea } from '../ui/textarea';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
+const inventoryUnits = [
+    { value: 'Piece', label: 'قطعة (Piece)' },
+    { value: 'Box', label: 'علبة (Box)' },
+    { value: 'Carton', label: 'كرتون (Carton)' },
+    { value: 'Pack', label: 'باقة (Pack)' },
+    { value: 'Set', label: 'مجموعة (Set)' },
+    { value: 'Meter', label: 'متر (Meter)' },
+    { value: 'Kilogram', label: 'كيلوجرام (Kilogram)' },
+    { value: 'Liter', label: 'لتر (Liter)' },
+    { value: 'Pair', label: 'زوج (Pair)' },
+    { value: 'Dozen', label: 'درزن (Dozen)' },
+    { value: 'Ream', label: 'رزمة (Ream)' },
+    { value: 'Roll', label: 'لفة (Roll)' },
+    { value: 'Bag', label: 'كيس (Bag)' },
+];
+
 
 interface EditItemDialogProps {
     isOpen: boolean;
@@ -148,7 +164,18 @@ export function EditItemDialog({
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="item-unit" className="text-right">Unit</Label>
-                            <Input id="item-unit" className="col-span-3" value={unit} onChange={e => setUnit(e.target.value)} />
+                             <Select onValueChange={setUnit} value={unit}>
+                                <SelectTrigger id="item-unit" className="col-span-3">
+                                    <SelectValue placeholder="Select a unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {inventoryUnits.map((u) => (
+                                        <SelectItem key={u.value} value={u.value}>
+                                            {u.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="item-lifespan" className="text-right">Lifespan</Label>
