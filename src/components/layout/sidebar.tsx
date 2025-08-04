@@ -16,11 +16,11 @@ import { Building, Home, Wrench, Bot, Settings, Users, ClipboardList, Move, List
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { CurrentTime } from '../ui/current-time';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
 import { getFormattedGitInfo } from '@/lib/git-info';
+import { Badge } from '@/components/ui/badge';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -108,21 +108,22 @@ export function AppSidebar() {
                 <Building className="h-8 w-8 text-primary" />
                 <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
             </div>
+             <div className="group-data-[collapsible=icon]:hidden text-sm pl-1">
+              <Badge variant={process.env.NODE_ENV === 'development' ? "outline" : "default"}>
+                {process.env.NODE_ENV === 'development' ? 'Development' : 'Production'}
+              </Badge>
+            </div>
             {/* Git Info */}
             {isMounted && gitInfo && (
-              <div className="group-data-[collapsible=icon]:hidden space-y-1">
+              <div className="group-data-[collapsible=icon]:hidden space-y-1 mt-2">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <GitBranch className="h-3 w-3" />
                   <span className="text-primary font-medium">{gitInfo.branch}</span>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
-                  <span className="font-medium">{gitInfo.lastUpdateRelative}</span>
+                  <span className="font-medium" title={gitInfo.lastUpdateWithTime}>{gitInfo.lastUpdateRelative}</span>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  <span className="text-emerald-600 dark:text-emerald-400">{gitInfo.lastUpdateWithTime}</span>
-                </div>
-                <CurrentTime />
               </div>
             )}
         </div>
