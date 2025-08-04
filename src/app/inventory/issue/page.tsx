@@ -127,14 +127,9 @@ export default function IssueMaterialPage() {
     
     const availableFacilities = useMemo(() => {
         if (!selectedComplex) return [];
-        let facilities = [...(selectedComplex.facilities || [])];
-        if (selectedBuilding) {
-            facilities = [...facilities, ...(selectedBuilding.facilities || [])];
-        }
-        if (selectedFloor) {
-            facilities = [...facilities, ...(selectedFloor.facilities || [])];
-        }
-        return facilities;
+        if (selectedFloor) return selectedFloor.facilities || [];
+        if (selectedBuilding) return selectedBuilding.facilities || [];
+        return selectedComplex.facilities || [];
     }, [selectedComplex, selectedBuilding, selectedFloor]);
 
 
@@ -160,10 +155,12 @@ export default function IssueMaterialPage() {
     
     useEffect(() => {
         setSelectedFloorId('');
+        setSelectedFacilityId('');
     }, [selectedBuildingId]);
 
     useEffect(() => {
         setSelectedRoomId('');
+        setSelectedFacilityId('');
     }, [selectedFloorId]);
     
     const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
