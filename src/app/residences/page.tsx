@@ -5,7 +5,11 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+<<<<<<< HEAD
 import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, BedDouble, Bath, CookingPot, Warehouse, Users as UsersIcon } from "lucide-react";
+=======
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, HomeIcon } from "lucide-react";
+>>>>>>> 5d72b5e (اريد عمل ملخص عبارة عن مربعات عن اعداد السكنات والغرف والمباني وهكذ)
 import {
   Dialog,
   DialogContent,
@@ -167,6 +171,7 @@ export default function ResidencesPage() {
   }, [userVisibleResidences]);
 
   const stats = useMemo(() => {
+<<<<<<< HEAD
     return userVisibleResidences.reduce((acc, complex) => {
         acc.complexes += 1;
         acc.buildings += complex.buildings.length;
@@ -191,6 +196,34 @@ export default function ResidencesPage() {
   const closeDialog = (type: DialogType) => {
     setDialogStates(prev => ({ ...prev, [type]: false }));
     setContextIds(null);
+=======
+    const complexes = userVisibleResidences.length;
+    const buildings = userVisibleResidences.reduce((sum, c) => sum + c.buildings.length, 0);
+    const facilities = userVisibleResidences.reduce((sum, c) => sum + (c.facilities?.length || 0), 0);
+    return { complexes, buildings, facilities };
+  }, [userVisibleResidences]);
+
+  const handleOpenAddDialog = (type: 'building' | 'floor' | 'room' | 'multipleRooms' | 'facility', id: string, parentId?: string, grandParentId?: string) => {
+    setSelectedComplexId(id);
+    if (type === 'building') {
+      setFormData(prev => ({ ...prev, newBuildingName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddBuildingDialogOpen: true }));
+    } else if (type === 'facility') {
+      setFormData(prev => ({ ...prev, newFacilityName: '', newFacilityType: '' }));
+      setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: true }));
+    } else if (type === 'floor' && parentId) {
+      setSelectedBuildingInfo({ complexId: parentId, buildingId: id });
+      setFormData(prev => ({ ...prev, newFloorName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddFloorDialogOpen: true }));
+    } else if (type === 'room' && parentId && grandParentId) {
+      setSelectedFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
+      setFormData(prev => ({ ...prev, newRoomName: '' }));
+      setDialogStates(prev => ({ ...prev, isAddRoomDialogOpen: true }));
+    } else if (type === 'multipleRooms' && parentId && grandParentId) {
+        setMultipleRoomsFloorInfo({ complexId: grandParentId, buildingId: parentId, floorId: id });
+        setDialogStates(prev => ({ ...prev, isAddMultipleRoomsDialogOpen: true }));
+    }
+>>>>>>> 5d72b5e (اريد عمل ملخص عبارة عن مربعات عن اعداد السكنات والغرف والمباني وهكذ)
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
@@ -386,6 +419,7 @@ export default function ResidencesPage() {
         )}
       </div>
 
+<<<<<<< HEAD
        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card><CardHeader className="p-4"><CardTitle className="text-sm">Complexes</CardTitle><CardDescription className="text-2xl font-bold">{stats.complexes}</CardDescription></CardHeader></Card>
         <Card><CardHeader className="p-4"><CardTitle className="text-sm">Buildings</CardTitle><CardDescription className="text-2xl font-bold">{stats.buildings}</CardDescription></CardHeader></Card>
@@ -393,6 +427,40 @@ export default function ResidencesPage() {
         <Card><CardHeader className="p-4"><CardTitle className="text-sm">Rooms</CardTitle><CardDescription className="text-2xl font-bold">{stats.rooms}</CardDescription></CardHeader></Card>
         <Card><CardHeader className="p-4"><CardTitle className="text-sm">Facilities</CardTitle><CardDescription className="text-2xl font-bold">{stats.facilities}</CardDescription></CardHeader></Card>
       </div>
+=======
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Complexes</CardTitle>
+                    <HomeIcon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.complexes}</div>
+                    <p className="text-xs text-muted-foreground">Total residential complexes</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Buildings</CardTitle>
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.buildings}</div>
+                    <p className="text-xs text-muted-foreground">Total buildings across all complexes</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Facilities</CardTitle>
+                    <ConciergeBell className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.facilities}</div>
+                    <p className="text-xs text-muted-foreground">Total general facilities</p>
+                </CardContent>
+            </Card>
+        </div>
+>>>>>>> 5d72b5e (اريد عمل ملخص عبارة عن مربعات عن اعداد السكنات والغرف والمباني وهكذ)
 
       {Object.entries(groupedByCity).map(([city, complexes]) => (
         <div key={city}>
