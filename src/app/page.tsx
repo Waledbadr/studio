@@ -93,10 +93,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <Card>
+        <Card className="border-t-4 border-blue-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5"/> Recent Material Requests</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5 text-blue-500"/> Recent MRs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/orders">View All<ArrowUpRight className="h-4 w-4" /></Link>
@@ -134,10 +134,10 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-t-4 border-green-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5"/> Recent Receipts</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-green-500"/> Recent MRVs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/receive">View All<ArrowUpRight className="h-4 w-4" /></Link>
@@ -167,10 +167,10 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-t-4 border-orange-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5"/> Recent Issues</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5 text-orange-500"/> Recent MIVs</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/issue-history">View All<ArrowUpRight className="h-4 w-4" /></Link>
