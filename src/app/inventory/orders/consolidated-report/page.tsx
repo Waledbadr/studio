@@ -34,15 +34,17 @@ export default function ConsolidatedReportPage() {
         loadOrders();
     }, [loadOrders]);
 
-    const groupedItems = useMemo(() => {
+    const { groupedItems, residenceNames } = useMemo(() => {
         if (loading || !currentUser || currentUser.role !== 'Admin') {
-            return {};
+            return { groupedItems: {}, residenceNames: [] };
         }
 
         const pendingOrders = orders.filter(o => o.status === 'Pending');
         const itemMap = new Map<string, AggregatedItem>();
+        const uniqueResidenceNames = new Set<string>();
 
         pendingOrders.forEach(order => {
+            uniqueResidenceNames.add(order.residence);
             order.items.forEach(item => {
                 const existing = itemMap.get(item.id);
                 if (existing) {
@@ -62,7 +64,7 @@ export default function ConsolidatedReportPage() {
 
         const sortedItems = Array.from(itemMap.values()).sort((a,b) => a.nameEn.localeCompare(b.nameEn));
         
-        return sortedItems.reduce((acc, item) => {
+        const grouped = sortedItems.reduce((acc, item) => {
             const category = item.category;
             if (!acc[category]) {
                 acc[category] = [];
@@ -70,6 +72,8 @@ export default function ConsolidatedReportPage() {
             acc[category].push(item);
             return acc;
         }, {} as GroupedAggregatedItems);
+        
+        return { groupedItems: grouped, residenceNames: Array.from(uniqueResidenceNames) };
         
     }, [orders, loading, currentUser]);
     
@@ -177,7 +181,7 @@ export default function ConsolidatedReportPage() {
                             <CardDescription className="text-lg">Aggregated material needs from all pending requests.</CardDescription>
                         </div>
                          <div className="text-right">
-                            <p className="font-semibold">All Residences</p>
+                            <p className="font-semibold">{residenceNames.join(', ') || 'All Residences'}</p>
                             <p className="text-sm text-muted-foreground">Report Date: {format(new Date(), 'PPP')}</p>
                         </div>
                     </div>
