@@ -92,40 +92,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <Card>
-            <CardHeader className="flex flex-row items-center">
-                <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
-                </div>
-                <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
-                </Button>
-            </CardHeader>
-            <CardContent>
-                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
-                : (
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {recentMaintenance.map(req => (
-                                <TableRow key={req.id}>
-                                    <TableCell>
-                                        <div className="font-medium">{req.issueTitle}</div>
-                                        <div className="text-sm text-muted-foreground">{req.complexName}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                )}
-            </CardContent>
-        </Card>
-        
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
@@ -228,6 +195,39 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
       </div>
+
+       <Card>
+            <CardHeader className="flex flex-row items-center">
+                <div className="grid gap-2">
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> Recent Maintenance</CardTitle>
+                </div>
+                <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
+                : (
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {recentMaintenance.map(req => (
+                                <TableRow key={req.id}>
+                                    <TableCell>
+                                        <div className="font-medium">{req.issueTitle}</div>
+                                        <div className="text-sm text-muted-foreground">{req.complexName}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
     </div>
   );
 }
