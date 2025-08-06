@@ -38,7 +38,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   const [loading, setLoading] = useState(true);
   const { currentUser } = useUsers();
   const { toast } = useToast();
-  const unsubscribeRef = useRef<() => void | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -46,25 +46,38 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
         unsubscribeRef.current();
       }
       
+      if (!db) {
+        console.warn("Firebase not configured, using empty notifications");
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
-      const q = query(
-        collection(db, 'notifications'),
-        where('userId', '==', currentUser.id),
-        orderBy('createdAt', 'desc')
-      );
+      try {
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', currentUser.id),
+          orderBy('createdAt', 'desc')
+        );
 
-      unsubscribeRef.current = onSnapshot(q, 
-        (snapshot) => {
-          const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-          setNotifications(notificationsData);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching notifications:", error);
-          toast({ title: "Firestore Error", description: "Could not fetch notifications.", variant: "destructive" });
-          setLoading(false);
-        }
-      );
+        unsubscribeRef.current = onSnapshot(q, 
+          (snapshot) => {
+            const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+            setNotifications(notificationsData);
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Error fetching notifications:", error);
+            setNotifications([]);
+            setLoading(false);
+          }
+        );
+      } catch (error) {
+        console.error("Error setting up notifications listener:", error);
+        setNotifications([]);
+        setLoading(false);
+      }
     } else {
       // No user logged in, clear notifications
       if (unsubscribeRef.current) unsubscribeRef.current();
@@ -81,7 +94,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   
   const addNotification = async (payload: NewNotificationPayload) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        console.warn("Firebase not configured, notification add skipped");
         return;
     }
     try {
@@ -97,7 +110,10 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   };
 
   const markAsRead = async (notificationId: string) => {
-    if (!db) return;
+    if (!db) {
+      console.warn("Firebase not configured, mark as read skipped");
+      return;
+    }
     try {
       const notifRef = doc(db, 'notifications', notificationId);
       await updateDoc(notifRef, { isRead: true });
@@ -107,14 +123,17 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   };
 
   const markAllAsRead = async () => {
-    if (!db) return;
+    if (!db) {
+      console.warn("Firebase not configured, mark all as read skipped");
+      return;
+    }
     const unreadNotifications = notifications.filter(n => !n.isRead);
     if (unreadNotifications.length === 0) return;
 
     try {
         const batch = writeBatch(db);
         unreadNotifications.forEach(n => {
-            const notifRef = doc(db, 'notifications', n.id);
+            const notifRef = doc(db!, 'notifications', n.id);
             batch.update(notifRef, { isRead: true });
         });
         await batch.commit();

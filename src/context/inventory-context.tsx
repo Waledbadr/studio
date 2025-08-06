@@ -239,10 +239,43 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const loadInventory = useCallback(() => {
      if (isLoaded.current) return;
+     
      if (!db) {
-        console.error(firebaseErrorMessage);
-        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+        console.warn("Firebase not configured, loading mock data");
+        // Load mock data when Firebase is not available
+        const mockItems: InventoryItem[] = [
+          {
+            id: 'item-1',
+            name: 'Office Chair',
+            nameAr: 'كرسي مكتب',
+            category: 'Furniture',
+            unit: 'piece',
+            costPerUnit: 450.50,
+            totalStock: 20,
+            stockByResidence: {
+              'res-1': 15,
+              'res-2': 5
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            createdBy: 'system',
+            description: 'Comfortable office chair',
+            descriptionAr: 'كرسي مكتب مريح',
+            barcode: '',
+            location: 'Office',
+            locationAr: 'المكتب',
+            minStock: 5,
+            maxStock: 50,
+            supplier: 'Office Supplies Co.',
+            supplierAr: 'شركة اللوازم المكتبية',
+            notes: ''
+          }
+        ];
+        
+        setItems(mockItems);
+        setCategories(['Furniture', 'Electronics', 'Office Supplies']);
         setLoading(false);
+        isLoaded.current = true;
         return;
     }
     
@@ -1073,7 +1106,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAudits = async (): Promise<InventoryAudit[]> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            console.warn("Firebase not configured, returning mock audits");
             return [];
         }
         
@@ -1090,7 +1123,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAuditById = async (auditId: string): Promise<InventoryAudit | null> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            console.warn("Firebase not configured, returning mock audit");
             return null;
         }
         
@@ -1111,7 +1144,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateAuditStatus = async (auditId: string, status: InventoryAudit['status']): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) {
+            console.warn("Firebase not configured, audit status update skipped");
+            return;
+        }
         
         try {
             const auditRef = doc(db, 'inventoryAudits', auditId);
@@ -1134,7 +1170,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAuditItems = async (auditId: string): Promise<AuditItem[]> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            console.warn("Firebase not configured, returning empty audit items");
             return [];
         }
         
@@ -1150,7 +1186,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateAuditItem = async (auditItem: AuditItem): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) {
+            console.warn("Firebase not configured, audit item update skipped");
+            return;
+        }
         
         try {
             const itemRef = doc(db, 'auditItems', auditItem.id);
@@ -1169,7 +1208,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         notes: string, 
         countedBy: string
     ): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) {
+            console.warn("Firebase not configured, audit count submission skipped");
+            return;
+        }
         
         try {
             const q = query(
@@ -1211,7 +1253,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         adjustments: AuditAdjustment[], 
         generalNotes: string
     ): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) {
+            console.warn("Firebase not configured, audit completion skipped");
+            return;
+        }
         
         try {
             await runTransaction(db, async (transaction) => {

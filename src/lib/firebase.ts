@@ -18,8 +18,15 @@ let db: Firestore | null = null;
 
 // Check if Firebase config is properly set
 const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
-  value && typeof value === 'string' && !value.includes('your_') && value !== 'your_api_key_here'
+  value && typeof value === 'string' && value !== 'undefined' && !value.includes('your_') && value !== 'your_api_key_here'
 );
+
+console.log('Firebase config check:', {
+  isConfigured: isFirebaseConfigured,
+  apiKey: firebaseConfig.apiKey ? 'Set' : 'Missing',
+  authDomain: firebaseConfig.authDomain ? 'Set' : 'Missing',
+  projectId: firebaseConfig.projectId ? 'Set' : 'Missing'
+});
 
 if (isFirebaseConfigured) {
   try {
@@ -27,7 +34,8 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     console.log("Firebase initialized successfully");
   } catch (e) {
-    console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
+    console.error("Firebase initialization error:", e);
+    console.error("Make sure you have set up your .env file correctly and that the Firebase project exists.");
   }
 } else {
   console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
