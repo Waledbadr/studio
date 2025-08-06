@@ -2,74 +2,25 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-// Export types that are used throughout the app
-export interface UserThemeSettings {
-  theme: 'light' | 'dark' | 'system';
-  primaryColor: string;
-  fontSize: 'small' | 'medium' | 'large';
-  language: 'en' | 'ar';
-  dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
-  timeFormat: '12h' | '24h';
-  currency: string;
-  notifications: {
-    email: boolean;
-    push: boolean;
-    sms: boolean;
-  };
-}
-
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: 'admin' | 'manager' | 'staff' | 'viewer';
-  assignedResidences: string[];
-  permissions: string[];
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  lastLogin?: Date;
-  profilePicture?: string;
-  phone?: string;
-  department?: string;
-  position?: string;
-  preferences: UserThemeSettings;
-}
-
-const mockUsers: User[] = [
+const mockUsers = [
   {
     id: 'user-1',
-    name: 'Ahmed Mohamed',
+    name: 'أحمد محمد',
+    nameEn: 'Ahmed Mohamed',
     email: 'ahmed@example.com',
-    role: 'admin' as const,
-    assignedResidences: ['res-1', 'res-2'],
-    permissions: ['*'],
-    isActive: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date(),
-    preferences: {
-      theme: 'dark' as const,
-      primaryColor: 'blue',
-      fontSize: 'medium' as const,
-      language: 'ar' as const,
-      dateFormat: 'DD/MM/YYYY' as const,
-      timeFormat: '24h' as const,
-      currency: 'SAR',
-      notifications: {
-        email: true,
-        push: true,
-        sms: false
-      }
+    role: 'Admin',
+    themeSettings: {
+      colorTheme: 'blue',
+      mode: 'dark'
     }
   }
 ];
 
 interface SimpleUsersContextType {
-  users: User[];
-  currentUser: User | null;
+  users: any[];
+  currentUser: any;
   loading: boolean;
   loadUsers: () => void;
-  saveUser: (user: Partial<User>) => Promise<void>;
   switchUser: (user: any) => void;
   addUser: (user: any) => Promise<void>;
   updateUser: (userId: string, updates: any) => Promise<void>;
@@ -86,10 +37,6 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const loadUsers = () => {
     console.log('Mock: Loading users');
-  };
-
-  const saveUser = async (user: Partial<User>) => {
-    console.log('Mock: Saving user', user);
   };
 
   const switchUser = (user: any) => {
@@ -119,7 +66,6 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       currentUser,
       loading,
       loadUsers,
-      saveUser,
       switchUser,
       addUser,
       updateUser,

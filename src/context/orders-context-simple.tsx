@@ -2,50 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-// Export types that are used throughout the app
-export interface OrderItem {
-  id: string;
-  nameAr: string;
-  nameEn: string;
-  category: string;
-  unit: string;
-  quantity: number;
-  unitPrice?: number;
-  totalPrice?: number;
-  specifications?: string;
-  notes?: string;
-}
-
-export interface Order {
-  id: string;
-  orderNumber: string;
-  supplierName: string;
-  supplierContact: string;
-  orderDate: Date;
-  expectedDeliveryDate: Date;
-  residenceIds: string[];
-  items: OrderItem[];
-  status: OrderStatus;
-  totalAmount: number;
-  notes?: string;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-  approvedBy?: string;
-  approvedAt?: Date;
-  deliveredAt?: Date;
-  itemsReceived?: any[];
-}
-
-export type OrderStatus = 'draft' | 'pending' | 'approved' | 'ordered' | 'partial' | 'delivered' | 'cancelled';
-
 interface SimpleOrdersContextType {
   orders: any[];
   loading: boolean;
-  loadOrders: () => void;
-  getOrderById: (id: string) => Promise<Order | null>;
-  receiveOrderItems: (orderId: string, items: any[]) => Promise<void>;
-  createOrder: (order: any) => Promise<void>;
   addOrder: (order: any) => Promise<void>;
   updateOrderStatus: (orderId: string, status: string) => Promise<void>;
   updateOrder: (orderId: string, updates: any) => Promise<void>;
@@ -57,23 +16,6 @@ const OrdersContext = createContext<SimpleOrdersContextType | undefined>(undefin
 export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const loadOrders = () => {
-    console.log('Mock: Loading orders');
-  };
-
-  const getOrderById = async (id: string): Promise<Order | null> => {
-    console.log('Mock: Getting order by ID', id);
-    return null;
-  };
-
-  const receiveOrderItems = async (orderId: string, items: any[]) => {
-    console.log('Mock: Receiving order items', { orderId, items });
-  };
-
-  const createOrder = async (order: any) => {
-    console.log('Mock: Creating order', order);
-  };
 
   const addOrder = async (order: any) => {
     console.log('Mock: Adding order', order);
@@ -95,10 +37,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     <OrdersContext.Provider value={{
       orders,
       loading,
-      loadOrders,
-      getOrderById,
-      receiveOrderItems,
-      createOrder,
       addOrder,
       updateOrderStatus,
       updateOrder,

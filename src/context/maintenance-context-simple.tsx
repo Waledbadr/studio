@@ -2,40 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-// Export types that are used throughout the app
-export interface MaintenanceRequest {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: MaintenanceStatus;
-  category: string;
-  residenceId: string;
-  roomId?: string;
-  itemId?: string;
-  requestedBy: string;
-  assignedTo?: string;
-  requestedAt: Date;
-  scheduledDate?: Date;
-  completedAt?: Date;
-  estimatedCost?: number;
-  actualCost?: number;
-  notes?: string;
-  attachments?: string[];
-  workOrderNumber?: string;
-  vendorId?: string;
-  approvedBy?: string;
-  approvedAt?: Date;
-  materials?: any[];
-}
-
-export type MaintenanceStatus = 'pending' | 'approved' | 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-
 interface SimpleMaintenanceContextType {
-  requests: MaintenanceRequest[];
+  requests: any[];
   loading: boolean;
-  loadRequests: () => void;
-  createRequest: (request: Omit<MaintenanceRequest, 'id' | 'requestedAt'>) => Promise<void>;
   addRequest: (request: any) => Promise<void>;
   updateRequestStatus: (requestId: string, status: string) => Promise<void>;
   updateRequest: (requestId: string, updates: any) => Promise<void>;
@@ -47,14 +16,6 @@ const MaintenanceContext = createContext<SimpleMaintenanceContextType | undefine
 export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const loadRequests = () => {
-    console.log('Mock: Loading maintenance requests');
-  };
-
-  const createRequest = async (request: Omit<MaintenanceRequest, 'id' | 'requestedAt'>) => {
-    console.log('Mock: Creating maintenance request', request);
-  };
 
   const addRequest = async (request: any) => {
     console.log('Mock: Adding maintenance request', request);
@@ -76,8 +37,6 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     <MaintenanceContext.Provider value={{
       requests,
       loading,
-      loadRequests,
-      createRequest,
       addRequest,
       updateRequestStatus,
       updateRequest,
