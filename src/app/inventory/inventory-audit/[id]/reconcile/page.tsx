@@ -213,14 +213,14 @@ export default function StockReconciliationPage() {
 
     const completedItems = updatedItems.filter(item => item.status !== 'PENDING').length;
     const itemsWithVariance = updatedItems.filter(item => item.variance !== 0).length;
-    const totalCostVariance = updatedItems.reduce((sum, item) => sum + item.totalCostVariance, 0);
+    const calculatedTotalCostVariance = updatedItems.reduce((sum, item) => sum + item.totalCostVariance, 0);
 
     setSession(prev => prev ? {
       ...prev,
       items: updatedItems,
       completedItems,
       itemsWithVariance,
-      totalCostVariance
+      totalCostVariance: calculatedTotalCostVariance
     } : null);
 
     setIsEditing(false);

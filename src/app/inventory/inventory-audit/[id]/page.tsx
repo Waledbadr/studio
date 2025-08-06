@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, FileText, Calendar, User, MapPin, Package, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { format } from 'date-fns';
 
 interface AuditDetail {
   id: string;
@@ -182,7 +181,7 @@ export default function AuditDetailPage() {
               <span className="font-medium text-gray-700">تاريخ الإنشاء:</span>
               <p className="text-gray-900 flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                {format(auditDetail.createdAt, 'dd/MM/yyyy')}
+                {auditDetail.createdAt.toLocaleDateString('ar-SA')}
               </p>
             </div>
           </CardContent>
@@ -199,13 +198,13 @@ export default function AuditDetailPage() {
             <div>
               <span className="font-medium text-gray-700">تاريخ البداية:</span>
               <p className="text-gray-900">
-                {auditDetail.startDate ? format(auditDetail.startDate, 'dd/MM/yyyy') : 'لم يبدأ بعد'}
+                {auditDetail.startDate ? auditDetail.startDate.toLocaleDateString('ar-SA') : 'لم يبدأ بعد'}
               </p>
             </div>
             <div>
               <span className="font-medium text-gray-700">تاريخ الانتهاء:</span>
               <p className="text-gray-900">
-                {auditDetail.endDate ? format(auditDetail.endDate, 'dd/MM/yyyy') : 'لم ينته بعد'}
+                {auditDetail.endDate ? auditDetail.endDate.toLocaleDateString('ar-SA') : 'لم ينته بعد'}
               </p>
             </div>
             <div>
