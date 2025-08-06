@@ -107,8 +107,13 @@ export default function InventoryPage() {
   }
 
   const handleRowClick = (itemId: string, residenceId?: string | undefined) => {
-    if (!residenceId) return;
-    router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
+    if (residenceId) {
+      // عرض حركة الصنف لسكن محدد
+      router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
+    } else {
+      // عرض حركة الصنف على مستوى النظام كله (All Items)
+      router.push(`/inventory/reports/item-movement?itemId=${itemId}`);
+    }
   };
 
   const calculateStockForUser = (item: InventoryItem) => {
@@ -158,7 +163,7 @@ export default function InventoryPage() {
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
-            <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className={!isAllItemsTab ? "cursor-pointer" : ""}>
+            <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className="cursor-pointer hover:bg-muted/50">
               <TableCell className="font-medium">{item.nameAr}</TableCell>
               <TableCell className="font-medium">{item.nameEn}</TableCell>
               <TableCell>{item.category}</TableCell>

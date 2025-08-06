@@ -163,7 +163,7 @@ export default function StockMovementReportPage() {
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Date', 'Item', 'Movement Type', 'Quantity', 'Location', 'Notes'];
+    const headers = ['Date', 'Item', 'Movement Type', 'Quantity', 'Residence', 'Location', 'Notes'];
     const csvContent = [
       headers.join(','),
       ...filteredTransactions.map(transaction => [
@@ -171,6 +171,7 @@ export default function StockMovementReportPage() {
         `"${transaction.itemNameEn || 'Unknown Item'}"`,
         getMovementTypeLabel(transaction.type),
         transaction.quantity,
+        `"${getResidenceName(transaction.residenceId)}"`,
         `"${getLocationString(transaction)}"`,
         `"${transaction.referenceDocId || ''}"`
       ].join(','))
@@ -203,6 +204,11 @@ export default function StockMovementReportPage() {
 
   const getLocationString = (transaction: any) => {
     return transaction.locationName || 'Location not specified';
+  };
+
+  const getResidenceName = (residenceId: string) => {
+    const residence = residences.find(r => r.id === residenceId);
+    return residence?.name || 'Unknown Residence';
   };
 
   const getMovementTypeColor = (type: string) => {
@@ -513,6 +519,7 @@ export default function StockMovementReportPage() {
                         <TableHead className="font-semibold">Item</TableHead>
                         <TableHead className="font-semibold">Movement Type</TableHead>
                         <TableHead className="font-semibold text-right">Quantity</TableHead>
+                        <TableHead className="font-semibold">Residence</TableHead>
                         <TableHead className="font-semibold">Location</TableHead>
                         <TableHead className="font-semibold">Reference</TableHead>
                       </TableRow>
@@ -533,6 +540,9 @@ export default function StockMovementReportPage() {
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {transaction.quantity}
+                          </TableCell>
+                          <TableCell className="font-medium text-primary">
+                            {getResidenceName(transaction.residenceId)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {getLocationString(transaction)}
