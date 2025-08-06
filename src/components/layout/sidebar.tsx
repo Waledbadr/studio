@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
+import { getFormattedGitInfo } from '@/lib/git-info';
 
 export function AppSidebar() {
   const pathname = usePathname();
