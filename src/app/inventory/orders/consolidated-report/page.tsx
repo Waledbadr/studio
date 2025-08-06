@@ -16,6 +16,7 @@ interface AggregatedItem {
     category: string;
     unit: string;
     totalQuantity: number;
+    selectedVariant?: string; // التفصيل المختار من قاعدة البيانات
 }
 
 interface GroupedAggregatedItems {
@@ -43,17 +44,26 @@ export default function ConsolidatedReportPage() {
         pendingOrders.forEach(order => {
             uniqueResidenceNames.add(order.residence);
             order.items.forEach(item => {
+                // استخراج الـ variant من الـ ID إذا كان موجوداً
+                const originalItemId = item.id.includes('-') ? item.id.split('-')[0] : item.id;
+                const selectedVariant = item.id.includes('-') ? item.id.split('-').slice(1).join('-') : undefined;
+                
+                // استخراج اسم الصنف الأصلي بدون التفاصيل
+                const cleanNameAr = item.nameAr.includes(' - ') ? item.nameAr.split(' - ')[0] : item.nameAr;
+                const cleanNameEn = item.nameEn.includes(' - ') ? item.nameEn.split(' - ')[0] : item.nameEn;
+                
                 const existing = itemMap.get(item.id);
                 if (existing) {
                     existing.totalQuantity += item.quantity;
                 } else {
                     itemMap.set(item.id, {
                         id: item.id,
-                        nameAr: item.nameAr,
-                        nameEn: item.nameEn,
+                        nameAr: cleanNameAr,
+                        nameEn: cleanNameEn,
                         category: item.category || 'Uncategorized',
                         unit: item.unit,
-                        totalQuantity: item.quantity
+                        totalQuantity: item.quantity,
+                        selectedVariant: selectedVariant
                     });
                 }
             });
@@ -873,58 +883,93 @@ export default function ConsolidatedReportPage() {
                                                       '250px',
                                             overflowY: 'auto'
                                         }}>
-                                            {cardConfig.items.map((item: any, index: number) => (
-                                                <div key={item.id} style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    padding: '6px 10px', // تقليل المسافة من 8px إلى 6px
-                                                    marginBottom: index === cardConfig.items.length - 1 ? '0' : '3px', // تقليل من 4px إلى 3px
-                                                    backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white',
-                                                    borderRadius: '4px', // تقليل من 6px إلى 4px
-                                                    border: '1px solid #f1f3f4'
-                                                }}>
-                                                    <div style={{ flex: 1, marginRight: '10px' }}>
-                                                        <div style={{
-                                                            fontSize: '11px', // تقليل من 12px إلى 11px
-                                                            fontWeight: '600',
-                                                            color: '#2c3e50',
-                                                            lineHeight: '1.2', // تقليل المسافة بين الأسطر
-                                                            marginBottom: '1px' // تقليل من 2px إلى 1px
-                                                        }}>
-                                                            {item.nameAr}
-                                                        </div>
-                                                        <div style={{
-                                                            fontSize: '9px', // تقليل من 10px إلى 9px
-                                                            color: '#7f8c8d',
-                                                            lineHeight: '1.1'
-                                                        }}>
-                                                            {item.nameEn}
-                                                        </div>
-                                                    </div>
-                                                    <div style={{
+                                            {cardConfig.items.map((item: any, index: number) => {
+                                                return (
+                                                    <div key={item.id} style={{
                                                         display: 'flex',
-                                                        flexDirection: 'column',
+                                                        justifyContent: 'space-between',
                                                         alignItems: 'center',
-                                                        minWidth: '45px' // تقليل من 50px إلى 45px
+                                                        padding: '6px 10px',
+                                                        marginBottom: index === cardConfig.items.length - 1 ? '0' : '3px',
+                                                        backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid #f1f3f4'
                                                     }}>
-                                                        <div style={{
-                                                            fontSize: '13px', // تقليل من 14px إلى 13px
-                                                            fontWeight: 'bold',
-                                                            color: '#2980b9'
+                                                        {/* اسم الصنف والتفاصيل */}
+                                                        <div style={{ 
+                                                            flex: 1, 
+                                                            marginRight: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between'
                                                         }}>
-                                                            {item.totalQuantity}
+                                                            {/* اسم الصنف - يحتفظ بعرضه الأصلي */}
+                                                            <div style={{ flex: 1, marginRight: '8px' }}>
+                                                                <div style={{
+                                                                    fontSize: '11px',
+                                                                    fontWeight: '600',
+                                                                    color: '#2c3e50',
+                                                                    lineHeight: '1.2',
+                                                                    marginBottom: '1px'
+                                                                }}>
+                                                                    {item.nameAr}
+                                                                </div>
+                                                                <div style={{
+                                                                    fontSize: '9px',
+                                                                    color: '#7f8c8d',
+                                                                    lineHeight: '1.1'
+                                                                }}>
+                                                                    {item.nameEn}
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {/* التفاصيل على اليمين من اسم الصنف */}
+                                                            {item.selectedVariant && (
+                                                                <div style={{
+                                                                    flex: 0,
+                                                                    minWidth: 'auto'
+                                                                }}>
+                                                                    <div style={{
+                                                                        fontSize: '9px',
+                                                                        fontWeight: '500',
+                                                                        color: '#8e44ad',
+                                                                        backgroundColor: '#f8f9ff',
+                                                                        padding: '2px 5px',
+                                                                        borderRadius: '3px',
+                                                                        border: '1px solid #e8e1ff',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        {item.selectedVariant}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
+                                                        
+                                                        {/* الكمية والوحدة على اليمين */}
                                                         <div style={{
-                                                            fontSize: '8px', // تقليل من 9px إلى 8px
-                                                            color: '#95a5a6',
-                                                            textAlign: 'center'
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            minWidth: '45px'
                                                         }}>
-                                                            {item.unit}
+                                                            <div style={{
+                                                                fontSize: '13px',
+                                                                fontWeight: 'bold',
+                                                                color: '#2980b9'
+                                                            }}>
+                                                                {item.totalQuantity}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '8px',
+                                                                color: '#95a5a6',
+                                                                textAlign: 'center'
+                                                            }}>
+                                                                {item.unit}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 ))}
