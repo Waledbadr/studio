@@ -6,14 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck, Search } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -48,13 +46,13 @@ export default function IssueMaterialPage() {
     const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCompletedOpen, setIsCompletedOpen] = useState(false);
     const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
     const [loadingMIVs, setLoadingMIVs] = useState(false);
-    const [isPending, startTransition] = useTransition();
 
     // Load completed section state from localStorage
     useEffect(() => {
@@ -110,55 +108,69 @@ export default function IssueMaterialPage() {
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
-    // Filter for dropdown (exclude main-warehouse)
     const filteredResidences = useMemo(() => {
         return userResidences.filter(r => r.id !== 'main-warehouse');
     }, [userResidences]);
-
-    // Statistics
-    const activeMIVs = recentMIVs.filter(miv => miv.status === 'Pending');
-    const issuedMIVs = recentMIVs.filter(miv => miv.status === 'Issued');
-    const cancelledMIVs = recentMIVs.filter(miv => miv.status === 'Cancelled');
-    const totalMIVs = recentMIVs.length;
 
     const selectedComplex = useMemo(() => residences.find(c => c.id === selectedComplexId), [selectedComplexId, residences]);
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
     
+    const availableFacilities = useMemo(() => {
+        if (!selectedComplex) return [];
+        // Show only the most specific facilities available
+        if (selectedFloorId) {
+            return selectedFloor?.facilities || [];
+        }
+        if (selectedBuildingId) {
+            return selectedBuilding?.facilities || [];
+        }
+        return selectedComplex.facilities || [];
+    }, [selectedComplex, selectedBuildingId, selectedFloorId, selectedFloor, selectedBuilding]);
+
+
     const isLocationSelected = useMemo(() => {
         if (locationType === 'unit') {
-            return !!(selectedBuildingId && selectedFloorId && selectedRoomId);
+            return !!(selectedComplexId && selectedBuildingId && selectedFloorId && selectedRoomId);
         }
-        return !!selectedFacilityId;
-    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
+        return !!(selectedComplexId && selectedFacilityId);
+    }, [locationType, selectedComplexId, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
-        return allItems.filter(item => getStockForResidence(item, selectedComplexId) > 0);
-    }, [selectedComplexId, allItems, getStockForResidence]);
+        return allItems
+            .filter(item => getStockForResidence(item, selectedComplexId) > 0)
+            .filter(item => 
+                item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+    }, [selectedComplexId, allItems, getStockForResidence, searchQuery]);
 
 
     useEffect(() => {
         setVoucherLocations([]);
         setSelectedBuildingId('');
-        setSelectedFacilityId('');
         setLocationType('unit');
     }, [selectedComplexId]);
     
     useEffect(() => {
         setSelectedFloorId('');
+        setSelectedFacilityId('');
     }, [selectedBuildingId]);
 
     useEffect(() => {
         setSelectedRoomId('');
-    }, [selectedFloorId]);
+        // Also reset facility ID when floor changes
+        if(locationType === 'facility') {
+            setSelectedFacilityId('');
+        }
+    }, [selectedFloorId, locationType]);
     
     const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
-        startTransition(async () => {
-            if (!isLocationSelected || !selectedComplex) {
-                toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
-                return;
-            }
+        if (!isLocationSelected || !selectedComplex) {
+            toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
+            return;
+        }
 
             const stock = getStockForResidence(itemToAdd, selectedComplexId);
             if (stock < 1) {
@@ -169,59 +181,59 @@ export default function IssueMaterialPage() {
             let locationId: string, locationName: string, isFacility: boolean;
             let newLocationDetails: Partial<VoucherLocation> = {};
 
-            if (locationType === 'unit') {
-                const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
-                if (!selectedBuilding || !selectedFloor || !selectedRoom) {
-                    toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
-                    return;
-                }
-                locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
-                locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
-                isFacility = false;
-                newLocationDetails = {
-                    buildingId: selectedBuildingId,
-                    buildingName: selectedBuilding.name,
-                    floorId: selectedFloorId,
-                    floorName: selectedFloor.name,
-                    roomId: selectedRoomId,
-                    roomName: selectedRoom.name,
-                };
-            } else {
-                const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
-                 if (!selectedFacility) {
-                    toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
-                    return;
-                }
-                locationId = selectedFacilityId;
-                locationName = selectedFacility.name;
-                isFacility = true;
-                newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
+        if (locationType === 'unit') {
+            const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
+            if (!selectedBuilding || !selectedFloor || !selectedRoom) {
+                toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                return;
             }
-            
-            // Lifespan check
-            if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
-                const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
-                if (lastIssueDate) {
-                    const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
-                    if (daysSinceLastIssue < itemToAdd.lifespanDays) {
-                        toast({
-                            title: "Lifespan Warning",
-                            description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
-                            variant: "default",
-                            duration: 8000,
-                            className: "bg-yellow-100 border-yellow-400 text-yellow-800"
-                        });
-                    }
+            locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
+            locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+            isFacility = false;
+            newLocationDetails = {
+                buildingId: selectedBuildingId,
+                buildingName: selectedBuilding.name,
+                floorId: selectedFloorId,
+                floorName: selectedFloor.name,
+                roomId: selectedRoomId,
+                roomName: selectedRoom.name,
+            };
+        } else {
+            const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
+             if (!selectedFacility) {
+                toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+                return;
+            }
+            locationId = selectedFacilityId;
+            locationName = selectedFacility.name;
+            isFacility = true;
+            newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
+        }
+        
+        // Lifespan check
+        if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
+            const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
+            if (lastIssueDate) {
+                const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                if (daysSinceLastIssue < itemToAdd.lifespanDays) {
+                    toast({
+                        title: "Lifespan Warning",
+                        description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
+                        variant: "default",
+                        duration: 8000,
+                        className: "bg-yellow-100 border-yellow-400 text-yellow-800"
+                    });
                 }
             }
+        }
+        
+        setVoucherLocations(prevLocations => {
+            const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
             
-            setVoucherLocations(prevLocations => {
-                const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
-                
-                if (existingLocationIndex > -1) {
-                    const newLocations = [...prevLocations];
-                    const targetLocation = newLocations[existingLocationIndex];
-                    const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
+            if (existingLocationIndex > -1) {
+                const newLocations = [...prevLocations];
+                const targetLocation = newLocations[existingLocationIndex];
+                const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
                     if (existingItemIndex > -1) {
                         const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
@@ -247,6 +259,7 @@ export default function IssueMaterialPage() {
             });
         });
     };
+
 
     const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
          const itemInfo = allItems.find(i => i.id === itemId);
@@ -332,84 +345,40 @@ export default function IssueMaterialPage() {
                 </div>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Issue</CardTitle>
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{activeMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Vouchers awaiting issue</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Issued Today</CardTitle>
-                        <Truck className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{issuedMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Items distributed</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
-                        <XCircle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cancelledMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Cancelled vouchers</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Vouchers</CardTitle>
-                        <Archive className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalMIVs}</div>
-                        <p className="text-xs text-muted-foreground">All MIVs this period</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Card>
-                 <CardHeader>
-                     <div className="flex justify-between items-center">
-                        <div>
-                            <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Add Items to a Location</CardTitle>
-                            <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                    <CardHeader>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Select Location & Items</CardTitle>
+                                <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Label className="whitespace-nowrap">Issue From:</Label>
+                                <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
+                                    <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Label className="whitespace-nowrap">Issue From Residence:</Label>
-                            <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                                <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
-                                <SelectContent>
-                                    {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        <div className="lg:col-span-1 space-y-4">
-                            <h3 className="font-semibold">Select Location Type</h3>
-                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="unit" id="r_unit" />
-                                    <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="facility" id="r_facility" />
-                                    <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
-                                </div>
-                            </RadioGroup>
-                            
-                            {locationType === 'unit' ? (
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-sm">Location Type</h3>
+                                <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="unit" id="r_unit" />
+                                        <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="facility" id="r_facility" />
+                                        <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
+                                    </div>
+                                </RadioGroup>
+                                
                                 <div className="space-y-2 pt-2">
                                     <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
                                         <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
@@ -452,7 +421,7 @@ export default function IssueMaterialPage() {
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                     <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending}>
+                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
                                             </div>
@@ -471,152 +440,69 @@ export default function IssueMaterialPage() {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
-                    <CardDescription>Review all items and locations before submitting the voucher.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {voucherLocations.length > 0 ? (
-                         <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
-                            {voucherLocations.map(location => (
-                                <AccordionItem key={location.locationId} value={location.locationId}>
-                                    <AccordionTrigger className="font-semibold text-lg">
-                                        {location.locationName}
-                                    </AccordionTrigger>
-                                    <AccordionContent>
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Item</TableHead>
-                                                    <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                                    <TableHead className="w-[50px] text-right"></TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {location.items.map(item => (
-                                                    <TableRow key={item.id}>
-                                                         <TableCell className="font-medium">
-                                                            <p>{item.nameAr} / {item.nameEn}</p>
-                                                            <p className="text-xs text-muted-foreground">{item.category}</p>
-                                                        </TableCell>
-                                                         <TableCell>
-                                                            <div className="flex items-center justify-center gap-2">
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
-                                                                    <Minus className="h-4 w-4" />
-                                                                </Button>
-                                                                <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
-                                                                    <Plus className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
-                                                                <Trash2 className="h-4 w-4 text-destructive"/>
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            ))}
-                        </Accordion>
-                    ) : (
-                        <div className="text-center text-muted-foreground p-8">
-                            No items added to the voucher yet.
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Recent MIVs History */}
-            <Collapsible 
-                open={isCompletedOpen} 
-                onOpenChange={handleCompletedToggle}
-            >
                 <Card>
-                    <CollapsibleTrigger asChild>
-                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Archive className="h-5 w-5 text-muted-foreground" />
-                                        Recent MIVs History
-                                    </CardTitle>
-                                    <CardDescription>
-                                        View recently created material issue vouchers ({recentMIVs.length} total)
-                                    </CardDescription>
-                                </div>
-                                <ChevronDown className={`h-4 w-4 transition-transform ${isCompletedOpen ? 'rotate-180' : ''}`} />
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
+                        <CardDescription>Review all items and locations before submitting.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[430px]">
+                        {voucherLocations.length > 0 ? (
+                            <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
+                                {voucherLocations.map(location => (
+                                    <AccordionItem key={location.locationId} value={location.locationId}>
+                                        <AccordionTrigger className="font-semibold text-base">
+                                            {location.locationName}
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Item</TableHead>
+                                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
+                                                        <TableHead className="w-[50px] text-right"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {location.items.map(item => (
+                                                        <TableRow key={item.id}>
+                                                            <TableCell className="font-medium">
+                                                                <p>{item.nameAr} / {item.nameEn}</p>
+                                                                <p className="text-xs text-muted-foreground">{item.category}</p>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
+                                                                        <Minus className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
+                                                                        <Plus className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        ) : (
+                            <div className="text-center text-muted-foreground p-8 h-[400px] flex items-center justify-center">
+                                No items added to the voucher yet.
                             </div>
-                        </CardHeader>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                        <CardContent>
-                            {loadingMIVs ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                    <span className="ml-2 text-muted-foreground">Loading recent MIVs...</span>
-                                </div>
-                            ) : recentMIVs.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <Archive className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>No MIVs found for your assigned residences.</p>
-                                </div>
-                            ) : (
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>MIV #</TableHead>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead>Residence</TableHead>
-                                                <TableHead>Items</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Created By</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {recentMIVs.map((miv) => (
-                                                <TableRow key={miv.id}>
-                                                    <TableCell className="font-medium">
-                                                        #{miv.id.slice(-6)}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {new Date(miv.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {residences.find(r => r.id === miv.residenceId)?.name || 'Unknown'}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {miv.totalItems || 0} items
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={
-                                                            miv.status === 'Issued' ? 'default' :
-                                                            miv.status === 'Pending' ? 'secondary' :
-                                                            'destructive'
-                                                        }>
-                                                            {miv.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {miv.createdBy || 'Unknown'}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </CollapsibleContent>
+                        )}
+                        </ScrollArea>
+                    </CardContent>
                 </Card>
-            </Collapsible>
-
+            </div>
         </div>
     );
 }

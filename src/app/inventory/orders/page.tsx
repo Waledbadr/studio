@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive } from 'lucide-react';
+import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
@@ -198,21 +198,13 @@ export default function PurchaseOrdersPage() {
                 <p className="text-muted-foreground">Review and manage all material requests.</p>
                 </div>
                  <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-9 gap-1">
-                                <ListFilter className="h-3.5 w-3.5" />
-                                <span>Filter</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>Pending</DropdownMenuItem>
-                            <DropdownMenuItem>Approved</DropdownMenuItem>
-                            <DropdownMenuItem>Delivered</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isAdmin && (
+                        <Button asChild variant="secondary">
+                             <Link href="/inventory/orders/consolidated-report">
+                                <Printer className="mr-2 h-4 w-4" /> Consolidated Printing
+                            </Link>
+                        </Button>
+                    )}
                     <Button asChild>
                         <Link href="/inventory/new-order">
                         <PlusCircle className="mr-2 h-4 w-4" /> New Request

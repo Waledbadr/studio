@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare, Clock } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,6 +38,7 @@ export default function NewOrderPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
+    const [recentItems, setRecentItems] = useState<InventoryItem[]>([]);
     const router = useRouter();
 
 
@@ -57,6 +58,47 @@ export default function NewOrderPage() {
         }
     }, [currentUser, residences, userResidences, selectedResidence]);
 
+    // Load recent items from localStorage
+    useEffect(() => {
+        const loadRecentItems = () => {
+            try {
+                const recentItemIds = JSON.parse(localStorage.getItem('recentMaterialRequestItems') || '[]') as string[];
+                const recent = recentItemIds
+                    .map(id => allItems.find(item => item.id === id))
+                    .filter((item): item is InventoryItem => item !== undefined)
+                    .slice(0, 5); // Show max 5 recent items
+                setRecentItems(recent);
+            } catch (error) {
+                console.error('Error loading recent items:', error);
+            }
+        };
+
+        if (allItems.length > 0) {
+            loadRecentItems();
+        }
+    }, [allItems]);
+
+    // Function to add item to recent items list
+    const addToRecentItems = useCallback((item: InventoryItem) => {
+        try {
+            const recentItemIds = JSON.parse(localStorage.getItem('recentMaterialRequestItems') || '[]') as string[];
+            // Remove if already exists to avoid duplicates
+            const filteredIds = recentItemIds.filter(id => id !== item.id);
+            // Add to beginning of array
+            const updatedIds = [item.id, ...filteredIds].slice(0, 10); // Keep max 10 recent items
+            localStorage.setItem('recentMaterialRequestItems', JSON.stringify(updatedIds));
+            
+            // Update state
+            const recent = updatedIds
+                .map(id => allItems.find(i => i.id === id))
+                .filter((i): i is InventoryItem => i !== undefined)
+                .slice(0, 5);
+            setRecentItems(recent);
+        } catch (error) {
+            console.error('Error saving recent item:', error);
+        }
+    }, [allItems]);
+
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
@@ -73,10 +115,14 @@ export default function NewOrderPage() {
                     item.id === orderItemId ? {...item, quantity: item.quantity + 1} : item
                 );
             } else {
-                return [...currentOrderItems, { ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }];
+                // Add new item at the beginning of the list (top)
+                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }, ...currentOrderItems];
             }
         });
-    }, []);
+
+        // Add to recent items
+        addToRecentItems(itemToAdd);
+    }, [addToRecentItems]);
     
     const handleRemoveItem = (id: string) => {
         setOrderItems(orderItems.filter(item => item.id !== id));
@@ -136,6 +182,7 @@ export default function NewOrderPage() {
 
     const handleNewItemAdded = (newItemWithId: InventoryItem) => {
         handleAddItemToOrder(newItemWithId);
+        addToRecentItems(newItemWithId);
         setSearchQuery('');
     };
 
@@ -248,27 +295,53 @@ export default function NewOrderPage() {
                                     <Skeleton className="h-12 w-full" />
                                 </div>
                             ) : (
-                                <div className="space-y-2">
-                                    {filteredItems.length > 0 ? filteredItems.map(item => (
-                                        <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
-                                            <div>
-                                                <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {handleGetStockForResidence(item)} {item.unit}</p>
+                                <div className="space-y-4">
+                                    {/* Recent Items Section */}
+                                    {recentItems.length > 0 && !searchQuery && selectedCategory === 'all' && (
+                                        <div className="border-b pb-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                                <h3 className="text-sm font-medium text-muted-foreground">
+                                                    Recently Used Items • الأصناف المستخدمة حديثاً
+                                                </h3>
                                             </div>
-                                            <AddItemButton item={item} />
+                                            <div className="space-y-2">
+                                                {recentItems.map(item => (
+                                                    <div key={`recent-${item.id}`} className="flex items-center justify-between p-2 rounded-md border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+                                                        <div>
+                                                            <p className="font-medium text-blue-900 dark:text-blue-100">{item.nameAr} / {item.nameEn}</p>
+                                                            <p className="text-sm text-blue-700 dark:text-blue-300">{item.category} - Stock: {handleGetStockForResidence(item)} {item.unit}</p>
+                                                        </div>
+                                                        <AddItemButton item={item} />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    )) : (
-                                         searchQuery || selectedCategory !== 'all' ? (
-                                            <div className="text-center text-muted-foreground py-10">
-                                                <p className="mb-4">No items found matching your criteria.</p>
-                                                 {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
-                                                    <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
-                                                </Button>}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
-                                        )
                                     )}
+                                    
+                                    {/* All Items Section */}
+                                    <div className="space-y-2">
+                                        {filteredItems.length > 0 ? filteredItems.map(item => (
+                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
+                                                <div>
+                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {handleGetStockForResidence(item)} {item.unit}</p>
+                                                </div>
+                                                <AddItemButton item={item} />
+                                            </div>
+                                        )) : (
+                                             searchQuery || selectedCategory !== 'all' ? (
+                                                <div className="text-center text-muted-foreground py-10">
+                                                    <p className="mb-4">No items found matching your criteria.</p>
+                                                     {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
+                                                    </Button>}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
+                                            )
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </ScrollArea>

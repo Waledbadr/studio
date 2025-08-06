@@ -25,9 +25,24 @@
         }
       ]
     },
+
     {
-      "collectionGroup": "stockTransfers",
+      "collectionGroup": "inventoryTransactions",
       "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "itemId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "inventoryTransactions",
+      "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
           "fieldPath": "date",
