@@ -32,6 +32,14 @@ export interface InventoryItem {
   handlingInstructions: string;
   safetyInformation: string;
   notes: string;
+  lifespanDays?: number;
+}
+
+export interface LocationWithItems {
+  locationId: string;
+  locationName: string;
+  isFacility: boolean;
+  items: (InventoryItem & { issueQuantity: number })[];
 }
 
 export interface MIV {

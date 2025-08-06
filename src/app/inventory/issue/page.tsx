@@ -49,6 +49,7 @@ export default function IssueMaterialPage() {
     const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCompletedOpen, setIsCompletedOpen] = useState(false);
     const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
@@ -77,7 +78,7 @@ export default function IssueMaterialPage() {
                 const allMIVs = await getMIVs();
                 // Filter by user permissions and get recent ones
                 let filteredMIVs = allMIVs;
-                if (currentUser.role !== 'Admin') {
+                if (currentUser.role !== 'admin') {
                     filteredMIVs = allMIVs.filter(miv => 
                         currentUser.assignedResidences.includes(miv.residenceId)
                     );
@@ -104,7 +105,7 @@ export default function IssueMaterialPage() {
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
-        if (currentUser.role === 'Admin') return residences;
+        if (currentUser.role === 'admin') return residences;
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
@@ -139,7 +140,7 @@ export default function IssueMaterialPage() {
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
         return allItems
-            .filter(item => getStockForResidence(item, selectedComplexId) > 0)
+            .filter(item => getStockForResidence(item.id, selectedComplexId) > 0)
             .filter(item => 
                 item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
@@ -172,7 +173,7 @@ export default function IssueMaterialPage() {
             return;
         }
 
-            const stock = getStockForResidence(itemToAdd, selectedComplexId);
+            const stock = getStockForResidence(itemToAdd.id, selectedComplexId);
             if (stock < 1) {
                 toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
                 return;
@@ -214,7 +215,8 @@ export default function IssueMaterialPage() {
         if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
             const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
             if (lastIssueDate) {
-                const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                const issueDate = lastIssueDate instanceof Date ? lastIssueDate : new Date(lastIssueDate);
+                const daysSinceLastIssue = differenceInDays(new Date(), issueDate);
                 if (daysSinceLastIssue < itemToAdd.lifespanDays) {
                     toast({
                         title: "Lifespan Warning",
@@ -235,28 +237,27 @@ export default function IssueMaterialPage() {
                 const targetLocation = newLocations[existingLocationIndex];
                 const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
-                    if (existingItemIndex > -1) {
-                        const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                        if(currentQty < stock) {
-                            targetLocation.items[existingItemIndex].issueQuantity += 1;
-                        } else {
-                             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
-                        }
+                if (existingItemIndex > -1) {
+                    const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
+                    if(currentQty < stock) {
+                        targetLocation.items[existingItemIndex].issueQuantity += 1;
                     } else {
-                        targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                         toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
                     }
-                    return newLocations;
                 } else {
-                    const newLocation: VoucherLocation = {
-                        ...newLocationDetails,
-                        locationId,
-                        locationName,
-                        isFacility,
-                        items: [{ ...itemToAdd, issueQuantity: 1 }]
-                    };
-                    return [...prevLocations, newLocation];
+                    targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
                 }
-            });
+                return newLocations;
+            } else {
+                const newLocation: VoucherLocation = {
+                    ...newLocationDetails,
+                    locationId,
+                    locationName,
+                    isFacility,
+                    items: [{ ...itemToAdd, issueQuantity: 1 }]
+                };
+                return [...prevLocations, newLocation];
+            }
         });
     };
 
@@ -265,7 +266,7 @@ export default function IssueMaterialPage() {
          const itemInfo = allItems.find(i => i.id === itemId);
         if (!itemInfo || !selectedComplexId) return;
 
-        const stock = getStockForResidence(itemInfo, selectedComplexId);
+        const stock = getStockForResidence(itemInfo.id, selectedComplexId);
 
         let quantity = newQuantity;
         if (quantity < 1) {
@@ -301,7 +302,7 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-            await issueItemsFromStock(selectedComplexId, voucherLocations);
+            await issueItemsFromStock({ selectedComplexId, voucherLocations });
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');
@@ -379,36 +380,37 @@ export default function IssueMaterialPage() {
                                     </div>
                                 </RadioGroup>
                                 
-                                <div className="space-y-2 pt-2">
-                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            ) : (
-                                 <div className="space-y-2 pt-2">
-                                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                 </div>
-                            )}
+                                {locationType === 'unit' ? (
+                                    <div className="space-y-2 pt-2">
+                                        <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
+                                            <SelectContent>
+                                                {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
+                                            <SelectContent>
+                                                {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
+                                            <SelectContent>
+                                                {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                ) : (
+                                     <div className="space-y-2 pt-2">
+                                        <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
+                                            <SelectContent>
+                                                {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                     </div>
+                                )}
                         </div>
                         <div className="lg:col-span-3">
                             <h3 className="font-semibold mb-4">Available Inventory</h3>
@@ -419,7 +421,7 @@ export default function IssueMaterialPage() {
                                             <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
                                                 <div>
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
+                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item.id, selectedComplexId)} {item.unit}</p>
                                                 </div>
                                                 <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
                                                     <Plus className="h-4 w-4" />
