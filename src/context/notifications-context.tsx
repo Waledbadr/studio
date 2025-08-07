@@ -69,8 +69,38 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
           },
           (error) => {
             console.error("Error fetching notifications:", error);
-            setNotifications([]);
-            setLoading(false);
+            // Check if error is related to index building
+            if (error.message.includes('index') && error.message.includes('building')) {
+              console.log("Notification index is still building, using fallback query...");
+              // Try fallback query without ordering
+              try {
+                const fallbackQ = query(
+                  collection(db!, 'notifications'),
+                  where('userId', '==', currentUser.id)
+                );
+                
+                unsubscribeRef.current = onSnapshot(fallbackQ, 
+                  (snapshot) => {
+                    const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification))
+                      .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()); // Sort client-side
+                    setNotifications(notificationsData);
+                    setLoading(false);
+                  },
+                  (fallbackError) => {
+                    console.error("Fallback notifications query also failed:", fallbackError);
+                    setNotifications([]);
+                    setLoading(false);
+                  }
+                );
+              } catch (fallbackError) {
+                console.error("Failed to setup fallback notifications listener:", fallbackError);
+                setNotifications([]);
+                setLoading(false);
+              }
+            } else {
+              setNotifications([]);
+              setLoading(false);
+            }
           }
         );
       } catch (error) {

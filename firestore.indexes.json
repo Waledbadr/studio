@@ -3,29 +3,18 @@
   "indexes": [
     {
       "collectionGroup": "inventoryTransactions",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "date",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventoryTransactions",
-      "queryScope": "COLLECTION_GROUP",
+      "queryScope": "COLLECTION",
       "fields": [
         {
           "fieldPath": "itemId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "residenceId",
+          "order": "ASCENDING"
         }
       ]
     },
-
     {
       "collectionGroup": "inventoryTransactions",
       "queryScope": "COLLECTION",
@@ -35,17 +24,25 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "date",
           "order": "DESCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "inventoryTransactions",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "date",
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
       ]
