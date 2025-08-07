@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -248,28 +247,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           {
             id: 'item-1',
             name: 'Office Chair',
+            nameEn: 'Office Chair',
             nameAr: 'كرسي مكتب',
             category: 'Furniture',
             unit: 'piece',
-            costPerUnit: 450.50,
-            totalStock: 20,
+            stock: 20,
             stockByResidence: {
               'res-1': 15,
               'res-2': 5
             },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            createdBy: 'system',
-            description: 'Comfortable office chair',
-            descriptionAr: 'كرسي مكتب مريح',
-            barcode: '',
-            location: 'Office',
-            locationAr: 'المكتب',
-            minStock: 5,
-            maxStock: 50,
-            supplier: 'Office Supplies Co.',
-            supplierAr: 'شركة اللوازم المكتبية',
-            notes: ''
+            lifespanDays: 365
           }
         ];
         
@@ -363,7 +350,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addCategory = async (newCategory: string) => {
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
       return;
     }
     const trimmedCategory = newCategory.trim().toLowerCase();
@@ -384,7 +371,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const updateCategory = async (oldName: string, newName: string) => {
      if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
       return;
     }
     const trimmedNewName = newName.trim();
@@ -418,7 +405,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addItem = async (newItem: Omit<InventoryItem, 'id' | 'stock'>): Promise<InventoryItem | void> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return;
     }
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
@@ -446,7 +433,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const updateItem = async (itemToUpdate: InventoryItem) => {
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
       return;
     }
     try {
@@ -462,7 +449,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteItem = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return;
     }
     try {
@@ -506,7 +493,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
-        throw new Error(firebaseErrorMessage);
+        throw new Error(firebaseNotConfiguredMessage);
     }
 
     try {
@@ -594,7 +581,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return [];
     }
     try {
@@ -620,7 +607,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getAllIssueTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return [];
     }
      const q = query(
@@ -635,7 +622,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return [];
     }
 
@@ -661,7 +648,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getMIVs = async (): Promise<MIV[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return [];
     }
     const mivsCollection = collection(db, "mivs");
@@ -673,7 +660,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: firebaseNotConfiguredMessage, variant: "destructive" });
         return null;
     }
      try {
@@ -744,7 +731,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
         if (!db || !payload) {
-            const msg = !db ? firebaseErrorMessage : "Transfer payload is missing.";
+            const msg = !db ? firebaseNotConfiguredMessage : "Transfer payload is missing.";
             toast({ title: "Error", description: msg, variant: "destructive" });
             throw new Error(msg);
         }
@@ -892,7 +879,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const approveTransfer = async (transferId: string, approverId: string) => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(firebaseNotConfiguredMessage);
         
         const transferRef = doc(db, 'stockTransfers', transferId);
         
@@ -1007,7 +994,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
     
     const rejectTransfer = async (transferId: string, rejecterId: string) => {
-         if (!db) throw new Error(firebaseErrorMessage);
+         if (!db) throw new Error(firebaseNotConfiguredMessage);
          const transferRef = doc(db, 'stockTransfers', transferId);
          await updateDoc(transferRef, {
              status: 'Rejected',
@@ -1018,7 +1005,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(firebaseNotConfiguredMessage);
         
         try {
             await runTransaction(db, async (transaction) => {
@@ -1079,7 +1066,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // Audit functions
     const createAudit = async (auditData: Omit<InventoryAudit, 'id' | 'createdAt' | 'summary'>): Promise<string> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(firebaseNotConfiguredMessage);
         
         try {
             const auditRef = doc(collection(db, 'inventoryAudits'));

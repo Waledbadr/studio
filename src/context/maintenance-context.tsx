@@ -1,88 +1,180 @@
+
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
+import { useToast } from "@/hooks/use-toast";
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc } from "firebase/firestore";
 
-// Export types that are used throughout the app
+export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
+export type MaintenancePriority = 'Low' | 'Medium' | 'High';
+
+
 export interface MaintenanceRequest {
   id: string;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  date: Timestamp;
+  requestedById: string;
+  
+  complexId: string;
+  complexName: string;
+  buildingId: string;
+  buildingName: string;
+  roomId: string;
+  roomName: string;
+
+  issueTitle: string;
+  issueDescription: string;
+  priority: MaintenancePriority;
   status: MaintenanceStatus;
-  category: string;
-  residenceId: string;
-  roomId?: string;
-  itemId?: string;
-  requestedBy: string;
-  assignedTo?: string;
-  requestedAt: Date;
-  scheduledDate?: Date;
-  completedAt?: Date;
-  estimatedCost?: number;
-  actualCost?: number;
-  notes?: string;
-  attachments?: string[];
-  workOrderNumber?: string;
-  vendorId?: string;
-  approvedBy?: string;
-  approvedAt?: Date;
-  materials?: any[];
 }
 
-export type MaintenanceStatus = 'pending' | 'approved' | 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
+export type NewRequestPayload = Omit<MaintenanceRequest, 'id' | 'date' | 'status'>;
 
-interface SimpleMaintenanceContextType {
+interface MaintenanceContextType {
   requests: MaintenanceRequest[];
   loading: boolean;
   loadRequests: () => void;
-  createRequest: (request: Omit<MaintenanceRequest, 'id' | 'requestedAt'>) => Promise<void>;
-  addRequest: (request: any) => Promise<void>;
-  updateRequestStatus: (requestId: string, status: string) => Promise<void>;
-  updateRequest: (requestId: string, updates: any) => Promise<void>;
-  deleteRequest: (requestId: string) => Promise<void>;
+  createRequest: (payload: NewRequestPayload) => Promise<string | null>;
+  updateRequestStatus: (id: string, status: MaintenanceStatus) => Promise<void>;
+  getRequestById: (id: string) => Promise<MaintenanceRequest | null>;
+  deleteRequest: (id: string) => Promise<void>;
 }
 
-const MaintenanceContext = createContext<SimpleMaintenanceContextType | undefined>(undefined);
+const MaintenanceContext = createContext<MaintenanceContextType | undefined>(undefined);
+
+const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
 export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const unsubscribeRef = useRef<Unsubscribe | null>(null);
+  const isLoaded = useRef(false);
 
-  const loadRequests = () => {
-    console.log('Mock: Loading maintenance requests');
+  const loadRequests = useCallback(() => {
+    if (isLoaded.current) return;
+    if (!db) {
+      console.warn("Firebase not configured, loading mock maintenance requests");
+      setRequests([]); // Empty requests for now
+      setLoading(false);
+      isLoaded.current = true;
+      return;
+    }
+    
+    isLoaded.current = true;
+    setLoading(true);
+
+    const requestsCollection = collection(db, "maintenanceRequests");
+    unsubscribeRef.current = onSnapshot(requestsCollection, (snapshot) => {
+      const requestsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRequest));
+      requestsData.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+      setRequests(requestsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching maintenance requests:", error);
+      toast({ title: "Firestore Error", description: "Could not fetch maintenance requests data.", variant: "destructive" });
+      setLoading(false);
+    });
+  }, [toast]);
+
+  useEffect(() => {
+    // Automatically load requests when the provider mounts
+    loadRequests();
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        isLoaded.current = false;
+      }
+    };
+  }, [loadRequests]);
+
+  const generateNewRequestId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const prefix = `REQ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}-`;
+    
+    const requestsQuery = query(collection(db, "maintenanceRequests"), where("id", ">=", prefix));
+    const querySnapshot = await getDocs(requestsQuery);
+    
+    let maxNum = 0;
+    querySnapshot.forEach(doc => {
+        const docId = doc.id;
+        if (docId.startsWith(prefix)) {
+            const numPart = parseInt(docId.substring(prefix.length), 10);
+            if (!isNaN(numPart) && numPart > maxNum) {
+                maxNum = numPart;
+            }
+        }
+    });
+
+    const nextRequestNumber = (maxNum + 1).toString().padStart(4, '0');
+    return `${prefix}${nextRequestNumber}`;
   };
 
-  const createRequest = async (request: Omit<MaintenanceRequest, 'id' | 'requestedAt'>) => {
-    console.log('Mock: Creating maintenance request', request);
+  const createRequest = async (payload: NewRequestPayload): Promise<string | null> => {
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return null;
+    }
+    setLoading(true);
+    try {
+      const newId = await generateNewRequestId();
+      const newRequestRef = doc(db, "maintenanceRequests", newId);
+      
+      const newRequest: Omit<MaintenanceRequest, 'id'> = {
+          ...payload,
+          date: Timestamp.now(),
+          status: 'Pending'
+      };
+      
+      await setDoc(newRequestRef, newRequest);
+      return newId;
+
+    } catch (error) {
+      console.error("Error creating maintenance request:", error);
+      toast({ title: "Error", description: "Failed to create maintenance request.", variant: "destructive" });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const updateRequestStatus = async (id: string, status: MaintenanceStatus) => {
+      if (!db) {
+          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+          return;
+      }
+      try {
+          const requestDocRef = doc(db, "maintenanceRequests", id);
+          await updateDoc(requestDocRef, { status });
+          toast({ title: "Success", description: `Request status updated to ${status}.` });
+      } catch (error) {
+          console.error("Error updating request status:", error);
+          toast({ title: "Error", description: "Failed to update request status.", variant: "destructive" });
+      }
   };
 
-  const addRequest = async (request: any) => {
-    console.log('Mock: Adding maintenance request', request);
+  const getRequestById = async (id: string): Promise<MaintenanceRequest | null> => {
+    // Implementation can be added if a detailed request view page is needed
+    return null;
   };
 
-  const updateRequestStatus = async (requestId: string, status: string) => {
-    console.log('Mock: Updating request status', requestId, status);
-  };
-
-  const updateRequest = async (requestId: string, updates: any) => {
-    console.log('Mock: Updating request', requestId, updates);
-  };
-
-  const deleteRequest = async (requestId: string) => {
-    console.log('Mock: Deleting request', requestId);
+  const deleteRequest = async (id: string) => {
+    if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+    }
+    try {
+        await deleteDoc(doc(db, "maintenanceRequests", id));
+        toast({ title: "Success", description: "Maintenance request deleted." });
+    } catch (error) {
+        console.error("Error deleting request:", error);
+        toast({ title: "Error", description: "Failed to delete request.", variant: "destructive" });
+    }
   };
 
   return (
-    <MaintenanceContext.Provider value={{
-      requests,
-      loading,
-      loadRequests,
-      createRequest,
-      addRequest,
-      updateRequestStatus,
-      updateRequest,
-      deleteRequest
-    }}>
+    <MaintenanceContext.Provider value={{ requests, loading, loadRequests, createRequest, updateRequestStatus, getRequestById, deleteRequest }}>
       {children}
     </MaintenanceContext.Provider>
   );
@@ -95,5 +187,3 @@ export const useMaintenance = () => {
   }
   return context;
 };
-
-console.log('🔧 Simple maintenance context loaded');
