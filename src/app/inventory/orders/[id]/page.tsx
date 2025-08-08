@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -220,7 +219,7 @@ export default function OrderDetailPage() {
                         <TableBody>
                             {Object.entries(groupedItems).map(([category, items]) => (
                                 <React.Fragment key={category}>
-                                    <TableRow className="bg-muted/50 hover:bg-muted/50 print-bg-muted">
+                                    <TableRow key={`cat-${category}`} className="bg-muted/50 hover:bg-muted/50 print-bg-muted">
                                         <TableCell colSpan={5} className="font-semibold text-primary capitalize py-2">
                                             {category}
                                         </TableCell>

@@ -17,11 +17,48 @@ interface AggregatedItem {
     unit: string;
     totalQuantity: number;
     selectedVariant?: string; // التفصيل المختار من قاعدة البيانات
+    note?: string; // ملاحظة الصنف
 }
 
 interface GroupedAggregatedItems {
     [category: string]: AggregatedItem[];
 }
+
+// استخراج ترجمات الفئات خارج المكون لمنع إعادة الإنشاء في كل رندر
+const CATEGORY_TRANSLATIONS: { [key: string]: string } = {
+    'CLEANING': 'التنظيف',
+    'PLUMBING': 'السباكة',
+    'ELECTRICAL': 'الكهرباء',
+    'SLEEP KIT': 'أدوات النوم',
+    'A/C': 'التكييف',
+    'OFFICE': 'المكتب',
+    'CAR MAINTENANCE': 'صيانة السيارات',
+    'MAINTENANCE': 'الصيانة العامة',
+    'KITCHEN': 'المطبخ',
+    'BATHROOM': 'الحمام',
+    'LAUNDRY': 'الغسيل',
+    'SAFETY': 'السلامة',
+    'TOOLS': 'الأدوات',
+    'FURNITURE': 'الأثاث',
+    'MEDICAL': 'المستلزمات الطبية',
+    'FOOD': 'المواد الغذائية',
+    'GARDEN': 'الحديقة',
+    'PAINT': 'الدهان',
+    'CONSTRUCTION': 'البناء والإنشاء',
+    'HARDWARE': 'الأجهزة',
+    'STATIONERY': 'القرطاسية',
+    'TEXTILES': 'المنسوجات',
+    'LIGHTING': 'الإضاءة',
+    'SECURITY': 'الأمن',
+    'COMMUNICATION': 'الاتصالات',
+    'TRANSPORTATION': 'النقل',
+    'STORAGE': 'التخزين',
+    'DECORATION': 'الديكور',
+    'UNCATEGORIZED': 'غير مصنف',
+    'OTHERS': 'أخرى',
+    'MISC': 'متنوعة',
+    'GENERAL': 'عام'
+};
 
 export default function ConsolidatedReportPage() {
     const router = useRouter();
@@ -42,51 +79,50 @@ export default function ConsolidatedReportPage() {
         const uniqueResidenceNames = new Set<string>();
 
         pendingOrders.forEach(order => {
-            uniqueResidenceNames.add(order.residence);
-            order.items.forEach(item => {
-                // استخراج الـ variant من الـ ID إذا كان موجوداً
-                const originalItemId = item.id.includes('-') ? item.id.split('-')[0] : item.id;
-                const selectedVariant = item.id.includes('-') ? item.id.split('-').slice(1).join('-') : undefined;
-                
-                // استخراج اسم الصنف الأصلي بدون التفاصيل
-                const cleanNameAr = item.nameAr.includes(' - ') ? item.nameAr.split(' - ')[0] : item.nameAr;
-                const cleanNameEn = item.nameEn.includes(' - ') ? item.nameEn.split(' - ')[0] : item.nameEn;
-                
-                const existing = itemMap.get(item.id);
+            if (order?.residence) uniqueResidenceNames.add(order.residence);
+            order.items?.forEach(item => {
+                if (!item) return;
+                const selectedVariant = item.id && item.id.includes('-') ? item.id.split('-').slice(1).join('-') : undefined;
+                const cleanNameAr = (item.nameAr || '').includes(' - ') ? item.nameAr.split(' - ')[0] : (item.nameAr || '');
+                const cleanNameEn = (item.nameEn || '').includes(' - ') ? item.nameEn.split(' - ')[0] : (item.nameEn || '');
+                const note = item.notes?.trim();
+                // دمج الـ note في المفتاح لضمان عدم دمج أصناف ذات ملاحظات مختلفة
+                const keyBase = item.id || `${cleanNameEn}-${cleanNameAr}`;
+                const key = note ? `${keyBase}__note:${note}` : keyBase;
+                const existing = itemMap.get(key);
                 if (existing) {
-                    existing.totalQuantity += item.quantity;
+                    existing.totalQuantity += item.quantity || 0;
                 } else {
-                    itemMap.set(item.id, {
-                        id: item.id,
-                        nameAr: cleanNameAr,
-                        nameEn: cleanNameEn,
-                        category: item.category || 'Uncategorized',
-                        unit: item.unit,
-                        totalQuantity: item.quantity,
-                        selectedVariant: selectedVariant
+                    itemMap.set(key, {
+                        id: key,
+                        nameAr: cleanNameAr || cleanNameEn || 'صنف بدون اسم',
+                        nameEn: cleanNameEn || cleanNameAr || 'Unnamed Item',
+                        category: (item.category || 'Uncategorized') || 'Uncategorized',
+                        unit: item.unit || '',
+                        totalQuantity: item.quantity || 0,
+                        selectedVariant,
+                        note
                     });
                 }
             });
         });
 
-        const sortedItems = Array.from(itemMap.values()).sort((a,b) => a.nameAr.localeCompare(b.nameAr));
+        const sortedItems = Array.from(itemMap.values()).sort((a,b) => {
+            const aKey = (a.nameAr || a.nameEn || '').toString();
+            const bKey = (b.nameAr || b.nameEn || '').toString();
+            return aKey.localeCompare(bKey, 'ar');
+        });
         
         const grouped = sortedItems.reduce((acc, item) => {
-            const category = item.category;
-            if (!acc[category]) {
-                acc[category] = [];
-            }
+            const category = (item.category || 'Uncategorized').trim();
+            if (!acc[category]) acc[category] = [];
             acc[category].push(item);
             return acc;
         }, {} as GroupedAggregatedItems);
         
-        // ترتيب الفئات حسب عدد الأصناف (من الأكثر للأقل)
         const sortedGrouped = Object.entries(grouped)
-            .sort(([,a], [,b]) => b.length - a.length)
-            .reduce((acc, [category, items]) => {
-                acc[category] = items;
-                return acc;
-            }, {} as GroupedAggregatedItems);
+            .sort(([,aItems], [,bItems]) => bItems.length - aItems.length)
+            .reduce((acc, [category, items]) => { acc[category] = items; return acc; }, {} as GroupedAggregatedItems);
         
         return { 
             groupedItems: sortedGrouped, 
@@ -97,146 +133,67 @@ export default function ConsolidatedReportPage() {
         
     }, [orders, loading, currentUser]);
 
-    // نظام ذكي أنيق ومرتب لتوزيع الكروت
-    const getElegantLayout = useMemo(() => {
-        const categoriesData = Object.entries(groupedItems).map(([category, items]) => ({
+    // أعيدت التسمية لتفادي الالتباس (ليست دالة إنما بيانات)
+    const layoutData = useMemo(() => {
+        const entries = Object.entries(groupedItems || {});
+        const categoriesData = entries.map(([category, items]) => ({
             category,
             items,
             itemCount: items.length
         }));
         
         if (categoriesData.length === 0) {
-            return { layoutConfig: [], gridColumns: 3, gridRows: 2 };
+            return { layoutConfig: [], gridColumns: 3, gridRows: 2, totalItems: 0, averageItems: 0 } as const;
         }
         
-        // ترتيب الفئات حسب عدد الأصناف (من الأكثر للأقل)
         categoriesData.sort((a, b) => b.itemCount - a.itemCount);
         
-        // تحديد التخطيط الأنيق بناءً على عدد الفئات
         let gridColumns = 3;
         let gridRows = Math.ceil(categoriesData.length / 3);
-        
         if (categoriesData.length <= 2) {
             gridColumns = 2;
         } else if (categoriesData.length <= 4) {
-            gridColumns = 2;
-            gridRows = 2;
+            gridColumns = 2; gridRows = 2;
         } else if (categoriesData.length <= 6) {
-            gridColumns = 3;
-            gridRows = 2;
+            gridColumns = 3; gridRows = 2;
         } else if (categoriesData.length <= 9) {
-            gridColumns = 3;
-            gridRows = 3;
-        } else {
-            gridColumns = 4;
-            gridRows = Math.ceil(categoriesData.length / 4);
-        }
+            gridColumns = 3; gridRows = 3;
+        } else { gridColumns = 4; gridRows = Math.ceil(categoriesData.length / 4); }
         
-        // حساب عتبات أنيقة للأحجام
-        const totalItems = categoriesData.reduce((sum, cat) => sum + cat.itemCount, 0);
-        const averageItems = totalItems / categoriesData.length;
+        const totalItemCount = categoriesData.reduce((sum, cat) => sum + cat.itemCount, 0);
+        const averageItems = totalItemCount / categoriesData.length || 0;
         
-            // تصنيف أنيق للكروت - تركيز على الطول وليس العرض
-            const layoutConfig = categoriesData.map((catData, index) => {
-                let cardType = 'normal';
-                let heightMultiplier = 1;
-                let widthMultiplier = 1; // دائماً عمود واحد
-                
-                // تحديد نوع الكرت بشكل أنيق - تركيز على الطول
-                if (catData.itemCount > averageItems * 2.5) {
-                    cardType = 'extra-large';
-                    heightMultiplier = 3; // ثلاثة سطور للكروت الضخمة
-                } else if (catData.itemCount > averageItems * 1.8) {
-                    cardType = 'large';
-                    heightMultiplier = 2; // سطرين للكروت الكبيرة
-                } else if (catData.itemCount > averageItems * 1.3) {
-                    cardType = 'medium-large';
-                    heightMultiplier = 1.5; // سطر ونصف للكروت المتوسطة الكبيرة
-                } else if (catData.itemCount < averageItems * 0.7) {
-                    cardType = 'small';
-                    heightMultiplier = 0.8; // أقل من السطر الواحد للكروت الصغيرة
-                }
-                
-                return {
-                    ...catData,
-                    cardType,
-                    heightMultiplier,
-                    widthMultiplier: 1, // دائماً عمود واحد
-                    gridColumn: 'span 1', // دائماً عمود واحد
-                    gridRow: heightMultiplier >= 3 ? 'span 3' : 
-                            heightMultiplier >= 2 ? 'span 2' : 
-                            heightMultiplier >= 1.5 ? 'span 2' : 'span 1'
-                };
-            });        return { 
-            layoutConfig, 
-            gridColumns, 
-            gridRows,
-            totalItems,
-            averageItems: Math.round(averageItems)
-        };
-    }, [groupedItems, totalCategories, totalItems]);
+        const layoutConfig = categoriesData.map(catData => {
+            let cardType: string = 'normal';
+            let heightMultiplier = 1;
+            if (catData.itemCount > averageItems * 2.5) { cardType = 'extra-large'; heightMultiplier = 3; }
+            else if (catData.itemCount > averageItems * 1.8) { cardType = 'large'; heightMultiplier = 2; }
+            else if (catData.itemCount > averageItems * 1.3) { cardType = 'medium-large'; heightMultiplier = 1.5; }
+            else if (catData.itemCount < averageItems * 0.7) { cardType = 'small'; heightMultiplier = 0.8; }
+            return {
+                ...catData,
+                cardType,
+                heightMultiplier,
+                widthMultiplier: 1,
+                gridColumn: 'span 1',
+                gridRow: heightMultiplier >= 3 ? 'span 3' : heightMultiplier >= 2 ? 'span 2' : heightMultiplier >= 1.5 ? 'span 2' : 'span 1'
+            };
+        });
+        
+        return { layoutConfig, gridColumns, gridRows, totalItems: totalItemCount, averageItems: Math.round(averageItems) } as const;
+    }, [groupedItems]);
 
-    // دالة ترجمة أسماء الفئات إلى العربية
+    // دالة ترجمة أسماء الفئات إلى العربية (تستخدم خريطة جاهزة)
     const getCategoryNameAr = (categoryEn: string): string => {
-        const translations: { [key: string]: string } = {
-            // الفئات الأساسية
-            'CLEANING': 'التنظيف',
-            'PLUMBING': 'السباكة',
-            'ELECTRICAL': 'الكهرباء',
-            'SLEEP KIT': 'أدوات النوم',
-            'A/C': 'التكييف',
-            'OFFICE': 'المكتب',
-            'CAR MAINTENANCE': 'صيانة السيارات',
-            'MAINTENANCE': 'الصيانة العامة',
-            
-            // فئات إضافية شائعة
-            'KITCHEN': 'المطبخ',
-            'BATHROOM': 'الحمام',
-            'LAUNDRY': 'الغسيل',
-            'SAFETY': 'السلامة',
-            'TOOLS': 'الأدوات',
-            'FURNITURE': 'الأثاث',
-            'MEDICAL': 'المستلزمات الطبية',
-            'FOOD': 'المواد الغذائية',
-            'GARDEN': 'الحديقة',
-            'PAINT': 'الدهان',
-            'CONSTRUCTION': 'البناء والإنشاء',
-            'HARDWARE': 'الأجهزة',
-            'STATIONERY': 'القرطاسية',
-            'TEXTILES': 'المنسوجات',
-            'LIGHTING': 'الإضاءة',
-            'SECURITY': 'الأمن',
-            'COMMUNICATION': 'الاتصالات',
-            'TRANSPORTATION': 'النقل',
-            'STORAGE': 'التخزين',
-            'DECORATION': 'الديكور',
-            
-            // حالات خاصة
-            'Uncategorized': 'غير مصنف',
-            'OTHERS': 'أخرى',
-            'MISC': 'متنوعة',
-            'GENERAL': 'عام'
-        };
-        
-        // البحث بطرق متعددة لضمان الدقة
+        if (!categoryEn) return 'غير مصنف';
         const upperCategory = categoryEn.toUpperCase().trim();
-        
-        // البحث المباشر
-        if (translations[upperCategory]) {
-            return translations[upperCategory];
+        if (CATEGORY_TRANSLATIONS[upperCategory]) return CATEGORY_TRANSLATIONS[upperCategory];
+        for (const [eng, ar] of Object.entries(CATEGORY_TRANSLATIONS)) {
+            if (upperCategory.includes(eng) || eng.includes(upperCategory)) return ar;
         }
-        
-        // البحث الجزئي للكلمات المركبة
-        for (const [eng, ar] of Object.entries(translations)) {
-            if (upperCategory.includes(eng) || eng.includes(upperCategory)) {
-                return ar;
-            }
-        }
-        
-        // إذا لم توجد ترجمة، أرجع النص الأصلي
         return categoryEn;
     };
-    
+
     const handlePrint = () => {
         window.print();
     }
@@ -795,18 +752,18 @@ export default function ConsolidatedReportPage() {
 
                     {/* Main Content - Elegant Design */}
                     <div style={{ padding: '0' }}>
-                        {getElegantLayout.layoutConfig.length > 0 ? (
+                        {layoutData.layoutConfig.length > 0 ? (
                             <div 
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: `repeat(${getElegantLayout.gridColumns}, 1fr)`,
+                                    gridTemplateColumns: `repeat(${layoutData.gridColumns}, 1fr)`,
                                     gap: '16px',
                                     marginBottom: '20px',
                                     gridAutoRows: 'minmax(200px, auto)'
                                 }}
                                 className="elegant-grid"
                             >
-                                {getElegantLayout.layoutConfig.map((cardConfig) => (
+                                {layoutData.layoutConfig.map((cardConfig) => (
                                     <div 
                                         key={cardConfig.category} 
                                         style={{
@@ -940,6 +897,28 @@ export default function ConsolidatedReportPage() {
                                                                         whiteSpace: 'nowrap'
                                                                     }}>
                                                                         {item.selectedVariant}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {item.note && (
+                                                                <div style={{
+                                                                    flex: 0,
+                                                                    minWidth: 'auto'
+                                                                }}>
+                                                                    <div style={{
+                                                                        fontSize: '9px',
+                                                                        fontWeight: '500',
+                                                                        color: '#0d6efd',
+                                                                        backgroundColor: '#eef6ff',
+                                                                        padding: '2px 5px',
+                                                                        borderRadius: '3px',
+                                                                        border: '1px solid #b6daff',
+                                                                        whiteSpace: 'nowrap',
+                                                                        maxWidth: '120px',
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis'
+                                                                    }} title={item.note}>
+                                                                        {item.note}
                                                                     </div>
                                                                 </div>
                                                             )}

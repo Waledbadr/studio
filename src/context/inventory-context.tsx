@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -268,7 +266,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       setItems(inventoryData);
        const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
        if (categories.length === 0 && uniqueCategories.length > 0) {
-           const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+           const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
            getDoc(categoriesDocRef).then(docSnap => {
                if (!docSnap.exists()) {
                    setDoc(categoriesDocRef, { names: uniqueCategories });
@@ -339,7 +337,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const updatedCategories = [...categories, newCategory.trim()];
-      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
       await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
       toast({ title: "Success", description: "Category added." });
     } catch(error) {
@@ -363,14 +361,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       // 1. Update categories document
       const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
-      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
       batch.set(categoriesDocRef, { names: updatedCategories });
       
       // 2. Update all items with the old category name
-      const itemsToUpdateQuery = query(collection(db, "inventory"), where("category", "==", oldName));
+      const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
       const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
       itemsToUpdateSnapshot.forEach(itemDoc => {
-        const itemRef = doc(db, "inventory", itemDoc.id);
+        const itemRef = doc(db!, "inventory", itemDoc.id);
         batch.update(itemRef, { category: trimmedNewName });
       });
 
@@ -416,7 +414,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      const itemDocRef = doc(db, "inventory", itemToUpdate.id);
+      const itemDocRef = doc(db!, "inventory", itemToUpdate.id);
       const { stock, ...itemData } = itemToUpdate; // Exclude total stock from being written to DB
       await updateDoc(itemDocRef, { ...itemData });
       toast({ title: "Success", description: "Item updated." });
@@ -432,7 +430,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     try {
-      await deleteDoc(doc(db, "inventory", id));
+      await deleteDoc(doc(db!, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
     } catch (error) {
        toast({ title: "Error", description: "Failed to delete item.", variant: "destructive" });
@@ -606,7 +604,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-        const q = query(collectionGroup(db, "inventoryTransactions"));
+        // Previously used collectionGroup which requires subcollections of the same name.
+        // Our transactions are stored in a top-level collection "inventoryTransactions",
+        // so use collection() here instead of collectionGroup().
+        const q = query(collection(db, "inventoryTransactions"));
         const querySnapshot = await getDocs(q);
         
         return querySnapshot.docs.map(doc => ({
@@ -862,7 +863,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const approveTransfer = async (transferId: string, approverId: string) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
-        const transferRef = doc(db, 'stockTransfers', transferId);
+        const transferRef = doc(db!, 'stockTransfers', transferId);
         
         try {
             await runTransaction(db, async (transaction) => {
@@ -976,7 +977,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     
     const rejectTransfer = async (transferId: string, rejecterId: string) => {
          if (!db) throw new Error(firebaseErrorMessage);
-         const transferRef = doc(db, 'stockTransfers', transferId);
+         const transferRef = doc(db!, 'stockTransfers', transferId);
          await updateDoc(transferRef, {
              status: 'Rejected',
              rejectedById: rejecterId,
@@ -1109,7 +1110,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
         
         try {
-            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const auditRef = doc(db!, 'inventoryAudits', auditId);
             const auditSnap = await getDoc(auditRef);
             
             if (!auditSnap.exists()) {
@@ -1128,7 +1129,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const auditRef = doc(db!, 'inventoryAudits', auditId);
             const updateData: any = { status };
             
             if (status === 'IN_PROGRESS') {
@@ -1167,7 +1168,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            const itemRef = doc(db, 'auditItems', auditItem.id);
+            const itemRef = doc(db!, 'auditItems', auditItem.id);
             await updateDoc(itemRef, { ...auditItem });
         } catch (error) {
             console.error('Error updating audit item:', error);
