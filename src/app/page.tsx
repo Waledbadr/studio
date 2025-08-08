@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -51,9 +50,10 @@ export default function DashboardPage() {
   const recentReceipts = filteredOrders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
   const recentIssues = filteredMIVs.slice(0, 5);
 
-  const totalRequests = filteredMaintenance.length;
-  const pendingRequests = filteredMaintenance.filter(r => r.status === 'Pending').length;
-  const completedRequests = filteredMaintenance.filter(r => r.status === 'Completed').length;
+  // Use material requests for top cards
+  const totalRequests = filteredOrders.length;
+  const pendingRequests = filteredOrders.filter(o => o.status === 'Pending').length;
+  const completedRequests = filteredOrders.filter(o => o.status === 'Delivered').length;
 
   const loading = maintenanceLoading || ordersLoading || inventoryLoading || usersLoading;
 
@@ -67,7 +67,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">Total maintenance requests</p>
+            <p className="text-xs text-muted-foreground">Total material requests</p>
           </CardContent>
         </Card>
         <Card>
