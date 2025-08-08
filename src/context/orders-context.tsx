@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -10,6 +8,7 @@ import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
 import { useNotifications } from './notifications-context';
+import type { DocumentReference } from 'firebase/firestore';
 
 
 export interface OrderItem extends InventoryItem {
@@ -63,6 +62,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const { addNotification } = useNotifications();
+  const { users } = useUsers();
 
 
   const loadOrders = useCallback(() => {
@@ -141,6 +141,32 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       }
       
       await setDoc(newOrderRef, { ...newOrder, id: newOrderId });
+
+      // Notify all Admin users about the new order
+      try {
+        let adminUserIds = users?.filter(u => u.role === 'Admin').map(u => u.id) || [];
+        if (adminUserIds.length === 0) {
+          // Fallback to Firestore query if users context is not yet loaded
+          const adminsQ = query(collection(db, 'users'), where('role', '==', 'Admin'));
+          const adminsSnap = await getDocs(adminsQ);
+          adminUserIds = adminsSnap.docs.map(d => d.id);
+        }
+
+        await Promise.all(
+          adminUserIds.map((adminId) =>
+            addNotification?.({
+              userId: adminId,
+              title: 'New Material Request',
+              message: `Request #${newOrderId} • ${orderData.residence}`,
+              type: 'new_order',
+              href: `/inventory/orders/${newOrderId}`,
+              referenceId: newOrderId,
+            })
+          )
+        );
+      } catch (notifyErr) {
+        console.warn('Failed to send admin notifications for new order:', notifyErr);
+      }
 
       return newOrderId;
     } catch (error) {

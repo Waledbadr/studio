@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useUsers } from './users-context';
@@ -12,7 +11,7 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'transfer_request' | 'order_approved';
+  type: 'transfer_request' | 'order_approved' | 'new_order';
   href: string;
   referenceId: string;
   isRead: boolean;
@@ -38,91 +37,94 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   const [loading, setLoading] = useState(true);
   const { currentUser } = useUsers();
   const { toast } = useToast();
-  const unsubscribeRef = useRef<() => void | null>(null);
 
   useEffect(() => {
-    if (currentUser?.id) {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-      
-      setLoading(true);
-      const q = query(
-        collection(db, 'notifications'),
-        where('userId', '==', currentUser.id),
-        orderBy('createdAt', 'desc')
-      );
-
-      unsubscribeRef.current = onSnapshot(q, 
-        (snapshot) => {
-          const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-          setNotifications(notificationsData);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching notifications:", error);
-          toast({ title: "Firestore Error", description: "Could not fetch notifications.", variant: "destructive" });
-          setLoading(false);
-        }
-      );
-    } else {
-      // No user logged in, clear notifications
-      if (unsubscribeRef.current) unsubscribeRef.current();
+    if (!db) {
       setNotifications([]);
       setLoading(false);
+      return;
     }
-    
+
+    if (!currentUser?.id) {
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const q = query(
+      collection(db!, 'notifications'),
+      where('userId', '==', currentUser.id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const notificationsData = snapshot.docs.map((d) => {
+          const data = d.data() as any;
+          const createdAt = data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now();
+          return { id: d.id, ...data, createdAt } as Notification;
+        });
+        setNotifications(notificationsData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching notifications:', error);
+        toast({ title: 'Firestore Error', description: 'Could not fetch notifications.', variant: 'destructive' });
+        setLoading(false);
+      }
+    );
+
     return () => {
-        if (unsubscribeRef.current) {
-            unsubscribeRef.current();
-        }
+      unsubscribe();
     };
   }, [currentUser, toast]);
-  
+
   const addNotification = async (payload: NewNotificationPayload) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
+      // Silent failure with optional toast for developers
+      console.warn(firebaseErrorMessage);
+      return;
     }
     try {
-        await addDoc(collection(db, 'notifications'), {
-            ...payload,
-            isRead: false,
-            createdAt: serverTimestamp(),
-        });
-    } catch(error) {
-        console.error("Error adding notification:", error);
-        // Don't toast this error to the user, as it's a background process
+      await addDoc(collection(db!, 'notifications'), {
+        ...payload,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error adding notification:', error);
+      // Silent for end-users
     }
   };
 
   const markAsRead = async (notificationId: string) => {
     if (!db) return;
     try {
-      const notifRef = doc(db, 'notifications', notificationId);
+      const notifRef = doc(db!, 'notifications', notificationId);
       await updateDoc(notifRef, { isRead: true });
     } catch (error) {
-      console.error("Error marking notification as read:", error);
+      console.error('Error marking notification as read:', error);
     }
   };
 
   const markAllAsRead = async () => {
     if (!db) return;
-    const unreadNotifications = notifications.filter(n => !n.isRead);
+    const unreadNotifications = notifications.filter((n) => !n.isRead);
     if (unreadNotifications.length === 0) return;
 
     try {
-        const batch = writeBatch(db);
-        unreadNotifications.forEach(n => {
-            const notifRef = doc(db, 'notifications', n.id);
-            batch.update(notifRef, { isRead: true });
-        });
-        await batch.commit();
+      const batch = writeBatch(db!);
+      unreadNotifications.forEach((n) => {
+        const notifRef = doc(db!, 'notifications', n.id);
+        batch.update(notifRef, { isRead: true });
+      });
+      await batch.commit();
     } catch (error) {
-        console.error("Error marking all notifications as read:", error);
+      console.error('Error marking all notifications as read:', error);
     }
   };
-
 
   return (
     <NotificationsContext.Provider value={{ notifications, loading, addNotification, markAsRead, markAllAsRead }}>

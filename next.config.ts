@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Disable source maps in production to avoid fetch errors
+  productionBrowserSourceMaps: false,
   images: {
     remotePatterns: [
       {
@@ -26,7 +28,19 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Permissions-Policy',
-            value: 'clipboard-read=*, clipboard-write=*',
+            value: 'clipboard-read=(self), clipboard-write=(self)',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
           },
         ],
       },
