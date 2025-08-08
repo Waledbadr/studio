@@ -1,11 +1,9 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-
 
 // Define types for our data structure
 export interface Room {
@@ -40,6 +38,7 @@ export interface Complex {
   managerId: string;
   buildings: Building[];
   facilities?: Facility[];
+  disabled?: boolean; // mark residence as disabled (hidden from active lists)
 }
 
 export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
@@ -65,6 +64,8 @@ interface ResidencesContextType {
   deleteFloor: (complexId: string, buildingId: string, floorId: string) => Promise<void>;
   deleteRoom: (complexId: string, buildingId: string, floorId: string, roomId: string) => Promise<void>;
   deleteFacility: (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => Promise<void>;
+  setResidenceDisabled: (id: string, disabled: boolean) => Promise<void>;
+  checkResidenceHasStock: (id: string) => Promise<boolean>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -150,7 +151,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
                 city: city.trim(),
                 managerId,
                 buildings: [],
-                facilities: []
+                facilities: [],
+                disabled: false
             };
             
             const updatedResidences = [...residences, newComplex];
@@ -165,7 +167,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
     
     const docRef = doc(collection(db, "residences"));
-    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [] });
+    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [], disabled: false });
     toast({ title: "Success", description: "New residential complex added." });
   };
   
@@ -456,97 +458,235 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteBuilding = async (complexId: string, buildingId: string) => {
-    if (!db) return;
-    const complexDocRef = doc(db, "residences", complexId);
-    const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) throw new Error("Complex not found");
-    const complexData = complexDoc.data() as Complex;
-    const updatedBuildings = complexData.buildings.filter(b => b.id !== buildingId);
-    await updateDoc(complexDocRef, { buildings: updatedBuildings });
-    toast({ title: "Success", description: "Building deleted successfully." });
+    if (!db) {
+      try {
+        const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'Success', description: 'Building deleted (locally).' });
+      } catch (error) {
+        console.error('Error deleting building locally:', error);
+        toast({ title: 'Error', description: 'Failed to delete building locally.', variant: 'destructive' });
+      }
+      return;
+    }
+    try {
+      const complexRef = doc(db, 'residences', complexId);
+      const snap = await getDoc(complexRef);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
+      const updatedBuildings = (data.buildings || []).filter(b => b.id !== buildingId);
+      await updateDoc(complexRef, { buildings: updatedBuildings });
+      toast({ title: 'Success', description: 'Building deleted.' });
+    } catch (e) {
+      console.error('Error deleting building:', e);
+      toast({ title: 'Error', description: 'Failed to delete building.', variant: 'destructive' });
+    }
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
-    if (!db) return;
-    const complexDocRef = doc(db, "residences", complexId);
-    const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) throw new Error("Complex not found");
-    const complexData = complexDoc.data() as Complex;
-    const updatedBuildings = complexData.buildings.map(b => 
-        b.id === buildingId ? {
-            ...b,
-            floors: b.floors.filter(f => f.id !== floorId)
-        } : b
-    );
-    await updateDoc(complexDocRef, { buildings: updatedBuildings });
-    toast({ title: "Success", description: "Floor deleted successfully." });
+    if (!db) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, floors: b.floors.filter(f => f.id !== floorId) } : b)
+          };
+        });
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'Success', description: 'Floor deleted (locally).' });
+      } catch (error) {
+        console.error('Error deleting floor locally:', error);
+        toast({ title: 'Error', description: 'Failed to delete floor locally.', variant: 'destructive' });
+      }
+      return;
+    }
+    try {
+      const complexRef = doc(db, 'residences', complexId);
+      const snap = await getDoc(complexRef);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
+      const updatedBuildings = data.buildings.map(b => b.id === buildingId ? { ...b, floors: b.floors.filter(f => f.id !== floorId) } : b);
+      await updateDoc(complexRef, { buildings: updatedBuildings });
+      toast({ title: 'Success', description: 'Floor deleted.' });
+    } catch (e) {
+      console.error('Error deleting floor:', e);
+      toast({ title: 'Error', description: 'Failed to delete floor.', variant: 'destructive' });
+    }
   };
 
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
-    if (!db) return;
-    const complexDocRef = doc(db, "residences", complexId);
-    const complexDoc = await getDoc(complexDocRef);
-     if (!complexDoc.exists()) throw new Error("Complex not found");
-    const complexData = complexDoc.data() as Complex;
-    const updatedBuildings = complexData.buildings.map(b => 
-        b.id === buildingId ? {
-            ...b,
-            floors: b.floors.map(f => 
-                f.id === floorId ? {...f, rooms: f.rooms.filter(r => r.id !== roomId)} : f
-            )
-        } : b
-    );
-    await updateDoc(complexDocRef, { buildings: updatedBuildings });
-    toast({ title: "Success", description: "Room deleted successfully." });
+    if (!db) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              return {
+                ...b,
+                floors: b.floors.map(f => f.id === floorId ? { ...f, rooms: f.rooms.filter(r => r.id !== roomId) } : f)
+              };
+            })
+          };
+        });
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'Success', description: 'Room deleted (locally).' });
+      } catch (error) {
+        console.error('Error deleting room locally:', error);
+        toast({ title: 'Error', description: 'Failed to delete room locally.', variant: 'destructive' });
+      }
+      return;
+    }
+    try {
+      const complexRef = doc(db, 'residences', complexId);
+      const snap = await getDoc(complexRef);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
+      const updatedBuildings = data.buildings.map(b => {
+        if (b.id !== buildingId) return b;
+        return {
+          ...b,
+          floors: b.floors.map(f => f.id === floorId ? { ...f, rooms: f.rooms.filter(r => r.id !== roomId) } : f)
+        };
+      });
+      await updateDoc(complexRef, { buildings: updatedBuildings });
+      toast({ title: 'Success', description: 'Room deleted.' });
+    } catch (e) {
+      console.error('Error deleting room:', e);
+      toast({ title: 'Error', description: 'Failed to delete room.', variant: 'destructive' });
+    }
   };
 
-    const deleteFacility = async (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => {
-        if (!db) return;
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-        const complexData = complexDoc.data() as Complex;
-        
-        let updatePayload: Partial<Complex> = {};
+  const deleteFacility = async (
+    complexId: string,
+    facilityId: string,
+    level: 'complex' | 'building' | 'floor',
+    buildingId?: string,
+    floorId?: string
+  ) => {
+    if (!db) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          if (level === 'complex') {
+            return { ...c, facilities: (c.facilities || []).filter(f => f.id !== facilityId) };
+          }
+          if (level === 'building' && buildingId) {
+            return {
+              ...c,
+              buildings: c.buildings.map(b => b.id === buildingId ? { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) } : b)
+            };
+          }
+          if (level === 'floor' && buildingId && floorId) {
+            return {
+              ...c,
+              buildings: c.buildings.map(b => b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => f.id === floorId ? { ...f, facilities: (f.facilities || []).filter(fc => fc.id !== facilityId) } : f)
+              } : b)
+            };
+          }
+          return c;
+        });
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'Success', description: 'Facility deleted (locally).' });
+      } catch (error) {
+        console.error('Error deleting facility locally:', error);
+        toast({ title: 'Error', description: 'Failed to delete facility locally.', variant: 'destructive' });
+      }
+      return;
+    }
 
-        if (level === 'complex') {
-            updatePayload.facilities = (complexData.facilities || []).filter(f => f.id !== facilityId);
-        } else if (level === 'building' && buildingId) {
-            updatePayload.buildings = complexData.buildings.map(b => {
-                if (b.id === buildingId) {
-                    return { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) };
-                }
-                return b;
-            });
-        } else if (level === 'floor' && buildingId && floorId) {
-            updatePayload.buildings = complexData.buildings.map(b => {
-                if (b.id === buildingId) {
-                    return {
-                        ...b,
-                        floors: b.floors.map(f => {
-                            if (f.id === floorId) {
-                                return { ...f, facilities: (f.facilities || []).filter(fac => fac.id !== facilityId) };
-                            }
-                            return f;
-                        })
-                    };
-                }
-                return b;
-            });
-        }
+    try {
+      const complexRef = doc(db, 'residences', complexId);
+      const snap = await getDoc(complexRef);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
 
-        await updateDoc(complexDocRef, updatePayload);
-        toast({ title: "Success", description: "Facility deleted successfully." });
-    };
+      if (level === 'complex') {
+        const updatedFacilities = (data.facilities || []).filter(f => f.id !== facilityId);
+        await updateDoc(complexRef, { facilities: updatedFacilities });
+      } else if (level === 'building' && buildingId) {
+        const updatedBuildings = data.buildings.map(b => b.id === buildingId ? { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) } : b);
+        await updateDoc(complexRef, { buildings: updatedBuildings });
+      } else if (level === 'floor' && buildingId && floorId) {
+        const updatedBuildings = data.buildings.map(b => b.id === buildingId ? {
+          ...b,
+          floors: b.floors.map(f => f.id === floorId ? { ...f, facilities: (f.facilities || []).filter(fc => fc.id !== facilityId) } : f)
+        } : b);
+        await updateDoc(complexRef, { buildings: updatedBuildings });
+      }
 
-  
+      toast({ title: 'Success', description: 'Facility deleted.' });
+    } catch (e) {
+      console.error('Error deleting facility:', e);
+      toast({ title: 'Error', description: 'Failed to delete facility.', variant: 'destructive' });
+    }
+  };
+
+
+  // Disable/Enable residence with stock check
+  const checkResidenceHasStock = async (residenceId: string): Promise<boolean> => {
+    if (!db) {
+      // Cannot check without DB; assume no stock
+      return false;
+    }
+    try {
+      const invSnap = await getDocs(collection(db, 'inventory'));
+      for (const d of invSnap.docs) {
+        const data: any = d.data();
+        const stockByResidence = data.stockByResidence || {};
+        const val = Number(stockByResidence[residenceId] || 0);
+        if (!isNaN(val) && val > 0) return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Error checking residence stock:', e);
+      return true; // fail-safe: prevent disabling on error
+    }
+  };
+
+  const setResidenceDisabled = async (id: string, disabled: boolean) => {
+    if (disabled) {
+      const hasStock = await checkResidenceHasStock(id);
+      if (hasStock) {
+        toast({ title: 'Cannot disable', description: 'Residence has stock. Please transfer or adjust to zero stock before disabling.', variant: 'destructive' });
+        return;
+      }
+    }
+
+    if (!db) {
+      // Local storage path
+      const updated = residences.map(r => r.id === id ? { ...r, disabled } : r);
+      setResidences(updated);
+      saveToLocalStorage(updated);
+      toast({ title: 'Success', description: disabled ? 'Residence disabled (local).' : 'Residence enabled (local).' });
+      return;
+    }
+
+    try {
+      const complexDocRef = doc(db, 'residences', id);
+      await updateDoc(complexDocRef, { disabled });
+      toast({ title: 'Success', description: disabled ? 'Residence disabled.' : 'Residence enabled.' });
+    } catch (error) {
+      console.error('Error updating residence disabled flag:', error);
+      toast({ title: 'Error', description: 'Failed to update residence status.', variant: 'destructive' });
+    }
+  };
+
   const buildings = useMemo(() => residences?.flatMap(c => c.buildings) || [], [residences]);
   const floors = useMemo(() => buildings?.flatMap(b => b.floors) || [], [buildings]);
   const rooms = useMemo(() => floors?.flatMap(f => f.rooms) || [], [floors]);
 
 
   return (
-    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, addFacility, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, deleteFacility }}>
+    <ResidencesContext.Provider value={{ residences, buildings, floors, rooms, loading, loadResidences, addComplex, updateComplex, addBuilding, addFloor, addRoom, addMultipleRooms, addFacility, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, deleteFacility, setResidenceDisabled, checkResidenceHasStock }}>
       {children}
     </ResidencesContext.Provider>
   );

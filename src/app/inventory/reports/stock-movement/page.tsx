@@ -154,7 +154,14 @@ export default function StockMovementReportPage() {
         return keep;
     });
 
-    setFilteredTransactions(filtered);
+    // Newest first
+    const sorted = [...filtered].sort((a, b) => {
+      const aMs = typeof a.date?.toMillis === 'function' ? a.date.toMillis() : a.date?.toDate?.().getTime?.() ?? 0;
+      const bMs = typeof b.date?.toMillis === 'function' ? b.date.toMillis() : b.date?.toDate?.().getTime?.() ?? 0;
+      return bMs - aMs;
+    });
+
+    setFilteredTransactions(sorted);
     setIsGenerating(false);
     setHasGenerated(true);
 
@@ -526,7 +533,7 @@ export default function StockMovementReportPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredTransactions.map((transaction, index) => (
-                        <TableRow key={index} className="hover:bg-muted/50 dark:hover:bg-muted/20">
+                        <TableRow key={transaction.id ?? `${transaction.referenceDocId || 'ref'}-${index}`} className="hover:bg-muted/50 dark:hover:bg-muted/20">
                           <TableCell className="font-mono text-sm">
                             {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
                           </TableCell>

@@ -109,8 +109,8 @@ export default function DashboardPage() {
                     <Table>
                          <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentMaterialRequests.map(order => (
-                                <TableRow key={order.id}>
+                            {recentMaterialRequests.map((order, i) => (
+                                <TableRow key={`${order.id}-${i}`}>
                                     <TableCell>
                                         <div className="font-medium">{order.id}</div>
                                         <div className="text-sm text-muted-foreground">{order.residence}</div>
@@ -150,8 +150,8 @@ export default function DashboardPage() {
                     <Table>
                          <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentReceipts.map(order => (
-                                <TableRow key={order.id}>
+                            {recentReceipts.map((order, i) => (
+                                <TableRow key={`${order.id}-${i}`}>
                                     <TableCell>
                                         <div className="font-medium">{order.id}</div>
                                         <div className="text-sm text-muted-foreground">{order.residence}</div>
@@ -183,8 +183,8 @@ export default function DashboardPage() {
                     <Table>
                          <TableHeader><TableRow><TableHead>MIV ID</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentIssues.map(miv => (
-                                <TableRow key={miv.id}>
+                            {recentIssues.map((miv, i) => (
+                                <TableRow key={`${miv.id}-${i}`}>
                                     <TableCell><div className="font-medium">{miv.id}</div></TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
                                 </TableRow>
@@ -212,8 +212,8 @@ export default function DashboardPage() {
                     <Table>
                         <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentMaintenance.map(req => (
-                                <TableRow key={req.id}>
+                            {recentMaintenance.map((req, i) => (
+                                <TableRow key={`${req.id}-${i}`}>
                                     <TableCell>
                                         <div className="font-medium">{req.issueTitle}</div>
                                         <div className="text-sm text-muted-foreground">{req.complexName}</div>
