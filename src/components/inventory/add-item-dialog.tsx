@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, type ReactNode, useTransition } from 'react';
@@ -8,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
-import { translateItemName } from '@/ai/flows/translate-item-flow';
 import { Loader2, Plus, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '../ui/textarea';
@@ -81,7 +79,14 @@ export function AddItemDialog({
 
         startTransition(async () => {
             try {
-                const translationResult = await translateItemName({ name: name });
+                // Call server API instead of importing server module in client
+                const res = await fetch('/api/translate-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                if (!res.ok) throw new Error(`Translation API failed: ${res.status}`);
+                const translationResult = await res.json();
 
                 let totalLifespanDays: number | undefined = undefined;
                 if (lifespanValue) {

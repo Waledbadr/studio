@@ -191,7 +191,7 @@ export default function StockReconciliationPage() {
     const variancePercentage = selectedItem.systemStock > 0 
       ? Math.round((variance / selectedItem.systemStock) * 100) 
       : 0;
-    const totalCostVariance = variance * selectedItem.costPerUnit;
+    const itemCostVariance = variance * selectedItem.costPerUnit;
     
     const updatedItems = session.items.map(item => {
       if (item.id === selectedItem.id) {
@@ -200,7 +200,7 @@ export default function StockReconciliationPage() {
           physicalStock: physicalStockValue,
           variance,
           variancePercentage,
-          totalCostVariance,
+          totalCostVariance: itemCostVariance,
           status: variance === 0 ? 'REVIEWED' : 'REVIEWED' as const,
           adjustmentReason,
           notes: countNotes,
@@ -213,14 +213,14 @@ export default function StockReconciliationPage() {
 
     const completedItems = updatedItems.filter(item => item.status !== 'PENDING').length;
     const itemsWithVariance = updatedItems.filter(item => item.variance !== 0).length;
-    const totalCostVariance = updatedItems.reduce((sum, item) => sum + item.totalCostVariance, 0);
+    const sessionCostVariance = updatedItems.reduce((sum, item) => sum + item.totalCostVariance, 0);
 
     setSession(prev => prev ? {
       ...prev,
       items: updatedItems,
       completedItems,
       itemsWithVariance,
-      totalCostVariance
+      totalCostVariance: sessionCostVariance
     } : null);
 
     setIsEditing(false);
