@@ -489,6 +489,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return `${prefix}${nextRequestNumber}`;
     };
 
+  // Generate reconciliation id: CON-<YY><M><seq>
+  const generateNewReconciliationId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // YY
+    const month = (now.getMonth() + 1).toString(); // M without leading zero
+    const prefix = `CON-${year}${month}`; // e.g., CON-258
+
+    const qRef = query(
+      collection(db, 'stockReconciliations'),
+      where('id', '>=', prefix),
+      where('id', '<', prefix + '\uf8ff'),
+      orderBy('id', 'desc'),
+      limit(1)
+    );
+
+    const snap = await getDocs(qRef);
+    let lastNum = 0;
+    if (!snap.empty) {
+      const last = snap.docs[0].data() as any;
+      const lastId = last?.id || snap.docs[0].id;
+      const numPart = parseInt(String(lastId).substring(prefix.length), 10);
+      if (!isNaN(numPart)) lastNum = numPart;
+    }
+    const next = lastNum + 1;
+    return `${prefix}${next}`; // e.g., CON-2583
+  };
+
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
@@ -1376,7 +1404,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         .filter((a) => !!a.itemId);
       if (filtered.length === 0) return;
 
-      const referenceId = `RECON-${Date.now()}`;
+      const referenceId = await generateNewReconciliationId();
       try {
         let totalIncrease = 0;
         let totalDecrease = 0;
@@ -1534,7 +1562,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    const getReconciliationItems = async (referenceId: string): Promise<InventoryTransaction[]> => {
+    const getReconciliationItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
       if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return [];
@@ -1542,7 +1570,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       try {
         const qRef = query(
           collection(db, 'inventoryTransactions'),
-          where('referenceDocId', '==', referenceId)
+          where('referenceDocId', '==', referenceDocId)
         );
         const snap = await getDocs(qRef);
         const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useInventory } from '@/context/inventory-context';
 import { useUsers } from '@/context/users-context';
+import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button';
 export default function ReconciliationsListPage() {
   const { getAllReconciliations } = useInventory();
   const { currentUser } = useUsers();
+  const { residences } = useResidences();
 
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,12 @@ export default function ReconciliationsListPage() {
     if (isAdmin) return data;
     return data.filter((r) => allowed.has(String(r.residenceId)));
   }, [data, allowed, isAdmin]);
+
+  const residenceNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (residences || []).forEach((r) => map.set(String(r.id), r.name));
+    return map;
+  }, [residences]);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6">
@@ -68,11 +76,12 @@ export default function ReconciliationsListPage() {
                 <TableBody>
                   {filtered.map((r) => {
                     const d = r.date?.toDate?.() ? r.date.toDate() : new Date();
+                    const residenceName = residenceNameById.get(String(r.residenceId)) || String(r.residenceId);
                     return (
                       <TableRow key={r.id}>
                         <TableCell>{d.toLocaleString()}</TableCell>
                         <TableCell>{r.id}</TableCell>
-                        <TableCell>{String(r.residenceId)}</TableCell>
+                        <TableCell>{residenceName}</TableCell>
                         <TableCell>{r.itemCount}</TableCell>
                         <TableCell className="text-green-700">{r.totalIncrease}</TableCell>
                         <TableCell className="text-red-700">{r.totalDecrease}</TableCell>

@@ -149,12 +149,13 @@ export default function StockReconciliationPage() {
       const ref = await reconcileStock(residenceId, adjustments, currentUser?.id);
       setNewStock({});
       setReasons({});
-      toast({ title: 'Stock reconciled', description: `Movement recorded (Ref: ${ref}).` });
+      toast({ title: 'Stock reconciled', description: ref ? `Movement recorded (Ref: ${ref}).` : 'Movement recorded.' });
       // Refresh reconciliation list after reconcile
       const list = await getReconciliations(residenceId);
       setRecons(list as unknown as Rec[]);
     } catch (e: any) {
-      // inventory context already toasts on error
+      const msg = e?.message || 'Failed to apply reconciliation.';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -407,7 +408,7 @@ export default function StockReconciliationPage() {
           <Button
             className="bg-green-600 hover:bg-green-700"
             onClick={applyReconciliation}
-            disabled={!residenceId || summary.changed === 0 || isSubmitting}
+            disabled={isSubmitting}
           >
             <Save className="w-4 h-4 mr-2" />
             Apply reconciliation & log
