@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer, Pencil, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Printer, Pencil, CheckCircle2, XCircle, PackageCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
@@ -19,7 +19,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { getOrderById } = useOrders();
+    const { getOrderById, updateOrderStatus, loading: ordersLoading } = useOrders();
     const { getStockForResidence, items: allItems } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const [order, setOrder] = useState<Order | null>(null);
@@ -51,6 +51,27 @@ export default function OrderDetailPage() {
     const handleEdit = () => {
         router.push(`/inventory/orders/${id}/edit`);
     }
+
+    const handleApprove = async () => {
+        if (!order || !currentUser) return;
+        const ok = window.confirm('Approve this request?');
+        if (!ok) return;
+        await updateOrderStatus(order.id, 'Approved', currentUser.id);
+        setOrder({ ...order, status: 'Approved', approvedById: currentUser.id });
+    };
+
+    const handleReject = async () => {
+        if (!order) return;
+        const ok = window.confirm('Reject and cancel this request?');
+        if (!ok) return;
+        await updateOrderStatus(order.id, 'Cancelled');
+        setOrder({ ...order, status: 'Cancelled' });
+    };
+
+    const goToReceive = () => {
+        if (!order) return;
+        router.push(`/inventory/receive/${order.id}`);
+    };
 
     if (loading || usersLoading) {
         return (
@@ -86,9 +107,10 @@ export default function OrderDetailPage() {
     
      const handleGetStockForResidence = (item: OrderItem) => {
         if (!order?.residenceId) return 0;
-        // The item ID in an order can be a composite ID (e.g., itemID-variant).
-        // We need to find the base item to get its stock.
-        const baseItemId = item.id.split('-')[0]; 
+        // Some legacy orders may store itemId instead of id
+        const rawId = (item as any).id ?? (item as any).itemId;
+        if (!rawId) return 0;
+        const baseItemId = String(rawId).split('-')[0]; 
         const baseItem = allItems.find(i => i.id === baseItemId);
         if (!baseItem) return 0;
         return getStockForResidence(baseItem, order.residenceId);
@@ -105,6 +127,9 @@ export default function OrderDetailPage() {
         acc[category].push(item);
         return acc;
     }, {} as Record<string, Order['items']>);
+
+    const canApproveReject = isAdmin && order.status === 'Pending';
+    const canReceive = order.status === 'Approved' || order.status === 'Partially Delivered';
 
     return (
         <div className="space-y-6">
@@ -154,12 +179,27 @@ export default function OrderDetailPage() {
                 }
             `}</style>
             
-            <div className="flex items-center justify-between no-print mb-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print mb-6">
                 <Button variant="outline" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Requests
                 </Button>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {canApproveReject && (
+                        <>
+                            <Button onClick={handleApprove} disabled={ordersLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                                <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+                            </Button>
+                            <Button onClick={handleReject} variant="destructive" disabled={ordersLoading}>
+                                <XCircle className="mr-2 h-4 w-4" /> Reject
+                            </Button>
+                        </>
+                    )}
+                    {canReceive && (
+                        <Button onClick={goToReceive} variant="secondary">
+                            <PackageCheck className="mr-2 h-4 w-4" /> Receive MRV
+                        </Button>
+                    )}
                     {isAdmin && (
                          <Button variant="secondary" onClick={handleEdit}>
                             <Pencil className="mr-2 h-4 w-4" />

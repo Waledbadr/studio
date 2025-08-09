@@ -1,7 +1,6 @@
-
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { getFirestore, type Firestore, setLogLevel, enableIndexedDbPersistence } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -25,6 +24,18 @@ if (isFirebaseConfigured) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
+
+    // Quieter console: only errors
+    setLogLevel('error');
+
+    // Enable offline persistence in the browser to make snapshots resilient
+    if (typeof window !== 'undefined' && db) {
+      enableIndexedDbPersistence(db).catch((err) => {
+        // Ignore common multi-tab error to avoid noisy logs
+        console.warn('IndexedDB persistence unavailable:', err?.code || err);
+      });
+    }
+
     console.log("Firebase initialized successfully");
   } catch (e) {
     console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);

@@ -632,10 +632,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return [];
     }
     const mivsCollection = collection(db, "mivs");
-    const q = query(mivsCollection, orderBy("date", "desc"));
+    // Fetch only recent documents to speed up dashboard
+    const q = query(mivsCollection, orderBy("date", "desc"), limit(20));
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => doc.data() as MIV);
+    return querySnapshot.docs.map(docSnap => {
+        const data = docSnap.data() as any;
+        return {
+            id: docSnap.id,
+            date: data.date,
+            residenceId: data.residenceId,
+            itemCount: data.itemCount ?? 0,
+            locationName: data.locationName ?? '—'
+        } as MIV;
+    });
   };
   
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {

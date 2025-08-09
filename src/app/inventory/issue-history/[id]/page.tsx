@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -19,16 +18,30 @@ export default function MIVDetailPage() {
     const { getMIVById, loading } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
     const [miv, setMiv] = useState<MIVDetails | null>(null);
+    const [localLoading, setLocalLoading] = useState(true);
+    const [triedOnce, setTriedOnce] = useState(false);
 
     useEffect(() => {
         const fetchMiv = async () => {
             if (typeof mivId === 'string' && residences.length > 0) {
-                const fetchedMiv = await getMIVById(mivId);
-                setMiv(fetchedMiv);
+                setLocalLoading(true);
+                try {
+                    const fetchedMiv = await getMIVById(mivId);
+                    if (!fetchedMiv && !triedOnce) {
+                        // Retry once in case of transient watch close
+                        setTriedOnce(true);
+                        const retry = await getMIVById(mivId);
+                        setMiv(retry);
+                    } else {
+                        setMiv(fetchedMiv);
+                    }
+                } finally {
+                    setLocalLoading(false);
+                }
             }
         };
-        fetchMiv();
-    }, [mivId, getMIVById, residences]);
+        if (!residencesLoading) fetchMiv();
+    }, [mivId, getMIVById, residences, residencesLoading, triedOnce]);
     
     const handlePrint = () => {
         window.print();
@@ -39,7 +52,7 @@ export default function MIVDetailPage() {
         return residences.find(r => r.id === miv.residenceId)?.name || 'Unknown Residence';
     }, [miv, residences]);
 
-    if (loading || residencesLoading) {
+    if (loading || residencesLoading || localLoading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-10 w-48" />
