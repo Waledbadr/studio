@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -50,11 +49,14 @@ export default function NewOrderPage() {
 
     const userResidences = currentUser?.assignedResidences
         ?.map(id => residences.find(r => r.id === id))
-        .filter((r): r is NonNullable<typeof r> => r !== undefined) || [];
+        .filter((r): r is NonNullable<typeof r> => r !== undefined && !r.disabled) || [];
 
     useEffect(() => {
         if (userResidences.length === 1 && !selectedResidence) {
             setSelectedResidence(userResidences[0]);
+        } else if (selectedResidence && selectedResidence.disabled) {
+            // Clear selection if it became disabled
+            setSelectedResidence(undefined);
         }
     }, [currentUser, residences, userResidences, selectedResidence]);
 

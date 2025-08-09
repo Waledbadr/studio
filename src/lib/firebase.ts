@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { getFirestore, type Firestore, setLogLevel, enableIndexedDbPersistence } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -17,23 +17,31 @@ let db: Firestore | null = null;
 
 // Check if Firebase config is properly set
 const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
-  value && typeof value === 'string' && value !== 'undefined' && !value.includes('your_') && value !== 'your_api_key_here'
+  value && typeof value === 'string' && !value.includes('your_') && value !== 'your_api_key_here'
 );
-
-console.log('Firebase config status:', isFirebaseConfigured ? 'Configured' : 'Not configured - using local storage mode');
 
 if (isFirebaseConfigured) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
-    console.log("✅ Firebase initialized successfully");
+
+    // Quieter console: only errors
+    setLogLevel('error');
+
+    // Enable offline persistence in the browser to make snapshots resilient
+    if (typeof window !== 'undefined' && db) {
+      enableIndexedDbPersistence(db).catch((err) => {
+        // Ignore common multi-tab error to avoid noisy logs
+        console.warn('IndexedDB persistence unavailable:', err?.code || err);
+      });
+    }
+
+    console.log("Firebase initialized successfully");
   } catch (e) {
-    console.warn("⚠️ Firebase initialization failed, falling back to local storage:", e);
-    app = null;
-    db = null;
+    console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
   }
 } else {
-  console.log("🔧 Firebase not configured - application will use local storage for data persistence");
+  console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
 }
 
 export { app, db };

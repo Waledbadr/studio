@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,6 +13,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { useUsers } from "@/context/users-context";
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
@@ -22,13 +22,16 @@ export default function DashboardPage() {
   const { currentUser, loading: usersLoading } = useUsers();
   
   const [mivs, setMivs] = useState<MIV[]>([]);
+  const [mivsLoading, setMivsLoading] = useState(true);
   const isAdmin = currentUser?.role === 'Admin';
+  const router = useRouter();
 
 
   useEffect(() => {
     loadRequests();
     loadOrders();
-    getMIVs().then(setMivs);
+    setMivsLoading(true);
+    getMIVs().then(setMivs).finally(() => setMivsLoading(false));
   }, [loadRequests, loadOrders, getMIVs]);
   
   const filteredMaintenance = useMemo(() => {
@@ -51,9 +54,10 @@ export default function DashboardPage() {
   const recentReceipts = filteredOrders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
   const recentIssues = filteredMIVs.slice(0, 5);
 
-  const totalRequests = filteredMaintenance.length;
-  const pendingRequests = filteredMaintenance.filter(r => r.status === 'Pending').length;
-  const completedRequests = filteredMaintenance.filter(r => r.status === 'Completed').length;
+  // Use material requests for top cards
+  const totalRequests = filteredOrders.length;
+  const pendingRequests = filteredOrders.filter(o => o.status === 'Pending').length;
+  const completedRequests = filteredOrders.filter(o => o.status === 'Delivered').length;
 
   const loading = maintenanceLoading || ordersLoading || inventoryLoading || usersLoading;
 
@@ -67,7 +71,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">Total maintenance requests</p>
+            <p className="text-xs text-muted-foreground">Total material requests</p>
           </CardContent>
         </Card>
         <Card>
@@ -109,10 +113,10 @@ export default function DashboardPage() {
                     <Table>
                          <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentMaterialRequests.map(order => (
-                                <TableRow key={order.id}>
+                            {recentMaterialRequests.map((order, i) => (
+                                <TableRow key={`${order.id}-${i}`} onClick={() => router.push(`/inventory/orders/${order.id}`)} className="cursor-pointer hover:bg-accent/30">
                                     <TableCell>
-                                        <div className="font-medium">{order.id}</div>
+                                        <div className="font-medium text-primary underline-offset-2 hover:underline">{order.id}</div>
                                         <div className="text-sm text-muted-foreground">{order.residence}</div>
                                     </TableCell>
                                     <TableCell>
@@ -150,17 +154,20 @@ export default function DashboardPage() {
                     <Table>
                          <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentReceipts.map(order => (
-                                <TableRow key={order.id}>
-                                    <TableCell>
-                                        <div className="font-medium">{order.id}</div>
-                                        <div className="text-sm text-muted-foreground">{order.residence}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={order.status === 'Delivered' ? 'default' : 'secondary'}>{order.status}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {recentReceipts.map((order, i) => {
+                                const href = order.status === 'Partially Delivered' ? `/inventory/receive/${order.id}` : `/inventory/orders/${order.id}`;
+                                return (
+                                    <TableRow key={`${order.id}-${i}`} onClick={() => router.push(href)} className="cursor-pointer hover:bg-accent/30">
+                                        <TableCell>
+                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{order.id}</div>
+                                            <div className="text-sm text-muted-foreground">{order.residence}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={order.status === 'Delivered' ? 'default' : 'secondary'}>{order.status}</Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 )}
@@ -177,15 +184,15 @@ export default function DashboardPage() {
                 </Button>
             </CardHeader>
             <CardContent>
-                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                 {mivsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                 : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">No recent issues found.</div>
                 : (
                     <Table>
                          <TableHeader><TableRow><TableHead>MIV ID</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentIssues.map(miv => (
-                                <TableRow key={miv.id}>
-                                    <TableCell><div className="font-medium">{miv.id}</div></TableCell>
+                            {recentIssues.map((miv, i) => (
+                                <TableRow key={`${miv.id}-${i}`} onClick={() => router.push(`/inventory/issue-history/${miv.id}`)} className="cursor-pointer hover:bg-accent/30">
+                                    <TableCell><div className="font-medium text-primary underline-offset-2 hover:underline">{miv.id}</div></TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
                                 </TableRow>
                             ))}
@@ -212,8 +219,8 @@ export default function DashboardPage() {
                     <Table>
                         <TableHeader><TableRow><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentMaintenance.map(req => (
-                                <TableRow key={req.id}>
+                            {recentMaintenance.map((req, i) => (
+                                <TableRow key={`${req.id}-${i}`}>
                                     <TableCell>
                                         <div className="font-medium">{req.issueTitle}</div>
                                         <div className="text-sm text-muted-foreground">{req.complexName}</div>

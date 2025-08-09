@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
@@ -43,6 +42,37 @@ interface MaintenanceContextType {
 const MaintenanceContext = createContext<MaintenanceContextType | undefined>(undefined);
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const LS_KEY = 'estatecare_maintenance_requests';
+
+// Helpers for localStorage fallback
+const loadFromLocalStorage = (): MaintenanceRequest[] => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as any[];
+    // Ensure Timestamp shape
+    return parsed.map((r) => ({
+      ...r,
+      date: r.date?.seconds ? new Timestamp(r.date.seconds, r.date.nanoseconds || 0) : Timestamp.now(),
+    })) as MaintenanceRequest[];
+  } catch (e) {
+    console.error('Failed to parse local maintenance data', e);
+    return [];
+  }
+};
+
+const saveToLocalStorage = (requests: MaintenanceRequest[]) => {
+  try {
+    const serializable = requests.map((r) => ({
+      ...r,
+      // Firestore Timestamp can't be stringified directly; store as seconds/nanos
+      date: { seconds: r.date.seconds, nanoseconds: r.date.nanoseconds },
+    }));
+    localStorage.setItem(LS_KEY, JSON.stringify(serializable));
+  } catch (e) {
+    console.error('Failed to save maintenance data locally', e);
+  }
+};
 
 export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
@@ -53,9 +83,11 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
 
   const loadRequests = useCallback(() => {
     if (isLoaded.current) return;
+
     if (!db) {
-      console.warn("Firebase not configured, loading mock maintenance requests");
-      setRequests([]); // Empty requests for now
+      // Local fallback
+      const localData = loadFromLocalStorage();
+      setRequests(localData);
       setLoading(false);
       isLoaded.current = true;
       return;
@@ -89,7 +121,11 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   }, [loadRequests]);
 
   const generateNewRequestId = async (): Promise<string> => {
-    if (!db) throw new Error("Firebase not initialized");
+    if (!db) {
+      // Local ID pattern when offline
+      const now = new Date();
+      return `REQ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}-${Date.now().toString().slice(-4)}`;
+    }
     const now = new Date();
     const prefix = `REQ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}-`;
     
@@ -113,8 +149,18 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
 
   const createRequest = async (payload: NewRequestPayload): Promise<string | null> => {
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      return null;
+      // Local fallback create
+      const newId = await generateNewRequestId();
+      const newReq: MaintenanceRequest = {
+        ...payload,
+        id: newId,
+        date: Timestamp.now(),
+        status: 'Pending',
+      };
+      const updated = [newReq, ...requests];
+      setRequests(updated);
+      saveToLocalStorage(updated);
+      return newId;
     }
     setLoading(true);
     try {
@@ -141,8 +187,12 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   
   const updateRequestStatus = async (id: string, status: MaintenanceStatus) => {
       if (!db) {
-          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-          return;
+        // Local fallback update
+        const updated = requests.map(r => r.id === id ? { ...r, status } : r);
+        setRequests(updated);
+        saveToLocalStorage(updated);
+        toast({ title: "Success", description: `Request status updated to ${status}.` });
+        return;
       }
       try {
           const requestDocRef = doc(db, "maintenanceRequests", id);
@@ -155,13 +205,20 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getRequestById = async (id: string): Promise<MaintenanceRequest | null> => {
-    // Implementation can be added if a detailed request view page is needed
+    if (!db) {
+      const found = requests.find(r => r.id === id) || null;
+      return found;
+    }
+    // Could be implemented if needed with getDoc
     return null;
   };
 
   const deleteRequest = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        const updated = requests.filter(r => r.id !== id);
+        setRequests(updated);
+        saveToLocalStorage(updated);
+        toast({ title: "Success", description: "Maintenance request deleted (local)." });
         return;
     }
     try {

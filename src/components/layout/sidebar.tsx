@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -20,6 +19,7 @@ import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
 import { getFormattedGitInfo } from '@/lib/git-info';
+import { Badge } from '@/components/ui/badge';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -31,6 +31,11 @@ export function AppSidebar() {
     setIsMounted(true);
     setGitInfo(getFormattedGitInfo());
   }, []);
+
+  // Prevent hydration mismatches by rendering only after mount
+  if (!isMounted) {
+    return null;
+  }
 
   // Define menu item types
   interface MenuItem {
@@ -84,7 +89,8 @@ export function AppSidebar() {
       ],
       subItems: [
         { href: '/inventory/reports/stock-movement', label: 'Stock Movement Report', icon: TrendingUp },
-        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History }
+        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History },
+        { href: '/inventory/reports/reconciliations', label: 'Reconciliations', icon: FileCheck },
       ]
     },
     // Settings Section
@@ -99,14 +105,32 @@ export function AppSidebar() {
     },
   ];
 
-  const environment = process.env.NODE_ENV;
-
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-2">
-            <Building className="h-8 w-8 text-primary" />
-            <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
+        <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+                <Building className="h-8 w-8 text-primary" />
+                <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
+            </div>
+             <div className="group-data-[collapsible=icon]:hidden text-sm pl-1">
+              <Badge variant={process.env.NODE_ENV === 'development' ? "outline" : "default"}>
+                {process.env.NODE_ENV === 'development' ? 'Development' : 'Production'}
+              </Badge>
+            </div>
+            {/* Git Info */}
+            {gitInfo && (
+              <div className="group-data-[collapsible=icon]:hidden space-y-1 mt-2">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <GitBranch className="h-3 w-3" />
+                  <span className="text-primary font-medium">{gitInfo.branch}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span className="font-medium" title={gitInfo.lastUpdateWithTime}>{gitInfo.lastUpdateRelative}</span>
+                </div>
+              </div>
+            )}
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -128,7 +152,7 @@ export function AppSidebar() {
                   >
                     <Link href={item.href}>
                       <item.icon />
-                      {isMounted && <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>}
+                      <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
                     </Link>
                   </SidebarMenuButton>
                   
@@ -163,7 +187,7 @@ export function AppSidebar() {
              <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
                  <div className="flex items-center gap-2">
                      <Avatar className="size-8">
-                       {isMounted && currentUser ? (
+                       {currentUser ? (
                          <>
                           <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser.name} data-ai-hint="profile picture" />
                           <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
@@ -173,8 +197,8 @@ export function AppSidebar() {
                        )}
                     </Avatar>
                     <div className="group-data-[collapsible=icon]:hidden text-left">
-                        <p className="font-semibold text-sm">{loading || !isMounted ? 'Loading...' : currentUser?.name}</p>
-                        <p className="text-xs text-muted-foreground">{loading || !isMounted ? '' : currentUser?.role}</p>
+                        <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                        <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
                     </div>
                  </div>
             </div>
