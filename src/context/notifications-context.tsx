@@ -20,6 +20,17 @@ export interface Notification {
 
 export type NewNotificationPayload = Omit<Notification, 'id' | 'isRead' | 'createdAt'>;
 
+export interface AppNotification {
+  id?: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'new_order' | 'order_approved' | 'transfer_request' | 'generic' | 'mrv_request';
+  href?: string;
+  referenceId?: string;
+  createdAt?: Timestamp;
+}
+
 interface NotificationsContextType {
   notifications: Notification[];
   loading: boolean;

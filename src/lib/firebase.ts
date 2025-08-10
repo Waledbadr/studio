@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore, setLogLevel, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth, type Auth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,6 +17,7 @@ const firebaseConfig = {
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let auth: Auth | null = null;
+let storage: FirebaseStorage | null = null;
 
 // Check if Firebase config is properly set
 const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
@@ -29,6 +31,7 @@ if (isFirebaseConfigured) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
+    storage = getStorage(app);
 
     // Quieter console: only errors
     setLogLevel('error');
@@ -71,4 +74,4 @@ if (isFirebaseConfigured) {
   console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
 }
 
-export { app, db, auth, authReady };
+export { app, db, auth, storage, authReady };

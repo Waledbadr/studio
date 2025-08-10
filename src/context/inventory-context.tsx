@@ -88,6 +88,57 @@ export interface MIVDetails {
     }
 }
 
+// MRV (Material Receipt Voucher) types
+export interface MRV {
+  id: string;
+  date: Timestamp;
+  residenceId: string;
+  itemCount: number;
+  supplierName?: string;
+  invoiceNo?: string;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  codeShort?: string | null;
+}
+
+export interface MRVDetails {
+  id: string;
+  date: Timestamp;
+  residenceId: string;
+  items: {
+    itemId: string;
+    itemNameEn: string;
+    itemNameAr: string;
+    quantity: number;
+  }[];
+  supplierName?: string;
+  invoiceNo?: string;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  codeShort?: string | null;
+}
+
+// MRV Request (needs admin approval before posting)
+export interface MRVRequest {
+  id: string;
+  residenceId: string;
+  items: { id: string; nameEn: string; nameAr: string; quantity: number }[];
+  supplierName: string | null;
+  invoiceNo: string | null;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  notes?: string | null;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedById?: string | null;
+  requestedAt: Timestamp;
+  approvedById?: string;
+  approvedAt?: Timestamp;
+  rejectedById?: string;
+  rejectedAt?: Timestamp;
+  mrvId?: string; // linked posted MRV id when approved
+  mrvShort?: string; // short code MRV-YYMSEQ
+}
+
 export interface StockTransfer {
   id: string;
   date: Timestamp;
@@ -233,6 +284,14 @@ interface InventoryContextType {
   getAllReconciliations: () => Promise<StockReconciliation[]>;
   getReconciliationById: (id: string) => Promise<StockReconciliation | null>;
   getReconciliationItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // MRV helpers
+  createMRV: (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string } }) => Promise<string>;
+  getMRVs: () => Promise<MRV[]>;
+  getMRVById: (mrvId: string) => Promise<MRVDetails | null>;
+  // MRV Requests (approval flow)
+  getMRVRequests: (status?: MRVRequest['status']) => Promise<MRVRequest[]>;
+  approveMRVRequest: (requestId: string, approverId: string) => Promise<string>;
+  rejectMRVRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -489,6 +548,33 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return `${prefix}${nextRequestNumber}`;
     };
 
+    // MRV ID generator: MRV-YY-MM-###
+    const generateNewMrvId = async (): Promise<string> => {
+      if (!db) throw new Error("Firebase not initialized");
+      const now = new Date();
+      const year = now.getFullYear().toString().slice(-2);
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const prefix = `MRV-${year}-${month}-`;
+
+      const qRef = query(
+        collection(db, 'mrvs'),
+        where('id', '>=', prefix),
+        where('id', '<', prefix + '\uf8ff'),
+        orderBy('id', 'desc'),
+        limit(1)
+      );
+
+      const snap = await getDocs(qRef);
+      let lastNum = 0;
+      if (!snap.empty) {
+        const lastId = snap.docs[0].id;
+        const numPart = parseInt(lastId.substring(prefix.length), 10);
+        if (!isNaN(numPart)) lastNum = numPart;
+      }
+      const next = (lastNum + 1).toString().padStart(3, '0');
+      return `${prefix}${next}`;
+    };
+
   // Generate reconciliation id: CON-<YY><M><seq>
   const generateNewReconciliationId = async (): Promise<string> => {
     if (!db) throw new Error("Firebase not initialized");
@@ -604,6 +690,86 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Create MRV (manual receipt without order)
+  const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string } }): Promise<string> => {
+    // Note: If meta.mrvId is not provided, we reserve an MRV id using monthly counters (reserveNewMrvId)
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
+      throw new Error(firebaseErrorMessage);
+    }
+    const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
+    if (!payload.residenceId || validItems.length === 0) {
+      throw new Error('Residence and at least one item with quantity > 0 are required.');
+    }
+
+    // Use reserved MRV id if provided; otherwise reserve a new one
+    let mrvId = payload.meta?.mrvId || '';
+    let mrvShort = payload.meta?.mrvShort || '';
+    if (!mrvId) {
+      const r = await reserveNewMrvId();
+      // Use short format as the official MRV ID
+      mrvId = r.short;
+      mrvShort = r.short;
+    }
+
+    await runTransaction(db, async (transaction) => {
+      // Read all item documents first
+      const uniqueItemIds = [...new Set(validItems.map(i => i.id))];
+      const itemRefs = uniqueItemIds.map(id => doc(db!, 'inventory', id));
+      const itemSnaps = await Promise.all(itemRefs.map(r => transaction.get(r)));
+
+      // Validate items existence
+      for (let i = 0; i < itemSnaps.length; i++) {
+        if (!itemSnaps[i].exists()) {
+          throw new Error(`Item not found (ID: ${uniqueItemIds[i]})`);
+        }
+      }
+
+      const now = Timestamp.now();
+      let totalItemCount = 0;
+
+      // Perform stock increments and write transactions
+      for (const line of validItems) {
+        const itemRef = doc(db!, 'inventory', line.id);
+        transaction.update(itemRef, {
+          [`stockByResidence.${payload.residenceId}`]: increment(line.quantity)
+        });
+
+        const txRef = doc(collection(db!, 'inventoryTransactions'));
+        transaction.set(txRef, {
+          itemId: line.id,
+          itemNameEn: line.nameEn,
+          itemNameAr: line.nameAr,
+          residenceId: payload.residenceId,
+          date: now,
+          type: 'IN',
+          quantity: line.quantity,
+          referenceDocId: mrvId,
+          locationName: 'Receiving'
+        } as Omit<InventoryTransaction, 'id'>);
+
+        totalItemCount += line.quantity;
+      }
+
+      // Write MRV master record
+      const mrvRef = doc(db!, 'mrvs', mrvId);
+      transaction.set(mrvRef, {
+        id: mrvId,
+        date: now,
+        residenceId: payload.residenceId,
+        itemCount: totalItemCount,
+        supplierName: payload.meta?.supplierName || null,
+        invoiceNo: payload.meta?.invoiceNo || null,
+        notes: payload.meta?.notes || null,
+        attachmentUrl: payload.meta?.attachmentUrl || null,
+        attachmentPath: payload.meta?.attachmentPath || null,
+        codeShort: mrvShort || null,
+      } as any);
+    });
+
+    toast({ title: 'Success', description: 'Materials received and added to stock.' });
+    return mrvId;
+  };
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
     if (!db) {
@@ -655,121 +821,236 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
         // Previously used collectionGroup which requires subcollections of the same name.
         // Our transactions are stored in a top-level collection "inventoryTransactions",
-        // so use collection() here instead of collectionGroup().
         const q = query(collection(db, "inventoryTransactions"));
         const querySnapshot = await getDocs(q);
-        
-        return querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as InventoryTransaction));
-
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
     } catch (error) {
-        console.error('Error fetching all transactions:', error);
-        toast({
-            title: "Error",
-            description: `Error fetching transactions: ${error}`,
-            variant: "destructive"
-        });
+        console.error("Error fetching all inventory transactions:", error);
+        toast({ title: "Error", description: "Failed to fetch all transactions.", variant: "destructive" });
         return [];
     }
   };
 
-  const getMIVs = async (): Promise<MIV[]> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return [];
-    }
-    const mivsCollection = collection(db, "mivs");
-    // Fetch only recent documents to speed up dashboard
-    const q = query(mivsCollection, orderBy("date", "desc"), limit(20));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data() as any;
-        return {
-            id: docSnap.id,
-            date: data.date,
-            residenceId: data.residenceId,
-            itemCount: data.itemCount ?? 0,
-            locationName: data.locationName ?? '—'
-        } as MIV;
-    });
-  };
-  
-  const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return null;
-    }
-     try {
-        const q = query(collection(db, "inventoryTransactions"), where("referenceDocId", "==", mivId));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            return null;
-        }
-
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        
-        const mivDetails: MIVDetails = {
-            id: mivId,
-            date: transactions[0].date,
-            residenceId: transactions[0].residenceId,
-            locations: {},
-        };
-
-        transactions.forEach(tx => {
-            const locationName = tx.locationName || "Unspecified Location";
-            if (!mivDetails.locations[locationName]) {
-                mivDetails.locations[locationName] = [];
-            }
-            mivDetails.locations[locationName].push({
-                itemId: tx.itemId,
-                itemNameEn: tx.itemNameEn,
-                itemNameAr: tx.itemNameAr,
-                quantity: tx.quantity
-            });
-        });
-        
-        return mivDetails;
-
-    } catch (error) {
-        console.error("Error fetching MIV details:", error);
-        toast({ title: "Error", description: "Failed to fetch MIV details.", variant: "destructive" });
-        return null;
-    }
-  }
-
+  // Helper: last issue date for an item at a specific location
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
     if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
       return null;
     }
     try {
-      // Avoid composite index by removing orderBy here and sorting client-side
-      const q = query(
-        collection(db, "inventoryTransactions"),
-        where("itemId", "==", itemId)
+      const qRef = query(
+        collection(db, 'inventoryTransactions'),
+        where('itemId', '==', itemId),
+        where('locationId', '==', locationId),
+        where('type', '==', 'OUT')
       );
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        return null;
-      }
-      
-      const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-
-      // Filter client-side for type and location, then sort by date desc
-      const specificLocationTx = transactions
-        .filter(tx => tx.type === 'OUT' && tx.locationId === locationId)
-        .sort((a, b) => b.date.toMillis() - a.date.toMillis())[0];
-      
-      return specificLocationTx ? specificLocationTx.date : null;
-
+      const snap = await getDocs(qRef);
+      if (snap.empty) return null;
+      const txs = snap.docs.map(d => d.data() as any);
+      txs.sort((a: any, b: any) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+      return txs[0]?.date || null;
     } catch (error) {
-        console.error("Error fetching last issue date:", error);
-        return null;
+      console.error('Error fetching last issue date:', error);
+      toast({ title: 'Error', description: 'Failed to fetch last issue date.', variant: 'destructive' });
+      return null;
     }
+  };
+
+  // List recent MIVs
+  const getMIVs = async (): Promise<MIV[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      const qRef = query(collection(db, 'mivs'), orderBy('date', 'desc'), limit(20));
+      const snap = await getDocs(qRef);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MIV[];
+    } catch (error) {
+      console.error('Error fetching MIVs:', error);
+      toast({ title: 'Error', description: 'Failed to fetch MIVs.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  // Get MIV details by ID
+  const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return null;
+    }
+    try {
+      const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
+      const txSnap = await getDocs(txQ);
+      if (txSnap.empty) return null;
+      const txs = txSnap.docs.map(d => d.data() as InventoryTransaction);
+
+      const locations: MIVDetails['locations'] = {};
+      for (const tx of txs) {
+        const locName = tx.locationName || 'Unknown';
+        if (!locations[locName]) locations[locName] = [];
+        locations[locName].push({
+          itemId: tx.itemId,
+          itemNameEn: tx.itemNameEn,
+          itemNameAr: tx.itemNameAr,
+          quantity: tx.quantity,
+        });
+      }
+
+      const detail: MIVDetails = {
+        id: mivId,
+        date: txs[0].date,
+        residenceId: txs[0].residenceId,
+        locations,
+      };
+      return detail;
+    } catch (e) {
+      console.error('Error fetching MIV details:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MIV details.', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  // List recent MRVs
+  const getMRVs = async (): Promise<MRV[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
+      const snap = await getDocs(qRef);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRV[];
+    } catch (error) {
+      console.error('Error fetching MRVs:', error);
+      toast({ title: 'Error', description: 'Failed to fetch MRVs.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  // Get MRV details by ID
+  const getMRVById = async (mrvId: string): Promise<MRVDetails | null> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return null;
+    }
+    try {
+      const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
+      const txSnap = await getDocs(txQ);
+      if (txSnap.empty) return null;
+      const items = txSnap.docs.map(d => d.data() as InventoryTransaction);
+      // Fetch MRV master for meta
+      const mrvRef = doc(db, 'mrvs', mrvId);
+      const mrvSnap = await getDoc(mrvRef);
+      const meta = mrvSnap.exists() ? (mrvSnap.data() as any) : {};
+
+      return {
+        id: mrvId,
+        date: items[0].date,
+        residenceId: items[0].residenceId,
+        items: items.map(tx => ({
+          itemId: tx.itemId,
+          itemNameEn: tx.itemNameEn,
+          itemNameAr: tx.itemNameAr,
+          quantity: tx.quantity
+        })),
+        supplierName: meta?.supplierName || undefined,
+        invoiceNo: meta?.invoiceNo || undefined,
+        attachmentUrl: meta?.attachmentUrl || null,
+        attachmentPath: meta?.attachmentPath || null,
+        codeShort: meta?.codeShort || null,
+      } as MRVDetails;
+    } catch (e) {
+      console.error('Error fetching MRV details:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MRV details.', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  const reserveNewMrvId = async (): Promise<{ id: string; short: string }> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2); // e.g., 25
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0'); // e.g., 08
+    const mmNoPad = (now.getMonth() + 1).toString(); // e.g., 8
+    const counterId = `mrv-${yy}-${mm}`; // counters/mrv-25-08
+    const counterRef = doc(db!, 'counters', counterId);
+
+    let nextSeq = 0;
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    const seqPadded = nextSeq.toString().padStart(3, '0');
+    const fullId = `MRV-${yy}-${mm}-${seqPadded}`; // MRV-25-08-027
+    const shortId = `MRV-${yy}${mmNoPad}${nextSeq}`; // MRV-25827
+    return { id: fullId, short: shortId };
+  };
+
+  // MRV Requests (Admin approval flow)
+  const getMRVRequests = async (status?: MRVRequest['status']): Promise<MRVRequest[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      let qRef: any = collection(db, 'mrvRequests');
+      if (status) {
+        qRef = query(qRef, where('status', '==', status));
+      }
+      const snap = await getDocs(qRef);
+      const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRVRequest[];
+      // Sort by requestedAt desc if available
+      arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+      return arr;
+    } catch (e) {
+      console.error('Error fetching MRV requests:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MRV requests.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+     // Read request
+     const reqRef = doc(db!, 'mrvRequests', requestId);
+     const reqSnap = await getDoc(reqRef);
+     if (!reqSnap.exists()) throw new Error('Request not found');
+     const reqData = reqSnap.data() as MRVRequest;
+     if (reqData.status !== 'Pending') throw new Error('Request already processed');
+
+    // Reserve an MRV id/code to ensure consistent monthly sequence
+    const reserved = await reserveNewMrvId();
+     // Create posted MRV and update request status
+     const mrvId = await createMRV({
+       residenceId: reqData.residenceId,
+       items: reqData.items.map(i => ({ id: i.id, nameEn: i.nameEn, nameAr: i.nameAr, quantity: i.quantity })),
+       meta: { supplierName: reqData.supplierName || undefined, invoiceNo: reqData.invoiceNo || undefined, notes: reqData.notes || undefined, attachmentUrl: reqData.attachmentUrl || null, attachmentPath: reqData.attachmentPath || null, mrvId: reserved.short, mrvShort: reserved.short }
+     });
+
+     await updateDoc(reqRef, {
+       status: 'Approved',
+       approvedById: approverId,
+       approvedAt: Timestamp.now(),
+       mrvId,
+       mrvShort: reserved.short
+     });
+
+     toast({ title: 'Approved', description: `MRV request approved and posted (${mrvId}).` });
+     return mrvId;
+   };
+
+  const rejectMRVRequest = async (requestId: string, rejecterId: string, reason?: string) => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    const reqRef = doc(db!, 'mrvRequests', requestId);
+    const snap = await getDoc(reqRef);
+    if (!snap.exists()) throw new Error('Request not found');
+    const data = snap.data() as MRVRequest;
+    if (data.status !== 'Pending') throw new Error('Request already processed');
+    await updateDoc(reqRef, { status: 'Rejected', rejectedById: rejecterId, rejectedAt: Timestamp.now(), rejectReason: reason || null });
+    toast({ title: 'Rejected', description: 'MRV request has been rejected.' });
   };
 
     const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
@@ -1519,6 +1800,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const snap = await getDocs(qRef);
         const recs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
         // Sort client-side by date desc to avoid composite indexes
+
         recs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
         return recs;
       } catch (error) {
@@ -1544,6 +1826,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return [];
       }
     };
+
+   
+
+   
 
     const getReconciliationById = async (id: string): Promise<StockReconciliation | null> => {
       if (!db) {
@@ -1571,7 +1857,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const qRef = query(
           collection(db, 'inventoryTransactions'),
           where('referenceDocId', '==', referenceDocId)
-        );
+               );
         const snap = await getDocs(qRef);
         const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
         // Sort by date desc for display
@@ -1593,6 +1879,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       loading, 
       addItem, 
       updateItem, 
+ 
       deleteItem, 
       loadInventory, 
       addCategory, 
@@ -1622,6 +1909,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getAllReconciliations,
       getReconciliationById,
       getReconciliationItems,
+      // expose MRV helpers
+      createMRV,
+      getMRVs,
+      getMRVById,
+      // MRV requests
+      getMRVRequests,
+      approveMRVRequest,
+      rejectMRVRequest,
     }}>
       {children}
     </InventoryContext.Provider>
