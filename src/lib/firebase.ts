@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore, setLogLevel, enableIndexedDbPersistence } from "firebase/firestore";
+import { getAuth, type Auth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,11 +15,15 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
+let auth: Auth | null = null;
 
 // Check if Firebase config is properly set
 const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
   value && typeof value === 'string' && !value.includes('your_') && value !== 'your_api_key_here'
 );
+
+// A promise that resolves when auth state is ready (client-only)
+let authReady: Promise<void> = Promise.resolve();
 
 if (isFirebaseConfigured) {
   try {
@@ -28,12 +33,34 @@ if (isFirebaseConfigured) {
     // Quieter console: only errors
     setLogLevel('error');
 
-    // Enable offline persistence in the browser to make snapshots resilient
-    if (typeof window !== 'undefined' && db) {
-      enableIndexedDbPersistence(db).catch((err) => {
-        // Ignore common multi-tab error to avoid noisy logs
-        console.warn('IndexedDB persistence unavailable:', err?.code || err);
+    // Initialize Auth and ensure a signed-in user (anonymous) exists on the client
+    auth = getAuth(app);
+
+    if (typeof window !== 'undefined') {
+      // Persist auth locally so tabs share state
+      setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+      authReady = new Promise<void>((resolve) => {
+        const unsub = onAuthStateChanged(auth!, () => {
+          unsub();
+          resolve();
+        });
       });
+
+      if (!auth.currentUser) {
+        signInAnonymously(auth).catch((e) => {
+          // Avoid noisy logs; Firestore will still deny without auth
+          console.warn('Anonymous sign-in failed:', e?.code || e);
+        });
+      }
+
+      // Enable offline persistence in the browser to make snapshots resilient
+      if (db) {
+        enableIndexedDbPersistence(db).catch((err) => {
+          // Ignore common multi-tab error to avoid noisy logs
+          console.warn('IndexedDB persistence unavailable:', err?.code || err);
+        });
+      }
     }
 
     console.log("Firebase initialized successfully");
@@ -44,4 +71,4 @@ if (isFirebaseConfigured) {
   console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
 }
 
-export { app, db };
+export { app, db, auth, authReady };
