@@ -20,11 +20,15 @@ import { useResidences } from '@/context/residences-context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export default function EditOrderPage() {
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
+    // Add residences context to resolve/display residence name properly
+    const { residences } = useResidences();
     const [order, setOrder] = useState<Order | null>(null);
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [residenceName, setResidenceName] = useState('');
@@ -44,54 +48,49 @@ export default function EditOrderPage() {
 
     // Draft support for editing an order
     const restoredDraftRef = useRef(false);
+    const hasMeaningfulDraftRef = useRef(false);
     const draftKey = (currentUser?.id && typeof id === 'string') ? `estatecare_draft_edit_request_${id}_${currentUser.id}` : null;
     const [lastDraftSavedAt, setLastDraftSavedAt] = useState<number | null>(null);
     const isDraftDirtyRef = useRef(false);
+    // Track live values without resubscribing the snapshot effect
+    const orderItemsRef = useRef<OrderItem[]>([]);
+    const generalNotesRef = useRef('');
+
+    // Update refs on orderItems or generalNotes change
+    useEffect(() => {
+        orderItemsRef.current = orderItems;
+    }, [orderItems]);
+    useEffect(() => {
+        generalNotesRef.current = generalNotes;
+    }, [generalNotes]);
 
     // Restore draft once after order is loaded
     useEffect(() => {
         if (!order || !draftKey || restoredDraftRef.current) return;
         try {
             const raw = localStorage.getItem(draftKey);
-            if (!raw) { restoredDraftRef.current = true; return; }
+            if (!raw) { restoredDraftRef.current = true; hasMeaningfulDraftRef.current = false; return; }
             const draft = JSON.parse(raw) as { items?: OrderItem[]; notes?: string; updatedAt?: number };
-            if (draft?.items && Array.isArray(draft.items)) setOrderItems(draft.items);
-            if (typeof draft?.notes === 'string') setGeneralNotes(draft.notes);
-            if (typeof draft?.updatedAt === 'number') setLastDraftSavedAt(draft.updatedAt);
+            const hasMeaningfulDraft = (Array.isArray(draft?.items) && draft.items.length > 0) || (typeof draft?.notes === 'string' && draft.notes.trim().length > 0);
+            hasMeaningfulDraftRef.current = hasMeaningfulDraft;
+            if (hasMeaningfulDraft) {
+                if (Array.isArray(draft.items)) setOrderItems(draft.items);
+                if (typeof draft.notes === 'string') setGeneralNotes(draft.notes);
+                if (typeof draft?.updatedAt === 'number') setLastDraftSavedAt(draft.updatedAt);
+            }
             restoredDraftRef.current = true;
-        } catch {}
+        } catch {
+            restoredDraftRef.current = true;
+            hasMeaningfulDraftRef.current = false;
+        }
     }, [order, draftKey]);
 
-    // Mark dirty on changes
+    // Mark dirty on changes, but skip the first run after mount
+    const firstDirtyMark = useRef(true);
     useEffect(() => {
         if (!draftKey) return;
+        if (firstDirtyMark.current) { firstDirtyMark.current = false; return; }
         isDraftDirtyRef.current = true;
-    }, [draftKey, orderItems, generalNotes]);
-
-    // Throttled auto-save every ~90s
-    useEffect(() => {
-        if (!draftKey) return;
-
-        const saveNow = () => {
-            if (!isDraftDirtyRef.current) return;
-            try {
-                const payload = { items: orderItems, notes: generalNotes, updatedAt: Date.now() };
-                localStorage.setItem(draftKey, JSON.stringify(payload));
-                setLastDraftSavedAt(payload.updatedAt);
-                isDraftDirtyRef.current = false;
-            } catch {}
-        };
-
-        const interval = setInterval(saveNow, 90_000);
-        const handleBeforeUnload = () => saveNow();
-        window.addEventListener('beforeunload', handleBeforeUnload);
-
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            clearInterval(interval);
-            // Final save on cleanup
-            saveNow();
-        };
     }, [draftKey, orderItems, generalNotes]);
 
     const clearDraft = useCallback(() => {
@@ -109,22 +108,36 @@ export default function EditOrderPage() {
     }, [loadInventory]);
     
     useEffect(() => {
-        const fetchOrder = async () => {
-            if (typeof id !== 'string') return;
-            setPageLoading(true);
-            const orderData = await getOrderById(id);
-            if(orderData) {
-                setOrder(orderData);
-                setOrderItems(orderData.items);
-                setResidenceName(orderData.residence);
-                setResidenceId(orderData.residenceId);
-                setGeneralNotes(orderData.notes || '');
-                setStatus(orderData.status);
+        if (!db || typeof id !== 'string') return;
+        const ref = doc(db, 'orders', id);
+        const unsub = onSnapshot(ref, (snap) => {
+            if (!snap.exists()) {
+                setPageLoading(false);
+                return;
             }
+            const data = { id: snap.id, ...(snap.data() as any) } as Order;
+            setOrder(data);
+
+            // Seed items if user hasn't started editing OR draft has no items.
+            // Keep user's draft notes if they exist; always sync residence and status.
+            const draftHasItems = orderItemsRef.current && orderItemsRef.current.length > 0;
+            if (!isDraftDirtyRef.current && !draftHasItems) {
+                setOrderItems(data.items || []);
+            }
+            setResidenceName(data.residence || '');
+            setResidenceId(data.residenceId || '');
+            if (!isDraftDirtyRef.current && !(hasMeaningfulDraftRef.current && (generalNotesRef.current?.trim().length > 0))) {
+                setGeneralNotes(data.notes || '');
+            }
+            setStatus(data.status);
+
             setPageLoading(false);
-        };
-        fetchOrder();
-    }, [id, getOrderById]);
+        }, (err) => {
+            console.error('Error listening to order in edit page:', err);
+            setPageLoading(false);
+        });
+        return () => unsub();
+    }, [id]);
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
@@ -133,7 +146,7 @@ export default function EditOrderPage() {
 
         setOrderItems((currentOrderItems) => {
             const existingItem = currentOrderItems.find(item => item.id === orderItemId);
-
+            isDraftDirtyRef.current = true;
             if (existingItem) {
                 return currentOrderItems.map(item => 
                     item.id === orderItemId ? { ...item, quantity: item.quantity + 1 } : item
@@ -146,19 +159,26 @@ export default function EditOrderPage() {
     }, []);
     
     const handleRemoveItem = (id: string) => {
+        isDraftDirtyRef.current = true;
         setOrderItems(orderItems.filter(item => item.id !== id));
     }
     
     const handleQuantityChange = (id: string, newQuantity: number) => {
         const quantity = isNaN(newQuantity) || newQuantity < 1 ? 1 : newQuantity;
-        
+        isDraftDirtyRef.current = true;
         setOrderItems(orderItems.map(item => item.id === id ? {...item, quantity: quantity } : item));
     }
 
     const handleNotesChange = (id: string, notes: string) => {
+        isDraftDirtyRef.current = true;
         setOrderItems(orderItems.map(item => item.id === id ? { ...item, notes } : item));
     };
-    
+
+    const handleGeneralNotesChange: React.ChangeEventHandler<HTMLTextAreaElement> = (e) => {
+        isDraftDirtyRef.current = true;
+        setGeneralNotes(e.target.value);
+    };
+
     const canEdit = status === 'Pending' ? (currentUser?.role === 'Admin' || currentUser?.id === order?.requestedById) : (currentUser?.role === 'Admin');
 
     const handleUpdateOrder = async () => {
@@ -171,9 +191,14 @@ export default function EditOrderPage() {
             return;
         }
 
+        // Resolve residence name correctly using residenceId if name is missing
+        const resolvedResidenceName = residenceName || (residences.find(r => r.id === residenceId)?.name ?? '');
+        // Also resolve residenceId from the resolved name if id is missing
+        const resolvedResidenceId = residenceId || (residences.find(r => r.name === resolvedResidenceName)?.id ?? '');
+
         const updatedOrderData = {
-            residence: residenceName,
-            residenceId: residenceId,
+            residence: resolvedResidenceName,
+            residenceId: resolvedResidenceId,
             items: orderItems,
             notes: generalNotes,
         };
@@ -182,6 +207,8 @@ export default function EditOrderPage() {
             await updateOrder(id as string, updatedOrderData);
             clearDraft();
             router.push(`/inventory/orders/${id}`);
+            // Force refresh to avoid any stale view after navigation
+            setTimeout(() => { try { router.refresh(); } catch {} }, 0);
         } finally {
             setIsSaving(false);
         }
@@ -202,9 +229,14 @@ export default function EditOrderPage() {
     };
 
     const getStockForResidence = (item: InventoryItem) => {
-        if (!residenceId || !item.stockByResidence) return 0;
-        return item.stockByResidence[residenceId] || 0;
+        // Use a resolved residenceId to show stock even if the stored name was empty
+        const residenceEffectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
+        if (!residenceEffectiveId || !item.stockByResidence) return 0;
+        return item.stockByResidence[residenceEffectiveId] || 0;
     }
+
+    // Derive a display name for residence using id if the name string is empty
+    const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
 
 
     if (pageLoading) {
@@ -356,7 +388,8 @@ export default function EditOrderPage() {
                             </div>
                             <div className="text-right">
                                 <Label htmlFor='residence' className="text-xs text-muted-foreground">Residence</Label>
-                                <Input id="residence" readOnly value={residenceName} className="w-48 mt-1 text-sm font-medium" />
+                                {/* Display resolved residence name even if the stored name is empty */}
+                                <Input id="residence" readOnly value={residenceDisplayName} className="w-48 mt-1 text-sm font-medium" />
                             </div>
                         </div>
                     </CardHeader>
@@ -430,7 +463,7 @@ export default function EditOrderPage() {
                                 id="general-notes"
                                 placeholder="Add any general notes for the entire request..."
                                 value={generalNotes}
-                                onChange={(e) => setGeneralNotes(e.target.value)}
+                                onChange={handleGeneralNotesChange}
                             />
                         </div>
                     </CardContent>

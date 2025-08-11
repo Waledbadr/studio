@@ -14,13 +14,18 @@ import { useUsers } from '@/context/users-context';
 import type { OrderItem } from '@/context/orders-context';
 import { useInventory } from '@/context/inventory-context';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { useResidences } from '@/context/residences-context';
+// Subscribe to Firestore document for real-time updates
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { getOrderById, updateOrderStatus, loading: ordersLoading } = useOrders();
+    const { updateOrderStatus, loading: ordersLoading } = useOrders();
     const { getStockForResidence, items: allItems } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
+    const { residences } = useResidences();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -28,27 +33,31 @@ export default function OrderDetailPage() {
     const requestedBy = order?.requestedById ? getUserById(order.requestedById) : null;
     const approvedBy = order?.approvedById ? getUserById(order.approvedById) : null;
 
-
+    // Real-time subscription to keep page in sync without hard refresh
     useEffect(() => {
-        const fetchOrder = async () => {
-            if (typeof id === 'string') {
-                setLoading(true);
-                const fetchedOrder = await getOrderById(id);
-                setOrder(fetchedOrder);
-                setLoading(false);
+        if (!db || typeof id !== 'string') return;
+        setLoading(true);
+        const ref = doc(db, 'orders', id);
+        const unsub = onSnapshot(ref, (snap) => {
+            if (snap.exists()) {
+                setOrder({ id: snap.id, ...(snap.data() as any) } as Order);
+            } else {
+                setOrder(null);
             }
-        };
-        if (id && users.length > 0) { // Ensure users are loaded before checking roles
-            fetchOrder();
-        }
-    }, [id, getOrderById, users]);
-    
+            setLoading(false);
+        }, (err) => {
+            console.error('Error listening to order doc:', err);
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [id]);
+
     const handlePrint = () => {
         window.print();
     }
-    
+
     const handleEdit = () => {
-        router.push(`/inventory/orders/${id}/edit`);
+        router.push(`/inventory/orders/${id}` + '/edit');
     }
 
     const handleApprove = async () => {
@@ -56,7 +65,7 @@ export default function OrderDetailPage() {
         const ok = window.confirm('Approve this request?');
         if (!ok) return;
         await updateOrderStatus(order.id, 'Approved', currentUser.id);
-        setOrder({ ...order, status: 'Approved', approvedById: currentUser.id });
+        // UI will update via onSnapshot
     };
 
     const handleReject = async () => {
@@ -64,7 +73,7 @@ export default function OrderDetailPage() {
         const ok = window.confirm('Reject and cancel this request?');
         if (!ok) return;
         await updateOrderStatus(order.id, 'Cancelled');
-        setOrder({ ...order, status: 'Cancelled' });
+        // UI will update via onSnapshot
     };
 
     const goToReceive = () => {
@@ -72,7 +81,7 @@ export default function OrderDetailPage() {
         router.push(`/inventory/receive/${order.id}`);
     };
 
-    if (loading || usersLoading) {
+    if (loading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-10 w-48" />
@@ -272,7 +281,7 @@ export default function OrderDetailPage() {
                             <CardDescription className="text-lg print-subtle">ID: #{formatOrderId(order.id)}</CardDescription>
                         </div>
                         <div className="text-right">
-                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{order.residence}</p>
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{order.residence || residences.find(r => r.id === order.residenceId)?.name || '—'}</p>
                             <p className="text-sm text-muted-foreground print-subtle">Date: {format(order.date.toDate(), 'PPP')}</p>
                             <Badge className="mt-2 print-badge" variant={
                                 order.status === 'Delivered' ? 'default'

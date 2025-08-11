@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from "firebase/firestore";
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
@@ -252,7 +252,14 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
     const firestore = db;
     const orderRef = doc(firestore, "orders", orderId);
 
+    // Helper to get base id safely (handles variant suffix without breaking random Firestore IDs)
+    const toBaseId = (rawId: string) => {
+        const idx = rawId.indexOf('-');
+        return idx === -1 ? rawId : rawId.slice(0, idx);
+    };
+
     try {
+        let skippedItemsNames: string[] = [];
         await runTransaction(firestore, async (transaction) => {
             // --- STAGE 1: ALL READS ---
             const orderSnap = await transaction.get(orderRef);
@@ -265,12 +272,21 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
                 throw new Error("Residence ID not found on order.");
             }
 
-            const itemsToProcess = newlyReceivedItems.filter(item => item.quantityReceived > 0);
+            // Strict validation & sanitization of inputs
+            const itemsToProcess = (newlyReceivedItems || [])
+                .filter((item) => item && typeof item.id === 'string' && item.id.trim().length > 0)
+                .map((item) => ({ ...item, quantityReceived: Number(item.quantityReceived) }))
+                .filter((item) => Number.isFinite(item.quantityReceived) && item.quantityReceived > 0);
+
+            // Allow force-complete even if no new quantities entered
+            if (itemsToProcess.length === 0 && !forceComplete) {
+                throw new Error('No valid items to receive.');
+            }
             
-             // Use a Map to fetch each base item only once
+            // Use a Map to fetch each base item only once
             const itemRefsToFetch = new Map<string, DocumentReference>();
             for (const item of itemsToProcess) {
-                const baseItemId = item.id.split('-')[0]; // Extract base ID
+                const baseItemId = toBaseId(String(item.id));
                 if (!itemRefsToFetch.has(baseItemId)) {
                     itemRefsToFetch.set(baseItemId, doc(firestore, "inventory", baseItemId));
                 }
@@ -281,65 +297,64 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
             // --- STAGE 2: ALL VALIDATION (NO WRITES) ---
             const itemDataMap = new Map<string, any>();
-             for (let i = 0; i < itemSnaps.length; i++) {
+            for (let i = 0; i < itemSnaps.length; i++) {
                 const itemSnap = itemSnaps[i];
                 if (itemSnap.exists()) {
                     itemDataMap.set(itemSnap.id, itemSnap.data());
                 }
             }
 
+            // Partition items into valid vs missing
+            const validItems: typeof itemsToProcess = [];
             const missingItems: string[] = [];
             for (const receivedItem of itemsToProcess) {
-                const baseItemId = receivedItem.id.split('-')[0];
-                if (!itemDataMap.has(baseItemId)) {
+                const baseItemId = toBaseId(String(receivedItem.id));
+                if (itemDataMap.has(baseItemId)) {
+                    validItems.push(receivedItem);
+                } else {
                     missingItems.push(`${receivedItem.nameEn} (ID: ${baseItemId})`);
                 }
             }
-            
-            if(missingItems.length > 0) {
-                 throw new Error(`The following items were not found in inventory: ${missingItems.join(', ')}. Please add them first.`);
-            }
+            skippedItemsNames = missingItems;
 
             // --- STAGE 3: ALL WRITES ---
             const transactionTime = Timestamp.now();
             
-            // Update inventory stock and log transactions
-            for (const receivedItem of itemsToProcess) {
-                 const baseItemId = receivedItem.id.split('-')[0];
-                const itemData = itemDataMap.get(baseItemId);
-                if (itemData) {
-                    const itemRef = doc(firestore, "inventory", baseItemId);
-                    // Use increment for atomic updates
-                    transaction.update(itemRef, {
-                         [`stockByResidence.${residenceId}`]: increment(receivedItem.quantityReceived)
-                    });
+            // 3.a Update inventory stock and log transactions for valid items only
+            for (const receivedItem of validItems) {
+                const baseItemId = toBaseId(String(receivedItem.id));
+                const itemRef = doc(firestore, "inventory", baseItemId);
+                transaction.update(itemRef, {
+                    [`stockByResidence.${residenceId}`]: increment(receivedItem.quantityReceived)
+                });
 
-                    const transactionRef = doc(collection(firestore, "inventoryTransactions"));
-                    transaction.set(transactionRef, {
-                        itemId: baseItemId,
-                        itemNameEn: receivedItem.nameEn,
-                        itemNameAr: receivedItem.nameAr,
-                        residenceId: residenceId,
-                        date: transactionTime,
-                        type: 'IN',
-                        quantity: receivedItem.quantityReceived,
-                        referenceDocId: orderId,
-                    } as Omit<InventoryTransaction, 'id'>);
-                }
+                const transactionRef = doc(collection(firestore, "inventoryTransactions"));
+                transaction.set(transactionRef, {
+                    itemId: baseItemId,
+                    itemNameEn: receivedItem.nameEn,
+                    itemNameAr: receivedItem.nameAr,
+                    residenceId: residenceId,
+                    date: transactionTime,
+                    type: 'IN',
+                    quantity: receivedItem.quantityReceived,
+                    referenceDocId: orderId,
+                } as Omit<InventoryTransaction, 'id'>);
             }
 
-            // Update order's received items and status
+            // 3.b Update order's received items and status using valid items (skip missing)
             const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
-            for (const receivedItem of newlyReceivedItems) {
-                const existingItemIndex = existingReceived.findIndex(item => item.id === receivedItem.id);
-                if (existingItemIndex > -1) {
-                    existingReceived[existingItemIndex].quantityReceived += receivedItem.quantityReceived;
+            for (const receivedItem of validItems) {
+                const idx = existingReceived.findIndex(item => item.id === receivedItem.id);
+                if (idx > -1) {
+                    const current = Number(existingReceived[idx].quantityReceived) || 0;
+                    existingReceived[idx].quantityReceived = current + receivedItem.quantityReceived;
                 } else {
                     existingReceived.push({ id: receivedItem.id, quantityReceived: receivedItem.quantityReceived });
                 }
             }
 
-            let allItemsDelivered = true;
+            // Determine status
+            let allItemsDelivered = forceComplete ? true : true;
             if (!forceComplete) {
                 for (const requestedItem of orderData.items) {
                     const totalReceived = existingReceived.find(ri => ri.id === requestedItem.id)?.quantityReceived || 0;
@@ -349,7 +364,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
                     }
                 }
             }
-            const newStatus: OrderStatus = allItemsDelivered || forceComplete ? 'Delivered' : 'Partially Delivered';
+            const newStatus: OrderStatus = allItemsDelivered ? 'Delivered' : 'Partially Delivered';
 
             transaction.update(orderRef, {
                 itemsReceived: existingReceived,
@@ -357,18 +372,20 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             });
         });
 
-        toast({ title: "Success", description: "Stock updated and request status changed." });
+        if (skippedItemsNames.length > 0) {
+            toast({ title: "Some items were skipped", description: `Missing in inventory: ${skippedItemsNames.join(', ')}`, variant: "destructive" });
+        } else {
+            toast({ title: "Success", description: "Stock updated and request status changed." });
+        }
     } catch (error) {
         console.error("Error receiving order items:", error);
         const err = error as Error;
         toast({ title: "Transaction Error", description: `Failed to process receipt: ${err.message}`, variant: "destructive" });
-        throw err; // Re-throw to prevent routing if transaction fails
+        throw err;
     } finally {
         setLoading(false);
     }
 };
-
-
 
 
   const getOrderById = async (id: string): Promise<Order | null> => {
@@ -377,7 +394,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
       return null;
     }
     const orderDocRef = doc(db, "orders", id);
-    const docSnap = await getDoc(orderDocRef);
+    const docSnap = await getDocFromServer(orderDocRef as any);
     if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() } as Order;
     } else {

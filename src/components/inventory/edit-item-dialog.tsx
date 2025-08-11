@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
@@ -18,8 +17,8 @@ type LifespanUnit = 'days' | 'months' | 'years';
 
 const inventoryUnits = [
     { value: 'Piece', label: 'قطعة (Piece)' },
-    { value: 'Box', label: 'علبة (Box)' },
-    { value: 'Carton', label: 'كرتون (Carton)' },
+    { value: 'Can', label: 'علبة (Can)' },
+    { value: 'Box', label: 'كرتون (Box)' },
     { value: 'Pack', label: 'باقة (Pack)' },
     { value: 'Set', label: 'مجموعة (Set)' },
     { value: 'Meter', label: 'متر (Meter)' },
