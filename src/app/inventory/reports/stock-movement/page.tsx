@@ -118,6 +118,19 @@ export default function StockMovementReportPage() {
         : userResidences.map(r => r.id)
     );
 
+    // Build allowed location ids based on selected hierarchy (room > floor > building)
+    let allowedLocationIds: string[] | null = null;
+    if (filters.roomId) {
+      allowedLocationIds = [filters.roomId];
+    } else if (filters.floorId) {
+      // availableRooms is already scoped to the selected floor
+      allowedLocationIds = availableRooms.map(r => r.id).filter(Boolean) as string[];
+    } else if (filters.buildingId) {
+      const building = availableBuildings.find(b => b.id === filters.buildingId);
+      const buildingRooms = (building?.floors || []).flatMap(f => (f?.rooms || []).map(r => r.id)).filter(Boolean) as string[];
+      allowedLocationIds = buildingRooms;
+    }
+
     const filtered = allTransactions.filter(transaction => {
         let keep = true;
 
@@ -139,16 +152,10 @@ export default function StockMovementReportPage() {
             if (transaction.date.toDate() > endDate) keep = false;
         }
         
-        // Location filtering (only if a specific residence is selected)
-        if (filters.residenceId) {
-            const roomName = filters.roomId ? availableRooms.find(r => r.id === filters.roomId)?.name : '';
-            const floorName = filters.floorId ? availableFloors.find(f => f.id === filters.floorId)?.name : '';
-            const buildingName = filters.buildingId ? availableBuildings.find(b => b.id === filters.buildingId)?.name : '';
-            
-            // These filters should only apply if a value is selected
-            if (roomName && !transaction.locationName?.includes(roomName)) keep = false;
-            else if (floorName && !roomName && !transaction.locationName?.includes(floorName)) keep = false;
-            else if (buildingName && !floorName && !roomName && !transaction.locationName?.includes(buildingName)) keep = false;
+        // Location filtering by IDs when any of building/floor/room is selected
+        if (allowedLocationIds && allowedLocationIds.length > 0) {
+          const txLocId = transaction.locationId as string | undefined;
+          if (!txLocId || !allowedLocationIds.includes(txLocId)) keep = false;
         }
         
         return keep;

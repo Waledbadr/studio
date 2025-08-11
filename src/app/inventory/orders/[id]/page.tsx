@@ -135,12 +135,18 @@ export default function OrderDetailPage() {
         <div className="space-y-6">
              <style jsx global>{`
                 @page {
-                    size: A4;
-                    margin: 10mm;
+                    size: A4 portrait;
+                    margin: 5mm;
                 }
                 @media print {
+                  html, body { height: auto !important; }
                   body {
                     -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                    font-size: 13px !important; /* was 9px */
+                    line-height: 1.25 !important; /* was 1.15 */
+                    margin: 0 !important;
+                    padding: 0 !important;
                   }
                   .printable-area {
                     position: absolute;
@@ -155,27 +161,57 @@ export default function OrderDetailPage() {
                     background-color: white !important;
                     color: black !important;
                   }
-                   .no-print {
-                       display: none !important;
-                   }
-                   .print-title {
-                       font-size: 2rem !important;
-                   }
-                   .print-table th, .print-table td {
-                        padding-top: 0.25rem !important;
-                        padding-bottom: 0.25rem !important;
-                        padding-left: 0.5rem !important;
-                        padding-right: 0.5rem !important;
-                        border-color: #e5e7eb !important;
-                        color: black !important;
-                   }
-                   .print-table {
-                       border-top: 1px solid #e5e7eb !important;
-                       border-bottom: 1px solid #e5e7eb !important;
-                   }
-                   .print-bg-muted {
-                       background-color: #f3f4f6 !important;
-                   }
+                  .no-print { display: none !important; }
+
+                  /* Compact table for printing */
+                  .print-compact-table { border-collapse: collapse !important; width: 100% !important; }
+                  .print-compact-table thead th {
+                    font-weight: 700 !important;
+                    font-size: 10px !important; /* was 9px */
+                    padding: 4px 6px !important; /* was 3px 4px */
+                    background: #f2f3f5 !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    color: #111 !important;
+                    white-space: nowrap !important;
+                  }
+                  .print-compact-table tbody td {
+                    font-size: 10px !important; /* was 9px */
+                    padding: 3px 6px !important; /* was 2px 4px */
+                    border-top: 1px solid #f1f5f9 !important;
+                    vertical-align: middle !important;
+                  }
+                  .print-compact-table .category-row td {
+                    padding-top: 4px !important; /* was 3px */
+                    padding-bottom: 4px !important; /* was 3px */
+                    background: #fafafa !important;
+                    color: #0f766e !important;
+                    font-weight: 700 !important;
+                    border-top: 1px solid #e2e8f0 !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                  }
+
+                  /* Clamp and tighten notes column */
+                  .print-notes {
+                    max-width: 220px !important; /* was 180px */
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                    color: #374151 !important;
+                  }
+
+                  /* Tighten header area */
+                  .print-header-title { font-size: 16px !important; /* was 14px */ margin-bottom: 2px !important; }
+                  .print-subtle { font-size: 10px !important; /* was 9px */ color: #4b5563 !important; }
+                  .print-badge { font-size: 10px !important; /* was 9px */ padding: 2px 8px !important; /* slightly larger */ }
+
+                  /* Total row */
+                  .print-total { margin-top: 6px !important; padding-top: 6px !important; border-top: 1px solid #e5e7eb !important; font-size: 11px !important; /* was 10px */ }
+
+                  /* Signatures compact */
+                  .print-signatures { margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #e5e7eb !important; }
+                  .print-signatures .slot { width: 120px !important; margin-top: 6px !important; }
+                  .print-signatures .label { font-size: 10px !important; /* was 9px */ color: #111 !important; }
+                  .print-signatures .line { border-top: 1px solid #000 !important; width: 90px !important; /* was 80px */ margin-top: 6px !important; }
                 }
             `}</style>
             
@@ -213,17 +249,18 @@ export default function OrderDetailPage() {
                 </div>
             </div>
 
-             <Card className="printable-area">
+            <Card className="printable-area">
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
-                            <CardTitle className="text-3xl print-title">Materials Request</CardTitle>
-                            <CardDescription className="text-lg">ID: #{order.id}</CardDescription>
+                            {/* Bilingual compact title for print */}
+                            <CardTitle className="text-3xl print-title print-header-title">طلب مواد • Materials Request</CardTitle>
+                            <CardDescription className="text-lg print-subtle">ID: #{order.id}</CardDescription>
                         </div>
-                         <div className="text-right">
-                            <p className="font-semibold">{order.residence}</p>
-                            <p className="text-sm text-muted-foreground">Date: {format(order.date.toDate(), 'PPP')}</p>
-                            <Badge className="mt-2" variant={
+                        <div className="text-right">
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{order.residence}</p>
+                            <p className="text-sm text-muted-foreground print-subtle">Date: {format(order.date.toDate(), 'PPP')}</p>
+                            <Badge className="mt-2 print-badge" variant={
                                 order.status === 'Delivered' ? 'default'
                                 : order.status === 'Approved' ? 'secondary'
                                 : order.status === 'Partially Delivered' ? 'secondary'
@@ -246,20 +283,20 @@ export default function OrderDetailPage() {
                             </CardContent>
                         </Card>
                     )}
-                    <Table className="print-table">
+                    <Table className="print-table print-compact-table">
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[40%]">Item</TableHead>
-                                <TableHead>Notes</TableHead>
-                                <TableHead>Unit</TableHead>
-                                <TableHead className="text-right">Quantity</TableHead>
-                                <TableHead className="text-center">Stock</TableHead>
+                                <TableHead className="w-[45%]">الصنف • Item</TableHead>
+                                <TableHead className="w-[25%]">ملاحظات • Notes</TableHead>
+                                <TableHead className="w-[10%]">وحدة • Unit</TableHead>
+                                <TableHead className="w-[10%] text-right">الكمية • Qty</TableHead>
+                                <TableHead className="w-[10%] text-center">المتوفر • Stock</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {Object.entries(groupedItems).map(([category, items]) => (
                                 <React.Fragment key={category}>
-                                    <TableRow key={`cat-${category}`} className="bg-muted/50 hover:bg-muted/50 print-bg-muted">
+                                    <TableRow key={`cat-${category}`} className="bg-muted/50 hover:bg-muted/50 print-bg-muted category-row">
                                         <TableCell colSpan={5} className="font-semibold text-primary capitalize py-2">
                                             {category}
                                         </TableCell>
@@ -269,7 +306,7 @@ export default function OrderDetailPage() {
                                             <TableCell className="font-medium">
                                                 {item.nameAr} / {item.nameEn}
                                             </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{item.notes || '-'}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground notes-cell print-notes">{item.notes || '-'}</TableCell>
                                             <TableCell>{item.unit}</TableCell>
                                             <TableCell className="text-right font-medium">{item.quantity}</TableCell>
                                             <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
@@ -280,22 +317,22 @@ export default function OrderDetailPage() {
                         </TableBody>
                     </Table>
                     
-                    <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4">
+                    <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4 print-total">
                         Total Items: {totalItems}
                     </div>
                 </CardContent>
 
-                <CardFooter className="mt-8 pt-4 border-t">
+                <CardFooter className="mt-8 pt-4 border-t print-signatures">
                     <div className="grid grid-cols-2 gap-8 w-full">
                         <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Requested By:</p>
-                            <p className="font-semibold">{requestedBy?.name || '...'}</p>
-                            <div className="mt-4 border-t-2 w-48"></div>
+                            <p className="text-sm text-muted-foreground label">Requested By:</p>
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{requestedBy?.name || '...'}</p>
+                            <div className="mt-2 border-t-2 w-48 line slot"></div>
                         </div>
                         <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Approved By:</p>
-                             <p className="font-semibold">{approvedBy?.name || '...'}</p>
-                            <div className="mt-4 border-t-2 w-48"></div>
+                            <p className="text-sm text-muted-foreground label">Approved By:</p>
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{approvedBy?.name || '...'}</p>
+                            <div className="mt-2 border-t-2 w-48 line slot"></div>
                         </div>
                     </div>
                 </CardFooter>
