@@ -26,10 +26,12 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 let storage: FirebaseStorage | null = null;
 
-// Check if Firebase config is properly set
-const isFirebaseConfigured = Object.values(firebaseConfig).every(value => 
-  value && typeof value === 'string' && !value.includes('your_') && value !== 'your_api_key_here'
-);
+// Check if Firebase config is properly set (require only essential keys)
+const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'] as const;
+const isFirebaseConfigured = requiredKeys.every((k) => {
+  const v = (firebaseConfig as any)[k];
+  return v && typeof v === 'string' && v.trim().length > 0 && !v.includes('your_') && v !== 'your_api_key_here';
+});
 
 // A promise that resolves when auth state is ready (client-only)
 let authReady: Promise<void> = Promise.resolve();
