@@ -1,7 +1,14 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore, setLogLevel, enableIndexedDbPersistence } from "firebase/firestore";
-import { getAuth, type Auth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { 
+  initializeFirestore,
+  type Firestore,
+  setLogLevel,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+} from "firebase/firestore";
+import { getAuth, type Auth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
@@ -30,18 +37,44 @@ let authReady: Promise<void> = Promise.resolve();
 if (isFirebaseConfigured) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
-    storage = getStorage(app);
 
     // Quieter console: only errors
     setLogLevel('error');
 
-    // Initialize Auth and ensure a signed-in user (anonymous) exists on the client
+    // Decide cache strategy
+    const useMemoryCache = (process.env.NEXT_PUBLIC_FIRESTORE_CACHE || '').toLowerCase() === 'memory'
+      || process.env.NODE_ENV !== 'production';
+
+    // Initialize Firestore with robust local cache and network settings
+    try {
+      db = initializeFirestore(app, {
+        localCache: useMemoryCache
+          ? memoryLocalCache()
+          : persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        ignoreUndefinedProperties: true,
+        experimentalForceLongPolling: useMemoryCache, // avoid primary lease contention in dev
+        experimentalAutoDetectLongPolling: !useMemoryCache,
+      } as any);
+    } catch (e) {
+      // Fallback (e.g., Safari Private Mode)
+      db = initializeFirestore(app, {
+        localCache: memoryLocalCache(),
+        ignoreUndefinedProperties: true,
+        experimentalForceLongPolling: true,
+      } as any);
+    }
+
+    storage = getStorage(app);
+
+    // Initialize Auth and ensure auth state is hydrated on the client
     auth = getAuth(app);
 
     if (typeof window !== 'undefined') {
       // Persist auth locally so tabs share state
       setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+      // Prefer device language for OAuth & email templates
+      try { auth.useDeviceLanguage(); } catch {}
 
       authReady = new Promise<void>((resolve) => {
         const unsub = onAuthStateChanged(auth!, () => {
@@ -49,21 +82,6 @@ if (isFirebaseConfigured) {
           resolve();
         });
       });
-
-      if (!auth.currentUser) {
-        signInAnonymously(auth).catch((e) => {
-          // Avoid noisy logs; Firestore will still deny without auth
-          console.warn('Anonymous sign-in failed:', e?.code || e);
-        });
-      }
-
-      // Enable offline persistence in the browser to make snapshots resilient
-      if (db) {
-        enableIndexedDbPersistence(db).catch((err) => {
-          // Ignore common multi-tab error to avoid noisy logs
-          console.warn('IndexedDB persistence unavailable:', err?.code || err);
-        });
-      }
     }
 
     console.log("Firebase initialized successfully");

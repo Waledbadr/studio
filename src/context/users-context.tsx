@@ -1,10 +1,10 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc } from "firebase/firestore";
+import { onAuthStateChanged } from 'firebase/auth';
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -42,6 +42,33 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
+  const lastAuthUidRef = useRef<string | null>(null);
+
+  const applyTheme = (theme?: UserThemeSettings) => {
+    const t = theme || { colorTheme: 'blue', mode: 'system' };
+    try {
+      localStorage.setItem('colorTheme', t.colorTheme);
+      localStorage.setItem('themeMode', t.mode);
+      window.dispatchEvent(new CustomEvent('userThemeChanged', { detail: t }));
+    } catch {}
+  };
+
+  // Track Firebase Auth state to prefer the signed-in UID and trigger loading
+  useEffect(() => {
+    if (!auth) return; // local mode
+    const unsub = onAuthStateChanged(auth, (u) => {
+      lastAuthUidRef.current = u?.uid || null;
+      if (!u) {
+        // Signed out
+        setCurrentUser(null);
+        try { localStorage.removeItem('currentUser'); } catch {}
+      } else if (!isLoaded.current) {
+        // First time we see a signed-in user, load users
+        loadUsers();
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const loadUsers = useCallback(() => {
     if (isLoaded.current) return;
@@ -56,18 +83,9 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         setUsers(usersData);
         
         const storedUserId = localStorage.getItem('currentUser');
-        const activeUser = usersData.find((u: User) => u.id === storedUserId) || usersData[0];
-        
-        if (usersData.length > 0) {
-          const newCurrentUser = activeUser;
-          setCurrentUser(newCurrentUser);
-          
-          if (newCurrentUser?.themeSettings) {
-            localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
-            localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
-            window.dispatchEvent(new CustomEvent('userThemeChanged', { detail: newCurrentUser.themeSettings }));
-          }
-        }
+        const activeUser = usersData.find((u: User) => u.id === storedUserId) || usersData[0] || null;
+        setCurrentUser(activeUser || null);
+        if (activeUser?.themeSettings) applyTheme(activeUser.themeSettings);
       } catch (error) {
         console.error("Error loading from localStorage:", error);
         setUsers([]);
@@ -75,6 +93,12 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       
       setLoading(false);
       isLoaded.current = true;
+      return;
+    }
+
+    // If Firebase is configured but no signed-in user yet, defer until auth is available
+    if (auth && !auth.currentUser) {
+      setLoading(false);
       return;
     }
     
@@ -86,18 +110,20 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
       setUsers(usersData);
       
+      const authUid = lastAuthUidRef.current;
       const storedUserId = localStorage.getItem('currentUser');
-      const activeUser = usersData.find(u => u.id === storedUserId) || usersData[0];
+      const activeUser = (authUid && usersData.find(u => u.id === authUid))
+        || (storedUserId && usersData.find(u => u.id === storedUserId))
+        || usersData[0]
+        || null;
 
-      if (usersData.length > 0 && (!currentUser || !usersData.find(u => u.id === currentUser.id))) {
-           const newCurrentUser = activeUser;
-           setCurrentUser(newCurrentUser);
-           
-           if (newCurrentUser?.themeSettings) {
-             localStorage.setItem('colorTheme', newCurrentUser.themeSettings.colorTheme);
-             localStorage.setItem('themeMode', newCurrentUser.themeSettings.mode);
-             window.dispatchEvent(new CustomEvent('userThemeChanged', { detail: newCurrentUser.themeSettings }));
-           }
+      // Update current user if missing or changed
+      if (!currentUser || (activeUser && currentUser.id !== activeUser.id)) {
+        setCurrentUser(activeUser);
+        if (activeUser) {
+          try { localStorage.setItem('currentUser', activeUser.id); } catch {}
+          applyTheme(activeUser.themeSettings);
+        }
       }
       setLoading(false);
     }, (error) => {
@@ -107,8 +133,24 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [toast, currentUser]);
 
+  // Initialize users list depending on environment/auth
   useEffect(() => {
-    loadUsers();
+    if (!auth) {
+      // local-only mode
+      loadUsers();
+      return () => {
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          isLoaded.current = false;
+        }
+      };
+    }
+
+    // If already signed in at load time
+    if (auth.currentUser && !isLoaded.current) {
+      loadUsers();
+    }
+
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
@@ -134,7 +176,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
                 toast({ title: "Success", description: "User updated successfully (locally)." });
             } else {
                 // Add new user
-                const newUser = { ...user, id: `user-${Date.now()}` };
+                const newUser = { ...user, id: `user-${Date.now()}` } as User;
                 const updatedUsers = [...usersData, newUser];
                 localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
                 setUsers(updatedUsers);
@@ -191,19 +233,10 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const switchUser = (user: User) => {
+    // Retained for local mode or admin emulation flows; not used in header anymore.
     setCurrentUser(user);
-    localStorage.setItem('currentUser', user.id);
-    
-    // Apply user's theme settings if they exist, otherwise use defaults
-    const themeSettings = user.themeSettings || { colorTheme: 'blue', mode: 'system' };
-    localStorage.setItem('colorTheme', themeSettings.colorTheme);
-    localStorage.setItem('themeMode', themeSettings.mode);
-    
-    // Trigger a custom event to notify ThemeProvider
-    window.dispatchEvent(new CustomEvent('userThemeChanged', {
-      detail: themeSettings
-    }));
-    
+    try { localStorage.setItem('currentUser', user.id); } catch {}
+    applyTheme(user.themeSettings);
     toast({ title: 'Switched User', description: `You are now acting as ${user.name}.` });
   };
   
@@ -227,4 +260,4 @@ export const useUsers = () => {
   return context;
 };
 
-    
+

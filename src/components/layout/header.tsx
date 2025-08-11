@@ -1,9 +1,8 @@
-
 'use client';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Globe, UserCircle, Sun, Moon, Check, Monitor, Palette } from 'lucide-react';
+import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -14,12 +13,13 @@ import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { Skeleton } from '../ui/skeleton';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  const { currentUser, users, switchUser } = useUsers();
+  const { currentUser } = useUsers();
   const { notifications, markAsRead, markAllAsRead } = useNotifications();
-  const { mode, setMode, resolvedMode, isLoaded } = useTheme();
+  const { mode, setMode, resolvedMode } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
@@ -28,7 +28,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
 
   const handleThemeSettingsClick = () => {
     router.push('/setup#themes');
@@ -43,12 +42,20 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     router.push(href);
   };
 
+  const handleLogout = async () => {
+    if (!auth) { router.push('/login'); return; }
+    try {
+      await signOut(auth);
+      router.replace('/login');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
-      <div className="flex-1">
-        {/* Can add breadcrumbs here */}
-      </div>
+      <div className="flex-1" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
@@ -81,6 +88,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
            <Button variant="ghost" size="icon" className="rounded-full relative">
@@ -128,14 +136,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
             <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Switch User</DropdownMenuLabel>
-            {isMounted && users ? users.map(user => (
-                <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
-                    {user.name} ({user.role})
-                </DropdownMenuItem>
-            )) : <DropdownMenuItem disabled>Loading...</DropdownMenuItem> }
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" /> Logout
+            </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
