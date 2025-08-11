@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -15,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
@@ -50,8 +50,10 @@ export default function InventoryPage() {
   }, [currentUser, residences, isAdmin]);
 
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-   useEffect(() => {
+  useEffect(() => {
     if (userResidences.length > 0 && activeTab === 'all') {
       // Do nothing, keep 'all' as active
     } else if (userResidences.length > 0 && !userResidences.some(r => r.id === activeTab)) {
@@ -92,11 +94,12 @@ export default function InventoryPage() {
 
   const handleUpdateCategory = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCategory || !editingCategory.newName.trim()) {
+    const ec = editingCategory;
+    if (!ec || !ec.newName.trim()) {
         toast({ title: "Error", description: "Category name cannot be empty.", variant: "destructive" });
         return;
     }
-    updateCategory(editingCategory.oldName, editingCategory.newName);
+    updateCategory(ec.oldName, ec.newName);
     setEditingCategory(null);
     setIsEditCategoryDialogOpen(false);
   }
@@ -132,6 +135,20 @@ export default function InventoryPage() {
     let filteredItems = isAllItemsTab 
         ? items 
         : items.filter(item => (getStockForResidence(item, residenceId) ?? 0) > 0);
+
+    // apply category filter
+    if (categoryFilter && categoryFilter !== 'all') {
+      filteredItems = filteredItems.filter(item => (item.category || '').toLowerCase() === categoryFilter.toLowerCase());
+    }
+
+    // apply search filter on names (ar/en)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      filteredItems = filteredItems.filter(item =>
+        (item.nameAr || '').toLowerCase().includes(q) ||
+        (item.nameEn || '').toLowerCase().includes(q)
+      );
+    }
 
     if (isAllItemsTab) {
         // Create a shallow copy before sorting to avoid mutating the original array
@@ -235,7 +252,7 @@ export default function InventoryPage() {
       <Card>
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="border-b p-4 flex justify-between items-center">
+            <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
                 <TabsList>
                     <TabsTrigger value="all">All Items</TabsTrigger>
                     {userResidences.map((res) => (
@@ -244,6 +261,29 @@ export default function InventoryPage() {
                       </TabsTrigger>
                     ))}
                 </TabsList>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="w-full sm:w-64">
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search / بحث"
+                      aria-label="Search items"
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {categories.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
             </div>
             <TabsContent value="all" className="p-6 pt-4">
                 {renderItemsTable('all')}
@@ -279,12 +319,12 @@ export default function InventoryPage() {
                       <Input 
                         id="edit-category-name" 
                         value={editingCategory?.newName || ''} 
-                        onChange={(e) => editingCategory && setEditingCategory({...editingCategory, newName: e.target.value})}
+                        onChange={(e) => setEditingCategory(prev => prev ? ({...prev, newName: e.target.value}) : prev)}
                         placeholder="e.g., General Maintenance"
                       />
                   </div>
                   <DialogFooter>
-                      <Button type="submit" disabled={!editingCategory || editingCategory.oldName === editingCategory.newName}>Save Changes</Button>
+                      <Button type="submit" disabled={!editingCategory || editingCategory?.oldName === editingCategory?.newName}>Save Changes</Button>
                   </DialogFooter>
               </form>
           </DialogContent>

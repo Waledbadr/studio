@@ -1,33 +1,36 @@
-
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare, ChevronDown } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
+import { useUsers } from '@/context/users-context';
 import { useRouter, useParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useResidences } from '@/context/residences-context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export default function EditOrderPage() {
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
+    const { currentUser } = useUsers();
+    const [order, setOrder] = useState<Order | null>(null);
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [residenceName, setResidenceName] = useState('');
     const [residenceId, setResidenceId] = useState('');
     const [generalNotes, setGeneralNotes] = useState('');
+    const [status, setStatus] = useState<'Pending' | 'Approved' | 'Partially Delivered' | 'Delivered' | 'Cancelled'>('Pending');
 
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +38,69 @@ export default function EditOrderPage() {
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
     const router = useRouter();
     const { id } = useParams();
+
+    // Local saving state for the Save button
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Draft support for editing an order
+    const restoredDraftRef = useRef(false);
+    const draftKey = (currentUser?.id && typeof id === 'string') ? `estatecare_draft_edit_request_${id}_${currentUser.id}` : null;
+    const [lastDraftSavedAt, setLastDraftSavedAt] = useState<number | null>(null);
+    const isDraftDirtyRef = useRef(false);
+
+    // Restore draft once after order is loaded
+    useEffect(() => {
+        if (!order || !draftKey || restoredDraftRef.current) return;
+        try {
+            const raw = localStorage.getItem(draftKey);
+            if (!raw) { restoredDraftRef.current = true; return; }
+            const draft = JSON.parse(raw) as { items?: OrderItem[]; notes?: string; updatedAt?: number };
+            if (draft?.items && Array.isArray(draft.items)) setOrderItems(draft.items);
+            if (typeof draft?.notes === 'string') setGeneralNotes(draft.notes);
+            if (typeof draft?.updatedAt === 'number') setLastDraftSavedAt(draft.updatedAt);
+            restoredDraftRef.current = true;
+        } catch {}
+    }, [order, draftKey]);
+
+    // Mark dirty on changes
+    useEffect(() => {
+        if (!draftKey) return;
+        isDraftDirtyRef.current = true;
+    }, [draftKey, orderItems, generalNotes]);
+
+    // Throttled auto-save every ~90s
+    useEffect(() => {
+        if (!draftKey) return;
+
+        const saveNow = () => {
+            if (!isDraftDirtyRef.current) return;
+            try {
+                const payload = { items: orderItems, notes: generalNotes, updatedAt: Date.now() };
+                localStorage.setItem(draftKey, JSON.stringify(payload));
+                setLastDraftSavedAt(payload.updatedAt);
+                isDraftDirtyRef.current = false;
+            } catch {}
+        };
+
+        const interval = setInterval(saveNow, 90_000);
+        const handleBeforeUnload = () => saveNow();
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            clearInterval(interval);
+            // Final save on cleanup
+            saveNow();
+        };
+    }, [draftKey, orderItems, generalNotes]);
+
+    const clearDraft = useCallback(() => {
+        try { if (draftKey) localStorage.removeItem(draftKey); } catch {}
+        setLastDraftSavedAt(null);
+        isDraftDirtyRef.current = false;
+    }, [draftKey]);
+
+    const hasDraft = !!draftKey && (orderItems.length > 0 || !!generalNotes);
 
     const [pageLoading, setPageLoading] = useState(true);
 
@@ -46,31 +112,35 @@ export default function EditOrderPage() {
         const fetchOrder = async () => {
             if (typeof id !== 'string') return;
             setPageLoading(true);
-            const order = await getOrderById(id);
-            if(order) {
-                setOrderItems(order.items);
-                setResidenceName(order.residence);
-                setResidenceId(order.residenceId);
-                setGeneralNotes(order.notes || '');
+            const orderData = await getOrderById(id);
+            if(orderData) {
+                setOrder(orderData);
+                setOrderItems(orderData.items);
+                setResidenceName(orderData.residence);
+                setResidenceId(orderData.residenceId);
+                setGeneralNotes(orderData.notes || '');
+                setStatus(orderData.status);
             }
             setPageLoading(false);
         };
         fetchOrder();
     }, [id, getOrderById]);
 
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
+        const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
+        const nameEn = variant ? `${itemToAdd.nameEn} - ${variant}` : itemToAdd.nameEn;
+        const orderItemId = variant ? `${itemToAdd.id}-${variant}` : itemToAdd.id;
 
-    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem) => {
         setOrderItems((currentOrderItems) => {
-            const existingItem = currentOrderItems.find(item => item.id === itemToAdd.id);
+            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
 
             if (existingItem) {
-                // If item already exists, just increment its quantity
                 return currentOrderItems.map(item => 
-                    item.id === itemToAdd.id ? {...item, quantity: item.quantity + 1} : item
+                    item.id === orderItemId ? { ...item, quantity: item.quantity + 1 } : item
                 );
             } else {
-                // Otherwise, add it to the order with quantity 1
-                return [...currentOrderItems, { ...itemToAdd, quantity: 1, notes: '' }];
+                // Add new item at the beginning (top) like the new order page
+                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }, ...currentOrderItems];
             }
         });
     }, []);
@@ -89,7 +159,13 @@ export default function EditOrderPage() {
         setOrderItems(orderItems.map(item => item.id === id ? { ...item, notes } : item));
     };
     
+    const canEdit = status === 'Pending' ? (currentUser?.role === 'Admin' || currentUser?.id === order?.requestedById) : (currentUser?.role === 'Admin');
+
     const handleUpdateOrder = async () => {
+        if (!canEdit) {
+            toast({ title: 'Not allowed', description: 'You cannot edit this request at its current status.', variant: 'destructive' });
+            return;
+        }
         if (orderItems.length === 0) {
             toast({ title: "Error", description: "Cannot submit an empty request.", variant: "destructive" });
             return;
@@ -101,9 +177,14 @@ export default function EditOrderPage() {
             items: orderItems,
             notes: generalNotes,
         };
-        
-        await updateOrder(id as string, updatedOrderData);
-        router.push(`/inventory/orders/${id}`);
+        setIsSaving(true);
+        try {
+            await updateOrder(id as string, updatedOrderData);
+            clearDraft();
+            router.push(`/inventory/orders/${id}`);
+        } finally {
+            setIsSaving(false);
+        }
     }
 
     const filteredItems = allItems.filter(item => {
@@ -145,19 +226,54 @@ export default function EditOrderPage() {
          );
     }
 
+    const AddItemButton = ({ item }: { item: InventoryItem }) => {
+        if (!item.variants || item.variants.length === 0) {
+            return (
+                <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+                    <Plus className="h-4 w-4" />
+                </Button>
+            );
+        }
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="outline">
+                        <ChevronDown className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {item.variants.map(variant => (
+                        <DropdownMenuItem key={variant} onClick={() => handleAddItemToOrder(item, variant)}>
+                            Add: {variant}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    };
+
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Edit Material Request</h1>
-                <p className="text-muted-foreground">Request ID: #{id as string}</p>
+                    <h1 className="text-2xl font-bold">Edit Material Request</h1>
+                    <p className="text-muted-foreground">Request ID: #{id as string}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Last autosave indicator */}
+                    {lastDraftSavedAt && (
+                        <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
+                    )}
                     <Button variant="outline" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
                     </Button>
-                    <Button onClick={handleUpdateOrder} disabled={orderItems.length === 0 || ordersLoading}>
-                        {ordersLoading ? (
+                    {hasDraft && (
+                        <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); clearDraft(); }}>
+                            Discard Draft
+                        </Button>
+                    )}
+                    <Button onClick={handleUpdateOrder} disabled={!canEdit || orderItems.length === 0 || isSaving}>
+                        {isSaving ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                         ) : (
                             `Save Changes (${totalOrderQuantity} items)`
@@ -211,9 +327,7 @@ export default function EditOrderPage() {
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                 <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
                                             </div>
-                                            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
+                                            <AddItemButton item={item} />
                                         </div>
                                     )) : (
                                          searchQuery || selectedCategory !== 'all' ? (
@@ -333,4 +447,4 @@ export default function EditOrderPage() {
     )
 }
 
-    
+

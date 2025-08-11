@@ -521,31 +521,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const generateNewMivId = async (): Promise<string> => {
         if (!db) throw new Error("Firebase not initialized");
         const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const prefix = `MIV-${year}-${month}-`;
+        const yy = now.getFullYear().toString().slice(-2);
+        const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+        const mmNoPad = (now.getMonth() + 1).toString();
+        const counterRef = doc(db!, 'counters', `miv-${yy}-${mm}`);
 
-        const q = query(
-            collection(db, 'mivs'),
-            where('id', '>=', prefix),
-            where('id', '<', prefix + '\uf8ff'),
-            orderBy('id', 'desc'),
-            limit(1)
-        );
+        let nextSeq = 0;
+        await runTransaction(db!, async (trx) => {
+          const snap = await trx.get(counterRef);
+          const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+          nextSeq = current + 1;
+          trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+        });
 
-        const querySnapshot = await getDocs(q);
-        
-        let lastNum = 0;
-        if (!querySnapshot.empty) {
-            const lastId = querySnapshot.docs[0].id;
-            const numPart = parseInt(lastId.substring(prefix.length), 10);
-            if (!isNaN(numPart)) {
-                lastNum = numPart;
-            }
-        }
-
-        const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
-        return `${prefix}${nextRequestNumber}`;
+        return `MIV-${yy}${mmNoPad}${nextSeq}`; // e.g., MIV-25814
     };
 
     // MRV ID generator: MRV-YY-MM-###

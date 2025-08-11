@@ -61,6 +61,31 @@ export default function DashboardPage() {
 
   const loading = maintenanceLoading || ordersLoading || inventoryLoading || usersLoading;
 
+  const formatOrderId = (id: string) => {
+    if (!id) return id;
+    if (id.startsWith('MR-')) return id;
+    const m = id.match(/^(\d{2})-(\d{2})-(\d{3})$/);
+    if (m) {
+      const yy = m[1];
+      const mmNoPad = String(parseInt(m[2], 10));
+      const seq = String(parseInt(m[3], 10));
+      return `MR-${yy}${mmNoPad}${seq}`;
+    }
+    return id;
+  };
+  const formatMivId = (id: string) => {
+    if (!id) return id;
+    if (id.startsWith('MIV-') && !id.includes('-')) return id;
+    const m = id.match(/^MIV-(\d{2})-(\d{2})-(\d{3})$/);
+    if (m) {
+      const yy = m[1];
+      const mmNoPad = String(parseInt(m[2], 10));
+      const seq = String(parseInt(m[3], 10));
+      return `MIV-${yy}${mmNoPad}${seq}`;
+    }
+    return id;
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -116,7 +141,7 @@ export default function DashboardPage() {
                             {recentMaterialRequests.map((order, i) => (
                                 <TableRow key={`${order.id}-${i}`} onClick={() => router.push(`/inventory/orders/${order.id}`)} className="cursor-pointer hover:bg-accent/30">
                                     <TableCell>
-                                        <div className="font-medium text-primary underline-offset-2 hover:underline">{order.id}</div>
+                                        <div className="font-medium text-primary underline-offset-2 hover:underline">{formatOrderId(order.id)}</div>
                                         <div className="text-sm text-muted-foreground">{order.residence}</div>
                                     </TableCell>
                                     <TableCell>
@@ -192,7 +217,7 @@ export default function DashboardPage() {
                         <TableBody>
                             {recentIssues.map((miv, i) => (
                                 <TableRow key={`${miv.id}-${i}`} onClick={() => router.push(`/inventory/issue-history/${miv.id}`)} className="cursor-pointer hover:bg-accent/30">
-                                    <TableCell><div className="font-medium text-primary underline-offset-2 hover:underline">{miv.id}</div></TableCell>
+                                    <TableCell><div className="font-medium text-primary underline-offset-2 hover:underline">{formatMivId(miv.id)}</div></TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
                                 </TableRow>
                             ))}

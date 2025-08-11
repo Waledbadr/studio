@@ -1,4 +1,3 @@
-
 'use client'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +20,19 @@ import { useResidences } from "@/context/residences-context";
 
 export default function PurchaseOrdersPage() {
     const { orders, loading, loadOrders, deleteOrder, updateOrderStatus } = useOrders();
+    // Helper to display ID in new short format for legacy records
+    const formatOrderId = (id: string) => {
+        if (!id) return id;
+        if (id.startsWith('MR-')) return id;
+        const m = id.match(/^(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) {
+            const yy = m[1];
+            const mmNoPad = String(parseInt(m[2], 10));
+            const seq = String(parseInt(m[3], 10));
+            return `MR-${yy}${mmNoPad}${seq}`;
+        }
+        return id;
+    };
     const router = useRouter();
     const { currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
@@ -107,7 +119,7 @@ export default function PurchaseOrdersPage() {
             <TableBody>
                 {loading ? renderSkeleton() : ordersList.length > 0 ? ordersList.map((order) => (
                     <TableRow key={order.id}>
-                        <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.id}</TableCell>
+                        <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
@@ -351,4 +363,4 @@ export default function PurchaseOrdersPage() {
     )
 }
 
-    
+

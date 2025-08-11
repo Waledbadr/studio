@@ -58,11 +58,12 @@ const firebaseErrorMessage = "Error: Firebase is not configured. Please add your
 
 export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initialize as false so UI doesn’t show saving/submitting states until an action starts
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const { addNotification } = useNotifications();
-  const { users } = useUsers();
+  const { users, currentUser } = useUsers();
 
 
   const loadOrders = useCallback(() => {
@@ -93,34 +94,24 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   
   const generateNewOrderId = async (): Promise<string> => {
     if (!db) {
-        throw new Error("Firebase not initialized");
+      throw new Error("Firebase not initialized");
     }
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const prefix = `${year}-${month}-`;
+    const yy = now.getFullYear().toString().slice(-2); // e.g., 25
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0'); // e.g., 08
+    const mmNoPad = (now.getMonth() + 1).toString(); // e.g., 8
+    const counterRef = doc(db!, 'counters', `mr-${yy}-${mm}`);
 
-    const q = query(
-        collection(db, 'orders'),
-        where('id', '>=', prefix),
-        where('id', '<', prefix + '\uf8ff'),
-        orderBy('id', 'desc'),
-        limit(1)
-    );
+    let nextSeq = 0;
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    });
 
-    const querySnapshot = await getDocs(q);
-    
-    let lastNum = 0;
-    if (!querySnapshot.empty) {
-        const lastId = querySnapshot.docs[0].id;
-        const numPart = parseInt(lastId.substring(prefix.length), 10);
-        if (!isNaN(numPart)) {
-            lastNum = numPart;
-        }
-    }
-
-    const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
-    return `${prefix}${nextRequestNumber}`;
+    // New ID format: MR-yy<m><seq>, e.g., MR-25828
+    return `MR-${yy}${mmNoPad}${nextSeq}`;
   };
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {
@@ -186,6 +177,22 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
         const orderDocRef = doc(db, "orders", id);
+        // Fetch existing order to enforce permissions
+        const existingSnap = await getDoc(orderDocRef);
+        if (!existingSnap.exists()) {
+          toast({ title: "Error", description: "Order not found.", variant: "destructive" });
+          return;
+        }
+        const existing = existingSnap.data() as Order;
+        const isAdmin = currentUser?.role === 'Admin';
+        const allowed = existing.status === 'Pending'
+          ? (isAdmin || currentUser?.id === existing.requestedById)
+          : isAdmin;
+        if (!allowed) {
+          toast({ title: "Not allowed", description: "You cannot edit this request at its current status.", variant: "destructive" });
+          return;
+        }
+
         await updateDoc(orderDocRef, { ...orderData });
         toast({ title: "Success", description: "Order updated successfully." });
     } catch (error) {

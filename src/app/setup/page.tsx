@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -147,7 +146,14 @@ export default function SetupPage() {
                 "orders",
                 "inventoryTransactions",
                 "mivs",
+                "mrvs",
+                "mrvRequests",
                 "stockTransfers",
+                "inventoryAudits",
+                "auditItems",
+                "auditAdjustments",
+                "stockReconciliations",
+                "maintenanceRequests",
                 "notifications"
             ];
 
@@ -166,6 +172,16 @@ export default function SetupPage() {
                 });
                 console.log(`Prepared to delete all documents from: ${collectionName}`);
             }
+
+            // 3. Clear monthly counters (MR, MIV, MRV, Reconciliation)
+            const countersSnap = await getDocs(collection(db, 'counters'));
+            countersSnap.forEach(d => {
+                const id = d.id || '';
+                if (/^(mr|miv|mrv|con)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con)-/i.test(id)) {
+                    batch.delete(d.ref);
+                }
+            });
+            console.log('Prepared to clear monthly counters.');
 
             // Commit all batched writes
             await batch.commit();

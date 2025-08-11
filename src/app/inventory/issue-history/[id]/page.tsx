@@ -21,6 +21,19 @@ export default function MIVDetailPage() {
     const [localLoading, setLocalLoading] = useState(true);
     const [triedOnce, setTriedOnce] = useState(false);
 
+    const formatMivId = (id: string) => {
+        if (!id) return id;
+        if (id.startsWith('MIV-') && !id.includes('-')) return id;
+        const m = id.match(/^MIV-(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) {
+            const yy = m[1];
+            const mmNoPad = String(parseInt(m[2], 10));
+            const seq = String(parseInt(m[3], 10));
+            return `MIV-${yy}${mmNoPad}${seq}`;
+        }
+        return id;
+    }
+
     useEffect(() => {
         const fetchMiv = async () => {
             if (typeof mivId === 'string' && residences.length > 0) {
@@ -127,7 +140,7 @@ export default function MIVDetailPage() {
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle className="text-3xl">Material Issue Voucher</CardTitle>
-                            <CardDescription className="text-lg">ID: {miv.id}</CardDescription>
+                            <CardDescription className="text-lg">ID: {formatMivId(miv.id)}</CardDescription>
                         </div>
                          <div className="text-right">
                             <p className="font-semibold">{residenceName}</p>

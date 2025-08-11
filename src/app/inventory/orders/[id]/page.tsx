@@ -15,7 +15,6 @@ import type { OrderItem } from '@/context/orders-context';
 import { useInventory } from '@/context/inventory-context';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
-
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
@@ -130,6 +129,21 @@ export default function OrderDetailPage() {
 
     const canApproveReject = isAdmin && order.status === 'Pending';
     const canReceive = order.status === 'Approved' || order.status === 'Partially Delivered';
+    const canEdit = !!order && (order.status === 'Pending' ? (isAdmin || currentUser?.id === order.requestedById) : isAdmin);
+
+    // Helper to format legacy ids
+    const formatOrderId = (id: string) => {
+        if (!id) return id;
+        if (id.startsWith('MR-')) return id;
+        const m = id.match(/^(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) {
+            const yy = m[1];
+            const mmNoPad = String(parseInt(m[2], 10));
+            const seq = String(parseInt(m[3], 10));
+            return `MR-${yy}${mmNoPad}${seq}`;
+        }
+        return id;
+    };
 
     return (
         <div className="space-y-6">
@@ -236,11 +250,11 @@ export default function OrderDetailPage() {
                             <PackageCheck className="mr-2 h-4 w-4" /> Receive MRV
                         </Button>
                     )}
-                    {isAdmin && (
+                    {canEdit && (
                          <Button variant="secondary" onClick={handleEdit}>
                             <Pencil className="mr-2 h-4 w-4" />
                             Edit Request
-                        </Button>
+                         </Button>
                     )}
                     <Button onClick={handlePrint}>
                         <Printer className="mr-2 h-4 w-4" />
@@ -255,7 +269,7 @@ export default function OrderDetailPage() {
                         <div>
                             {/* Bilingual compact title for print */}
                             <CardTitle className="text-3xl print-title print-header-title">طلب مواد • Materials Request</CardTitle>
-                            <CardDescription className="text-lg print-subtle">ID: #{order.id}</CardDescription>
+                            <CardDescription className="text-lg print-subtle">ID: #{formatOrderId(order.id)}</CardDescription>
                         </div>
                         <div className="text-right">
                             <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{order.residence}</p>
