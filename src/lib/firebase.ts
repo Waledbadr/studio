@@ -86,7 +86,13 @@ if (isFirebaseConfigured) {
       });
     }
 
-    console.log("Firebase initialized successfully");
+    if (process.env.NODE_ENV !== 'production') {
+      const key = String(firebaseConfig.apiKey || '');
+      const masked = key ? `${key.slice(0, 6)}...${key.slice(-2)}` : 'missing';
+      console.log(`Firebase initialized. apiKey: ${masked}`);
+    } else {
+      console.log("Firebase initialized successfully");
+    }
   } catch (e) {
     console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
   }

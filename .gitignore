@@ -38,8 +38,9 @@ yarn-error.log*
 next-env.d.ts
 
 .genkit/*
-# Ignore local environment files
-.env*
+# Ignore only local env files; allow committed dev/prod envs
+.env.local
+.env.*.local
 
 # firebase
 firebase-debug.log
