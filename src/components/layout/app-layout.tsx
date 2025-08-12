@@ -6,8 +6,19 @@ import { AppSidebar } from './sidebar';
 import { AppHeader } from './header';
 import RequireAuth from '@/components/auth/require-auth';
 import { usePathname } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { useEffect } from 'react';
+import { useUsers } from '@/context/users-context';
+import { enablePushIfGranted } from '@/lib/messaging';
+
+const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 export function AppLayout({ children }: PropsWithChildren) {
+  const { currentUser } = useUsers();
+
+  useEffect(() => {
+    enablePushIfGranted(currentUser?.id);
+  }, [currentUser?.id]);
   const pathname = usePathname();
 
   // Render bare page for login route (no sidebar/header/guard)
@@ -27,9 +38,9 @@ export function AppLayout({ children }: PropsWithChildren) {
         </Sidebar>
         <SidebarInset className="flex flex-col">
           <AppHeader className="no-print" />
-          <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-background">
-            {children}
-          </main>
+           <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-background">
+             {children}
+           </main>
         </SidebarInset>
       </SidebarProvider>
     </RequireAuth>

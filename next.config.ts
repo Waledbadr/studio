@@ -25,27 +25,22 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
+    const isProd = process.env.NODE_ENV === 'production';
+    const baseHeaders = [
+      { key: 'Permissions-Policy', value: 'clipboard-read=(self), clipboard-write=(self)' },
+    ] as { key: string; value: string }[];
+    const securityHeaders = isProd
+      ? [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
+        ]
+      : [];
+
     return [
       {
         source: '/(.*)',
-        headers: [
-          {
-            key: 'Permissions-Policy',
-            value: 'clipboard-read=(self), clipboard-write=(self)',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-        ],
+        headers: [...baseHeaders, ...securityHeaders],
       },
     ];
   },

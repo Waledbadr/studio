@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, Boxes, ArrowUpDown, Package2, GitBranch, Clock } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, Boxes, ArrowUpDown, Package2, GitBranch, Clock, LifeBuoy } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -101,6 +101,17 @@ export function AppSidebar() {
         { href: '/users', label: 'Users', icon: Users },
         { href: '/setup', label: 'Setup', icon: Settings },
       ]
+    },
+    // Feedback Section
+    {
+      title: 'Feedback',
+      items: [
+        { href: '/feedback', label: 'My Feedback', icon: LifeBuoy },
+        ...(currentUser?.role === 'Admin' ? [
+          { href: '/admin/feedback', label: 'Feedback Board', icon: ClipboardList },
+          { href: '/admin/feedback/stats', label: 'Feedback Analytics', icon: AreaChart },
+        ] : [] as any),
+      ] as any,
     },
   ];
 

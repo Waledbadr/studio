@@ -15,6 +15,9 @@ import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import dynamic from 'next/dynamic';
+
+const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { currentUser } = useUsers();
@@ -56,6 +59,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
       <div className="flex-1" />
+  {/* Feedback trigger in header */}
+  <FeedbackWidget />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">

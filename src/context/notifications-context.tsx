@@ -11,7 +11,7 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'transfer_request' | 'order_approved' | 'new_order';
+  type: 'transfer_request' | 'order_approved' | 'new_order' | 'generic' | 'feedback_update';
   href: string;
   referenceId: string;
   isRead: boolean;
