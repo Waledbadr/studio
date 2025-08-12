@@ -1,5 +1,4 @@
 import type {NextConfig} from 'next';
-require('dotenv').config({ path: './.env' });
 
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
