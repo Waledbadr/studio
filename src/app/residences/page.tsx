@@ -44,6 +44,9 @@ const facilityIcons: { [key: string]: React.ElementType } = {
   'default': ConciergeBell
 };
 
+// Normalize possible legacy shapes (object maps) into arrays
+const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
+
 const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDelete }: { facility: Facility, canEdit: boolean, onDelete: () => void }) {
   const Icon = facilityIcons[facility.type.toLowerCase()] || facilityIcons.default;
   return (
@@ -216,6 +219,7 @@ export default function ResidencesPage() {
   const deferredSearch = useDeferredValue(search);
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [managerFilter, setManagerFilter] = useState<string>('all');
+  const selectedManager = useMemo(() => users.find(u => u.id === managerFilter), [users, managerFilter]);
 
   // Track expanded buildings per complex to lazy-mount contents
   const [openByComplex, setOpenByComplex] = useState<Record<string, string[]>>({});
@@ -268,7 +272,20 @@ export default function ResidencesPage() {
       .filter(c => cityFilter === 'all' || c.city === cityFilter)
       .filter(c => {
         if (managerFilter === 'all') return true;
-        return c.managerId === managerFilter;
+        // Robust matching: support legacy fields (manager name or object) in existing docs
+        const matchesId = c.managerId === managerFilter;
+        const selectedName = selectedManager?.name || '';
+        const managerUserName = users.find(u => u.id === c.managerId)?.name || '';
+        const matchesName = selectedName && managerUserName && selectedName === managerUserName;
+        const legacy: any = c as any;
+        const legacyManager = legacy.manager; // could be id or name or object
+        const legacyManagerName = legacy.managerName as string | undefined;
+        const legacyObjId = typeof legacyManager === 'object' && legacyManager ? legacyManager.id : undefined;
+        const legacyIsId = typeof legacyManager === 'string' && legacyManager === managerFilter;
+        const legacyIsName = typeof legacyManager === 'string' && selectedName && legacyManager === selectedName;
+        const legacyObjMatch = legacyObjId && legacyObjId === managerFilter;
+        const legacyNameMatch = legacyManagerName && selectedName && legacyManagerName === selectedName;
+        return !!(matchesId || matchesName || legacyIsId || legacyIsName || legacyObjMatch || legacyNameMatch);
       })
       .map(complex => {
         if (!q) return complex;
@@ -282,17 +299,17 @@ export default function ResidencesPage() {
           const filteredFloors = b.floors.map(f => {
             const floorMatch = includeText(f.name);
             const filteredRooms = f.rooms.filter(r => includeText(r.name));
-            const filteredFacilities = (f.facilities || []).filter(fc => includeText(fc.name) || includeText(fc.type));
+            const filteredFacilities = asArray<Facility>(f.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
             const keepFloor = floorMatch || filteredRooms.length > 0 || filteredFacilities.length > 0;
             return keepFloor ? { ...f, rooms: filteredRooms.length ? filteredRooms : f.rooms.filter(() => false), facilities: filteredFacilities } : null;
           }).filter(Boolean) as Floor[];
 
-          const buildingFacilities = (b.facilities || []).filter(fc => includeText(fc.name) || includeText(fc.type));
+          const buildingFacilities = asArray<Facility>(b.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
           const keepBuilding = buildingMatch || filteredFloors.length > 0 || buildingFacilities.length > 0;
           return keepBuilding ? { ...b, floors: filteredFloors, facilities: buildingFacilities } : null;
         }).filter(Boolean) as BuildingType[];
 
-        const complexFacilities = (complex.facilities || []).filter(fc => includeText(fc.name) || includeText(fc.type));
+        const complexFacilities = asArray<Facility>(complex.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
 
         const keepComplex = complexNameMatch || filteredBuildings.length > 0 || complexFacilities.length > 0;
         return keepComplex ? { ...complex, buildings: filteredBuildings, facilities: complexFacilities } : null;
@@ -306,13 +323,13 @@ export default function ResidencesPage() {
       acc.buildings += complex.buildings.length;
       complex.buildings.forEach(building => {
         acc.floors += building.floors.length;
-        acc.facilities += (building.facilities?.length || 0);
+        acc.facilities += asArray<Facility>(building.facilities).length;
         building.floors.forEach(floor => {
           acc.rooms += floor.rooms.length;
-          acc.facilities += (floor.facilities?.length || 0);
+          acc.facilities += asArray<Facility>(floor.facilities).length;
         });
       });
-      acc.facilities += (complex.facilities?.length || 0);
+      acc.facilities += asArray<Facility>(complex.facilities).length;
       return acc;
     }, { complexes: 0, buildings: 0, floors: 0, rooms: 0, facilities: 0 });
   }, [filteredResidences]);
@@ -618,7 +635,7 @@ export default function ResidencesPage() {
                                   <div>
                                     <Label className="text-xs text-muted-foreground">Building Facilities</Label>
                                     <FacilitySection 
-                                      facilities={building.facilities}
+                                      facilities={asArray<Facility>(building.facilities)}
                                       canEdit={!!isAdmin}
                                       onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
                                       onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
@@ -636,7 +653,7 @@ export default function ResidencesPage() {
                                                       <Button variant="outline" size="sm" onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
                                                           <PlusCircle className="mr-2 h-4 w-4" /> Add Room
                                                       </Button>
-                                                      <Button variant="outline" size="sm" onClick={() => openDialog('addMultipleRooms', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                      <Button variant="outline" size="sm" onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
                                                           <Plus className="mr-2 h-4 w-4" /> Add Multiple Rooms
                                                       </Button>
                                                       <AlertDialog>
@@ -671,7 +688,7 @@ export default function ResidencesPage() {
                                               <div>
                                                 <Label className="text-xs text-muted-foreground">Floor Facilities</Label>
                                                 <FacilitySection 
-                                                  facilities={floor.facilities}
+                                                  facilities={asArray<Facility>(floor.facilities)}
                                                   canEdit={!!isAdmin}
                                                   onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
                                                   onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
@@ -692,7 +709,7 @@ export default function ResidencesPage() {
                         <Separator className="my-4" />
                         <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> General Facilities</h4>
                         <FacilitySection 
-                          facilities={complex.facilities}
+                          facilities={asArray<Facility>(complex.facilities)}
                           canEdit={!!isAdmin}
                           onAdd={() => openDialog('addFacility', { level: 'complex', complexId: complex.id })}
                           onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
@@ -815,8 +832,10 @@ export default function ResidencesPage() {
       {/* Add Multiple Rooms Dialog */}
       <AddMultipleRoomsDialog
         isOpen={dialogStates.addMultipleRooms}
-        onOpenChange={(open) => open ? openDialog('addMultipleRooms') : closeDialog('addMultipleRooms')}
-        floorInfo={contextIds && contextIds.level === 'floor' ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId! } : null}
+        onOpenChange={(open) => {
+          if (!open) closeDialog('addMultipleRooms');
+        }}
+        floorInfo={contextIds && contextIds.complexId && contextIds.buildingId && contextIds.floorId ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId! } : null}
         onAddRooms={addMultipleRooms}
       />
       

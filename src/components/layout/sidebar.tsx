@@ -98,9 +98,11 @@ export function AppSidebar() {
       title: 'Settings',
       items: [
         { href: '/residences', label: 'Residences', icon: Building },
-        { href: '/users', label: 'Users', icon: Users },
-        { href: '/setup', label: 'Setup', icon: Settings },
-      ]
+        ...(currentUser?.role === 'Admin' ? [
+          { href: '/users', label: 'Users', icon: Users },
+          { href: '/setup', label: 'Setup', icon: Settings },
+        ] : [] as any),
+      ] as any
     },
     // Feedback Section
     {

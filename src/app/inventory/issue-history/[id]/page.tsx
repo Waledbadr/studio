@@ -3,14 +3,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useInventory, type MIVDetails } from '@/context/inventory-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export default function MIVDetailPage() {
     const { id: mivId } = useParams();
@@ -97,15 +96,26 @@ export default function MIVDetailPage() {
         )
     }
 
+    // Flatten and compute totals for printing
+    const entries = Object.entries(miv.locations);
+    const totalIssued = entries.reduce((sum, [, items]) => sum + items.reduce((s, it) => s + (Number(it.quantity) || 0), 0), 0);
+
     return (
         <div className="space-y-6">
              <style jsx global>{`
+                @page {
+                    size: A4 portrait;
+                    margin: 5mm;
+                }
                 @media print {
-                  body * {
-                    visibility: hidden;
-                  }
-                  .printable-area, .printable-area * {
-                    visibility: visible;
+                  html, body { height: auto !important; }
+                  body {
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                    font-size: 13px !important;
+                    line-height: 1.25 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
                   }
                   .printable-area {
                     position: absolute;
@@ -113,17 +123,52 @@ export default function MIVDetailPage() {
                     top: 0;
                     width: 100%;
                     height: auto;
-                    box-shadow: none !important;
-                    border: none !important;
-                    padding: 1rem !important;
+                    padding: 0 !important;
                     margin: 0 !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    background-color: white !important;
+                    color: black !important;
                   }
-                   .no-print {
-                       display: none !important;
-                   }
+                  .no-print { display: none !important; }
+
+                  /* Compact table for printing */
+                  .print-compact-table { border-collapse: collapse !important; width: 100% !important; }
+                  .print-compact-table thead th {
+                    font-weight: 700 !important;
+                    font-size: 10px !important;
+                    padding: 4px 6px !important;
+                    background: #f2f3f5 !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    color: #111 !important;
+                    white-space: nowrap !important;
+                  }
+                  .print-compact-table tbody td {
+                    font-size: 10px !important;
+                    padding: 3px 6px !important;
+                    border-top: 1px solid #f1f5f9 !important;
+                    vertical-align: middle !important;
+                  }
+                  .print-compact-table .section-row td {
+                    padding-top: 4px !important;
+                    padding-bottom: 4px !important;
+                    background: #fafafa !important;
+                    color: #0f766e !important;
+                    font-weight: 700 !important;
+                    border-top: 1px solid #e2e8f0 !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                  }
+
+                  .print-header-title { font-size: 16px !important; margin-bottom: 2px !important; }
+                  .print-subtle { font-size: 10px !important; color: #4b5563 !important; }
+                  .print-total { margin-top: 6px !important; padding-top: 6px !important; border-top: 1px solid #e5e7eb !important; font-size: 11px !important; }
+                  .print-signatures { margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #e5e7eb !important; }
+                  .print-signatures .slot { width: 120px !important; margin-top: 6px !important; }
+                  .print-signatures .label { font-size: 10px !important; color: #111 !important; }
+                  .print-signatures .line { border-top: 1px solid #000 !important; width: 90px !important; margin-top: 6px !important; }
                 }
             `}</style>
-            
+
             <div className="flex items-center justify-between no-print mb-6">
                 <Button variant="outline" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -135,50 +180,64 @@ export default function MIVDetailPage() {
                 </Button>
             </div>
 
-             <Card className="printable-area">
-                <CardHeader className="border-b">
+            <Card className="printable-area">
+                <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
-                            <CardTitle className="text-3xl">Material Issue Voucher</CardTitle>
-                            <CardDescription className="text-lg">ID: {formatMivId(miv.id)}</CardDescription>
+                            {/* Bilingual title like MR/MRV */}
+                            <CardTitle className="text-3xl print-header-title">إشعار صرف مواد • Material Issue Voucher</CardTitle>
+                            <CardDescription className="text-lg print-subtle">ID: {formatMivId(miv.id)}</CardDescription>
                         </div>
-                         <div className="text-right">
-                            <p className="font-semibold">{residenceName}</p>
-                            <p className="text-sm text-muted-foreground">Date: {format(miv.date.toDate(), 'PPP p')}</p>
+                        <div className="text-right">
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{residenceName}</p>
+                            <p className="text-sm text-muted-foreground print-subtle">Date: {format(miv.date.toDate(), 'PPP p')}</p>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                    <Accordion type="multiple" defaultValue={Object.keys(miv.locations)}>
-                        {Object.entries(miv.locations).map(([locationName, items]) => (
-                            <AccordionItem key={locationName} value={locationName}>
-                                <AccordionTrigger className="font-semibold text-lg">
-                                    {locationName}
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Item</TableHead>
-                                                <TableHead className="w-[150px] text-right">Quantity Issued</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {items.map(item => (
-                                                <TableRow key={item.itemId}>
-                                                    <TableCell className="font-medium">
-                                                        <p>{item.itemNameAr} / {item.itemNameEn}</p>
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-bold">{item.quantity}</TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </AccordionContent>
-                            </AccordionItem>
-                        ))}
-                    </Accordion>
+                    <Table className="print-compact-table">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[70%]">الصنف • Item</TableHead>
+                                <TableHead className="w-[30%] text-right">الكمية المصروفة • Qty Issued</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {entries.map(([locName, items]) => (
+                                <React.Fragment key={locName}>
+                                    <TableRow className="section-row">
+                                        <TableCell colSpan={2} className="font-semibold text-primary">
+                                            {locName}
+                                        </TableCell>
+                                    </TableRow>
+                                    {items.map((it) => (
+                                        <TableRow key={`${locName}-${it.itemId}`}>
+                                            <TableCell className="font-medium">{it.itemNameEn} | {it.itemNameAr}</TableCell>
+                                            <TableCell className="text-right font-medium">{it.quantity}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </React.Fragment>
+                            ))}
+                        </TableBody>
+                    </Table>
+
+                    <div className="mt-6 text-right font-bold text-lg pr-4 border-t pt-4 print-total">
+                        Total Issued: {totalIssued}
+                    </div>
                 </CardContent>
+
+                <CardFooter className="mt-8 pt-4 border-t print-signatures">
+                    <div className="grid grid-cols-2 gap-8 w-full">
+                        <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground label">Issued By:</p>
+                            <div className="mt-2 border-t-2 w-48 line slot"></div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground label">Received By:</p>
+                            <div className="mt-2 border-t-2 w-48 line slot"></div>
+                        </div>
+                    </div>
+                </CardFooter>
             </Card>
         </div>
     )

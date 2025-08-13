@@ -42,18 +42,67 @@ export function AddMultipleRoomsDialog({
   const handleSave = async () => {
     if (!floorInfo) return;
     
-    // Split by commas, newlines, or spaces, then filter out empty strings
-    const roomNames = roomList.split(/[\n, ]+/).filter(name => name.trim() !== '');
+    // Helper: convert Arabic-Indic digits to ASCII
+    const toAsciiDigits = (s: string) => s.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => {
+      const code = d.charCodeAt(0);
+      // Arabic-Indic 0-9: \u0660-\u0669, Eastern Arabic 0-9: \u06F0-\u06F9
+      const base = code >= 0x06F0 ? 0x06F0 : 0x0660;
+      return String(code - base);
+    });
+
+    // Split by commas (including Arabic comma '،'), semicolons, pipes, newlines, tabs, or spaces
+    const tokens = roomList
+      .split(/[\n\r\t,،;\| ]+/)
+      .map(t => toAsciiDigits(t.trim()))
+      .filter(t => t.length > 0);
+
+    // Expand range tokens like 1:10 (inclusive). Preserve zero padding if present.
+    const expanded: string[] = [];
+    for (const tk of tokens) {
+      const m = tk.match(/^(\d+)\s*[:]\s*(\d+)$/); // only colon per requirement
+      if (m) {
+        const [_, aStr, bStr] = m;
+        const a = parseInt(aStr, 10);
+        const b = parseInt(bStr, 10);
+        if (!Number.isNaN(a) && !Number.isNaN(b)) {
+          const start = Math.min(a, b);
+          const end = Math.max(a, b);
+          const hasPad = /^0/.test(aStr) || /^0/.test(bStr);
+          const width = hasPad ? Math.max(aStr.length, bStr.length) : 0;
+          for (let n = start; n <= end; n++) {
+            const s = hasPad ? String(n).padStart(width, '0') : String(n);
+            expanded.push(s);
+          }
+          continue;
+        }
+      }
+      // Non-range token stays as-is
+      expanded.push(tk);
+    }
+
+    // De-duplicate (case-insensitive)
+    const seen = new Set<string>();
+    const roomNames = expanded.filter((name) => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     if (roomNames.length === 0) {
       toast({ title: "Input Error", description: "Please enter at least one room name.", variant: "destructive" });
       return;
     }
     
-    setIsLoading(true);
-    await onAddRooms(floorInfo.complexId, floorInfo.buildingId, floorInfo.floorId, roomNames);
-    setIsLoading(false);
-    onOpenChange(false);
+    try {
+      setIsLoading(true);
+  await onAddRooms(floorInfo.complexId, floorInfo.buildingId, floorInfo.floorId, roomNames);
+  toast({ title: 'Success', description: `Added ${roomNames.length} room(s).` });
+      setRoomList('');
+      onOpenChange(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

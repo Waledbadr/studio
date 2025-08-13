@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -47,6 +47,9 @@ export default function EditOrderPage() {
 
     // Local saving state for the Save button
     const [isSaving, setIsSaving] = useState(false);
+
+    // Threshold for highlighting stock availability
+    const STOCK_ATTENTION_THRESHOLD = 3;
 
     // Draft support for editing an order
     const restoredDraftRef = useRef(false);
@@ -322,6 +325,39 @@ export default function EditOrderPage() {
     // Derive a display name for residence using id if the name string is empty
     const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
 
+    // Helper: split name into base and detail using " - " like details/new-order pages
+    const splitNameDetail = (name?: string): { base: string; detail: string } => {
+        const raw = (name || '').trim();
+        if (!raw) return { base: '', detail: '' };
+        const parts = raw.split(' - ');
+        if (parts.length <= 1) return { base: raw, detail: '' };
+        return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
+    };
+
+    // Map order item id (variant possible) to base item stock at current residence
+    const handleGetStockForOrderItem = (item: OrderItem) => {
+        try {
+            const rawId = (item as any).id ?? (item as any).itemId;
+            if (!rawId) return 0;
+            const baseItemId = String(rawId).split('-')[0];
+            const baseItem = allItems.find(i => i.id === baseItemId);
+            if (!baseItem) return 0;
+            const effectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
+            if (!effectiveId || !baseItem.stockByResidence) return 0;
+            return baseItem.stockByResidence[effectiveId] || 0;
+        } catch { return 0; }
+    };
+
+    // Group current order items by category for display similar to new-order/details
+    const groupedOrderItems = useMemo(() => {
+        return orderItems.reduce((acc, item) => {
+            const category = item.category || 'Uncategorized';
+            if (!acc[category]) acc[category] = [];
+            acc[category].push(item);
+            return acc;
+        }, {} as Record<string, OrderItem[]>);
+    }, [orderItems]);
+
 
     if (pageLoading) {
          return (
@@ -428,7 +464,7 @@ export default function EditOrderPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                         <ScrollArea className="h-[450px]">
+                        <ScrollArea className="h-[450px]">
                             {inventoryLoading ? (
                                 <div className="space-y-4">
                                     <Skeleton className="h-12 w-full" />
@@ -441,7 +477,18 @@ export default function EditOrderPage() {
                                         <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                                             <div>
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
+                                                {(() => {
+                                                    const stock = getStockForResidence(item);
+                                                    return (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {item.category} - {" "}
+                                                            <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>
+                                                                Stock: {stock}
+                                                            </span>{" "}
+                                                            {item.unit}
+                                                        </p>
+                                                    );
+                                                })()}
                                             </div>
                                             <AddItemButton item={item} />
                                         </div>
@@ -479,67 +526,77 @@ export default function EditOrderPage() {
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[450px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                        <TableHead className="text-right w-[100px]">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {orderItems.length > 0 ? orderItems.map(item => (
-                                        <TableRow key={item.id}>
-                                            <TableCell className="font-medium">
-                                                {item.nameAr} / {item.nameEn}
-                                                <div className="text-xs text-muted-foreground">{item.category}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
-                                                        <Minus className="h-4 w-4" />
-                                                    </Button>
-                                                    <Input type="number" value={item.quantity} onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                 <div className="flex items-center justify-end gap-1">
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button variant="ghost" size="icon">
-                                                                <MessageSquare className="h-4 w-4" />
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80">
-                                                            <div className="grid gap-4">
-                                                                <div className="space-y-2">
-                                                                    <h4 className="font-medium leading-none">Item Notes</h4>
-                                                                    <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                            {orderItems.length === 0 ? (
+                                <div className="h-60 flex items-center justify-center text-muted-foreground">Your request is empty.</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {Object.entries(groupedOrderItems).map(([category, items]) => (
+                                        <div key={category} className="rounded-md border">
+                                            <div className="bg-muted/50 px-3 py-2 font-semibold text-primary capitalize">{category}</div>
+                                            <div className="divide-y">
+                                                {items.map((item) => {
+                                                    const ar = splitNameDetail(item.nameAr);
+                                                    const en = splitNameDetail(item.nameEn);
+                                                    const detail = ar.detail || en.detail || '';
+                                                    const stock = handleGetStockForOrderItem(item);
+                                                    return (
+                                                        <div key={item.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <div className="font-medium truncate">{en.base || item.nameEn} | {ar.base || item.nameAr}</div>
+                                                                <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                                                                    <span className="capitalize">{item.category}</span>
+                                                                    {item.unit && <span>• {item.unit}</span>}
+                                                                    <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>• Stock: {stock}</span>
+                                                                    {detail && <span className="italic">• {detail}</span>}
                                                                 </div>
-                                                                <Textarea
-                                                                    value={item.notes || ''}
-                                                                    onChange={(e) => handleNotesChange(item.id, e.target.value)}
-                                                                    placeholder="e.g., Please provide the new model."
-                                                                />
                                                             </div>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                                                        <Trash2 className="h-4 w-4 text-destructive"/>
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your request is empty.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
+                                                                    <Minus className="h-4 w-4" />
+                                                                </Button>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))}
+                                                                    className="w-16 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
+                                                                    <Plus className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button variant="ghost" size="icon">
+                                                                            <MessageSquare className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-80">
+                                                                        <div className="grid gap-4">
+                                                                            <div className="space-y-2">
+                                                                                <h4 className="font-medium leading-none">Item Notes</h4>
+                                                                                <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                                                                            </div>
+                                                                            <Textarea
+                                                                                value={item.notes || ''}
+                                                                                onChange={(e) => handleNotesChange(item.id, e.target.value)}
+                                                                                placeholder="e.g., Please provide the new model."
+                                                                            />
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </ScrollArea>
                         <div className="mt-6 space-y-2">
                             <Label htmlFor="general-notes">General Notes</Label>

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2, LayoutGrid, List } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
@@ -262,6 +262,46 @@ export default function ConsolidatedReportPage() {
                         border-radius: 0 !important;
                         box-shadow: none !important;
                     }
+
+                    /* Use multi-column layout on print to better utilize vertical whitespace */
+                    .elegant-grid {
+                        display: block !important;
+                        column-count: 2;
+                        column-gap: 8px !important;
+                        column-fill: balance;
+                        margin: 0 !important;
+                    }
+
+                    /* Allow cards to break across pages/columns and avoid clipping */
+                    .report-card {
+                        display: inline-block;
+                        width: 100%;
+                        break-inside: auto !important;
+                        page-break-inside: auto !important;
+                        overflow: visible !important;
+                        box-shadow: none !important;
+                        border-radius: 6px !important;
+                    }
+
+                    /* Keep header with the first row, but allow long cards to split */
+                    .report-card-header {
+                        break-after: avoid !important;
+                        position: static !important;
+                        box-shadow: none !important;
+                    }
+
+                    /* Ensure full item list prints */
+                    .report-card-body {
+                        max-height: none !important;
+                        overflow: visible !important;
+                        padding: 4px 6px !important;
+                    }
+
+                    /* Avoid breaking inside a single row visually */
+                    .row-item {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                    }
                     
                     /* تصغير أحجام الخطوط للطباعة */
                     div[style*="fontSize: '20px'"] {
@@ -333,24 +373,15 @@ export default function ConsolidatedReportPage() {
                         gap: 8px !important;
                     }
                     
-                    /* تحسين Grid الأنيق للطباعة */
-                    .elegant-grid {
-                        gap: 8px !important;
-                    }
-                    
-                    /* إزالة جميع القيود على الارتفاع لضمان عرض جميع الأصناف */
+                    /* إزالة جميع القيود على الارتفاع لضمان عرض جميع الأصناف - إبقاء دعم selector القديم احتياطياً */
                     div[style*="maxHeight"] {
                         max-height: none !important;
                         overflow: visible !important;
                     }
-                    
-                    /* السماح بالتمدد الطبيعي للكروت الأنيقة */
                     div[style*="overflowY: 'auto'"] {
                         overflow: visible !important;
                         max-height: none !important;
                     }
-                    
-                    /* ضمان ظهور جميع الأصناف في التصميم الأنيق */
                     .elegant-grid > div {
                         height: auto !important;
                         max-height: none !important;
@@ -551,10 +582,21 @@ export default function ConsolidatedReportPage() {
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Requests
                     </Button>
-                    <Button onClick={handlePrint}>
-                        <Printer className="mr-2 h-4 w-4" />
-                        طباعة التقرير (Print Report)
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => router.push('/inventory/orders/consolidated-report-mr')}
+                            title="عرض التقرير العادي (MR-style)"
+                        >
+                            <List className="mr-2 h-4 w-4" />
+                            التقرير العادي
+                        </Button>
+                        <Button onClick={handlePrint} title="طباعة التقرير الشبكي">
+                            <Printer className="mr-2 h-4 w-4" />
+                            طباعة الشبكي
+                        </Button>
+                    </div>
                 </div>
 
                 <div 
@@ -766,6 +808,7 @@ export default function ConsolidatedReportPage() {
                                 {layoutData.layoutConfig.map((cardConfig) => (
                                     <div 
                                         key={cardConfig.category} 
+                                        className="report-card"
                                         style={{
                                             border: '1px solid #dee2e6',
                                             borderRadius: '12px',
@@ -778,7 +821,7 @@ export default function ConsolidatedReportPage() {
                                         }}
                                     >
                                         {/* Card Header - Bilingual & Elegant */}
-                                        <div style={{
+                                        <div className="report-card-header" style={{
                                             background: 'linear-gradient(135deg, #495057 0%, #343a40 100%)', // لون موحد رمادي أنيق
                                             color: 'white',
                                             padding: '8px 12px', // زيادة قليلة للمساحة للنصين
@@ -832,7 +875,7 @@ export default function ConsolidatedReportPage() {
                                         </div>
                                         
                                         {/* Card Content - Optimized for Height */}
-                                        <div style={{
+                                        <div className="report-card-body" style={{
                                             padding: '6px', // تقليل المسافة الداخلية
                                             maxHeight: cardConfig.cardType === 'extra-large' ? '500px' : // زيادة الارتفاع للكروت الضخمة
                                                       cardConfig.cardType === 'large' ? '400px' : // زيادة للكروت الكبيرة
@@ -842,7 +885,7 @@ export default function ConsolidatedReportPage() {
                                         }}>
                                             {cardConfig.items.map((item: any, index: number) => {
                                                 return (
-                                                    <div key={item.id} style={{
+                                                    <div key={item.id} className="row-item" style={{
                                                         display: 'flex',
                                                         justifyContent: 'space-between',
                                                         alignItems: 'center',
