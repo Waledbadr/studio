@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 
@@ -77,7 +78,7 @@ export default function IssueMaterialPage() {
                 const allMIVs = await getMIVs();
                 // Filter by user permissions and get recent ones
                 let filteredMIVs = allMIVs;
-                if (currentUser.role !== 'admin') {
+                if (currentUser.role !== 'Admin') {
                     filteredMIVs = allMIVs.filter(miv => 
                         currentUser.assignedResidences.includes(miv.residenceId)
                     );
@@ -103,8 +104,8 @@ export default function IssueMaterialPage() {
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
     const userResidences = useMemo(() => {
-        if (!currentUser) return [];
-        if (currentUser.role === 'admin') return residences;
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
@@ -139,7 +140,7 @@ export default function IssueMaterialPage() {
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
         return allItems
-            .filter(item => getStockForResidence(item.id, selectedComplexId) > 0)
+            .filter(item => getStockForResidence(item, selectedComplexId) > 0)
             .filter(item => 
                 item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
@@ -172,7 +173,7 @@ export default function IssueMaterialPage() {
             return;
         }
 
-            const stock = getStockForResidence(itemToAdd.id, selectedComplexId);
+            const stock = getStockForResidence(itemToAdd, selectedComplexId);
             if (stock < 1) {
                 toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
                 return;
@@ -214,7 +215,7 @@ export default function IssueMaterialPage() {
         if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
             const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
             if (lastIssueDate) {
-                const issueDate = lastIssueDate instanceof Date ? lastIssueDate : new Date(lastIssueDate);
+                const issueDate = lastIssueDate instanceof Timestamp ? lastIssueDate.toDate() : new Date(lastIssueDate as any);
                 const daysSinceLastIssue = differenceInDays(new Date(), issueDate);
                 if (daysSinceLastIssue < itemToAdd.lifespanDays) {
                     toast({
@@ -278,7 +279,7 @@ export default function IssueMaterialPage() {
          const itemInfo = allItems.find(i => i.id === itemId);
         if (!itemInfo || !selectedComplexId) return;
 
-        const stock = getStockForResidence(itemInfo.id, selectedComplexId);
+    const stock = getStockForResidence(itemInfo, selectedComplexId);
 
         let quantity = newQuantity;
         if (quantity < 1) {
@@ -314,7 +315,7 @@ export default function IssueMaterialPage() {
         }
         setIsSubmitting(true);
         try {
-            await issueItemsFromStock({ selectedComplexId, voucherLocations });
+            await issueItemsFromStock(selectedComplexId, voucherLocations);
             toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
             setVoucherLocations([]);
             setSelectedBuildingId('');
@@ -433,7 +434,7 @@ export default function IssueMaterialPage() {
                                             <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
                                                 <div>
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item.id, selectedComplexId)} {item.unit}</p>
+                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
                                                 </div>
                                                 <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
                                                     <Plus className="h-4 w-4" />
