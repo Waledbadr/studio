@@ -34,6 +34,7 @@ export default function AdminFeedbackPage() {
   const [prioritySort, setPrioritySort] = useState<'none' | 'high_first' | 'low_first'>('none');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [closedOpen, setClosedOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -71,6 +72,25 @@ export default function AdminFeedbackPage() {
   }, [items, statusFilter, categoryFilter, prioritySort, search]);
 
   const openItems = useMemo(() => filtered.filter(i => i.status === 'new' || i.status === 'in_progress'), [filtered]);
+  // Sort Open: in_progress first, then by priority (default high->low or according to dropdown), then newest first
+  const openItemsSorted = useMemo(() => {
+    const statusRank = (s?: string) => (s === 'in_progress' ? 0 : 1);
+    const priRankHighFirst = (p?: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : p === 'low' ? 2 : 3);
+    const priRankLowFirst = (p?: string) => (p === 'low' ? 0 : p === 'medium' ? 1 : p === 'high' ? 2 : 3);
+    const priRank = prioritySort === 'low_first' ? priRankLowFirst : priRankHighFirst;
+    const toDate = (d: Item['createdAt']) => {
+      if (!d) return new Date(0);
+      if (typeof d === 'object') return (d as any).toDate?.() || new Date(0);
+      return new Date(d as any);
+    };
+    return [...openItems].sort((a, b) => {
+      const s = statusRank(a.status) - statusRank(b.status);
+      if (s !== 0) return s;
+      const p = priRank(a.priority) - priRank(b.priority);
+      if (p !== 0) return p;
+      return toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime();
+    });
+  }, [openItems, prioritySort]);
   const closedItems = useMemo(() => filtered.filter(i => i.status === 'resolved' || i.status === 'rejected'), [filtered]);
 
   const updateItem = async (id: string, status?: string, priority?: Item['priority']) => {
@@ -169,7 +189,7 @@ export default function AdminFeedbackPage() {
       {/* Open section */}
       <div className="grid gap-3">
         <h2 className="text-lg font-semibold">Open</h2>
-        {openItems.map((f) => (
+        {openItemsSorted.map((f) => (
           <Card key={f.id}>
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
@@ -216,47 +236,58 @@ export default function AdminFeedbackPage() {
         )}
       </div>
 
-      {/* Closed section */}
+      {/* Closed section (collapsible) */}
       <div className="grid gap-3 mt-6">
-        <h2 className="text-lg font-semibold">Closed</h2>
-        {closedItems.map((f) => (
-          <Collapsible key={f.id} open={!!expanded[f.id]} onOpenChange={(v) => setExpanded((prev) => ({ ...prev, [f.id]: v }))}>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <CardTitle className="text-base">{f.title} <span className="text-muted-foreground">({f.ticketId})</span></CardTitle>
-                    <CardDescription>
-                      {f.createdAt ? formatDistanceToNow(typeof f.createdAt === 'object' ? (f.createdAt as any).toDate?.() || new Date() : new Date(f.createdAt as any), { addSuffix: true }) : ''}
-                      {" "}• by {f.userId ? (getUserById(f.userId)?.name || 'Unknown') : 'Unknown'}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{f.category}</Badge>
-                    <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{f.status}</Badge>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">{expanded[f.id] ? 'Hide details' : 'Show details'}</Button>
-                    </CollapsibleTrigger>
-                  </div>
-                </div>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent className="space-y-3">
-                  {f.screenshotUrl && <img src={f.screenshotUrl} alt="screenshot" className="max-h-64 rounded border" />}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Priority:</span>
-                      <Badge variant="secondary">{f.priority || 'medium'}</Badge>
+        <Collapsible open={closedOpen} onOpenChange={setClosedOpen}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              Closed <span className="text-muted-foreground">({closedItems.length})</span>
+            </h2>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">{closedOpen ? 'Hide' : 'Show'}</Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            {closedItems.map((f) => (
+              <Collapsible key={f.id} open={!!expanded[f.id]} onOpenChange={(v) => setExpanded((prev) => ({ ...prev, [f.id]: v }))}>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <CardTitle className="text-base">{f.title} <span className="text-muted-foreground">({f.ticketId})</span></CardTitle>
+                        <CardDescription>
+                          {f.createdAt ? formatDistanceToNow(typeof f.createdAt === 'object' ? (f.createdAt as any).toDate?.() || new Date() : new Date(f.createdAt as any), { addSuffix: true }) : ''}
+                          {" "}• by {f.userId ? (getUserById(f.userId)?.name || 'Unknown') : 'Unknown'}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{f.category}</Badge>
+                        <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{f.status}</Badge>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">{expanded[f.id] ? 'Hide details' : 'Show details'}</Button>
+                        </CollapsibleTrigger>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-        ))}
-        {closedItems.length === 0 && (
-          <div className="text-muted-foreground text-sm p-8 text-center">No closed items.</div>
-        )}
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-3">
+                      {f.screenshotUrl && <img src={f.screenshotUrl} alt="screenshot" className="max-h-64 rounded border" />}
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Priority:</span>
+                          <Badge variant="secondary">{f.priority || 'medium'}</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            ))}
+            {closedItems.length === 0 && (
+              <div className="text-muted-foreground text-sm p-8 text-center">No closed items.</div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
       </>
       )}

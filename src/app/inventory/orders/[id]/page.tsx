@@ -154,6 +154,15 @@ export default function OrderDetailPage() {
         return id;
     };
 
+    // Helper: split name into base and detail using " - " convention
+    const splitNameDetail = (name?: string): { base: string; detail: string } => {
+        const raw = (name || '').trim();
+        if (!raw) return { base: '', detail: '' };
+        const parts = raw.split(' - ');
+        if (parts.length <= 1) return { base: raw, detail: '' };
+        return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
+    };
+
     return (
         <div className="space-y-6">
              <style jsx global>{`
@@ -324,17 +333,28 @@ export default function OrderDetailPage() {
                                             {category}
                                         </TableCell>
                                     </TableRow>
-                                    {items.map((item: OrderItem) => (
-                                        <TableRow key={item.id}>
-                                            <TableCell className="font-medium">
-                                                {item.nameAr} / {item.nameEn}
-                                            </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground notes-cell print-notes">{item.notes || '-'}</TableCell>
-                                            <TableCell>{item.unit}</TableCell>
-                                            <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                                            <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {items.map((item: OrderItem) => {
+                                        const ar = splitNameDetail(item.nameAr);
+                                        const en = splitNameDetail(item.nameEn);
+                                        const detail = ar.detail || en.detail || '';
+                                        const notes = (() => {
+                                            const baseNotes = (item.notes || '').trim();
+                                            if (detail && baseNotes) return `${baseNotes}  ${detail}`; // append detail to notes
+                                            if (detail) return detail;
+                                            return baseNotes || '-';
+                                        })();
+                                        return (
+                                            <TableRow key={item.id}>
+                                                <TableCell className="font-medium">
+                                                    {en.base || item.nameEn} | {ar.base || item.nameAr}
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground notes-cell print-notes">{notes}</TableCell>
+                                                <TableCell>{item.unit}</TableCell>
+                                                <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                                <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </React.Fragment>
                             ))}
                         </TableBody>

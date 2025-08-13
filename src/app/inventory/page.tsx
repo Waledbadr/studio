@@ -18,6 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 
 export default function InventoryPage() {
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
@@ -52,6 +54,7 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
 
   useEffect(() => {
     if (userResidences.length > 0 && activeTab === 'all') {
@@ -141,13 +144,32 @@ export default function InventoryPage() {
       filteredItems = filteredItems.filter(item => (item.category || '').toLowerCase() === categoryFilter.toLowerCase());
     }
 
-    // apply search filter on names (ar/en)
+    // apply search filter (normalized, supports per-item keywords and centralized synonyms)
     if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      filteredItems = filteredItems.filter(item =>
-        (item.nameAr || '').toLowerCase().includes(q) ||
-        (item.nameEn || '').toLowerCase().includes(q)
-      );
+      const qN = normalizeText(search);
+    filteredItems = filteredItems.filter(item => {
+        const cand = [
+          item.nameEn,
+          item.nameAr,
+          item.category,
+          ...(item.keywordsAr || []),
+          ...(item.keywordsEn || []),
+      ...(item.variants || []),
+        ].filter(Boolean).join(' ');
+        if (includesNormalized(cand, qN)) return true;
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+          if (aliasSet.has(qN)) {
+            const itemMatchesCanon =
+              includesNormalized(item.nameAr, canonN) ||
+              includesNormalized(item.nameEn, canonN) ||
+              (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+        (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+        (item.variants || []).some(v => includesNormalized(v, canonN));
+            if (itemMatchesCanon) return true;
+          }
+        }
+        return false;
+      });
     }
 
     if (isAllItemsTab) {

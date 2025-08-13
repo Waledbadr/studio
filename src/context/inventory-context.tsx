@@ -24,6 +24,9 @@ export interface InventoryItem {
   stockByResidence?: { [residenceId: string]: number };
   lifespanDays?: number;
   variants?: string[];
+  // Optional: item-level search keywords (synonyms/aliases)
+  keywordsAr?: string[];
+  keywordsEn?: string[];
 }
 
 export interface InventoryTransaction {

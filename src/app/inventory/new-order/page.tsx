@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare, Clock } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -98,7 +100,7 @@ export default function NewOrderPage() {
         isDraftDirtyRef.current = true;
     }, [draftKey, orderItems, generalNotes, selectedResidence?.id]);
 
-    // Throttled auto-save every ~90s, with final save on unmount
+    // Robust autosave: debounce on changes (2s), heartbeat interval (30s), beforeunload + when tab hidden
     useEffect(() => {
         if (!draftKey) return;
 
@@ -117,15 +119,22 @@ export default function NewOrderPage() {
             } catch {}
         };
 
-        // Save on interval (~90 seconds)
-        const interval = setInterval(saveNow, 90_000);
+        // Debounced save shortly after changes
+        const debounced = setTimeout(saveNow, 2_000);
+        // Heartbeat save every 30s while editing (in case a change flag was missed)
+        const interval = setInterval(saveNow, 30_000);
         // Save before unload/navigation
         const handleBeforeUnload = () => saveNow();
+        // Save when tab goes to background
+        const handleVisibility = () => { if (document.visibilityState === 'hidden') saveNow(); };
         window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibility);
             clearInterval(interval);
+            clearTimeout(debounced);
             // Final save when effect cleans up
             saveNow();
         };
@@ -273,11 +282,37 @@ export default function NewOrderPage() {
         }
     }
 
+    // Use centralized Arabic synonyms (includes دهان ⇄ بوية)
+    const normalizedSynonyms = buildNormalizedSynonyms(AR_SYNONYMS);
+
+    const searchN = normalizeText(searchQuery);
     const filteredItems = allItems.filter(item => {
         const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-        const matchesSearch = item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              item.nameAr.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesSearch;
+        if (!matchesCategory) return false;
+        if (!searchN) return true;
+        const cand = [
+            item.nameEn,
+            item.nameAr,
+            item.category,
+            ...(item.keywordsAr || []),
+            ...(item.keywordsEn || []),
+            ...(item.variants || []),
+        ].filter(Boolean).join(' ');
+        // Direct normalized contains
+        if (includesNormalized(cand, searchN)) return true;
+        // Alias match: if search matches any alias of a canonical and item matches that canonical
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+            if (aliasSet.has(searchN)) {
+                const itemMatchesCanon =
+                    includesNormalized(item.nameAr, canonN) ||
+                    includesNormalized(item.nameEn, canonN) ||
+                    (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.variants || []).some(v => includesNormalized(v, canonN));
+                if (itemMatchesCanon) return true;
+            }
+        }
+        return false;
     });
 
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);

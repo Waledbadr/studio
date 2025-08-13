@@ -20,6 +20,8 @@ import { useResidences } from '@/context/residences-context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
@@ -74,7 +76,8 @@ export default function EditOrderPage() {
             const hasMeaningfulDraft = (Array.isArray(draft?.items) && draft.items.length > 0) || (typeof draft?.notes === 'string' && draft.notes.trim().length > 0);
             hasMeaningfulDraftRef.current = hasMeaningfulDraft;
             if (hasMeaningfulDraft) {
-                if (Array.isArray(draft.items)) setOrderItems(draft.items);
+                // Only apply draft items if there are items; avoid clearing server items with an empty array
+                if (Array.isArray(draft.items) && draft.items.length > 0) setOrderItems(draft.items);
                 if (typeof draft.notes === 'string') setGeneralNotes(draft.notes);
                 if (typeof draft?.updatedAt === 'number') setLastDraftSavedAt(draft.updatedAt);
             }
@@ -107,37 +110,95 @@ export default function EditOrderPage() {
         loadInventory();
     }, [loadInventory]);
     
+    // Seed initial data promptly via a one-time fetch, then keep in sync via onSnapshot
     useEffect(() => {
-        if (!db || typeof id !== 'string') return;
-        const ref = doc(db, 'orders', id);
-        const unsub = onSnapshot(ref, (snap) => {
-            if (!snap.exists()) {
+        let unsub: (() => void) | null = null;
+        let isMounted = true;
+        (async () => {
+            if (!db || typeof id !== 'string') { setPageLoading(false); return; }
+            try {
+                // Immediate fetch to populate without hard refresh
+                const first = await getOrderById(id as string);
+                if (first && isMounted) {
+                    setOrder(first);
+                    const hasItemsNow = orderItemsRef.current && orderItemsRef.current.length > 0;
+                    if (!hasItemsNow) {
+                        setOrderItems(first.items || []);
+                    }
+                    setResidenceName(first.residence || '');
+                    setResidenceId(first.residenceId || '');
+                    if (!isDraftDirtyRef.current && !(hasMeaningfulDraftRef.current && (generalNotesRef.current?.trim().length > 0))) {
+                        setGeneralNotes(first.notes || '');
+                    }
+                    setStatus(first.status);
+                    setPageLoading(false);
+                }
+            } catch (e) {
+                console.warn('Initial fetch failed, relying on snapshot:', e);
+            }
+
+            // Live subscription
+            const ref = doc(db, 'orders', id as string);
+            unsub = onSnapshot(ref, (snap) => {
+                if (!snap.exists()) {
+                    if (isMounted) setPageLoading(false);
+                    return;
+                }
+                const data = { id: snap.id, ...(snap.data() as any) } as Order;
+                if (!isMounted) return;
+                setOrder(data);
+
+                const hasItemsNow = orderItemsRef.current && orderItemsRef.current.length > 0;
+                if (!hasItemsNow) {
+                    setOrderItems(data.items || []);
+                }
+                setResidenceName(data.residence || '');
+                setResidenceId(data.residenceId || '');
+                if (!isDraftDirtyRef.current && !(hasMeaningfulDraftRef.current && (generalNotesRef.current?.trim().length > 0))) {
+                    setGeneralNotes(data.notes || '');
+                }
+                setStatus(data.status);
                 setPageLoading(false);
-                return;
-            }
-            const data = { id: snap.id, ...(snap.data() as any) } as Order;
-            setOrder(data);
+            }, (err) => {
+                console.error('Error listening to order in edit page:', err);
+                if (isMounted) setPageLoading(false);
+            });
+        })();
+        return () => { isMounted = false; if (unsub) unsub(); };
+    }, [id, getOrderById]);
 
-            // Seed items if user hasn't started editing OR draft has no items.
-            // Keep user's draft notes if they exist; always sync residence and status.
-            const draftHasItems = orderItemsRef.current && orderItemsRef.current.length > 0;
-            if (!isDraftDirtyRef.current && !draftHasItems) {
-                setOrderItems(data.items || []);
-            }
-            setResidenceName(data.residence || '');
-            setResidenceId(data.residenceId || '');
-            if (!isDraftDirtyRef.current && !(hasMeaningfulDraftRef.current && (generalNotesRef.current?.trim().length > 0))) {
-                setGeneralNotes(data.notes || '');
-            }
-            setStatus(data.status);
+    // Autosave draft in edit page: debounce + interval + visibility change
+    useEffect(() => {
+        if (!draftKey) return;
 
-            setPageLoading(false);
-        }, (err) => {
-            console.error('Error listening to order in edit page:', err);
-            setPageLoading(false);
-        });
-        return () => unsub();
-    }, [id]);
+        const saveNow = () => {
+            if (!isDraftDirtyRef.current) return;
+            try {
+                const payload = {
+                    items: orderItemsRef.current,
+                    notes: generalNotesRef.current,
+                    updatedAt: Date.now(),
+                };
+                localStorage.setItem(draftKey, JSON.stringify(payload));
+                setLastDraftSavedAt(payload.updatedAt);
+                isDraftDirtyRef.current = false;
+            } catch {}
+        };
+
+        const debounced = setTimeout(saveNow, 2_000);
+        const interval = setInterval(saveNow, 30_000);
+        const handleBeforeUnload = () => saveNow();
+        const handleVisibility = () => { if (document.visibilityState === 'hidden') saveNow(); };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibility);
+            clearInterval(interval);
+            clearTimeout(debounced);
+            saveNow();
+        };
+    }, [draftKey, orderItems, generalNotes]);
 
     const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
@@ -214,11 +275,34 @@ export default function EditOrderPage() {
         }
     }
 
+    // Use centralized Arabic synonyms (includes دهان ⇄ بوية)
+    const normalizedSynonyms = buildNormalizedSynonyms(AR_SYNONYMS);
+    const searchN = normalizeText(searchQuery);
     const filteredItems = allItems.filter(item => {
         const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-        const matchesSearch = item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              item.nameAr.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesSearch;
+        if (!matchesCategory) return false;
+        if (!searchN) return true;
+        const cand = [
+            item.nameEn,
+            item.nameAr,
+            item.category,
+            ...(item.keywordsAr || []),
+            ...(item.keywordsEn || []),
+            ...(item.variants || []),
+        ].filter(Boolean).join(' ');
+        if (includesNormalized(cand, searchN)) return true;
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+            if (aliasSet.has(searchN)) {
+                const itemMatchesCanon =
+                    includesNormalized(item.nameAr, canonN) ||
+                    includesNormalized(item.nameEn, canonN) ||
+                    (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.variants || []).some(v => includesNormalized(v, canonN));
+                if (itemMatchesCanon) return true;
+            }
+        }
+        return false;
     });
 
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
