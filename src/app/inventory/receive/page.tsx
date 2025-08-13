@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useInventory } from "@/context/inventory-context";
+import { useOrders, type Order } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
@@ -16,6 +17,7 @@ import { useResidences } from "@/context/residences-context";
 
 export default function ReceiveMaterialsPage() {
     const { getMRVRequests, approveMRVRequest } = useInventory();
+    const { orders, loadOrders } = useOrders();
     const router = useRouter();
     const { currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
@@ -58,6 +60,8 @@ export default function ReceiveMaterialsPage() {
         if (residences.length === 0) {
             loadResidences();
         }
+        // Ensure orders are subscribed so Approved/Partially Delivered MRs appear here
+        loadOrders();
         loadMrvStats();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadResidences, residences.length, isAdmin, currentUser]);
@@ -69,10 +73,14 @@ export default function ReceiveMaterialsPage() {
         localStorage.setItem('receive-completed-open', JSON.stringify(open));
     };
 
-    // MR is separated; keep MR-related sets empty on MRV page
-    const userApprovedOrders: any[] = [];
-    const allUserOrders: any[] = [];
-    const completedOrders: any[] = [];
+    // Derive Approved/Partially Delivered Material Requests (MR) visible to user
+    const userVisibleApprovedMRs = useMemo(() => {
+        const approvable: Order['status'][] = ['Approved', 'Partially Delivered'];
+        const list = (orders || []).filter(o => approvable.includes(o.status));
+        if (isAdmin) return list;
+        const ids = currentUser?.assignedResidences || [];
+        return list.filter(o => ids.includes(o.residenceId));
+    }, [orders, isAdmin, currentUser]);
 
 
     const renderSkeleton = () => (
@@ -90,7 +98,7 @@ export default function ReceiveMaterialsPage() {
     
     // No MR select on MRV page
 
-        // Build unified rows for Ready section (pending MRV requests only)
+                // Build unified rows for Ready section (Pending MRV requests + Approved/Partially Delivered MRs)
     const readyRows = useMemo(() => {
         const rows: any[] = [];
         // MRV Pending
@@ -126,8 +134,32 @@ export default function ReceiveMaterialsPage() {
             )
           });
         }
+                // MR Approved or Partially Delivered (ready to receive)
+                for (const o of userVisibleApprovedMRs) {
+                    rows.push({
+                        key: `mr-${o.id}`,
+                        id: o.id,
+                        type: 'MR',
+                        dateLabel: o.date?.toDate ? format(o.date.toDate(), 'PPP') : '-',
+                        residence: residenceName(o.residenceId),
+                        items: (o.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+                        status: (
+                            <Badge variant={o.status === 'Approved' ? 'secondary' : 'outline'}>
+                                {o.status}
+                            </Badge>
+                        ),
+                        href: `/inventory/receive/${o.id}`,
+                        action: (
+                            <div className="flex items-center justify-end gap-2">
+                                <Button size="sm" onClick={() => router.push(`/inventory/receive/${o.id}`)}>
+                                    Receive
+                                </Button>
+                            </div>
+                        )
+                    });
+                }
         return rows;
-            }, [pendingMrvRequests, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats]);
+                        }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats]);
 
         // Build rows for Completed section (approved MRVs only)
     const completedRows = useMemo(() => {
@@ -188,7 +220,7 @@ export default function ReceiveMaterialsPage() {
         </Table>
     );
 
-    const readyToReceiveCount = pendingMrvCount;
+    const readyToReceiveCount = pendingMrvCount + userVisibleApprovedMRs.length;
     const completedDeliveredCount = approvedMrvCount;
 
     return (

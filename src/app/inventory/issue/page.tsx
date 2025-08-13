@@ -95,13 +95,23 @@ export default function IssueMaterialPage() {
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
+        const q = searchQuery.toLowerCase();
         return allItems
-            .filter(item => getStockForResidence(item, selectedComplexId) > 0)
+            .filter(item => {
+                const stock = getStockForResidence(item, selectedComplexId);
+                if (stock <= 0) return false;
+                // Remaining allocatable = stock - already allocated across voucher locations
+                const allocated = voucherLocations.reduce((sum, loc) => {
+                    const found = loc.items.find(i => i.id === item.id);
+                    return sum + (found ? found.issueQuantity : 0);
+                }, 0);
+                return stock - allocated > 0;
+            })
             .filter(item => 
-                item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+                item.nameEn.toLowerCase().includes(q) || 
+                item.nameAr.toLowerCase().includes(q)
             );
-    }, [selectedComplexId, allItems, getStockForResidence, searchQuery]);
+    }, [selectedComplexId, allItems, getStockForResidence, searchQuery, voucherLocations]);
 
 
     useEffect(() => {
@@ -123,6 +133,13 @@ export default function IssueMaterialPage() {
         }
     }, [selectedFloorId, locationType]);
     
+    const getAggregateIssuedQty = (itemId: string): number => {
+        return voucherLocations.reduce((sum, loc) => {
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+    };
+
     const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
         startTransition(async () => {
             if (!isLocationSelected || !selectedComplex) {
@@ -133,6 +150,13 @@ export default function IssueMaterialPage() {
             const stock = getStockForResidence(itemToAdd, selectedComplexId);
             if (stock < 1) {
                 toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
+                return;
+            }
+
+            // Client-side guard: prevent aggregated over-issuing across multiple locations
+            const currentAgg = getAggregateIssuedQty(itemToAdd.id);
+            if (currentAgg >= stock) {
+                toast({ title: "Stock limit reached", description: `You already allocated ${currentAgg} of ${stock} available.`, variant: "destructive" });
                 return;
             }
 
@@ -195,23 +219,32 @@ export default function IssueMaterialPage() {
 
                     if (existingItemIndex > -1) {
                         const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                        if(currentQty < stock) {
+                        // Compute residence-wide remaining stock allowance for this item
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id) - currentQty;
+                        const remaining = stock - allocatedElsewhere;
+                        if(currentQty < remaining) {
                             // Increment quantity without reordering when item already exists
                             const updatedItems = [...targetLocation.items];
                             updatedItems[existingItemIndex] = {
                                 ...updatedItems[existingItemIndex],
-                                issueQuantity: currentQty + 1,
+                                issueQuantity: Math.min(currentQty + 1, remaining),
                             };
                             targetLocation.items = updatedItems;
                         } else {
-                             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                             toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
                         }
                         // keep locations order as is when just incrementing existing item
                         newLocations[existingLocationIndex] = targetLocation;
                         return newLocations;
                     } else {
                         // New item: place it at the top of the item's list
-                        targetLocation.items = [ { ...itemToAdd, issueQuantity: 1 }, ...targetLocation.items ];
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id);
+                        const canAdd = Math.max(0, stock - allocatedElsewhere);
+                        if (canAdd <= 0) {
+                            toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
+                            return prevLocations;
+                        }
+                        targetLocation.items = [ { ...itemToAdd, issueQuantity: Math.min(1, canAdd) }, ...targetLocation.items ];
                         // Move this location to the top since a new item was added here
                         newLocations.splice(existingLocationIndex, 1);
                         return [ targetLocation, ...newLocations ];
@@ -244,6 +277,18 @@ export default function IssueMaterialPage() {
         } else if (quantity > stock) {
             quantity = stock;
             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+        }
+
+        // Additional client-side guard: cap by residence-wide remaining allowance considering other locations
+        const allocatedElsewhere = voucherLocations.reduce((sum, loc) => {
+            if (loc.locationId === locationId) return sum;
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+        const remaining = Math.max(0, stock - allocatedElsewhere);
+        if (quantity > remaining) {
+            quantity = remaining;
+            toast({ title: "Stock limit reached", description: `Only ${remaining} left available for this item across locations.`, variant: "destructive"});
         }
         
         setVoucherLocations(prev => prev.map(loc => 
@@ -396,17 +441,25 @@ export default function IssueMaterialPage() {
                                 <ScrollArea className="h-[250px] border rounded-md">
                                     {selectedComplexId ? (
                                         <div className="p-2 space-y-2">
-                                            {availableInventory.length > 0 ? availableInventory.map(item => (
-                                                <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
-                                                        <p className="text-xs text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
+                                            {availableInventory.length > 0 ? availableInventory.map(item => {
+                                                const stock = getStockForResidence(item, selectedComplexId);
+                                                const allocated = voucherLocations.reduce((sum, loc) => {
+                                                    const f = loc.items.find(i => i.id === item.id);
+                                                    return sum + (f ? f.issueQuantity : 0);
+                                                }, 0);
+                                                const remaining = Math.max(0, stock - allocated);
+                                                return (
+                                                    <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
+                                                        <div>
+                                                            <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
+                                                            <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
+                                                        </div>
+                                                        <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending || remaining <= 0}>
+                                                            <Plus className="h-4 w-4" />
+                                                        </Button>
                                                     </div>
-                                                    <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending}>
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            )) : (
+                                                );
+                                            }) : (
                                                 <div className="text-center text-muted-foreground p-8 text-sm">No inventory found.</div>
                                             )}
                                         </div>

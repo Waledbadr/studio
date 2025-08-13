@@ -603,39 +603,45 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
         const mivId = await generateNewMivId();
         
-        await runTransaction(db, async (transaction) => {
-            const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
-            const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
-            
-            // Step 1: Read all items first
-            const itemSnapshots = new Map<string, DocumentSnapshot>();
-            for (const id of uniqueItemIds) {
-                const itemRef = doc(db!, "inventory", id);
-                const itemSnap = await transaction.get(itemRef);
-                if (!itemSnap.exists()) {
-                    throw new Error(`Item with ID ${id} not found.`);
-                }
-                itemSnapshots.set(id, itemSnap);
-            }
+    await runTransaction(db, async (transaction) => {
+      const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
+      const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
 
-            // Step 2: Validate all items and prepare stock updates
-            const stockUpdates: Array<{ itemId: string, issueQuantity: number }> = [];
-            for (const item of allIssuedItems) {
-                const itemSnap = itemSnapshots.get(item.id);
-                const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
-                if (currentStock < item.issueQuantity) {
-                    throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
-                }
-                stockUpdates.push({ itemId: item.id, issueQuantity: item.issueQuantity });
-            }
-            
-            // Step 3: Perform all writes after all reads and validations are complete
-            // Update stock for all items
-            for (const update of stockUpdates) {
-                const itemRef = doc(db!, "inventory", update.itemId);
-                const stockUpdateKey = `stockByResidence.${residenceId}`;
-                transaction.update(itemRef, { [stockUpdateKey]: increment(-update.issueQuantity) });
-            }
+      // Step 1: Read all items first
+      const itemSnapshots = new Map<string, DocumentSnapshot>();
+      for (const id of uniqueItemIds) {
+        const itemRef = doc(db!, "inventory", id);
+        const itemSnap = await transaction.get(itemRef);
+        if (!itemSnap.exists()) {
+          throw new Error(`Item with ID ${id} not found.`);
+        }
+        itemSnapshots.set(id, itemSnap);
+      }
+
+      // Step 2: Aggregate quantities per item and validate against current stock
+      const totalsByItem = new Map<string, number>();
+      for (const line of allIssuedItems) {
+        const prev = totalsByItem.get(line.id) || 0;
+        totalsByItem.set(line.id, prev + (Number(line.issueQuantity) || 0));
+      }
+
+      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+        const snap = itemSnapshots.get(itemId);
+        const data: any = snap?.data() || {};
+        const currentStock = Number(data.stockByResidence?.[residenceId] || 0);
+        if (currentStock < totalToIssue) {
+          // Get item name for better message
+          const nameEn = data.nameEn || data.name || itemId;
+          throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToIssue}`);
+        }
+      }
+
+      // Step 3: Perform stock decrements once per item (atomic and aggregated)
+      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+        const itemRef = doc(db!, "inventory", itemId);
+        const stockUpdateKey = `stockByResidence.${residenceId}`;
+        transaction.update(itemRef, { [stockUpdateKey]: increment(-totalToIssue) });
+      }
             
             const transactionTime = Timestamp.now();
             let totalItemsCount = 0;
