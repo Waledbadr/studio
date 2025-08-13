@@ -15,8 +15,8 @@ type LifespanUnit = 'days' | 'months' | 'years';
 
 const inventoryUnits = [
     { value: 'Piece', label: 'قطعة (Piece)' },
-    { value: 'Box', label: 'علبة (Box)' },
-    { value: 'Carton', label: 'كرتون (Carton)' },
+    { value: 'Can', label: 'علبة (Can)' },
+    { value: 'Box', label: 'كرتون (Box)' },
     { value: 'Pack', label: 'باقة (Pack)' },
     { value: 'Set', label: 'مجموعة (Set)' },
     { value: 'Meter', label: 'متر (Meter)' },
@@ -53,6 +53,8 @@ export function AddItemDialog({
     const [lifespanValue, setLifespanValue] = useState<string>('');
     const [lifespanUnit, setLifespanUnit] = useState<LifespanUnit>('days');
     const [variants, setVariants] = useState<string>('');
+    const [keywordsAr, setKeywordsAr] = useState<string>('');
+    const [keywordsEn, setKeywordsEn] = useState<string>('');
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -66,6 +68,8 @@ export function AddItemDialog({
             setLifespanValue('');
             setLifespanUnit('days');
             setVariants('');
+            setKeywordsAr('');
+            setKeywordsEn('');
         }
     }, [isOpen, initialName]);
 
@@ -105,6 +109,8 @@ export function AddItemDialog({
                 }
                 
                 const variantList = variants.split(/[\n,]+/).map(v => v.trim()).filter(v => v);
+                const kwArList = keywordsAr.split(/[\n,]+/).map(v => v.trim()).filter(v => v);
+                const kwEnList = keywordsEn.split(/[\n,]+/).map(v => v.trim()).filter(v => v);
 
 
                 const newInventoryItem: Omit<InventoryItem, 'id' | 'stock'> = {
@@ -115,7 +121,9 @@ export function AddItemDialog({
                     unit: unit,
                     stockByResidence: {},
                     lifespanDays: totalLifespanDays,
-                    variants: variantList
+                    variants: variantList,
+                    keywordsAr: kwArList.length ? kwArList : undefined,
+                    keywordsEn: kwEnList.length ? kwEnList : undefined,
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -201,6 +209,32 @@ export function AddItemDialog({
                                 onChange={e => setVariants(e.target.value)} 
                             />
                             <p className="text-xs text-muted-foreground mt-1">Separate variants with a comma or new line. Leave blank if none.</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                        <Label htmlFor="item-keywords-ar" className="text-right mt-2">Arabic Keywords</Label>
+                        <div className="col-span-3">
+                            <Textarea
+                                id="item-keywords-ar"
+                                placeholder="مثال: بوية, صبغ, طلاء"
+                                className="col-span-3"
+                                value={keywordsAr}
+                                onChange={e => setKeywordsAr(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">افصل بين الكلمات بفاصلة أو سطر جديد. اختياري.</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                        <Label htmlFor="item-keywords-en" className="text-right mt-2">English Keywords</Label>
+                        <div className="col-span-3">
+                            <Textarea
+                                id="item-keywords-en"
+                                placeholder="e.g., paint, dye, coating"
+                                className="col-span-3"
+                                value={keywordsEn}
+                                onChange={e => setKeywordsEn(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Separate with a comma or new line. Optional.</p>
                         </div>
                     </div>
                 </div>

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare, Clock } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +25,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 
-
 export default function NewOrderPage() {
     const { items: allItems, loading, loadInventory, addItem, categories, getStockForResidence } = useInventory();
     const { createOrder, loading: ordersLoading } = useOrders();
@@ -33,19 +34,120 @@ export default function NewOrderPage() {
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [selectedResidence, setSelectedResidence] = useState<Complex | undefined>(undefined);
     const [generalNotes, setGeneralNotes] = useState('');
-    const { toast } = useToast();
+    // Track pending residence id when restoring draft before residences are loaded
+    const pendingResidenceIdRef = useRef<string | null>(null);
+    const restoredDraftRef = useRef<boolean>(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
     const [recentItems, setRecentItems] = useState<InventoryItem[]>([]);
     const router = useRouter();
+    const { toast } = useToast();
 
+    // Local submitting state for the submit button
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Compute a per-user draft key
+    const draftKey = currentUser?.id ? `estatecare_draft_material_request_${currentUser.id}` : null;
+    // New: track last autosave time and dirty state
+    const [lastDraftSavedAt, setLastDraftSavedAt] = useState<number | null>(null);
+    const isDraftDirtyRef = useRef(false);
 
     useEffect(() => {
         loadInventory();
         if (users.length === 0) loadUsers();
         if (residences.length === 0) loadResidences();
     }, [loadInventory, loadUsers, loadResidences, users.length, residences.length]);
+
+    // Restore draft once when user and residences are available
+    useEffect(() => {
+        if (!currentUser || restoredDraftRef.current) return;
+        if (!draftKey) return;
+        try {
+            const raw = localStorage.getItem(draftKey);
+            if (!raw) return;
+            const draft = JSON.parse(raw) as { items?: OrderItem[]; notes?: string; residenceId?: string; updatedAt?: number };
+            if (!draft || (!draft.items?.length && !draft.notes && !draft.residenceId)) return;
+
+            // Restore items and notes immediately
+            if (draft.items && Array.isArray(draft.items)) setOrderItems(draft.items);
+            if (typeof draft.notes === 'string') setGeneralNotes(draft.notes);
+            if (typeof draft.updatedAt === 'number') setLastDraftSavedAt(draft.updatedAt);
+
+            // Restore residence when available
+            if (draft.residenceId) {
+                const found = residences.find(r => r.id === draft.residenceId && !r.disabled);
+                if (found) setSelectedResidence(found);
+                else pendingResidenceIdRef.current = draft.residenceId;
+            }
+            restoredDraftRef.current = true;
+        } catch {}
+    }, [currentUser, draftKey, residences]);
+
+    // If we had a pending residence id and residences list updated, try to apply it
+    useEffect(() => {
+        if (!pendingResidenceIdRef.current || residences.length === 0) return;
+        const found = residences.find(r => r.id === pendingResidenceIdRef.current && !r.disabled);
+        if (found) {
+            setSelectedResidence(found);
+            pendingResidenceIdRef.current = null;
+        }
+    }, [residences]);
+
+    // Mark draft dirty on changes
+    useEffect(() => {
+        if (!draftKey) return;
+        isDraftDirtyRef.current = true;
+    }, [draftKey, orderItems, generalNotes, selectedResidence?.id]);
+
+    // Robust autosave: debounce on changes (2s), heartbeat interval (30s), beforeunload + when tab hidden
+    useEffect(() => {
+        if (!draftKey) return;
+
+        const saveNow = () => {
+            if (!isDraftDirtyRef.current) return;
+            try {
+                const payload = {
+                    items: orderItems,
+                    notes: generalNotes,
+                    residenceId: selectedResidence?.id || null,
+                    updatedAt: Date.now(),
+                };
+                localStorage.setItem(draftKey, JSON.stringify(payload));
+                setLastDraftSavedAt(payload.updatedAt);
+                isDraftDirtyRef.current = false;
+            } catch {}
+        };
+
+        // Debounced save shortly after changes
+        const debounced = setTimeout(saveNow, 2_000);
+        // Heartbeat save every 30s while editing (in case a change flag was missed)
+        const interval = setInterval(saveNow, 30_000);
+        // Save before unload/navigation
+        const handleBeforeUnload = () => saveNow();
+        // Save when tab goes to background
+        const handleVisibility = () => { if (document.visibilityState === 'hidden') saveNow(); };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibility);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibility);
+            clearInterval(interval);
+            clearTimeout(debounced);
+            // Final save when effect cleans up
+            saveNow();
+        };
+    }, [draftKey, orderItems, generalNotes, selectedResidence?.id]);
+
+    // Clear draft helper
+    const clearDraft = useCallback(() => {
+        try {
+            if (draftKey) localStorage.removeItem(draftKey);
+        } catch {}
+        setLastDraftSavedAt(null);
+        isDraftDirtyRef.current = false;
+    }, [draftKey]);
 
     const userResidences = currentUser?.assignedResidences
         ?.map(id => residences.find(r => r.id === id))
@@ -164,20 +266,53 @@ export default function NewOrderPage() {
             notes: generalNotes,
         };
         
-        const newOrderId = await createOrder(newOrderData);
+        setIsSubmitting(true);
+        try {
+            const newOrderId = await createOrder(newOrderData);
 
-        if (newOrderId) {
-            toast({ title: "Success", description: "Your order has been submitted." });
-            setOrderItems([]);
-            router.push(`/inventory/orders/${newOrderId}`);
+            if (newOrderId) {
+                toast({ title: "Success", description: "Your order has been submitted." });
+                // Clear draft on success
+                clearDraft();
+                setOrderItems([]);
+                router.push(`/inventory/orders/${newOrderId}`);
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
+    // Use centralized Arabic synonyms (includes دهان ⇄ بوية)
+    const normalizedSynonyms = buildNormalizedSynonyms(AR_SYNONYMS);
+
+    const searchN = normalizeText(searchQuery);
     const filteredItems = allItems.filter(item => {
         const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-        const matchesSearch = item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              item.nameAr.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesSearch;
+        if (!matchesCategory) return false;
+        if (!searchN) return true;
+        const cand = [
+            item.nameEn,
+            item.nameAr,
+            item.category,
+            ...(item.keywordsAr || []),
+            ...(item.keywordsEn || []),
+            ...(item.variants || []),
+        ].filter(Boolean).join(' ');
+        // Direct normalized contains
+        if (includesNormalized(cand, searchN)) return true;
+        // Alias match: if search matches any alias of a canonical and item matches that canonical
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+            if (aliasSet.has(searchN)) {
+                const itemMatchesCanon =
+                    includesNormalized(item.nameAr, canonN) ||
+                    includesNormalized(item.nameEn, canonN) ||
+                    (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+                    (item.variants || []).some(v => includesNormalized(v, canonN));
+                if (itemMatchesCanon) return true;
+            }
+        }
+        return false;
     });
 
     const totalOrderQuantity = orderItems.reduce((total, item) => total + item.quantity, 0);
@@ -227,9 +362,12 @@ export default function NewOrderPage() {
     };
 
 
+    // Allow manual clearing of draft
+    const hasDraft = !!draftKey && (orderItems.length > 0 || !!generalNotes || !!selectedResidence);
+
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Create New Material Request</h1>
                     {userResidences.length > 1 ? (
@@ -250,13 +388,24 @@ export default function NewOrderPage() {
                          <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{selectedResidence?.name || '...'}</span></p>
                     )}
                 </div>
-                <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || ordersLoading || !selectedResidence}>
-                    {ordersLoading ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
-                    ) : (
-                        `Submit Request (${totalOrderQuantity} items)`
+                <div className="flex items-center gap-2">
+                    {/* Last autosave indicator */}
+                    {lastDraftSavedAt && (
+                        <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
                     )}
-                </Button>
+                    {hasDraft && (
+                        <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); /* keep residence */ clearDraft(); }}>
+                            Discard Draft
+                        </Button>
+                    )}
+                    <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || isSubmitting || !selectedResidence}>
+                        {isSubmitting ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                        ) : (
+                            `Submit Request (${totalOrderQuantity} items)`
+                        )}
+                    </Button>
+                </div>
             </div>
             
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">

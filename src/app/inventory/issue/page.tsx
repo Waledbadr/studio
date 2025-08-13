@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useTransition } from 'react';
@@ -231,23 +230,35 @@ export default function IssueMaterialPage() {
         
         setVoucherLocations(prevLocations => {
             const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
-            
+
             if (existingLocationIndex > -1) {
                 const newLocations = [...prevLocations];
-                const targetLocation = newLocations[existingLocationIndex];
+                const targetLocation = { ...newLocations[existingLocationIndex] };
                 const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
                 if (existingItemIndex > -1) {
                     const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                    if(currentQty < stock) {
-                        targetLocation.items[existingItemIndex].issueQuantity += 1;
+                    if (currentQty < stock) {
+                        // Increment quantity without reordering when item already exists
+                        const updatedItems = [...targetLocation.items];
+                        updatedItems[existingItemIndex] = {
+                            ...updatedItems[existingItemIndex],
+                            issueQuantity: currentQty + 1,
+                        };
+                        targetLocation.items = updatedItems;
                     } else {
-                         toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                        toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive" });
                     }
+                    // keep locations order as is when just incrementing existing item
+                    newLocations[existingLocationIndex] = targetLocation;
+                    return newLocations;
                 } else {
-                    targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                    // New item: place it at the top of the item's list
+                    targetLocation.items = [{ ...itemToAdd, issueQuantity: 1 }, ...targetLocation.items];
+                    // Move this location to the top since a new item was added here
+                    newLocations.splice(existingLocationIndex, 1);
+                    return [targetLocation, ...newLocations];
                 }
-                return newLocations;
             } else {
                 const newLocation: VoucherLocation = {
                     ...newLocationDetails,
@@ -256,7 +267,8 @@ export default function IssueMaterialPage() {
                     isFacility,
                     items: [{ ...itemToAdd, issueQuantity: 1 }]
                 };
-                return [...prevLocations, newLocation];
+                // New location: place at the top
+                return [newLocation, ...prevLocations];
             }
         });
     };

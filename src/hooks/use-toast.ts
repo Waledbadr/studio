@@ -182,7 +182,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, []) // register once; avoid re-adding on every state change
 
   return {
     ...state,

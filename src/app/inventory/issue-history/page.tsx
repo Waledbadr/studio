@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -20,6 +19,18 @@ export default function MIVHistoryPage() {
     const router = useRouter();
     const isAdmin = currentUser?.role === 'Admin';
 
+    const formatMivId = (id: string) => {
+        if (!id) return id;
+        if (id.startsWith('MIV-') && !id.includes('-')) return id; // already short
+        const m = id.match(/^MIV-(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) {
+            const yy = m[1];
+            const mmNoPad = String(parseInt(m[2], 10));
+            const seq = String(parseInt(m[3], 10));
+            return `MIV-${yy}${mmNoPad}${seq}`;
+        }
+        return id;
+    }
 
     useEffect(() => {
         if (!loading && !residencesLoading && !usersLoading) {
@@ -73,7 +84,7 @@ export default function MIVHistoryPage() {
                         <TableBody>
                             {loading || residencesLoading ? renderSkeleton() : filteredMIVs.length > 0 ? filteredMIVs.map((miv) => (
                                 <TableRow key={miv.id} className="cursor-pointer" onClick={() => router.push(`/inventory/issue-history/${miv.id}`)}>
-                                    <TableCell className="font-medium">{miv.id}</TableCell>
+                                    <TableCell className="font-medium">{formatMivId(miv.id)}</TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP p')}</TableCell>
                                     <TableCell>{getResidenceName(miv.residenceId)}</TableCell>
                                     <TableCell>{miv.locationName}</TableCell>

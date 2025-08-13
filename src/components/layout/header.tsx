@@ -1,9 +1,8 @@
-
 'use client';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Globe, UserCircle, Sun, Moon, Check, Monitor, Palette } from 'lucide-react';
+import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
@@ -14,12 +13,16 @@ import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { Skeleton } from '../ui/skeleton';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+import dynamic from 'next/dynamic';
+
+const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  const { currentUser, users, switchUser } = useUsers();
+  const { currentUser } = useUsers();
   const { notifications, markAsRead, markAllAsRead } = useNotifications();
-  const { mode, setMode, resolvedMode, isLoaded } = useTheme();
+  const { mode, setMode, resolvedMode } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
@@ -28,7 +31,6 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
 
   const handleThemeSettingsClick = () => {
     router.push('/setup#themes');
@@ -43,12 +45,41 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     router.push(href);
   };
 
+  const handleLogout = async () => {
+    if (!auth) { router.push('/login'); return; }
+    try {
+      await signOut(auth);
+      router.replace('/login');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Visual mapping for notification types
+  const getNotificationMeta = (type: string) => {
+    switch (type) {
+      case 'new_order':
+        return { Icon: Package, color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-950/60', ring: 'ring-blue-200 dark:ring-blue-900/50' };
+      case 'order_approved':
+        return { Icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/60', ring: 'ring-emerald-200 dark:ring-emerald-900/50' };
+      case 'transfer_request':
+        return { Icon: ArrowLeftRight, color: 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-950/60', ring: 'ring-amber-200 dark:ring-amber-900/50' };
+      case 'feedback_update':
+        return { Icon: MessageSquare, color: 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-950/60', ring: 'ring-purple-200 dark:ring-purple-900/50' };
+      case 'mrv_request':
+        return { Icon: PackageCheck, color: 'text-cyan-600 bg-cyan-100 dark:text-cyan-400 dark:bg-cyan-950/60', ring: 'ring-cyan-200 dark:ring-cyan-900/50' };
+      case 'generic':
+      default:
+        return { Icon: BellRing, color: 'text-slate-600 bg-slate-100 dark:text-slate-300 dark:bg-slate-800/70', ring: 'ring-slate-200 dark:ring-slate-800' };
+    }
+  };
+
   return (
     <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
       <SidebarTrigger className="md:hidden" />
-      <div className="flex-1">
-        {/* Can add breadcrumbs here */}
-      </div>
+      <div className="flex-1" />
+  {/* Feedback trigger in header */}
+  <FeedbackWidget />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
@@ -81,6 +112,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
            <Button variant="ghost" size="icon" className="rounded-full relative">
@@ -91,19 +123,43 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                 <span className="sr-only">Notifications</span>
             </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuContent align="end" className="w-96">
             <DropdownMenuLabel className="flex justify-between items-center">
-                <span>Notifications</span>
+                <span className="font-semibold">Notifications</span>
                 {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>Mark all as read</Button>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isMounted && notifications.length > 0 ? notifications.slice(0, 5).map(notification => (
-                <DropdownMenuItem key={notification.id} onSelect={() => handleNotificationClick(notification.id, notification.href)} className={cn("flex flex-col items-start gap-1 whitespace-normal", !notification.isRead && "bg-accent")}>
-                    <p className="font-semibold">{notification.title}</p>
-                    <p className="text-xs text-muted-foreground">{notification.message}</p>
-                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}</p>
-                </DropdownMenuItem>
-            )) : <DropdownMenuItem disabled><p className="p-2 text-sm text-muted-foreground text-center">No notifications</p></DropdownMenuItem>}
+            {isMounted && notifications.length > 0 ? notifications.slice(0, 8).map(notification => {
+                const meta = getNotificationMeta(notification.type);
+                const { Icon } = meta;
+                return (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    onSelect={() => handleNotificationClick(notification.id, notification.href)}
+                    className={cn(
+                      'flex items-start gap-3 whitespace-normal py-3',
+                      'focus:bg-accent/60',
+                      !notification.isRead ? 'bg-accent/40' : ''
+                    )}
+                  >
+                    <div className={cn('mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full ring-1', meta.color, meta.ring)}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium leading-snug truncate">{notification.title}</p>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                    </div>
+                    {!notification.isRead && <span className="ml-1 mt-1 inline-block h-2 w-2 rounded-full bg-primary" aria-hidden />}
+                  </DropdownMenuItem>
+                );
+            }) : (
+              <DropdownMenuItem disabled>
+                <p className="p-2 text-sm text-muted-foreground text-center w-full">No notifications</p>
+              </DropdownMenuItem>
+            )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -128,14 +184,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
             <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Switch User</DropdownMenuLabel>
-            {isMounted && users ? users.map(user => (
-                <DropdownMenuItem key={user.id} onClick={() => switchUser(user)}>
-                    {user.name} ({user.role})
-                </DropdownMenuItem>
-            )) : <DropdownMenuItem disabled>Loading...</DropdownMenuItem> }
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" /> Logout
+            </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

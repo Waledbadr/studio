@@ -12,6 +12,8 @@ import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Minus, Trash2, ArrowLeftRight, Loader2, Search } from 'lucide-react';
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,6 +38,7 @@ export default function NewStockTransferPage() {
     const [transferItems, setTransferItems] = useState<TransferItem[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
 
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -43,14 +46,35 @@ export default function NewStockTransferPage() {
         return residences.filter(r => currentUser.assignedResidences.includes(r.id) || currentUser.role === 'Admin');
     }, [currentUser, residences]);
 
-    const availableItemsForTransfer = useMemo(() => {
+        const availableItemsForTransfer = useMemo(() => {
         if (!fromResidenceId) return [];
-        return items
-            .filter(item => getStockForResidence(item, fromResidenceId) > 0)
-            .filter(item => 
-                item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-            );
+                const qN = normalizeText(searchQuery);
+                return items
+                        .filter(item => getStockForResidence(item, fromResidenceId) > 0)
+                        .filter(item => {
+                                if (!qN) return true;
+                                                const cand = [
+                                    item.nameEn,
+                                    item.nameAr,
+                                    item.category,
+                                    ...(item.keywordsAr || []),
+                                    ...(item.keywordsEn || []),
+                                                    ...(item.variants || []),
+                                ].filter(Boolean).join(' ');
+                                if (includesNormalized(cand, qN)) return true;
+                                for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+                                    if (aliasSet.has(qN)) {
+                                                            const itemMatchesCanon =
+                                            includesNormalized(item.nameAr, canonN) ||
+                                            includesNormalized(item.nameEn, canonN) ||
+                                                                (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+                                                                (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+                                                                (item.variants || []).some(v => includesNormalized(v, canonN));
+                                        if (itemMatchesCanon) return true;
+                                    }
+                                }
+                                return false;
+                        });
     }, [fromResidenceId, items, getStockForResidence, searchQuery]);
     
     const availableToResidences = useMemo(() => {
