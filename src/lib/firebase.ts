@@ -28,10 +28,11 @@ let storage: FirebaseStorage | null = null;
 
 // Check if Firebase config is properly set (require only essential keys)
 const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'] as const;
+const isApiKeyLikelyValid = typeof firebaseConfig.apiKey === 'string' && firebaseConfig.apiKey.trim().startsWith('AIza');
 const isFirebaseConfigured = requiredKeys.every((k) => {
   const v = (firebaseConfig as any)[k];
   return v && typeof v === 'string' && v.trim().length > 0 && !v.includes('your_') && v !== 'your_api_key_here';
-});
+}) && isApiKeyLikelyValid;
 
 // A promise that resolves when auth state is ready (client-only)
 let authReady: Promise<void> = Promise.resolve();
@@ -91,13 +92,27 @@ if (isFirebaseConfigured) {
       const masked = key ? `${key.slice(0, 6)}...${key.slice(-2)}` : 'missing';
       console.log(`Firebase initialized. apiKey: ${masked}`);
     } else {
-      console.log("Firebase initialized successfully");
+      const key = String(firebaseConfig.apiKey || '');
+      const masked = key ? `${key.slice(0, 4)}...${key.slice(-2)}` : 'missing';
+      console.log(`Firebase initialized successfully (apiKey ${masked})`);
     }
   } catch (e) {
     console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
   }
 } else {
-  console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
+  const missing = requiredKeys.filter((k) => {
+    const v = (firebaseConfig as any)[k];
+    return !(v && typeof v === 'string' && v.trim().length > 0);
+  });
+  const key = String(firebaseConfig.apiKey || '');
+  const masked = key ? `${key.slice(0, 4)}...${key.slice(-2)}` : 'missing';
+  const reasons: string[] = [];
+  if (missing.length) reasons.push(`missing keys: ${missing.join(', ')}`);
+  if (key && !key.startsWith('AIza')) reasons.push('apiKey format invalid (Firebase Web API keys usually start with "AIza")');
+  console.warn(
+    `Firebase not configured. Using local storage fallback. ${reasons.length ? `Reasons: ${reasons.join(' | ')}` : ''} (apiKey ${masked}). ` +
+    `Ensure NEXT_PUBLIC_FIREBASE_* env vars are set at build time (e.g., on Render) with values from Firebase Console > Project Settings > Web app.`
+  );
 }
 
 export { app, db, auth, storage, authReady };
