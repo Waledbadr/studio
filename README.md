@@ -116,18 +116,27 @@ EstateCare/
 3. **إعداد Firebase**
    - إنشاء مشروع جديد في [Firebase Console](https://console.firebase.google.com)
    - تفعيل Firestore Database
-   - تفعيل Authentication
-   - تفعيل Hosting
-   - إضافة ملف `firebase-config.js` في `src/lib/`
+   - تفعيل Authentication (Email/Password + أي موفرات تريدها مثل Google/Microsoft)
+   - تفعيل Hosting (اختياري للتجربة المحلية)
 
 4. **تكوين متغيرات البيئة**
+   - انسخ الملف `.env.local.example` إلى `.env.local` ثم عبئ القيم من إعدادات تطبيق الويب في Firebase (Project settings > General > Your apps):
    ```bash
-   # إنشاء ملف .env.local
-   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_domain
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-   # ... باقي متغيرات Firebase
+   NEXT_PUBLIC_FIREBASE_API_KEY=...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
    ```
+   - في وضع التطوير يمكنك أيضًا الاعتماد على `.env.development` المرفق كتجربة، لكن يُفضّل إنشاء مشروع Firebase منفصل لك.
+   - لتفعيل WebAuthn (اختياري)، اترك `NEXT_PUBLIC_WEBAUTHN_RPID=localhost` أثناء التطوير.
+
+   ملاحظات مهمة لتجنب خطأ `auth/invalid-credential`:
+   - تأكد من صحة البريد/كلمة المرور وأن المستخدم موجود في Authentication > Users.
+   - تحقق من أن `Authorized domains` في Firebase Authentication تحتوي `localhost` واسم نطاقك.
+   - في حال استخدام Google/Microsoft، فعّل الموفر واضبط Client ID/Secret، وأضف `http://localhost:9002` ضمن النطاقات المسموح بها للعودة إن لزم.
+   - إن نقرت "Continue with Google" ورأيت الخطأ، فالسبب غالبًا نطاق غير مصرح به أو موفر غير مفعّل.
 
 5. **تشغيل التطبيق في وضع التطوير**
    ```powershell
