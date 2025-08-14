@@ -90,12 +90,8 @@ export default function ReceiveOrderPage() {
         const itemInfo = receivedItems.find(item => item.id === itemId);
         if (!itemInfo) return;
 
-        const maxReceivable = itemInfo.quantity - itemInfo.alreadyReceived;
-        let quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
-        if (quantity > maxReceivable) {
-            quantity = maxReceivable;
-            toast({ title: "Warning", description: "Cannot receive more than requested quantity." });
-        }
+        // Allow over-receipt: only enforce non-negative numbers
+        const quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
 
         setReceivedItems(prevItems =>
             prevItems.map(item =>
@@ -246,7 +242,6 @@ export default function ReceiveOrderPage() {
                                             onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} 
                                             className="w-24 text-center mx-auto [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                                             min={0}
-                                            max={item.quantity - item.alreadyReceived}
                                         />
                                     </TableCell>
                                 </TableRow>

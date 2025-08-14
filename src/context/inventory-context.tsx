@@ -242,6 +242,23 @@ export interface StockReconciliation {
   performedById?: string;
 }
 
+// Reconciliation approval workflow
+export interface ReconciliationRequest {
+  id: string;
+  residenceId: string;
+  adjustments: { itemId: string; newStock: number; reason?: string }[];
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedById: string;
+  requestedAt: Timestamp;
+  approvedById?: string;
+  approvedAt?: Timestamp;
+  rejectedById?: string;
+  rejectedAt?: Timestamp;
+  rejectReason?: string | null;
+  referenceId?: string; // linked reconciliation id when approved
+  reservedId?: string; // pre-reserved reconciliation id/code for display while pending
+}
+
 
 interface InventoryContextType {
   items: InventoryItem[];
@@ -280,13 +297,19 @@ interface InventoryContextType {
   reconcileStock: (
     residenceId: string,
     adjustments: { itemId: string; newStock: number; reason?: string }[],
-    performedById?: string
+  performedById?: string,
+  overrideReferenceId?: string
   ) => Promise<string | void>;
   getReconciliations: (residenceId: string) => Promise<StockReconciliation[]>;
   // New: admin/all and details helpers
   getAllReconciliations: () => Promise<StockReconciliation[]>;
   getReconciliationById: (id: string) => Promise<StockReconciliation | null>;
   getReconciliationItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // Reconciliation approval workflow
+  getReconciliationRequests: (residenceId?: string, status?: ReconciliationRequest['status']) => Promise<ReconciliationRequest[]>;
+  createReconciliationRequest: (residenceId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string) => Promise<string>;
+  approveReconciliationRequest: (requestId: string, approverId: string) => Promise<string>;
+  rejectReconciliationRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
   // MRV helpers
   createMRV: (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string } }) => Promise<string>;
   getMRVs: () => Promise<MRV[]>;
@@ -316,6 +339,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const isLoaded = useRef(false);
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
+  const { users } = useUsers();
 
 
   const loadInventory = useCallback(() => {
@@ -567,32 +591,22 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return `${prefix}${next}`;
     };
 
-  // Generate reconciliation id: CON-<YY><M><seq>
-  const generateNewReconciliationId = async (): Promise<string> => {
+  // Reserve reconciliation id via counters: CON-<YY><M><seq>
+  const reserveNewReconciliationId = async (): Promise<string> => {
     if (!db) throw new Error("Firebase not initialized");
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2); // YY
-    const month = (now.getMonth() + 1).toString(); // M without leading zero
-    const prefix = `CON-${year}${month}`; // e.g., CON-258
+    const yy = now.getFullYear().toString().slice(-2);
+    const mmNoPad = (now.getMonth() + 1).toString();
+    const counterRef = doc(db!, 'counters', `recon-${yy}-${mmNoPad}`);
 
-    const qRef = query(
-      collection(db, 'stockReconciliations'),
-      where('id', '>=', prefix),
-      where('id', '<', prefix + '\uf8ff'),
-      orderBy('id', 'desc'),
-      limit(1)
-    );
-
-    const snap = await getDocs(qRef);
-    let lastNum = 0;
-    if (!snap.empty) {
-      const last = snap.docs[0].data() as any;
-      const lastId = last?.id || snap.docs[0].id;
-      const numPart = parseInt(String(lastId).substring(prefix.length), 10);
-      if (!isNaN(numPart)) lastNum = numPart;
-    }
-    const next = lastNum + 1;
-    return `${prefix}${next}`; // e.g., CON-2583
+    let nextSeq = 0;
+    await runTransaction(db!, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm: mmNoPad, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    return `CON-${yy}${mmNoPad}${nextSeq}`;
   };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
@@ -1668,7 +1682,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const reconcileStock = async (
       residenceId: string,
       adjustments: { itemId: string; newStock: number; reason?: string }[],
-      performedById?: string
+      performedById?: string,
+      overrideReferenceId?: string
     ): Promise<string | void> => {
       if (!db) {
         toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
@@ -1683,7 +1698,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         .filter((a) => !!a.itemId);
       if (filtered.length === 0) return;
 
-      const referenceId = await generateNewReconciliationId();
+  const referenceId = overrideReferenceId || await reserveNewReconciliationId();
       try {
         let totalIncrease = 0;
         let totalDecrease = 0;
@@ -1868,6 +1883,122 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
+    // Reconciliation approval workflow implementations
+  const getReconciliationRequests = async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
+      if (!db) {
+        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        return [];
+      }
+      try {
+        let qRef: any = collection(db, 'reconciliationRequests');
+        const clauses: any[] = [];
+        if (resId) clauses.push(where('residenceId', '==', resId));
+        if (status) clauses.push(where('status', '==', status));
+        if (clauses.length > 0) {
+          qRef = query(qRef, ...clauses);
+        }
+        const snap = await getDocs(qRef);
+        const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ReconciliationRequest[];
+        arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+        return arr;
+      } catch (e) {
+        console.error('Error fetching reconciliation requests:', e);
+        toast({ title: 'Error', description: 'Failed to fetch reconciliation requests.', variant: 'destructive' });
+        return [];
+      }
+    };
+
+    const createReconciliationRequest = async (resId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string): Promise<string> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      if (!resId || !adjustments || adjustments.length === 0) throw new Error('Residence and at least one adjustment are required');
+      // Reserve a reconciliation code for display
+      const reservedId = await reserveNewReconciliationId();
+      const reqRef = doc(collection(db, 'reconciliationRequests'));
+      const payload: ReconciliationRequest = {
+        id: reqRef.id,
+        residenceId: resId,
+        adjustments,
+        status: 'Pending',
+        requestedById,
+        requestedAt: Timestamp.now(),
+        reservedId,
+      } as ReconciliationRequest;
+      await setDoc(reqRef, payload);
+      toast({ title: 'Submitted', description: 'Reconciliation request submitted for admin approval.' });
+      // Notify all admins
+      try {
+        const admins = (users || []).filter(u => u.role === 'Admin');
+        for (const admin of admins) {
+          await addNotification?.({
+            userId: admin.id,
+            title: 'Reconciliation Request',
+            message: `New reconciliation request for residence ${resId}.`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: reqRef.id,
+          } as any);
+        }
+      } catch {}
+      return reqRef.id;
+    };
+
+    const approveReconciliationRequest = async (requestId: string, approverId: string): Promise<string> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      const reqRef = doc(db, 'reconciliationRequests', requestId);
+      const snap = await getDoc(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as ReconciliationRequest;
+      if (data.status !== 'Pending') throw new Error('Request already processed');
+      // Apply reconciliation using reserved id if present
+      const refId = await reconcileStock(data.residenceId, data.adjustments, approverId, data.reservedId) as string | void;
+      const finalRef = typeof refId === 'string' ? refId : undefined;
+      await updateDoc(reqRef, {
+        status: 'Approved',
+        approvedById: approverId,
+        approvedAt: Timestamp.now(),
+        referenceId: finalRef || null,
+      });
+      toast({ title: 'Approved', description: 'Reconciliation request approved and applied.' });
+      // Notify requester
+      try {
+        if (data.requestedById) {
+          await addNotification?.({
+            userId: data.requestedById,
+            title: 'Reconciliation Approved',
+            message: `Your reconciliation was approved (${finalRef || data.reservedId || ''}).`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: finalRef || requestId,
+          } as any);
+        }
+      } catch {}
+      return finalRef || '';
+    };
+
+    const rejectReconciliationRequest = async (requestId: string, rejecterId: string, reason?: string) => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      const reqRef = doc(db, 'reconciliationRequests', requestId);
+      const snap = await getDoc(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as ReconciliationRequest;
+      if (data.status !== 'Pending') throw new Error('Request already processed');
+      await updateDoc(reqRef, { status: 'Rejected', rejectedById: rejecterId, rejectedAt: Timestamp.now(), rejectReason: reason || null });
+      toast({ title: 'Rejected', description: 'Reconciliation request has been rejected.' });
+      // Notify requester
+      try {
+        if (data.requestedById) {
+          await addNotification?.({
+            userId: data.requestedById,
+            title: 'Reconciliation Rejected',
+            message: `Your reconciliation was rejected${reason ? `: ${reason}` : ''}.`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: requestId,
+          } as any);
+        }
+      } catch {}
+    };
+
   return (
     <InventoryContext.Provider value={{ 
       items, 
@@ -1907,6 +2038,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getAllReconciliations,
       getReconciliationById,
       getReconciliationItems,
+  getReconciliationRequests,
+  createReconciliationRequest,
+  approveReconciliationRequest,
+  rejectReconciliationRequest,
       // expose MRV helpers
       createMRV,
       getMRVs,

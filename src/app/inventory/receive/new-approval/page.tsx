@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,15 +11,18 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
-import { UploadCloud, Loader2, Search } from 'lucide-react';
+import { UploadCloud, Loader2, Search, ChevronDown } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp } from 'firebase/firestore';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 
 // MRV with Admin approval, UI similar to New Order
 export default function NewMRVApprovalPage() {
-  const { items, loading, categories } = useInventory();
+  const { items, loading, categories, addItem, getStockForResidence, updateItem } = useInventory();
   const { residences, loadResidences } = useResidences();
   const { currentUser } = useUsers();
   const { toast } = useToast();
@@ -34,6 +37,9 @@ export default function NewMRVApprovalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [editItemOpen, setEditItemOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
     if (residences.length === 0) loadResidences();
@@ -45,13 +51,34 @@ export default function NewMRVApprovalPage() {
   }, [residences, currentUser]);
 
   const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
+    const matches = (it: InventoryItem) => {
+      if (tokens.length === 0) return true;
+      const hay = [
+        it.nameEn?.toLowerCase?.() || '',
+        it.nameAr?.toLowerCase?.() || '',
+        it.category?.toLowerCase?.() || '',
+        it.unit?.toLowerCase?.() || '',
+        ...(it.variants || []).map(v => (v || '').toLowerCase()),
+        ...(it.keywordsAr || []).map(k => (k || '').toLowerCase()),
+        ...(it.keywordsEn || []).map(k => (k || '').toLowerCase()),
+      ].join(' ');
+      return tokens.every(t => hay.includes(t));
+    };
     return items.filter((item) => {
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch = !q || item.nameEn.toLowerCase().includes(q) || item.nameAr.toLowerCase().includes(q);
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matches(item);
     });
   }, [items, selectedCategory, searchQuery]);
+
+  // Determine if the typed name already exists (exact match AR/EN)
+  const canQuickAdd = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return false;
+    const exists = items.some(it => (it.nameEn || '').toLowerCase() === q || (it.nameAr || '').toLowerCase() === q);
+    return !exists;
+  }, [items, searchQuery]);
 
   const setQty = (id: string, q: number) => setLines(prev => ({ ...prev, [id]: Math.max(0, isNaN(q) ? 0 : q) }));
   const addOne = (item: InventoryItem) => setQty(item.id, (lines[item.id] || 0) + 1);
@@ -65,6 +92,20 @@ export default function NewMRVApprovalPage() {
     }), [lines, items]);
 
   const totalQty = selectedLines.reduce((s, l) => s + l.quantity, 0);
+
+  // Per-line stock check (for the selected residence)
+  const lineWarnings = useMemo(() => {
+    const map: Record<string, { stock: number; noNeed: boolean }> = {};
+    for (const line of selectedLines) {
+      const it = items.find(i => i.id === line.id);
+      const stock = residenceId && it ? (getStockForResidence?.(it as any, residenceId) || 0) : 0;
+      const noNeed = !!residenceId && stock >= line.quantity && line.quantity > 0;
+      map[line.id] = { stock, noNeed };
+    }
+    return map;
+  }, [selectedLines, items, residenceId, getStockForResidence]);
+
+  const hasBlockingLines = useMemo(() => Object.values(lineWarnings).some(w => w.noNeed), [lineWarnings]);
 
   const handleSubmit = async () => {
     if (!db) {
@@ -85,6 +126,18 @@ export default function NewMRVApprovalPage() {
     }
     if (selectedLines.length === 0) {
       toast({ title: 'Error', description: 'Enter at least one quantity.', variant: 'destructive' });
+      return;
+    }
+
+    // Prevent submission if any selected line quantity is already available in stock
+    if (hasBlockingLines) {
+      const first = selectedLines.find(l => lineWarnings[l.id]?.noNeed);
+      if (first) {
+        const stock = lineWarnings[first.id]?.stock || 0;
+        toast({ title: 'لا حاجة للشراء', description: `${first.nameAr} متوفر في المخزون (الكمية: ${stock}). عدّل الكمية أو احذف الصنف.`, variant: 'destructive' });
+      } else {
+        toast({ title: 'لا حاجة للشراء', description: 'بعض الأصناف متوفرة بالمخزون. عدّل الكميات أو احذف الأصناف.', variant: 'destructive' });
+      }
       return;
     }
 
@@ -136,10 +189,19 @@ export default function NewMRVApprovalPage() {
           <h1 className="text-2xl font-bold">New MRV (Requires Admin Approval)</h1>
           <p className="text-muted-foreground">Create a receipt request with supplier and invoice attachment.</p>
         </div>
-        <Button onClick={handleSubmit} disabled={submitting || !residenceId}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setAddItemOpen(true)}>+ Add New Item</Button>
+          <Button onClick={handleSubmit} disabled={submitting || !residenceId || hasBlockingLines}>
           {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : `Submit (${totalQty})`}
-        </Button>
+          </Button>
+        </div>
       </div>
+      {hasBlockingLines && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          <div className="font-medium text-destructive">تنبيه</div>
+          <div className="text-muted-foreground">هناك أصناف لا حاجة لشرائها لأن الكمية المطلوبة متوفرة في المخزون. عدّل الكميات أو احذف الأصناف المظللة باللون الأحمر.</div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -199,19 +261,54 @@ export default function NewMRVApprovalPage() {
             <div className="space-y-2 max-h-[450px] overflow-auto pr-2">
               {loading ? (
                 <div className="text-sm text-muted-foreground">Loading items…</div>
-              ) : filteredItems.length > 0 ? filteredItems.map(it => (
-                <div key={it.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
-                  <div>
-                    <p className="font-medium">{it.nameAr} / {it.nameEn}</p>
-                    <p className="text-sm text-muted-foreground">{it.category} • {it.unit}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input type="number" min={0} className="w-24 text-center" value={lines[it.id] ?? 0} onChange={(e) => setQty(it.id, parseInt(e.target.value, 10))} />
-                    <Button size="sm" variant="outline" onClick={() => addOne(it)}>+1</Button>
-                  </div>
+              ) : filteredItems.length > 0 ? (
+                <>
+                  {canQuickAdd && (
+                    <div className="flex items-center justify-between p-2 rounded-md border border-dashed bg-muted/10">
+                      <div className="text-sm">
+                        لم يتم العثور على "{searchQuery}" كصنف مطابق.
+                      </div>
+                      <Button size="sm" variant="secondary" onClick={() => setAddItemOpen(true)}>+ إضافة صنف جديد</Button>
+                    </div>
+                  )}
+                  {filteredItems.map(it => (
+                    <div key={it.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
+                      <div>
+                        <p className="font-medium">{it.nameAr} / {it.nameEn}</p>
+                        <p className="text-sm text-muted-foreground">{it.category} • {it.unit} {residenceId ? `• المتوفر: ${getStockForResidence?.(it as any, residenceId) || 0}` : ''}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input type="number" min={0} className="w-24 text-center" value={lines[it.id] ?? 0} onChange={(e) => setQty(it.id, parseInt(e.target.value, 10))} />
+                        <Button size="sm" variant="outline" onClick={() => addOne(it)}>+1</Button>
+                        {Array.isArray(it.variants) && it.variants.length > 0 && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="ghost" className="px-2" aria-label="Add by variant">
+                                <ChevronDown className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {it.variants.map((v) => (
+                                <DropdownMenuItem key={v} onSelect={(e) => { e.preventDefault(); addOne(it); }}>
+                                  Add: {v}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        
+                        <Button size="sm" variant="ghost" onClick={() => { setItemToEdit(it); setEditItemOpen(true); }}>Edit</Button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground py-10 space-y-3">
+                  <div>لا توجد أصناف مطابقة للبحث.</div>
+                  {canQuickAdd && (
+                    <Button size="sm" onClick={() => setAddItemOpen(true)}>+ إضافة "{searchQuery}" كصنف جديد</Button>
+                  )}
                 </div>
-              )) : (
-                <div className="text-center text-muted-foreground py-10">No items match your search.</div>
               )}
             </div>
           </CardContent>
@@ -233,13 +330,24 @@ export default function NewMRVApprovalPage() {
               </TableHeader>
               <TableBody>
                 {selectedLines.length > 0 ? selectedLines.map(line => (
-                  <TableRow key={line.id}>
+                  <TableRow key={line.id} className={lineWarnings[line.id]?.noNeed ? 'bg-destructive/5' : ''}>
                     <TableCell className="font-medium">{line.nameAr} / {line.nameEn}<div className="text-xs text-muted-foreground">{line.category}</div></TableCell>
                     <TableCell>
-                      <Input type="number" min={0} className="w-24 text-center mx-auto" value={line.quantity} onChange={(e) => setQty(line.id, parseInt(e.target.value, 10))} />
+                      <div className="flex flex-col items-center gap-1">
+                        <Input type="number" min={0} className="w-24 text-center mx-auto" value={line.quantity} onChange={(e) => setQty(line.id, parseInt(e.target.value, 10))} />
+                        {residenceId && (
+                          <div className={`text-[11px] ${lineWarnings[line.id]?.noNeed ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            المتوفر: {lineWarnings[line.id]?.stock || 0}
+                            {lineWarnings[line.id]?.noNeed && ' • لا حاجة للشراء'}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => removeLine(line.id)}>Remove</Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => { const it = items.find(i => i.id === line.id); if (it) { setItemToEdit(it); setEditItemOpen(true); } }}>Edit</Button>
+                        <Button variant="ghost" size="sm" onClick={() => removeLine(line.id)}>Remove</Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )) : (
@@ -252,6 +360,26 @@ export default function NewMRVApprovalPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Item Dialog */}
+      <AddItemDialog
+        isOpen={addItemOpen}
+        onOpenChange={setAddItemOpen}
+        onItemAdded={addItem}
+        initialName={searchQuery}
+        onItemAddedAndOrdered={(newItem) => {
+          // When user clicks "Save & Add to Order", prefill quantity 1 and scroll to receipt
+          setLines(prev => ({ ...prev, [newItem.id]: (prev[newItem.id] || 0) + 1 }));
+          setAddItemOpen(false);
+        }}
+      />
+
+      <EditItemDialog
+        isOpen={editItemOpen}
+        onOpenChange={(open) => { setEditItemOpen(open); if (!open) setItemToEdit(null); }}
+        onItemUpdated={updateItem}
+        item={itemToEdit}
+      />
     </div>
   );
 }

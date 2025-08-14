@@ -8,21 +8,25 @@ import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Truck, Package, 
 import Link from 'next/link';
 import { useMaintenance } from "@/context/maintenance-context";
 import { useOrders, type Order } from "@/context/orders-context";
-import { useInventory, type MIV } from "@/context/inventory-context";
+import { useInventory, type MIV, type ReconciliationRequest } from "@/context/inventory-context";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { useUsers } from "@/context/users-context";
+import { useResidences } from "@/context/residences-context";
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
   const { orders, loading: ordersLoading, loadOrders } = useOrders();
-  const { getMIVs, loading: inventoryLoading } = useInventory();
-  const { currentUser, loading: usersLoading } = useUsers();
+    const { getMIVs, getReconciliationRequests, loading: inventoryLoading } = useInventory();
+    const { currentUser, loading: usersLoading, getUserById } = useUsers();
+    const { residences } = useResidences();
   
   const [mivs, setMivs] = useState<MIV[]>([]);
   const [mivsLoading, setMivsLoading] = useState(true);
+    const [pendingRecons, setPendingRecons] = useState<ReconciliationRequest[]>([]);
+    const [pendingReconsLoading, setPendingReconsLoading] = useState(true);
   const isAdmin = currentUser?.role === 'Admin';
   const router = useRouter();
 
@@ -32,6 +36,13 @@ export default function DashboardPage() {
     loadOrders();
     setMivsLoading(true);
     getMIVs().then(setMivs).finally(() => setMivsLoading(false));
+        if (isAdmin) {
+            setPendingReconsLoading(true);
+            getReconciliationRequests(undefined, 'Pending').then(setPendingRecons).finally(() => setPendingReconsLoading(false));
+        } else {
+            setPendingRecons([]);
+            setPendingReconsLoading(false);
+        }
   }, [loadRequests, loadOrders, getMIVs]);
   
   const filteredMaintenance = useMemo(() => {
@@ -121,7 +132,47 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {isAdmin && (
+                    <Card className="border-t-4 border-purple-500 lg:col-span-3">
+                        <CardHeader className="flex flex-row items-center">
+                            <div className="grid gap-2">
+                                <CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5 text-purple-500"/> Pending Reconciliations</CardTitle>
+                            </div>
+                            <Button asChild size="sm" className="ml-auto gap-1">
+                                <Link href="/inventory/inventory-audit">Review<ArrowUpRight className="h-4 w-4" /></Link>
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {pendingReconsLoading ? (
+                                <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                            ) : pendingRecons.length === 0 ? (
+                                <div className="text-center text-muted-foreground p-10">No pending reconciliation requests.</div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Code</TableHead>
+                                            <TableHead>Residence</TableHead>
+                                            <TableHead>Items</TableHead>
+                                            <TableHead>Requester</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {pendingRecons.slice(0,5).map(r => (
+                                            <TableRow key={r.id} onClick={() => router.push('/inventory/inventory-audit')} className="cursor-pointer hover:bg-accent/30">
+                                            <TableCell><div className="font-mono">{r.reservedId || r.id}</div></TableCell>
+                                            <TableCell>{residences.find(x => String(x.id) === String(r.residenceId))?.name || r.residenceId}</TableCell>
+                                                <TableCell>{r.adjustments?.length || 0}</TableCell>
+                                            <TableCell>{getUserById(r.requestedById)?.name || r.requestedById}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
         <Card className="border-t-4 border-blue-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useInventory } from '@/context/inventory-context';
@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Filter, TrendingUp, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Link from 'next/link';
 
 interface StockMovementFilters {
   residenceId: string;
@@ -25,7 +27,7 @@ interface StockMovementFilters {
 }
 
 export default function StockMovementReportPage() {
-  const { getAllInventoryTransactions, items } = useInventory();
+  const { getAllInventoryTransactions, items, getMRVById, getMIVById, getReconciliationItems } = useInventory();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
 
@@ -45,6 +47,13 @@ export default function StockMovementReportPage() {
   const [isFetchingInitial, setIsFetchingInitial] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
+
+  // Details dialog state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [docDetails, setDocDetails] = useState<any>(null);
+  const [reconItems, setReconItems] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -173,6 +182,47 @@ export default function StockMovementReportPage() {
     setHasGenerated(true);
 
   }, [filters, allTransactions, userResidences, availableRooms, availableFloors, availableBuildings]);
+
+  // Build deep links to original documents
+  const canOpenDocLink = (tx: any) => {
+    if (!tx?.referenceDocId) return null;
+    if (tx.type === 'IN') return `/inventory/receive/receipts/${tx.referenceDocId}`;
+    if (tx.type === 'OUT') {
+      return typeof tx.referenceDocId === 'string' && tx.referenceDocId.startsWith('MIV-')
+        ? `/inventory/issue-history/${tx.referenceDocId}`
+        : null;
+    }
+    if (tx.type === 'ADJUSTMENT') {
+      const id = tx.referenceDocId as string;
+      return id.startsWith('CON-') ? `/inventory/reports/reconciliations/${id}` : null;
+    }
+    return null;
+  };
+
+  // Open row details dialog and fetch extra info depending on type
+  const openTxDetails = async (tx: any) => {
+    setSelectedTx(tx);
+    setDocDetails(null);
+    setReconItems([]);
+    setDetailOpen(true);
+    try {
+      setDetailLoading(true);
+      if (tx.type === 'IN' && tx.referenceDocId) {
+        const d = await getMRVById(tx.referenceDocId);
+        setDocDetails(d);
+      } else if (tx.type === 'OUT' && tx.referenceDocId && String(tx.referenceDocId).startsWith('MIV-')) {
+        const d = await getMIVById(tx.referenceDocId);
+        setDocDetails(d);
+      } else if (tx.type === 'ADJUSTMENT' && tx.referenceDocId) {
+        const items = await getReconciliationItems(tx.referenceDocId);
+        setReconItems(items || []);
+      }
+    } catch (e) {
+      // ignore, show minimal info
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
 
   // Export to CSV
@@ -540,7 +590,11 @@ export default function StockMovementReportPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredTransactions.map((transaction, index) => (
-                        <TableRow key={transaction.id ?? `${transaction.referenceDocId || 'ref'}-${index}`} className="hover:bg-muted/50 dark:hover:bg-muted/20">
+                        <TableRow
+                          key={`${transaction.id || transaction.referenceDocId || 'row'}-${transaction.residenceId || 'res'}-${transaction.date?.toMillis?.() || transaction.date?.toDate?.()?.getTime?.() || index}`}
+                          className="hover:bg-muted/50 dark:hover:bg-muted/20 cursor-pointer"
+                          onClick={() => openTxDetails(transaction)}
+                        >
                           <TableCell className="font-mono text-sm">
                             {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
                           </TableCell>
@@ -592,6 +646,110 @@ export default function StockMovementReportPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Details dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Movement details</DialogTitle>
+          </DialogHeader>
+          {selectedTx ? (
+            <div className="text-sm text-muted-foreground space-y-1 mb-3">
+              <div>
+                Type: <span className="font-medium text-foreground">{selectedTx.type}</span>
+              </div>
+              <div>
+                Date: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), 'PPP p') : ''}
+              </div>
+              <div>
+                Reference: <span className="font-mono">{selectedTx.referenceDocId || '—'}</span>
+              </div>
+              <div>Residence: {getResidenceName(selectedTx.residenceId)}</div>
+              {selectedTx.locationName ? <div>Location: {selectedTx.locationName}</div> : null}
+            </div>
+          ) : null}
+
+          {detailLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : selectedTx?.type === 'IN' && docDetails ? (
+            <div className="space-y-3">
+              <div className="text-sm">Supplier: {docDetails.supplierName || '—'} · Invoice: {docDetails.invoiceNo || '—'}</div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {docDetails.items?.map((it: any, i: number) => (
+                      <TableRow key={`${it.itemId}-${i}`}>
+                        <TableCell>{it.itemNameEn || it.itemNameAr}</TableCell>
+                        <TableCell className="text-right">{it.quantity}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {canOpenDocLink(selectedTx) && (
+                <div className="pt-2">
+                  <Button asChild>
+                    <Link href={canOpenDocLink(selectedTx)!}>Open MRV</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : selectedTx?.type === 'OUT' && docDetails ? (
+            <div className="space-y-3">
+              <div className="text-sm">Location: {Object.keys(docDetails.locations || {}).join(', ') || selectedTx.locationName || '—'}</div>
+              {canOpenDocLink(selectedTx) && (
+                <div className="pt-2">
+                  <Button asChild>
+                    <Link href={canOpenDocLink(selectedTx)!}>Open MIV</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : selectedTx?.type === 'ADJUSTMENT' ? (
+            <div className="space-y-3">
+              {reconItems.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No reconciliation lines found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead>Direction</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reconItems.map((it: any, i: number) => (
+                        <TableRow key={`${it.id || it.itemId || 'row'}-${i}`}>
+                          <TableCell>{it.itemNameEn || it.itemNameAr}</TableCell>
+                          <TableCell>{it.adjustmentDirection || '—'}</TableCell>
+                          <TableCell className="text-right">{it.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {!!selectedTx.referenceDocId && (
+                <div className="pt-2">
+                  <Button asChild variant="secondary">
+                    <Link href={`/inventory/reports/reconciliations/${selectedTx.referenceDocId}`}>Open Reconciliation</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No additional details available for this movement.</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

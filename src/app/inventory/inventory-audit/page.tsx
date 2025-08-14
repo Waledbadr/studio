@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useInventory } from '@/context/inventory-context';
+import { useInventory, type ReconciliationRequest } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle, FileText, ListFilter, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronDown, FileText, ListFilter, RefreshCw, Save } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Select,
   SelectTrigger,
@@ -23,9 +24,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
 export default function StockReconciliationPage() {
-  const { items, categories, loading, getStockForResidence, reconcileStock, getReconciliations } = useInventory();
+  const { items, categories, loading, getStockForResidence, reconcileStock, getReconciliations, getAllReconciliations, getReconciliationItems, createReconciliationRequest, getReconciliationRequests, approveReconciliationRequest, rejectReconciliationRequest } = useInventory();
   const { residences, loading: residencesLoading } = useResidences();
-  const { currentUser } = useUsers();
+  const { currentUser, getUserById } = useUsers();
   const { toast } = useToast();
 
   const [residenceId, setResidenceId] = useState<string | undefined>(undefined);
@@ -36,11 +37,22 @@ export default function StockReconciliationPage() {
   const [newStock, setNewStock] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isAdmin = (currentUser?.role === 'Admin');
 
   // Reconciliation history state
   type Rec = { id: string; residenceId: string; date: any; itemCount: number; totalIncrease: number; totalDecrease: number; performedById?: string };
   const [recons, setRecons] = useState<Rec[]>([]);
   const [reconsLoading, setReconsLoading] = useState(false);
+  const [pending, setPending] = useState<ReconciliationRequest[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedRec, setSelectedRec] = useState<Rec | null>(null);
+  const [detailItems, setDetailItems] = useState<any[]>([]);
+  const [reqDetailOpen, setReqDetailOpen] = useState(false);
+  const [selectedReq, setSelectedReq] = useState<ReconciliationRequest | null>(null);
+  const [reqDetailItems, setReqDetailItems] = useState<Array<{ itemId: string; name: string; unit?: string; current: number; newStock: number; diff: number; reason?: string }>>([]);
 
   const safeCategories = useMemo(() => (categories || []).filter((c): c is string => !!c), [categories]);
   const safeResidences = useMemo(() => {
@@ -49,6 +61,14 @@ export default function StockReconciliationPage() {
     const allowed = new Set(currentUser.assignedResidences || []);
     return list.filter(r => allowed.has(r.id));
   }, [residences, currentUser]);
+
+  const residenceNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (residences || []).forEach(r => map.set(String(r.id), r.name));
+    return map;
+  }, [residences]);
+
+  const userName = (id?: string) => (id ? (getUserById(id)?.name || id) : '—');
 
   // Reset per-residence state
   useEffect(() => {
@@ -60,22 +80,42 @@ export default function StockReconciliationPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!residenceId) {
-        setRecons([]);
-        return;
-      }
       setReconsLoading(true);
       try {
-        const list = await getReconciliations(residenceId);
+        let list: any[] = [];
+        if (residenceId) {
+          list = await getReconciliations(residenceId);
+        } else {
+          list = await getAllReconciliations();
+          if (!isAdmin && currentUser) {
+            const allowed = new Set(currentUser.assignedResidences || []);
+            list = list.filter((r: any) => allowed.has(String(r.residenceId)));
+          }
+        }
         if (!cancelled) setRecons(list as unknown as Rec[]);
       } catch (e) {
         // toast handled in context on error
       } finally {
         if (!cancelled) setReconsLoading(false);
       }
+
+      // Load pending requests (admin sees all; others filtered to assigned)
+      setPendingLoading(true);
+      try {
+        let reqs = await getReconciliationRequests(undefined, 'Pending');
+        if (!isAdmin && currentUser) {
+          const allowed = new Set(currentUser.assignedResidences || []);
+          reqs = reqs.filter(r => allowed.has(String(r.residenceId)));
+        }
+        if (!cancelled) setPending(reqs);
+      } catch (e) {
+        // handled in context
+      } finally {
+        if (!cancelled) setPendingLoading(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [residenceId, getReconciliations]);
+  }, [residenceId, getReconciliations, getAllReconciliations, getReconciliationRequests, isAdmin, currentUser]);
 
   const itemsForResidence = useMemo(() => {
     if (!residenceId) return [] as typeof items;
@@ -146,19 +186,55 @@ export default function StockReconciliationPage() {
 
     setIsSubmitting(true);
     try {
-      const ref = await reconcileStock(residenceId, adjustments, currentUser?.id);
+      if (isAdmin) {
+        const ref = await reconcileStock(residenceId, adjustments, currentUser?.id);
+        toast({ title: 'Stock reconciled', description: ref ? `Movement recorded (Ref: ${ref}).` : 'Movement recorded.' });
+      } else {
+        const id = await createReconciliationRequest(residenceId, adjustments, currentUser?.id || '');
+        toast({ title: 'Submitted', description: `Sent for admin approval (${id}).` });
+      }
       setNewStock({});
       setReasons({});
-      toast({ title: 'Stock reconciled', description: ref ? `Movement recorded (Ref: ${ref}).` : 'Movement recorded.' });
-      // Refresh reconciliation list after reconcile
       const list = await getReconciliations(residenceId);
       setRecons(list as unknown as Rec[]);
+      const reqs = await getReconciliationRequests(isAdmin ? undefined : residenceId, 'Pending');
+      setPending(reqs);
     } catch (e: any) {
-      const msg = e?.message || 'Failed to apply reconciliation.';
+      const msg = e?.message || 'Failed to submit reconciliation.';
       toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openDetails = async (rec: Rec) => {
+    setSelectedRec(rec);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const items = await getReconciliationItems(rec.id);
+      setDetailItems(items);
+    } catch (e) {
+      // handled via context toast
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const openReqDetails = (r: ReconciliationRequest) => {
+    setSelectedReq(r);
+    // Build details from current items state
+    const rows = (r.adjustments || []).map((adj) => {
+      const it = items.find(x => x.id === adj.itemId);
+      const name = (it?.nameEn || it?.nameAr || adj.itemId) as string;
+      const unit = it?.unit;
+      const current = it && r.residenceId ? getStockForResidence(it, r.residenceId) : 0;
+      const newStock = Math.max(0, Number(adj.newStock) || 0);
+      const diff = newStock - current;
+      return { itemId: adj.itemId, name, unit, current, newStock, diff, reason: adj.reason };
+    });
+    setReqDetailItems(rows);
+    setReqDetailOpen(true);
   };
 
   if (loading || residencesLoading) {
@@ -339,15 +415,95 @@ export default function StockReconciliationPage() {
         </CardContent>
       </Card>
 
-      {/* Reconciliation history */}
+      {/* Pending requests (Admin) */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending reconciliation requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pendingLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : pending.length === 0 ? (
+              <div className="text-sm text-gray-600">No pending requests.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-left">Request</TableHead>
+                      <TableHead className="text-left">Residence</TableHead>
+                      <TableHead className="text-left">Items</TableHead>
+                      <TableHead className="text-left">Requested by</TableHead>
+                      <TableHead className="text-left">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pending.map((r) => (
+                      <TableRow key={r.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => openReqDetails(r)}>
+                        <TableCell className="font-medium">{r.reservedId || r.id}</TableCell>
+                        <TableCell>{residenceNameById.get(String(r.residenceId)) || r.residenceId}</TableCell>
+                        <TableCell>{r.adjustments?.length || 0}</TableCell>
+                        <TableCell>{userName(r.requestedById)}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="secondary" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await approveReconciliationRequest(r.id, currentUser?.id || '');
+                                const reqs = await getReconciliationRequests(undefined, 'Pending');
+                                let filtered = reqs;
+                                if (!isAdmin && currentUser) {
+                                  const allowed = new Set(currentUser.assignedResidences || []);
+                                  filtered = reqs.filter(x => allowed.has(String(x.residenceId)));
+                                }
+                                setPending(filtered);
+                                if (residenceId) {
+                                  const list = await getReconciliations(residenceId);
+                                  setRecons(list as unknown as Rec[]);
+                                }
+                              } catch {}
+                            }}>Approve</Button>
+                            <Button size="sm" variant="outline" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await rejectReconciliationRequest(r.id, currentUser?.id || '');
+                                const reqs = await getReconciliationRequests(undefined, 'Pending');
+                                let filtered = reqs;
+                                if (!isAdmin && currentUser) {
+                                  const allowed = new Set(currentUser.assignedResidences || []);
+                                  filtered = reqs.filter(x => allowed.has(String(x.residenceId)));
+                                }
+                                setPending(filtered);
+                                if (residenceId) {
+                                  const list = await getReconciliations(residenceId);
+                                  setRecons(list as unknown as Rec[]);
+                                }
+                              } catch {}
+                            }}>Reject</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reconciliation history (collapsible) */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Reconciliation history</CardTitle>
+          <Button variant="ghost" size="icon" aria-label="Toggle history" onClick={() => setHistoryOpen(v => !v)}>
+            <ChevronDown className={`h-5 w-5 transition-transform ${historyOpen ? '' : '-rotate-90'}`} />
+          </Button>
         </CardHeader>
+        {historyOpen && (
         <CardContent>
-          {!residenceId ? (
-            <div className="text-sm text-gray-600">Select a residence to view reconciliations.</div>
-          ) : reconsLoading ? (
+          {reconsLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : recons.length === 0 ? (
             <div className="text-sm text-gray-600">No reconciliations found.</div>
@@ -358,6 +514,7 @@ export default function StockReconciliationPage() {
                   <TableRow>
                     <TableHead className="text-left">Date</TableHead>
                     <TableHead className="text-left">Reference</TableHead>
+                    <TableHead className="text-left">Residence</TableHead>
                     <TableHead className="text-left">Items adjusted</TableHead>
                     <TableHead className="text-left">Total increase</TableHead>
                     <TableHead className="text-left">Total decrease</TableHead>
@@ -368,13 +525,14 @@ export default function StockReconciliationPage() {
                   {recons.map((r) => {
                     const d = r.date?.toDate?.() ? r.date.toDate() : new Date();
                     return (
-                      <TableRow key={r.id}>
+                      <TableRow key={r.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => openDetails(r)}>
                         <TableCell>{d.toLocaleString()}</TableCell>
                         <TableCell>{r.id}</TableCell>
+                        <TableCell>{residenceNameById.get(String(r.residenceId)) || r.residenceId}</TableCell>
                         <TableCell>{r.itemCount}</TableCell>
                         <TableCell className="text-green-700">{r.totalIncrease}</TableCell>
                         <TableCell className="text-red-700">{r.totalDecrease}</TableCell>
-                        <TableCell>{r.performedById || '—'}</TableCell>
+                        <TableCell>{userName(r.performedById)}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -383,6 +541,7 @@ export default function StockReconciliationPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
       {/* Actions */}
@@ -415,6 +574,135 @@ export default function StockReconciliationPage() {
           </Button>
         </div>
       </div>
+
+      {/* Details dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Reconciliation details</DialogTitle>
+            <DialogDescription>
+              {selectedRec ? (
+                <div className="text-sm text-gray-600">
+                  Reference: <span className="font-mono">{selectedRec.id}</span> · Residence: {residenceNameById.get(String(selectedRec.residenceId)) || selectedRec.residenceId}
+                </div>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          {detailLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : detailItems.length === 0 ? (
+            <div className="text-sm text-gray-600">No items found for this reconciliation.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left">Item</TableHead>
+                    <TableHead className="text-left">Qty</TableHead>
+                    <TableHead className="text-left">Direction</TableHead>
+                    <TableHead className="text-left">Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detailItems.map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <div className="font-medium">{tx.itemNameEn || tx.itemNameAr}</div>
+                        <div className="text-xs text-gray-500">{tx.itemNameAr && tx.itemNameEn ? tx.itemNameAr : ''}</div>
+                      </TableCell>
+                      <TableCell>{tx.quantity}</TableCell>
+                      <TableCell>
+                        <Badge className={tx.adjustmentDirection === 'INCREASE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                          {tx.adjustmentDirection || '—'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[300px] truncate" title={tx.adjustmentReason || ''}>{tx.adjustmentReason || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pending request details dialog */}
+      <Dialog open={reqDetailOpen} onOpenChange={setReqDetailOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Review reconciliation request</DialogTitle>
+            <DialogDescription>
+              {selectedReq ? (
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>Code: <span className="font-mono">{selectedReq.reservedId || selectedReq.id}</span></div>
+                  <div>Residence: {residenceNameById.get(String(selectedReq.residenceId)) || selectedReq.residenceId}</div>
+                  <div>Requested by: {userName(selectedReq.requestedById)}</div>
+                </div>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          {(!selectedReq || reqDetailItems.length === 0) ? (
+            <div className="text-sm text-gray-600">No items.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left">Item</TableHead>
+                    <TableHead className="text-left">Unit</TableHead>
+                    <TableHead className="text-left">System</TableHead>
+                    <TableHead className="text-left">New</TableHead>
+                    <TableHead className="text-left">Diff</TableHead>
+                    <TableHead className="text-left">Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reqDetailItems.map((row) => (
+                    <TableRow key={row.itemId}>
+                      <TableCell>
+                        <div className="font-medium">{row.name}</div>
+                      </TableCell>
+                      <TableCell>{row.unit || '—'}</TableCell>
+                      <TableCell>{row.current}</TableCell>
+                      <TableCell>{row.newStock}</TableCell>
+                      <TableCell>
+                        <Badge className={row.diff >= 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}>
+                          {row.diff >= 0 ? `+${row.diff}` : row.diff}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[300px] truncate" title={row.reason || ''}>{row.reason || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {selectedReq && (
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={async () => {
+                try {
+                  await approveReconciliationRequest(selectedReq.id, currentUser?.id || '');
+                  const reqs = await getReconciliationRequests(undefined, 'Pending');
+                  setPending(reqs);
+                  if (residenceId) {
+                    const list = await getReconciliations(residenceId);
+                    setRecons(list as unknown as Rec[]);
+                  }
+                  setReqDetailOpen(false);
+                } catch {}
+              }}>Approve</Button>
+              <Button variant="outline" onClick={async () => {
+                try {
+                  await rejectReconciliationRequest(selectedReq.id, currentUser?.id || '');
+                  const reqs = await getReconciliationRequests(undefined, 'Pending');
+                  setPending(reqs);
+                  setReqDetailOpen(false);
+                } catch {}
+              }}>Reject</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

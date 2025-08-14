@@ -187,9 +187,21 @@ export default function IssueMaterialPage() {
                     return;
                 }
                 locationId = selectedFacility.id;
-                locationName = `${selectedComplex.name} -> ${selectedFacility.name}`;
+                // Build a hierarchical name for facilities as well
+                // e.g., Residence -> Building -> (Floor ->) Facility
+                const parts: string[] = [selectedComplex.name];
+                if (selectedBuilding) parts.push(selectedBuilding.name);
+                if (selectedFloor) parts.push(selectedFloor.name);
+                parts.push(selectedFacility.name);
+                locationName = parts.join(' -> ');
                 isFacility = true;
-                newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
+                newLocationDetails = {
+                    facilityId: selectedFacilityId,
+                    locationId: selectedFacilityId,
+                    // Include building/floor context for facilities when available
+                    ...(selectedBuilding ? { buildingId: selectedBuildingId, buildingName: selectedBuilding.name } : {}),
+                    ...(selectedFloor ? { floorId: selectedFloorId, floorName: selectedFloor.name } : {}),
+                };
             }
             
             // Lifespan check
