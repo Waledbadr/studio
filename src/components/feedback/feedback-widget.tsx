@@ -43,7 +43,11 @@ function captureAppInfo() {
 async function captureScreenshot(): Promise<string | undefined> {
   try {
     const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(document.body, { useCORS: true, logging: false });
+    // Hide feedback dialog before screenshot
+    const dialog = document.querySelector('[data-feedback-dialog]');
+    if (dialog) dialog.style.display = 'none';
+    const canvas = await html2canvas(document.body, { useCORS: true, logging: false, ignoreElements: (el) => el.hasAttribute && el.hasAttribute('data-feedback-dialog') });
+    if (dialog) dialog.style.display = '';
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrl;
   } catch (e) {
@@ -180,6 +184,31 @@ export default function FeedbackWidget({ className }: Props) {
     }
   };
 
+  // Support paste image from clipboard
+  useEffect(() => {
+    if (!open) return;
+    function handlePaste(e: ClipboardEvent) {
+      if (e.clipboardData) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                setScreenshotDataUrl(ev.target?.result as string);
+              };
+              reader.readAsDataURL(file);
+            }
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -187,7 +216,7 @@ export default function FeedbackWidget({ className }: Props) {
           <LifeBuoy className="h-4 w-4 mr-2" /> Feedback
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" data-feedback-dialog>
         <DialogHeader>
           <DialogTitle>Send Feedback</DialogTitle>
           <DialogDescription>Report a problem or send an idea to improve the app.</DialogDescription>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, type ReactNode, useTransition, useMemo } from "react";
+import { useState, useEffect, useRef, type ReactNode, useTransition, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from "@/context/inventory-context";
-import { Loader2, Plus, X, Languages, Eye } from "lucide-react";
+import { Loader2, Plus, X, Languages, Eye, Box, Tag, Image as ImageIcon, Hash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '../ui/textarea';
 
@@ -28,6 +28,18 @@ const inventoryUnits = [
     { value: 'Roll', label: 'لفة (Roll)' },
     { value: 'Bag', label: 'كيس (Bag)' },
 ];
+
+// Reusable section header for consistent, professional headings
+const SectionHeader = ({ children, description, icon }: { children: ReactNode; description?: string; icon?: ReactNode }) => (
+    <div className="mb-4">
+        <div className="flex items-center gap-2 min-h-[32px]">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary mr-2">{icon}</span>
+            <h3 className="text-base font-bold tracking-tight text-primary">{children}</h3>
+        </div>
+        {description && <p className="text-xs text-muted-foreground mt-1 ml-8">{description}</p>}
+        <div className="mt-2 border-b border-muted/40" />
+    </div>
+);
 
 
 interface AddItemDialogProps {
@@ -50,6 +62,7 @@ export function AddItemDialog({
     // Names (dual-language)
     const [nameAr, setNameAr] = useState('');
     const [nameEn, setNameEn] = useState(initialName);
+    const nameArRef = useRef<HTMLInputElement | null>(null);
     // Category/Unit (with optional custom)
     const [category, setCategory] = useState('');
     const [categoryCustom, setCategoryCustom] = useState('');
@@ -64,10 +77,37 @@ export function AddItemDialog({
     const [keywordsArInput, setKeywordsArInput] = useState('');
     const [keywordsEnList, setKeywordsEnList] = useState<string[]>([]);
     const [keywordsEnInput, setKeywordsEnInput] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [imageError, setImageError] = useState(false);
+    const formRef = useRef<HTMLFormElement | null>(null);
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
     const { categories, items, addCategory } = useInventory();
+
+    // Focus first input on open
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => {
+                try { nameArRef.current?.focus(); } catch {};
+            }, 50);
+        }
+    }, [isOpen]);
+
+    // Keyboard submit handler: Ctrl/Cmd + Enter
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                // Use requestSubmit if available to trigger React onSubmit
+                try {
+                    (formRef.current as HTMLFormElement | null)?.requestSubmit?.();
+                } catch {}
+            }
+        };
+        if (isOpen) window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isOpen]);
 
     const isCustomCategory = category === '__custom__';
     const isCustomUnit = unit === '__custom__';
@@ -103,6 +143,7 @@ export function AddItemDialog({
             setKeywordsArInput('');
             setKeywordsEnList([]);
             setKeywordsEnInput('');
+            setImageUrl('');
         }
     }, [isOpen, initialName]);
 
@@ -218,73 +259,79 @@ export function AddItemDialog({
     };
     
     const dialogContent = (
-         <DialogContent>
-            <form onSubmit={(e) => handleAddItem(e, 'save')}>
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6">
+            <form
+                onSubmit={(e) => handleAddItem(e, 'save')}
+                className="flex flex-col gap-6 max-h-[72vh] overflow-y-auto px-0 pr-4 custom-scrollbar"
+                ref={formRef}
+            >
                 <DialogHeader>
-                    <DialogTitle>Add New Inventory Item</DialogTitle>
-                    <DialogDescription>اكتب اسم الصنف بالعربي أو الإنجليزي واضغط ترجمة إن رغبت؛ المخزون الابتدائي صفر ويتم زيادته عبر سندات الاستلام (MRV).</DialogDescription>
+                    <DialogTitle className="text-lg">Add New Inventory Item</DialogTitle>
+                    <DialogDescription className="text-sm">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    {/* Names row */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Name (AR / EN)</Label>
-                        <div className="col-span-3 grid grid-cols-3 gap-2">
-                            <Input placeholder="مثال: لمبة" value={nameAr} onChange={e => setNameAr(e.target.value)} />
+                {/* Basic Info Section */}
+                <section className="flex flex-col gap-4">
+                    <SectionHeader icon={<Hash className="h-5 w-5 text-primary" />}>Basic Information</SectionHeader>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2 mt-2">
+                            <Label>Arabic Name</Label>
+                            <Input placeholder="e.g., لمبة" value={nameAr} onChange={e => setNameAr(e.target.value)} ref={nameArRef} />
+                        </div>
+                        <div className="flex flex-col gap-2 mt-2">
+                            <Label>English Name</Label>
                             <Input placeholder="e.g., Light Bulb" value={nameEn} onChange={e => setNameEn(e.target.value)} />
-                            <Button type="button" variant="secondary" onClick={handleAutoTranslate} className="gap-2"><Languages className="h-4 w-4"/> Translate</Button>
                         </div>
                     </div>
-                    {/* Category */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="item-category" className="text-right">Category</Label>
-                        <Select onValueChange={setCategory} value={category}>
-                             <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Select a category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {categories.map((cat) => (
-                                    <SelectItem key={cat} value={cat}>
-                                        {cat}
-                                    </SelectItem>
-                                ))}
-                                <SelectItem value="__custom__">+ Add new category…</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div className="flex gap-2">
+                        <Button type="button" variant="secondary" onClick={handleAutoTranslate} className="gap-2"><Languages className="h-4 w-4"/> Auto Translate</Button>
+                        {duplicateName && <span className="text-xs text-destructive">Duplicate name already exists.</span>}
                     </div>
-                    {isCustomCategory && (
-                        <div className="grid grid-cols-4 items-center gap-4 -mt-2">
-                            <div />
-                            <Input placeholder="New category name" className="col-span-3" value={categoryCustom} onChange={e => setCategoryCustom(e.target.value)} />
+                </section>
+                {/* Details Section */}
+                <section className="flex flex-col gap-4">
+                    <SectionHeader icon={<Tag className="h-5 w-5 text-primary" />}>Item Details</SectionHeader>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                            <Label>Category</Label>
+                            <Select onValueChange={setCategory} value={category}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                    ))}
+                                    <SelectItem value="__custom__">+ Add new category…</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {isCustomCategory && (
+                                <Input placeholder="New category name" value={categoryCustom} onChange={e => setCategoryCustom(e.target.value)} className="mt-2" />
+                            )}
                         </div>
-                    )}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="item-unit" className="text-right">Unit</Label>
-                        <Select onValueChange={setUnit} value={unit}>
-                             <SelectTrigger id="item-unit" className="col-span-3">
-                                <SelectValue placeholder="Select a unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {inventoryUnits.map((u) => (
-                                    <SelectItem key={u.value} value={u.value}>
-                                        {u.label}
-                                    </SelectItem>
-                                ))}
-                                <SelectItem value="__custom__">+ Custom unit…</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="flex flex-col gap-2">
+                            <Label>Unit</Label>
+                            <Select onValueChange={setUnit} value={unit}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {inventoryUnits.map((u) => (
+                                        <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                                    ))}
+                                    <SelectItem value="__custom__">+ Custom unit…</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {isCustomUnit && (
+                                <Input placeholder="e.g., Bundle, Sheet…" value={unitCustom} onChange={e => setUnitCustom(e.target.value)} className="mt-2" />
+                            )}
+                        </div>
                     </div>
-                    {isCustomUnit && (
-                        <div className="grid grid-cols-4 items-center gap-4 -mt-2">
-                            <div />
-                            <Input placeholder="e.g., Bundle, Sheet…" className="col-span-3" value={unitCustom} onChange={e => setUnitCustom(e.target.value)} />
-                        </div>
-                    )}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="item-lifespan" className="text-right">Lifespan</Label>
-                        <div className="col-span-3 grid grid-cols-3 gap-2">
-                             <Input id="item-lifespan" type="number" placeholder="e.g., 1" className="col-span-1" value={lifespanValue} onChange={e => setLifespanValue(e.target.value)} />
-                             <Select value={lifespanUnit} onValueChange={(value) => setLifespanUnit(value as LifespanUnit)}>
-                                <SelectTrigger className="col-span-2">
+                    <div className="flex flex-col gap-2 md:w-1/2">
+                        <Label>Lifespan</Label>
+                        <div className="flex gap-2">
+                            <Input type="number" placeholder="e.g., 1" value={lifespanValue} onChange={e => setLifespanValue(e.target.value)} className="w-1/2" />
+                            <Select value={lifespanUnit} onValueChange={(value) => setLifespanUnit(value as LifespanUnit)}>
+                                <SelectTrigger className="w-1/2">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -295,40 +342,48 @@ export function AddItemDialog({
                             </Select>
                         </div>
                     </div>
-                    {/* Variants chips */}
-                    <div className="grid grid-cols-4 items-start gap-4 pt-2">
-                        <Label className="text-right mt-2">Variants</Label>
-                        <div className="col-span-3 space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                                {variantList.map(v => (
-                                    <span key={v} className="inline-flex items-center rounded border px-2 py-1 text-xs">
-                                        {v}
-                                        <button type="button" className="ml-1 text-muted-foreground hover:text-destructive" onClick={() => removeChip(v, setVariantList)}>
-                                            <X className="h-3 w-3"/>
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
-                            <Input
-                                placeholder="Type and press Enter or comma"
-                                value={variantInput}
-                                onChange={e => setVariantInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ',') {
-                                        e.preventDefault();
-                                        const parts = variantInput.split(/[\n,]+/);
-                                        parts.forEach(p => addChip(p, setVariantList));
-                                        setVariantInput('');
-                                    }
-                                }}
-                            />
-                            <p className="text-xs text-muted-foreground">Optional.</p>
-                        </div>
+                    <div className="flex flex-col gap-2">
+                        <Label>Image URL</Label>
+                        <Input placeholder="Optional: e.g., http://example.com/image.jpg" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+                        {imageError && <p className="text-xs text-destructive">Invalid image URL.</p>}
                     </div>
-                    {/* Keywords AR */}
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right mt-2">Arabic Keywords</Label>
-                        <div className="col-span-3 space-y-2">
+                </section>
+                {/* Variants Section */}
+                <section className="flex flex-col gap-4">
+                    <SectionHeader icon={<Plus className="h-5 w-5 text-primary" />}>Variants</SectionHeader>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap gap-2">
+                            {variantList.map(v => (
+                                <span key={v} className="inline-flex items-center rounded border px-2 py-1 text-xs">
+                                    {v}
+                                    <button type="button" className="ml-1 text-muted-foreground hover:text-destructive" onClick={() => removeChip(v, setVariantList)}>
+                                        <X className="h-3 w-3"/>
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                        <Input
+                            placeholder="Type and press Enter or comma"
+                            value={variantInput}
+                            onChange={e => setVariantInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ',') {
+                                    e.preventDefault();
+                                    const parts = variantInput.split(/[\n,]+/);
+                                    parts.forEach(p => addChip(p, setVariantList));
+                                    setVariantInput('');
+                                }
+                            }}
+                        />
+                        <p className="text-xs text-muted-foreground">Optional.</p>
+                    </div>
+                </section>
+                {/* Keywords Section */}
+                <section className="flex flex-col gap-4">
+                    <SectionHeader icon={<Tag className="h-5 w-5 text-primary" />}>Keywords</SectionHeader>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                            <Label>Arabic Keywords</Label>
                             <div className="flex flex-wrap gap-2">
                                 {keywordsArList.map(v => (
                                     <span key={v} className="inline-flex items-center rounded border px-2 py-1 text-xs">
@@ -340,7 +395,7 @@ export function AddItemDialog({
                                 ))}
                             </div>
                             <Input
-                                placeholder="اكتب ثم اضغط Enter أو فاصلة"
+                                placeholder="Type then press Enter or comma"
                                 value={keywordsArInput}
                                 onChange={e => setKeywordsArInput(e.target.value)}
                                 onKeyDown={(e) => {
@@ -352,13 +407,10 @@ export function AddItemDialog({
                                     }
                                 }}
                             />
-                            <p className="text-xs text-muted-foreground">اختياري.</p>
+                            <p className="text-xs text-muted-foreground">Optional.</p>
                         </div>
-                    </div>
-                    {/* Keywords EN */}
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right mt-2">English Keywords</Label>
-                        <div className="col-span-3 space-y-2">
+                        <div className="flex flex-col gap-2">
+                            <Label>English Keywords</Label>
                             <div className="flex flex-wrap gap-2">
                                 {keywordsEnList.map(v => (
                                     <span key={v} className="inline-flex items-center rounded border px-2 py-1 text-xs">
@@ -385,23 +437,33 @@ export function AddItemDialog({
                             <p className="text-xs text-muted-foreground">Optional.</p>
                         </div>
                     </div>
-                    {/* Preview */}
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right mt-2">Preview</Label>
-                        <div className="col-span-3 text-sm border rounded-md p-3">
-                            <div className="flex items-center gap-2 text-muted-foreground mb-2"><Eye className="h-4 w-4"/> How it will look</div>
-                            <div className="font-medium">{nameAr || '—'} / {nameEn || '—'}</div>
-                            <div className="text-xs text-muted-foreground">{(isCustomCategory ? categoryCustom : category) || 'Category'} • { (isCustomUnit ? unitCustom : unit) || 'Unit' } {lifespanValue ? `• Lifespan: ${lifespanValue} ${lifespanUnit}` : ''}</div>
-                            {variantList.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {variantList.map(v => <span key={v} className="rounded bg-muted px-2 py-0.5 text-xs">{v}</span>)}
-                                </div>
-                            )}
+                </section>
+                {/* Preview Section */}
+                <section className="flex flex-col gap-4">
+                    <SectionHeader icon={<Eye className="h-5 w-5 text-primary" />}>Preview</SectionHeader>
+                    <div className="border rounded-md p-3 bg-muted/20">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2"><Eye className="h-4 w-4" /> How the item will look</div>
+                        <div className="font-medium">{nameAr || '—'} / {nameEn || '—'}</div>
+                        <div className="text-xs text-muted-foreground">
+                            {(isCustomCategory ? categoryCustom : category) || 'Category'}
+                            <span className="mx-1">•</span>
+                            { (isCustomUnit ? unitCustom : unit) || 'Unit' }
+                            {lifespanValue ? ` • Lifespan: ${lifespanValue} ${lifespanUnit}` : ''}
                         </div>
+                        {variantList.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {variantList.map(v => <span key={v} className="rounded bg-muted px-2 py-0.5 text-xs">{v}</span>)}
+                            </div>
+                        )}
+                        {imageUrl && (
+                            <div className="mt-2">
+                                <img src={imageUrl} alt="Preview" className="max-w-full h-auto rounded-md" onError={() => setImageError(true)} onLoad={() => setImageError(false)} />
+                                {imageError && <p className="text-xs text-destructive mt-1">Could not load image.</p>}
+                            </div>
+                        )}
                     </div>
-                </div>
-                <DialogFooter>
-                    {duplicateName && <span className="text-xs text-destructive mr-auto">اسم مشابه موجود بالفعل.</span>}
+                </section>
+                <DialogFooter className="flex flex-row gap-2 justify-end mt-4">
                     {onItemAddedAndOrdered && (
                         <Button type="button" variant="outline" onClick={(e) => handleAddItem(e as any, 'save-and-order')} disabled={isPending}>
                             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save & Add to Order
@@ -424,10 +486,15 @@ export function AddItemDialog({
             </Dialog>
         );
     }
-    
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-           {dialogContent}
+            {dialogContent}
         </Dialog>
     );
 }
+
+/* Add custom scrollbar styles for the dialog form */
+/* Add this style block at the top or in your global CSS if not already present
+.custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: theme('colors.primary.DEFAULT', '#3b82f6'); border-radius: 8px; }
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: #3b82f6 #f3f4f6; } */

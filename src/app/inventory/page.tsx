@@ -20,6 +20,7 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
+import * as XLSX from 'xlsx';
 
 export default function InventoryPage() {
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
@@ -227,9 +228,34 @@ export default function InventoryPage() {
     );
   };
 
+  // Export inventory items to Excel
+  const handleExportExcel = () => {
+    if (!items || items.length === 0) return;
+    const data = items.map(item => ({
+      'Arabic Name': item.nameAr,
+      'English Name': item.nameEn,
+      'Category': item.category,
+      'Unit': item.unit,
+      'Lifespan (days)': item.lifespanDays ?? '',
+      'Variants': item.variants?.join(', ') ?? '',
+      'Keywords (Ar)': item.keywordsAr?.join(', ') ?? '',
+      'Keywords (En)': item.keywordsEn?.join(', ') ?? '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory');
+    XLSX.writeFile(workbook, 'inventory.xlsx');
+  };
+
   return (
-    <div className="space-y-6">
-       <div className="flex items-center justify-between">
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Inventory Management</h1>
+        <Button variant="outline" onClick={handleExportExcel}>
+          تصدير الأصناف إلى Excel
+        </Button>
+      </div>
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Inventory Management</h1>
           <p className="text-muted-foreground">Manage your materials and supplies for each residence.</p>
