@@ -43,6 +43,12 @@ export interface InventoryTransaction {
     locationName?: string;
     relatedResidenceId?: string; // For transfers
     depreciationReason?: string; // For depreciation transactions
+  // Optional legacy fields used by some reports
+  buildingId?: string;
+  floorId?: string;
+  roomId?: string;
+  movementType?: string;
+  timestamp?: number | string | Date;
 }
 
 export interface DepreciationRequest {
@@ -262,6 +268,8 @@ export interface ReconciliationRequest {
 
 interface InventoryContextType {
   items: InventoryItem[];
+  // compatibility alias expected by some pages
+  inventoryItems?: InventoryItem[];
   categories: string[];
   transfers: StockTransfer[];
   audits: InventoryAudit[];
@@ -279,6 +287,7 @@ interface InventoryContextType {
   issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactionsRaw?: () => Promise<any[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -2002,6 +2011,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   return (
     <InventoryContext.Provider value={{ 
       items, 
+  inventoryItems: items,
       categories, 
       transfers, 
       audits, 
@@ -2017,6 +2027,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       issueItemsFromStock, 
       getInventoryTransactions, 
       getAllInventoryTransactions, 
+      getAllInventoryTransactionsRaw: async () => {
+        // provide raw typed-any transactions if callers expect different shape
+        const rows = await getAllInventoryTransactions();
+        return rows as any;
+      },
       getMIVs, 
       getMIVById, 
       getLastIssueDateForItemAtLocation, 

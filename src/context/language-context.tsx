@@ -35,7 +35,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     locale,
     setLocale,
     toggleLanguage,
-    dict: dictionaries[locale],
+    // Use fallback dictionary for unknown locales
+    dict: (dictionaries as any)[locale] || dictionaries.en,
   };
 
   return (

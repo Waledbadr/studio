@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { useToast } from "@/hooks/use-toast";
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare, Clock } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageSquare, Clock, Edit } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { useOrders } from '@/context/orders-context';
 import type { OrderItem } from '@/context/orders-context';
 import { useRouter } from 'next/navigation';
@@ -26,7 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Textarea } from '@/components/ui/textarea';
 
 export default function NewOrderPage() {
-    const { items: allItems, loading, loadInventory, addItem, categories, getStockForResidence } = useInventory();
+    const { items: allItems, loading, loadInventory, addItem, categories, getStockForResidence, updateItem } = useInventory();
     const { createOrder, loading: ordersLoading } = useOrders();
     const { currentUser, users, loadUsers } = useUsers();
     const { residences, loadResidences } = useResidences();
@@ -212,23 +213,23 @@ export default function NewOrderPage() {
     }, [allItems]);
 
 
-    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string, qty: number = 1) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
         const nameEn = variant ? `${itemToAdd.nameEn} - ${variant}` : itemToAdd.nameEn;
         
-        // Use a unique ID for each variant to allow adding multiple variants of the same item
-        const orderItemId = variant ? `${itemToAdd.id}-${variant}` : itemToAdd.id;
+        // Use an encoded variant suffix to keep ids safe
+        const orderItemId = variant ? `${itemToAdd.id}::${encodeURIComponent(String(variant))}` : itemToAdd.id;
 
         setOrderItems((currentOrderItems) => {
             const existingItem = currentOrderItems.find(item => item.id === orderItemId);
 
             if (existingItem) {
                 return currentOrderItems.map(item => 
-                    item.id === orderItemId ? {...item, quantity: item.quantity + 1} : item
+                    item.id === orderItemId ? {...item, quantity: (item.quantity || 0) + qty} : item
                 );
             } else {
                 // Add new item at the beginning of the list (top)
-                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }, ...currentOrderItems];
+                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: qty, notes: '' }, ...currentOrderItems];
             }
         });
 
@@ -349,6 +350,33 @@ export default function NewOrderPage() {
         setSearchQuery('');
     };
 
+    // Edit item dialog state so users can add/edit variants & keywords inline while creating an order
+    const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+    // Variant selection bookkeeping for the popover UI. Shape: { [itemId]: { [variantLabel]: true } }
+    const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
+    // Small tick state to force re-render when the ref is updated (simple and efficient)
+    const [variantTick, setVariantTick] = useState(0);
+
+    const openEditForItem = (item: InventoryItem) => {
+        setItemToEdit(item);
+        setEditDialogOpen(true);
+    };
+
+    const handleItemUpdated = async (updated: InventoryItem) => {
+        try {
+            await updateItem(updated);
+            // Close dialog
+            setEditDialogOpen(false);
+            setItemToEdit(null);
+            // Optionally update recent items list if present
+            addToRecentItems(updated);
+        } catch (e) {
+            console.error('Failed to update item from new order page', e);
+        }
+    };
+
     const handleResidenceChange = (residenceId: string) => {
         const residence = userResidences.find(r => r.id === residenceId);
         setSelectedResidence(residence);
@@ -394,32 +422,97 @@ export default function NewOrderPage() {
         }, {} as Record<string, OrderItem[]>);
     }, [orderItems]);
     
-    const AddItemButton = ({ item }: { item: InventoryItem }) => {
-        if (!item.variants || item.variants.length === 0) {
-            return (
-                <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={!selectedResidence}>
-                    <Plus className="h-4 w-4" />
-                </Button>
-            );
-        }
+// Top-level AddItemButton for NewOrder to avoid remounting and keep popover stable
+function AddItemButton({
+    item,
+    handleAddItemToOrder,
+    variantSelectionsRef,
+    disabled,
+}: {
+    item: InventoryItem;
+    handleAddItemToOrder: (item: InventoryItem, variant?: string, qty?: number) => void;
+    variantSelectionsRef: React.MutableRefObject<Record<string, Record<string, boolean>>>;
+    disabled?: boolean;
+}) {
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const [, setTick] = useState(0);
 
+    if (!item.variants || item.variants.length === 0) {
         return (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="outline" disabled={!selectedResidence}>
-                        <ChevronDown className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {item.variants.map(variant => (
-                        <DropdownMenuItem key={variant} onClick={() => handleAddItemToOrder(item, variant)}>
-                            Add: {variant}
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={disabled}>
+                <Plus className="h-4 w-4" />
+            </Button>
         );
-    };
+    }
+
+    return (
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+                <Button size="icon" variant="outline" disabled={disabled}>
+                    <ChevronDown className="h-4 w-4" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72">
+                <div className="space-y-2">
+                    {item.variants.map((variant) => (
+                        <div key={variant} className="flex items-center justify-between gap-2">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    className="form-checkbox h-4 w-4"
+                                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
+                                    onChange={(e) => {
+                                        const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                                        if (e.target.checked) map[variant] = true;
+                                        else delete map[variant];
+                                        variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                                        setTick(t => t + 1);
+                                    }}
+                                />
+                                <span className="truncate">{variant}</span>
+                            </label>
+                        </div>
+                    ))}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>
+                            Clear
+                        </Button>
+                        <Button size="sm" onClick={() => {
+                            const map = variantSelectionsRef.current[item.id] || {};
+                            const entries = Object.entries(map);
+                            if (entries.length === 0) {
+                                handleAddItemToOrder(item, item.variants?.[0]);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            if (entries.length === 1) {
+                                const [variant] = entries[0];
+                                handleAddItemToOrder(item, variant, 1);
+                                variantSelectionsRef.current[item.id] = {};
+                                setTick(t => t + 1);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            const composedParts = entries.map(([variant]) => variant);
+                            const combinedLabel = composedParts.join(', ');
+                            const totalQty = entries.length;
+                            handleAddItemToOrder(item, combinedLabel, totalQty);
+
+                            setPopoverOpen(true);
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick(t => t + 1);
+                        }}>
+                            Add selected
+                        </Button>
+                    </div>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
 
 
     // Allow manual clearing of draft
@@ -534,7 +627,12 @@ export default function NewOrderPage() {
                                                                 );
                                                             })()}
                                                         </div>
-                                                        <AddItemButton item={item} />
+                                                        <div className="flex items-center gap-2">
+                                                            <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} disabled={!selectedResidence} />
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -560,7 +658,12 @@ export default function NewOrderPage() {
                                                         );
                                                     })()}
                                                 </div>
-                                                <AddItemButton item={item} />
+                                                <div className="flex items-center gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} disabled={!selectedResidence} />
+                                                </div>
                                             </div>
                                         )) : (
                                              searchQuery || selectedCategory !== 'all' ? (
@@ -679,6 +782,12 @@ export default function NewOrderPage() {
                 onItemAdded={addItem}
                 onItemAddedAndOrdered={handleNewItemAdded}
                 initialName={searchQuery}
+            />
+            <EditItemDialog
+                isOpen={editDialogOpen}
+                onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }}
+                onItemUpdated={handleItemUpdated}
+                item={itemToEdit}
             />
         </div>
     )

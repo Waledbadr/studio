@@ -7,11 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare, ChevronDown } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare, ChevronDown, Edit } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { useUsers } from '@/context/users-context';
 import { useRouter, useParams } from 'next/navigation';
@@ -25,8 +26,101 @@ import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
+// Top-level AddItemButton component to avoid remounting when parent re-renders
+function AddItemButton({
+    item,
+    handleAddItemToOrder,
+    variantSelectionsRef,
+}: {
+    item: InventoryItem;
+    handleAddItemToOrder: (item: InventoryItem, variant?: string, qty?: number) => void;
+    variantSelectionsRef: React.MutableRefObject<Record<string, Record<string, boolean>>>;
+}) {
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const [, setTick] = useState(0);
+
+    if (!item.variants || item.variants.length === 0) {
+        return (
+            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+                <Plus className="h-4 w-4" />
+            </Button>
+        );
+    }
+
+    return (
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+                <Button size="icon" variant="outline">
+                    <ChevronDown className="h-4 w-4" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72">
+                <div className="space-y-2">
+                    {item.variants.map((variant) => (
+                        <div key={variant} className="flex items-center justify-between gap-2">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    className="form-checkbox h-4 w-4"
+                                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
+                                    onChange={(e) => {
+                                        const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                                        if (e.target.checked) map[variant] = true;
+                                        else delete map[variant];
+                                        variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                                        setTick(t => t + 1);
+                                    }}
+                                />
+                                <span className="truncate">{variant}</span>
+                            </label>
+                        </div>
+                    ))}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>
+                            Clear
+                        </Button>
+                        <Button size="sm" onClick={() => {
+                            const map = variantSelectionsRef.current[item.id] || {};
+                            const entries = Object.entries(map);
+                            if (entries.length === 0) {
+                                const firstVariant = item.variants?.[0];
+                                handleAddItemToOrder(item, firstVariant ?? undefined, 1);
+                                variantSelectionsRef.current[item.id] = {};
+                                setTick(t => t + 1);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            if (entries.length === 1) {
+                                const [variant] = entries[0];
+                                handleAddItemToOrder(item, variant, 1);
+                                variantSelectionsRef.current[item.id] = {};
+                                setTick(t => t + 1);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            const composedParts = entries.map(([variant]) => variant);
+                            const combinedLabel = composedParts.join(', ');
+                            const totalQty = entries.length;
+                            handleAddItemToOrder(item, combinedLabel, totalQty);
+
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick(t => t + 1);
+                            setPopoverOpen(true);
+                        }}>
+                            Add selected
+                        </Button>
+                    </div>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default function EditOrderPage() {
-    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
+    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
     // Add residences context to resolve/display residence name properly
@@ -203,21 +297,34 @@ export default function EditOrderPage() {
         };
     }, [draftKey, orderItems, generalNotes]);
 
-    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
+    // Support adding a specific quantity and record variant metadata on the order line
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string, qty: number = 1) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
         const nameEn = variant ? `${itemToAdd.nameEn} - ${variant}` : itemToAdd.nameEn;
-        const orderItemId = variant ? `${itemToAdd.id}-${variant}` : itemToAdd.id;
+        // Use a safe separator and encode variant text to avoid unsafe chars in id
+        const orderItemId = variant ? `${itemToAdd.id}::${encodeURIComponent(String(variant))}` : itemToAdd.id;
 
         setOrderItems((currentOrderItems) => {
-            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
             isDraftDirtyRef.current = true;
+            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
             if (existingItem) {
                 return currentOrderItems.map(item => 
-                    item.id === orderItemId ? { ...item, quantity: item.quantity + 1 } : item
+                    item.id === orderItemId ? { ...item, quantity: (item.quantity || 0) + qty } : item
                 );
             } else {
-                // Add new item at the beginning (top) like the new order page
-                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }, ...currentOrderItems];
+                // Add new item at the beginning (top) with explicit variant fields
+                const newOrderItem: any = {
+                    ...itemToAdd,
+                    id: orderItemId,
+                    itemId: itemToAdd.id,
+                    variantId: variant ?? null,
+                    variantLabel: variant ?? '',
+                    nameAr,
+                    nameEn,
+                    quantity: qty,
+                    notes: ''
+                };
+                return [newOrderItem, ...currentOrderItems];
             }
         });
     }, []);
@@ -251,7 +358,7 @@ export default function EditOrderPage() {
             return;
         }
         if (orderItems.length === 0) {
-            toast({ title: "Error", description: "Cannot submit an empty request.", variant: "destructive" });
+            toast({ title: 'Error', description: 'Cannot submit an empty request.', variant: 'destructive' });
             return;
         }
 
@@ -266,6 +373,7 @@ export default function EditOrderPage() {
             items: orderItems,
             notes: generalNotes,
         };
+
         setIsSaving(true);
         try {
             await updateOrder(id as string, updatedOrderData);
@@ -276,7 +384,7 @@ export default function EditOrderPage() {
         } finally {
             setIsSaving(false);
         }
-    }
+    };
 
     // Use centralized Arabic synonyms (includes دهان ⇄ بوية)
     const normalizedSynonyms = buildNormalizedSynonyms(AR_SYNONYMS);
@@ -313,6 +421,29 @@ export default function EditOrderPage() {
     const handleNewItemAdded = (newItemWithId: InventoryItem) => {
         handleAddItemToOrder(newItemWithId);
         setSearchQuery('');
+    };
+
+    // Edit item dialog state so users can add/edit variants & keywords inline while editing an order
+    const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+    // Variant selection bookkeeping for the popover UI. Shape: { [itemId]: { [variantLabel]: true } }
+    const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
+
+    const openEditForItem = (item: InventoryItem) => {
+        setItemToEdit(item);
+        setEditDialogOpen(true);
+    };
+
+    const handleItemUpdated = async (updated: InventoryItem) => {
+        try {
+            await updateItem(updated);
+            // close dialog and clear selection
+            setEditDialogOpen(false);
+            setItemToEdit(null);
+        } catch (e) {
+            console.error('Failed to update item from edit order page', e);
+        }
     };
 
     const getStockForResidence = (item: InventoryItem) => {
@@ -378,31 +509,7 @@ export default function EditOrderPage() {
          );
     }
 
-    const AddItemButton = ({ item }: { item: InventoryItem }) => {
-        if (!item.variants || item.variants.length === 0) {
-            return (
-                <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
-                    <Plus className="h-4 w-4" />
-                </Button>
-            );
-        }
-        return (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="outline">
-                        <ChevronDown className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {item.variants.map(variant => (
-                        <DropdownMenuItem key={variant} onClick={() => handleAddItemToOrder(item, variant)}>
-                            Add: {variant}
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        );
-    };
+    // Note: using the top-level AddItemButton declared above avoids remounts and keeps popovers stable.
 
     return (
         <div className="space-y-6">
@@ -490,7 +597,12 @@ export default function EditOrderPage() {
                                                     );
                                                 })()}
                                             </div>
-                                            <AddItemButton item={item} />
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} />
+                                            </div>
                                         </div>
                                     )) : (
                                          searchQuery || selectedCategory !== 'all' ? (
@@ -616,6 +728,16 @@ export default function EditOrderPage() {
                 onItemAdded={addItem}
                 onItemAddedAndOrdered={handleNewItemAdded}
                 initialName={searchQuery}
+            />
+            {/* Edit dialog for modifying variants/keywords inline while editing an order */}
+            {/* Use the same EditItemDialog component as the new-order page */}
+            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+            {/* @ts-ignore */}
+            <EditItemDialog
+                isOpen={editDialogOpen}
+                onOpenChange={(v: boolean) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }}
+                onItemUpdated={handleItemUpdated}
+                item={itemToEdit}
             />
         </div>
     )

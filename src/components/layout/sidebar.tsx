@@ -37,6 +37,31 @@ export function AppSidebar() {
     return null;
   }
 
+  // When inside the accommodation app, render an intentionally empty sidebar
+  const isAccommodation = pathname?.startsWith('/accommodation');
+  if (isAccommodation) {
+    return (
+      <>
+        <SidebarHeader>
+          <div className="flex items-center gap-2 p-2">
+            <span className="text-lg font-semibold text-amber-600">Accommodation</span>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <div className="p-2">
+            <nav className="space-y-2">
+              <a href="/accommodation/residences" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
+              <a href="/accommodation/assign" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
+            </nav>
+          </div>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="p-2" />
+        </SidebarFooter>
+      </>
+    );
+  }
+
   // Define menu item types
   interface MenuItem {
     href: string;
@@ -97,7 +122,7 @@ export function AppSidebar() {
     {
       title: 'Settings',
       items: [
-        { href: '/residences', label: 'Residences', icon: Building },
+  { href: '/residences', label: 'Residences', icon: Building },
         ...(currentUser?.role === 'Admin' ? [
           { href: '/users', label: 'Users', icon: Users },
           { href: '/setup', label: 'Setup', icon: Settings },
@@ -125,24 +150,7 @@ export function AppSidebar() {
                 <Building className="h-8 w-8 text-primary" />
                 <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
             </div>
-             <div className="group-data-[collapsible=icon]:hidden text-sm pl-1">
-              <Badge variant={process.env.NODE_ENV === 'development' ? "outline" : "default"}>
-                {process.env.NODE_ENV === 'development' ? 'Development' : 'Production'}
-              </Badge>
-            </div>
-            {/* Git Info */}
-            {gitInfo && (
-              <div className="group-data-[collapsible=icon]:hidden space-y-1 mt-2">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <GitBranch className="h-3 w-3" />
-                  <span className="text-primary font-medium">{gitInfo.branch}</span>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  <span className="font-medium" title={gitInfo.lastUpdateWithTime}>{gitInfo.lastUpdateRelative}</span>
-                </div>
-              </div>
-            )}
+            {/* Environment badge and git info removed per request */}
         </div>
       </SidebarHeader>
       <SidebarContent>

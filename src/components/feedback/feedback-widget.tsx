@@ -36,7 +36,7 @@ function captureAppInfo() {
     url: window.location.href,
     path: window.location.pathname,
     referrer: document.referrer,
-  git: gitInfo,
+  // git info intentionally omitted
   };
 }
 
@@ -44,10 +44,10 @@ async function captureScreenshot(): Promise<string | undefined> {
   try {
     const html2canvas = (await import('html2canvas')).default;
     // Hide feedback dialog before screenshot
-    const dialog = document.querySelector('[data-feedback-dialog]');
-    if (dialog) dialog.style.display = 'none';
+  const dialog = document.querySelector('[data-feedback-dialog]') as HTMLElement | null;
+  if (dialog) dialog.style.display = 'none';
     const canvas = await html2canvas(document.body, { useCORS: true, logging: false, ignoreElements: (el) => el.hasAttribute && el.hasAttribute('data-feedback-dialog') });
-    if (dialog) dialog.style.display = '';
+  if (dialog) dialog.style.display = '';
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrl;
   } catch (e) {

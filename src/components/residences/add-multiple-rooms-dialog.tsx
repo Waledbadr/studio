@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { parseSpec } from '@/lib/room-utils';
 import { Loader2 } from 'lucide-react';
 
 interface AddMultipleRoomsDialogProps {
@@ -32,6 +33,42 @@ export function AddMultipleRoomsDialog({
   const [roomList, setRoomList] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  const roomNamesPreviewCount = (input: string) => {
+    if (!input) return 0;
+    const toAsciiDigits = (s: string) => s.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => {
+      const code = d.charCodeAt(0);
+      const base = code >= 0x06F0 ? 0x06F0 : 0x0660;
+      return String(code - base);
+    });
+    const tokens = input
+      .split(/[\n\r\t,،;\| ]+/)
+      .map(t => toAsciiDigits(t.trim()))
+      .filter(t => t.length > 0);
+    const expanded: string[] = [];
+    for (const tk of tokens) {
+      const m = tk.match(/^(\d+)\s*[:]\s*(\d+)$/);
+      if (m) {
+        const a = parseInt(m[1], 10);
+        const b = parseInt(m[2], 10);
+        if (!Number.isNaN(a) && !Number.isNaN(b)) {
+          const start = Math.min(a, b);
+          const end = Math.max(a, b);
+          for (let n = start; n <= end; n++) expanded.push(String(n));
+          continue;
+        }
+      }
+      expanded.push(tk);
+    }
+    const seen = new Set<string>();
+    const roomNames = expanded.filter(name => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return roomNames.length;
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -112,6 +149,13 @@ export function AddMultipleRoomsDialog({
           <DialogTitle>Add Multiple Rooms</DialogTitle>
           <DialogDescription>
             Paste or type a list of room names. Separate them with commas, spaces, or new lines.
+            You can optionally include an area or dimensions after a pipe '|' per item:
+            <br />
+            <strong>Examples:</strong>
+            <ul className="list-disc ml-6">
+              <li>Room 101|20  — area = 20 m²</li>
+              <li>Room 102|5x4 — length=5 m, width=4 m (area = 20 m²)</li>
+            </ul>
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -123,6 +167,9 @@ export function AddMultipleRoomsDialog({
             value={roomList}
             onChange={(e) => setRoomList(e.target.value)}
           />
+          <div className="text-sm text-muted-foreground">
+            Preview: {roomNamesPreviewCount(roomList)} item(s) parsed. Use '|' to include area or dimensions.
+          </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>

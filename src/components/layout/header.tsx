@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
@@ -25,6 +25,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const { mode, setMode, resolvedMode } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const pathname = usePathname();
+  const atAccommodation = pathname?.startsWith('/accommodation');
+
+  const toggleApp = () => {
+    if (atAccommodation) router.push('/');
+    else router.push('/accommodation');
+  };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -74,9 +81,22 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     }
   };
 
+  const headerClass = cn(
+    'sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6',
+    className,
+  );
+
   return (
-    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
+    <header className={headerClass} {...props}>
       <SidebarTrigger className="md:hidden" />
+      <button
+        onClick={toggleApp}
+        className="ml-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
+        title={atAccommodation ? 'الرجوع لتطبيق Materials' : 'فتح Accommodation'}
+      >
+        {atAccommodation ? 'Materials' : 'Accommodation'}
+      </button>
+
       <div className="flex-1" />
   {/* Feedback trigger in header */}
   <FeedbackWidget />

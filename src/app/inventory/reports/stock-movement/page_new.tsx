@@ -128,7 +128,9 @@ export default function StockMovementReportPage() {
         }
         
         // Filter by date range
-        const transactionDate = new Date(transaction.timestamp);
+  // guard against missing timestamp fields (legacy data)
+  if (!transaction.timestamp) return false;
+  const transactionDate = new Date(transaction.timestamp as any);
         if (filters.startDate && transactionDate < filters.startDate) {
           return false;
         }

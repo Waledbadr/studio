@@ -106,7 +106,7 @@ export default function OrderDetailPage() {
         return (
             <div className="text-center py-10">
                 <p className="text-xl text-muted-foreground">Request not found.</p>
-                <Button onClick={() => router.back()} className="mt-4">
+                    <Button onClick={() => router.push('/inventory/orders')} className="mt-4">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
                 </Button>
             </div>
@@ -248,7 +248,7 @@ export default function OrderDetailPage() {
             `}</style>
             
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print mb-6">
-                <Button variant="outline" onClick={() => router.back()}>
+                <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Requests
                 </Button>
