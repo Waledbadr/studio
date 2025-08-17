@@ -21,8 +21,8 @@ const TooltipContent = React.forwardRef<
     className={cn(
       // Glass tooltip surface
       "z-50 overflow-hidden rounded-md border px-3 py-1.5 text-sm text-popover-foreground shadow-md backdrop-blur-xl",
-      // Translucent backgrounds
-      "bg-white/70 border-white/30 dark:bg-white/10 dark:border-white/10",
+  // Translucent backgrounds (match Card)
+  "bg-white/40 border-white/20 dark:bg-white/5 dark:border-white/5",
       // Animations
       "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
       className

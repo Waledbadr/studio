@@ -9,10 +9,10 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Glassmorphism base for all cards
-      "rounded-xl border border-white/30 bg-white/60 text-card-foreground shadow-[0_10px_35px_-15px_rgba(0,0,0,0.35)] backdrop-blur-xl",
-      // Dark mode tuning
-      "dark:border-white/10 dark:bg-white/10",
+  // Glassmorphism base for all cards
+  "rounded-xl border border-white/20 bg-white/40 text-card-foreground shadow-[0_10px_35px_-15px_rgba(0,0,0,0.35)] backdrop-blur-xl",
+  // Dark mode tuning (slightly more transparent)
+  "dark:border-white/5 dark:bg-white/5",
       className
     )}
     {...props}

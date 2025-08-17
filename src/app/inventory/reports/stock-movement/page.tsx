@@ -10,12 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Filter, TrendingUp, Download, Search } from 'lucide-react';
+import { Filter, TrendingUp, Download, Search, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useLanguage } from '@/context/language-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 interface StockMovementFilters {
   residenceId: string;
@@ -115,7 +117,13 @@ export default function StockMovementReportPage() {
   }, [availableFloors, filters.floorId]);
 
   const availableItems = useMemo(() => {
-    return items || [];
+    const arr = (items || []) as any[];
+    const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+    return [...arr].sort((a, b) => {
+      const aLabel = `${a?.nameAr || ''} ${a?.nameEn || ''}`.trim();
+      const bLabel = `${b?.nameAr || ''} ${b?.nameEn || ''}`.trim();
+      return collator.compare(aLabel, bLabel);
+    });
   }, [items]);
 
   // Generate report
@@ -468,11 +476,11 @@ export default function StockMovementReportPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__ALL__">{dict.allItems}</SelectItem>
-                        {availableItems.map((item: any) => {
+        {availableItems.map((item: any) => {
                           if (!item?.id) return null;
                           return (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.nameEn}
+          {item?.nameAr ? `${item.nameAr} • ${item.nameEn}` : item.nameEn}
                             </SelectItem>
                           );
                         })}
@@ -490,28 +498,56 @@ export default function StockMovementReportPage() {
                 </div>
                 
                 <div className="space-y-4">
-                  {/* Date Inputs */}
+                  {/* Date Inputs (Glass Popovers) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="startDate" className="text-sm font-medium">{dict.startDate}</Label>
-                      <input
-                        id="startDate"
-                        type="date"
-                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        value={filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : ''}
-                        onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value) : undefined)}
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button id="startDate" variant="outline" className="w-full h-11 justify-between">
+                            <span>{filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <CalendarIcon className="h-4 w-4 opacity-60" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={filters.startDate}
+                            onSelect={(date) => handleFilterChange('startDate', date ?? undefined)}
+                            initialFocus
+                          />
+                          <div className="flex justify-end pt-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleFilterChange('startDate', undefined)}>
+                              {'Clear'}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="endDate" className="text-sm font-medium">{dict.endDate}</Label>
-                      <input
-                        id="endDate"
-                        type="date"
-                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        value={filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : ''}
-                        onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value) : undefined)}
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button id="endDate" variant="outline" className="w-full h-11 justify-between">
+                            <span>{filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <CalendarIcon className="h-4 w-4 opacity-60" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={filters.endDate}
+                            onSelect={(date) => handleFilterChange('endDate', date ?? undefined)}
+                            initialFocus
+                          />
+                          <div className="flex justify-end pt-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleFilterChange('endDate', undefined)}>
+                              {'Clear'}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   

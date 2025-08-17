@@ -33,7 +33,7 @@ SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 
 const sheetVariants = cva(
   // Glass sheet surface
-  "fixed z-50 gap-4 border p-6 shadow-lg transition ease-in-out backdrop-blur-xl bg-white/70 border-white/30 dark:bg-white/10 dark:border-white/10 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+  "fixed z-50 gap-4 border p-6 shadow-lg transition ease-in-out backdrop-blur-xl bg-white/40 border-white/20 dark:bg-white/5 dark:border-white/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
   {
     variants: {
       side: {
