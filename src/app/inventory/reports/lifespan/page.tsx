@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useInventory, type InventoryTransaction } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInDays } from 'date-fns';
+import { useLanguage } from '@/context/language-context';
 
 interface LifespanException {
     id: string;
@@ -21,6 +22,7 @@ interface LifespanException {
 
 export default function LifespanReportPage() {
     const { items, getAllIssueTransactions, loading: inventoryLoading } = useInventory();
+    const { dict } = useLanguage();
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
     const [transactionsLoading, setTransactionsLoading] = useState(true);
 
@@ -107,10 +109,8 @@ export default function LifespanReportPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold">Lifespan Exception Report</h1>
-                <p className="text-muted-foreground">
-                    This report shows items that were issued to the same location again before their defined lifespan was over.
-                </p>
+                <h1 className="text-2xl font-bold">{dict.lifespanReportTitle}</h1>
+                <p className="text-muted-foreground">{dict.lifespanReportDescription}</p>
             </div>
 
             <Card>
@@ -118,12 +118,12 @@ export default function LifespanReportPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Item</TableHead>
-                                <TableHead>Location</TableHead>
-                                <TableHead className="text-center">Lifespan (Days)</TableHead>
-                                <TableHead>Previous Issue</TableHead>
-                                <TableHead>Latest Issue</TableHead>
-                                <TableHead className="text-center">Actual Days</TableHead>
+                                <TableHead>{dict.itemLabel}</TableHead>
+                                <TableHead>{dict.location}</TableHead>
+                                <TableHead className="text-center">{dict.lifespanDays}</TableHead>
+                                <TableHead>{dict.previousIssue}</TableHead>
+                                <TableHead>{dict.latestIssue}</TableHead>
+                                <TableHead className="text-center">{dict.actualDays}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -140,7 +140,7 @@ export default function LifespanReportPage() {
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">No lifespan exceptions found.</TableCell>
+                                            <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">{dict.noLifespanExceptionsFound}</TableCell>
                                         </TableRow>
                                     )}
                                 </>

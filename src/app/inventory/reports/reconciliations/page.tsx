@@ -8,6 +8,7 @@ import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { useLanguage } from '@/context/language-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
@@ -44,33 +45,35 @@ export default function ReconciliationsListPage() {
     return map;
   }, [residences]);
 
+  const { dict } = useLanguage();
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reconciliations</h1>
+        <h1 className="text-2xl font-semibold">{dict.reconciliationsTitle}</h1>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All reconciliations</CardTitle>
+          <CardTitle>{dict.allReconciliations}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <Skeleton className="h-24 w-full" />
           ) : filtered.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No reconciliations found.</div>
+            <div className="text-sm text-muted-foreground">{dict.noReconciliationsFound}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
+                  <TableHeader>
                   <TableRow>
-                    <TableHead className="text-left">Date</TableHead>
-                    <TableHead className="text-left">Reference</TableHead>
-                    <TableHead className="text-left">Residence</TableHead>
-                    <TableHead className="text-left">Items</TableHead>
-                    <TableHead className="text-left">Increase</TableHead>
-                    <TableHead className="text-left">Decrease</TableHead>
-                    <TableHead className="text-left">Actions</TableHead>
+                    <TableHead className="text-left">{dict.date}</TableHead>
+                    <TableHead className="text-left">{dict.referenceLabel}</TableHead>
+                    <TableHead className="text-left">{dict.residenceLabel}</TableHead>
+                    <TableHead className="text-left">{dict.itemsLabel}</TableHead>
+                    <TableHead className="text-left">{dict.increaseLabel}</TableHead>
+                    <TableHead className="text-left">{dict.decreaseLabel}</TableHead>
+                    <TableHead className="text-left">{dict.viewLabel}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -87,7 +90,7 @@ export default function ReconciliationsListPage() {
                         <TableCell className="text-red-700">{r.totalDecrease}</TableCell>
                         <TableCell>
                           <Button asChild size="sm" variant="outline">
-                            <Link href={`/inventory/reports/reconciliations/${r.id}`}>View</Link>
+                            <Link href={`/inventory/reports/reconciliations/${r.id}`}>{dict.viewLabel}</Link>
                           </Button>
                         </TableCell>
                       </TableRow>

@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
+import { useLanguage } from '@/context/language-context';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
@@ -120,6 +121,7 @@ function AddItemButton({
 }
 
 export default function EditOrderPage() {
+    const { dict } = useLanguage();
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
@@ -515,8 +517,8 @@ export default function EditOrderPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Edit Material Request</h1>
-                    <p className="text-muted-foreground">Request ID: #{id as string}</p>
+                    <h1 className="text-2xl font-bold">{dict.ui.editMaterialRequest}</h1>
+                    <p className="text-muted-foreground">{dict.orderId || 'Request ID'}: #{id as string}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Last autosave indicator */}
@@ -528,14 +530,14 @@ export default function EditOrderPage() {
                     </Button>
                     {hasDraft && (
                         <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); clearDraft(); }}>
-                            Discard Draft
+                            {dict.ui.discardDraft}
                         </Button>
                     )}
                     <Button onClick={handleUpdateOrder} disabled={!canEdit || orderItems.length === 0 || isSaving}>
                         {isSaving ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                         ) : (
-                            `Save Changes (${totalOrderQuantity} items)`
+                            `${dict.ui.saveChanges} (${totalOrderQuantity} items)`
                         )}
                     </Button>
                 </div>
@@ -544,7 +546,7 @@ export default function EditOrderPage() {
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Available Inventory</CardTitle>
+                        <CardTitle>{dict.ui.availableInventory}</CardTitle>
                         <CardDescription>Click the '+' to add an item to your request.</CardDescription>
                          <div className="flex gap-2">
                             <div className="relative flex-grow">
@@ -626,7 +628,7 @@ export default function EditOrderPage() {
                     <CardHeader>
                         <div className="flex justify-between items-center">
                             <div>
-                                <CardTitle>Current Request</CardTitle>
+                                <CardTitle>{dict.ui.currentRequest}</CardTitle>
                                 <CardDescription>Review and adjust the items in your request.</CardDescription>
                             </div>
                             <div className="text-right">
@@ -711,10 +713,10 @@ export default function EditOrderPage() {
                             )}
                         </ScrollArea>
                         <div className="mt-6 space-y-2">
-                            <Label htmlFor="general-notes">General Notes</Label>
+                            <Label htmlFor="general-notes">{dict.ui.generalNotes}</Label>
                             <Textarea
                                 id="general-notes"
-                                placeholder="Add any general notes for the entire request..."
+                                placeholder={dict.ui.addGeneralNotesPlaceholder}
                                 value={generalNotes}
                                 onChange={handleGeneralNotesChange}
                             />

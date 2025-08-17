@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Residence as AcResidence } from '@/context/accommodation-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 
 export default function ResidenceDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -13,6 +14,7 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
   const [error, setError] = useState<string | null>(null);
 
   const { residences, loadResidences } = useResidences();
+  const { dict } = useLanguage();
 
   useEffect(() => {
     // Attempt to get the residence from the canonical provider
@@ -47,9 +49,9 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     return () => { mounted = false; };
   }, [id, residences, loadResidences]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{dict.loading || 'Loading...'}</div>;
   if (error) return <div className="text-red-600">{error}</div>;
-  if (!residence) return <div>No residence data.</div>;
+  if (!residence) return <div>{dict.noResidenceData || 'No residence data.'}</div>;
   // assign form state
   const [selectedRoom, setSelectedRoom] = useState<string | null>(
     (residence && residence.rooms && residence.rooms.length && residence.rooms[0].id) ||
@@ -82,14 +84,14 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{residence.name}</h1>
-        <div className="flex gap-2">
-          <button className="rounded-md border px-3 py-1" onClick={() => router.push('/accommodation/residences')}>Back</button>
+          <h1 className="text-2xl font-semibold">{residence.name}</h1>
+          <div className="flex gap-2">
+            <button className="rounded-md border px-3 py-1" onClick={() => router.push('/accommodation/residences')}>{dict.back || 'Back'}</button>
+          </div>
         </div>
-      </div>
 
       <div className="rounded-md border p-4 bg-white/80">
-        <h3 className="font-medium mb-2">Assign tenant</h3>
+  <h3 className="font-medium mb-2">{dict.assignTenant || 'Assign tenant'}</h3>
         <div className="flex flex-col md:flex-row gap-3">
           <select value={selectedRoom ?? ''} onChange={(e) => setSelectedRoom(e.target.value)} className="border rounded px-3 py-2">
             {residence?.rooms?.map(r => (
@@ -104,18 +106,18 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
               </optgroup>
             ))}
           </select>
-            <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Tenant name" className="border rounded px-3 py-2 flex-1" />
-          <button onClick={handleAssign} disabled={submitting} className="rounded-md bg-amber-600 text-white px-4 py-2">{submitting ? 'Working...' : 'Assign'}</button>
+            <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder={dict.tenantNamePlaceholder || 'Tenant name'} className="border rounded px-3 py-2 flex-1" />
+          <button onClick={handleAssign} disabled={submitting} className="rounded-md bg-amber-600 text-white px-4 py-2">{submitting ? (dict.working || 'Working...') : (dict.assign || 'Assign')}</button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="col-span-2">
           <div className="rounded-md border p-4 bg-white/80">
-            <h3 className="font-medium mb-2">Address</h3>
-            <p className="text-sm text-muted-foreground">{residence.address || 'Not specified'}</p>
+            <h3 className="font-medium mb-2">{dict.address || 'Address'}</h3>
+            <p className="text-sm text-muted-foreground">{residence.address || dict.notSpecified || 'Not specified'}</p>
 
-            <h3 className="font-medium mt-4 mb-2">Rooms / Buildings</h3>
+            <h3 className="font-medium mt-4 mb-2">{dict.roomsBuildings || 'Rooms / Buildings'}</h3>
             <ul className="space-y-2">
               {((residence.rooms && residence.rooms.length) || (residence.buildings && residence.buildings.length)) ? (
                 // If top-level rooms exist, render them. Otherwise render buildings -> floors -> rooms
@@ -141,7 +143,7 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
                   ))
                 )
               ) : (
-                <li className="text-muted-foreground">No rooms defined.</li>
+                <li className="text-muted-foreground">{dict.noRoomsDefined || 'No rooms defined.'}</li>
               )}
             </ul>
           </div>

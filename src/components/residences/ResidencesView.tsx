@@ -26,7 +26,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Label } from "@/components/ui/label";
+import { useLanguage } from '@/context/language-context';
 import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room, type Facility } from '@/context/residences-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsers } from '@/context/users-context';
@@ -213,6 +214,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const isAdmin = currentUser?.role === 'Admin';
+  const { dict } = useLanguage();
 
   useEffect(() => {
     loadResidences();
@@ -452,16 +454,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Residences</h1>
-          <p className="text-muted-foreground">Manage your residential complexes, buildings, and units.</p>
+          <h1 className="text-2xl font-bold">{dict.residencesTitle}</h1>
+          <p className="text-muted-foreground">{dict.residencesDescription}</p>
         </div>
         {isAdmin && (
             <Dialog open={dialogStates.addComplex} onOpenChange={(open) => open ? openDialog('addComplex') : closeDialog('addComplex')}>
-            <DialogTrigger asChild>
-                <Button>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Complex
-                </Button>
-            </DialogTrigger>
+        <DialogTrigger asChild>
+        <Button>
+        <PlusCircle className="mr-2 h-4 w-4" /> {dict.addComplex}
+        </Button>
+      </DialogTrigger>
             <DialogContent>
                 <form onSubmit={handleAddComplex}>
                 <DialogHeader>
@@ -508,7 +510,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search complexes, buildings, floors, rooms..."
+                placeholder={dict.searchResidencesPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

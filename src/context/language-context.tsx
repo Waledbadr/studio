@@ -16,15 +16,27 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [locale, setLocale] = useState<Locale>('en');
+  // Initialize locale from localStorage if available (client-only)
+  const [locale, setLocale] = useState<Locale>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('locale');
+        if (stored === 'ar' || stored === 'en') return stored as Locale;
+      }
+    } catch {}
+    return 'en';
+  });
 
   useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
-    // Set CSS variable for font
-    const font = locale === 'ar' ? 'Tajawal' : 'Inter';
-    document.documentElement.style.setProperty('--font-body', font);
-    document.documentElement.style.setProperty('--font-headline', font);
+    try {
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+      // Set CSS variable for font
+      const font = locale === 'ar' ? 'Tajawal' : 'Inter';
+      document.documentElement.style.setProperty('--font-body', font);
+      document.documentElement.style.setProperty('--font-headline', font);
+      localStorage.setItem('locale', locale);
+    } catch {}
   }, [locale]);
   
   const toggleLanguage = useCallback(() => {

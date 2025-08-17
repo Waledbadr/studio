@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/context/language-context';
 
 
 interface IssuedItem extends InventoryItem {
@@ -45,6 +46,7 @@ export default function IssueMaterialPage() {
     const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
+    const { dict } = useLanguage();
     const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
@@ -359,16 +361,16 @@ export default function IssueMaterialPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Material Issue Voucher (MIV)</h1>
-                    <p className="text-muted-foreground">Issue materials from a residence's storeroom to specific locations.</p>
+                    <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
+                    <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
                  <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
-                        <History className="mr-2 h-4 w-4"/> View History
+                        <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
                     <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Submit Voucher
+                        {dict.submitVoucher}
                     </Button>
                 </div>
             </div>

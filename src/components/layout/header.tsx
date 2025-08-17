@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
@@ -62,6 +63,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     }
   };
 
+  const { locale, toggleLanguage } = useLanguage();
+  const { dict } = useLanguage();
+
   // Visual mapping for notification types
   const getNotificationMeta = (type: string) => {
     switch (type) {
@@ -92,9 +96,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <button
         onClick={toggleApp}
         className="ml-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
-        title={atAccommodation ? 'الرجوع لتطبيق Materials' : 'فتح Accommodation'}
+        title={atAccommodation ? `الرجوع لتطبيق ${dict.ui.materialsApp}` : `فتح ${dict.ui.accommodationApp}`}
       >
-        {atAccommodation ? 'Materials' : 'Accommodation'}
+        {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
       </button>
 
       <div className="flex-1" />
@@ -104,31 +108,51 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
             {resolvedMode === 'light' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            <span className="sr-only">Theme settings</span>
+            <span className="sr-only">{dict.ui.theme}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Theme</DropdownMenuLabel>
+          <DropdownMenuLabel>{dict.ui.theme}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setMode('light')}>
             <Sun className="mr-2 h-4 w-4" />
-            Light
+            {dict.ui.light}
             {mode === 'light' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('dark')}>
             <Moon className="mr-2 h-4 w-4" />
-            Dark
+            {dict.ui.dark}
             {mode === 'dark' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('system')}>
             <Monitor className="mr-2 h-4 w-4" />
-            System
+            {dict.ui.system}
             {mode === 'system' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleThemeSettingsClick}>
             <Palette className="mr-2 h-4 w-4" />
-            Color Settings
+            {dict.ui.colorSettings}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Language switch */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <ArrowLeftRight className="h-5 w-5" />
+            <span className="sr-only">Change language</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>{dict.changeLanguage}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => { if (locale !== 'en') toggleLanguage(); }}>
+            English {locale === 'en' && <Check className="ml-auto h-4 w-4" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { if (locale !== 'ar') toggleLanguage(); }}>
+            العربية {locale === 'ar' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -145,8 +169,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-96">
             <DropdownMenuLabel className="flex justify-between items-center">
-                <span className="font-semibold">Notifications</span>
-                {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>Mark all as read</Button>}
+                <span className="font-semibold">{dict.notifications}</span>
+                {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>{dict.viewAll}</Button>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {isMounted && notifications.length > 0 ? notifications.slice(0, 8).map(notification => {
@@ -177,7 +201,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                 );
             }) : (
               <DropdownMenuItem disabled>
-                <p className="p-2 text-sm text-muted-foreground text-center w-full">No notifications</p>
+                <p className="p-2 text-sm text-muted-foreground text-center w-full">{dict.notifications}</p>
               </DropdownMenuItem>
             )}
         </DropdownMenuContent>
@@ -199,13 +223,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : 'My Account'}</DropdownMenuLabel>
+            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : dict.myAccount}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
+            <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" /> Logout
+              <LogOut className="mr-2 h-4 w-4" /> {dict.logout}
             </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

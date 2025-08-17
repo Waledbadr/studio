@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/context/language-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Link from "next/link";
 
@@ -132,14 +133,16 @@ function ItemMovementContent() {
     ));
   };
 
+  const { dict } = useLanguage();
+
   if (!item || (residenceId && !residence)) {
     return (
       <div className="text-center py-10">
         <p className="text-xl text-muted-foreground">
-          {!item ? "Item not found." : "Residence not found."}
+          {!item ? dict.itemNotFound : dict.residenceNotFound}
         </p>
         <Button onClick={() => router.back()} className="mt-4">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
+          <ArrowLeft className="mr-2 h-4 w-4" /> {dict.back}
         </Button>
       </div>
     );
@@ -229,23 +232,23 @@ function ItemMovementContent() {
       <div className="flex items-center justify-between">
         <div>
           <Button variant="outline" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Inventory
+            <ArrowLeft className="mr-2 h-4 w-4" /> {dict.backToInventory}
           </Button>
-          <h1 className="text-2xl font-bold mt-2">Item Movement Report (Ledger)</h1>
+          <h1 className="text-2xl font-bold mt-2">{dict.itemMovementReportTitle}</h1>
           <p className="text-muted-foreground">
-            Showing history for <span className="font-semibold text-primary">{item.nameEn} / {item.nameAr}</span>{" "}
+            {dict.showingHistoryFor} <span className="font-semibold text-primary">{item.nameEn} / {item.nameAr}</span>{" "}
             {residenceId ? (
               <span>
-                at <span className="font-semibold text-primary">{residence?.name}</span>
+                {dict.atLabel || 'at'} <span className="font-semibold text-primary">{residence?.name}</span>
               </span>
             ) : (
-              <span className="font-semibold text-primary">across all residences</span>
+              <span className="font-semibold text-primary">{dict.acrossAllResidences}</span>
             )}
           </p>
         </div>
         <div className="text-right">
           <p className="text-sm text-muted-foreground">
-            {residenceId ? "Current Stock" : "Total System Stock"}
+            {residenceId ? dict.currentStockLabel : dict.totalSystemStockLabel}
           </p>
           <div className="text-3xl font-bold">
             {inventoryLoading || transactionsLoading ? (
@@ -262,12 +265,12 @@ function ItemMovementContent() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>Type</TableHead>
-                {!residenceId && <TableHead>Residence</TableHead>}
-                <TableHead className="text-center">Quantity</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
+                <TableHead>{dict.date}</TableHead>
+                <TableHead>{dict.details}</TableHead>
+                <TableHead>{dict.typeLabel}</TableHead>
+                {!residenceId && <TableHead>{dict.residenceLabel}</TableHead>}
+                <TableHead className="text-center">{dict.quantity}</TableHead>
+                <TableHead className="text-right">{dict.balance}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -299,7 +302,7 @@ function ItemMovementContent() {
                               : "text-red-600"
                           }`}
                         >
-                          {`${
+                          {`$${
                             tx.type === "IN" || tx.type === "TRANSFER_IN" ? "+" : "-"
                           }${tx.quantity}`}
                         </TableCell>
@@ -310,13 +313,13 @@ function ItemMovementContent() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell
+                        <TableCell
                         colSpan={residenceId ? 5 : 6}
                         className="h-48 text-center text-muted-foreground"
                       >
                         {residenceId
-                          ? "No movement history found for this item in this residence."
-                          : "No movement history found for this item across all residences."}
+                          ? dict.noMovementHistoryFoundForThisItemInResidence
+                          : dict.noMovementHistoryFoundForThisItemAcrossResidences}
                       </TableCell>
                     </TableRow>
                   )}
@@ -328,23 +331,23 @@ function ItemMovementContent() {
       </Card>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Movement details</DialogTitle>
+            <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
           </DialogHeader>
           {selectedTx ? (
             <div className="text-sm text-muted-foreground space-y-1 mb-3">
               <div>
-                Type: <span className="font-medium text-foreground">{selectedTx.type}</span>
+                {dict.typeLabel}: <span className="font-medium text-foreground">{selectedTx.type}</span>
               </div>
               <div>
-                Date: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), "PPP p") : ""}
+                {dict.date}: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), "PPP p") : ""}
               </div>
               <div>
-                Reference: <span className="font-mono">{selectedTx.referenceDocId || "—"}</span>
+                {dict.referenceLabel}: <span className="font-mono">{selectedTx.referenceDocId || "—"}</span>
               </div>
-              <div>Residence: {getTransactionResidenceName(selectedTx.residenceId)}</div>
-              {selectedTx.locationName ? <div>Location: {selectedTx.locationName}</div> : null}
+              <div>{dict.residenceLabel}: {getTransactionResidenceName(selectedTx.residenceId)}</div>
+              {selectedTx.locationName ? <div>{dict.location}: {selectedTx.locationName}</div> : null}
             </div>
           ) : null}
           {detailLoading ? (
@@ -352,14 +355,14 @@ function ItemMovementContent() {
           ) : selectedTx?.type === "IN" && docDetails ? (
             <div className="space-y-3">
               <div className="text-sm">
-                Supplier: {docDetails.supplierName || "—"} · Invoice: {docDetails.invoiceNo || "—"}
+                {dict.supplierLabel}: {docDetails.supplierName || "—"} · {dict.invoiceLabel}: {docDetails.invoiceNo || "—"}
               </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead>{dict.itemLabel}</TableHead>
+                      <TableHead className="text-right">{dict.quantity}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -375,7 +378,7 @@ function ItemMovementContent() {
               {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
                   <Button asChild>
-                    <Link href={canOpenDocLink(selectedTx)!}>Open MRV</Link>
+                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMrv}</Link>
                   </Button>
                 </div>
               )}
@@ -383,7 +386,7 @@ function ItemMovementContent() {
           ) : selectedTx?.type === "OUT" && docDetails ? (
             <div className="space-y-3">
               <div className="text-sm">
-                Location: {Object.keys(docDetails.locations || {}).join(", ") || selectedTx.locationName || "—"}
+                {dict.location}: {Object.keys(docDetails.locations || {}).join(", ") || selectedTx.locationName || "—"}
               </div>
               {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
@@ -396,15 +399,15 @@ function ItemMovementContent() {
           ) : selectedTx?.type === "ADJUSTMENT" ? (
             <div className="space-y-3">
               {reconItems.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No reconciliation lines found.</div>
+                <div className="text-sm text-muted-foreground">{dict.noReconciliationLinesFound}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Direction</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>{dict.itemLabel}</TableHead>
+                        <TableHead>{dict.directionLabel}</TableHead>
+                        <TableHead className="text-right">{dict.quantity}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -421,16 +424,16 @@ function ItemMovementContent() {
               )}
               {!!selectedTx.referenceDocId && (
                 <div className="pt-2">
-                  <Button asChild variant="secondary">
+                    <Button asChild variant="secondary">
                     <Link href={`/inventory/reports/reconciliations/${selectedTx.referenceDocId}`}>
-                      Open Reconciliation
+                      {dict.openReconciliation}
                     </Link>
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No additional details available for this movement.</div>
+            <div className="text-sm text-muted-foreground">{dict.noAdditionalMovementDetails}</div>
           )}
         </DialogContent>
       </Dialog>

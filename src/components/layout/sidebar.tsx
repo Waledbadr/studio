@@ -15,6 +15,7 @@ import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrder
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
@@ -78,65 +79,67 @@ export function AppSidebar() {
   }
 
   // Menu structure with groupings
+  const { dict } = useLanguage();
+
   const menuStructure: MenuSection[] = [
     // Main Section
     {
-      title: 'Main',
+      title: dict.sidebar?.main || 'Main',
       items: [
-        { href: '/', label: 'Dashboard', icon: Home },
-        { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+        { href: '/', label: dict.sidebar?.dashboard || 'Dashboard', icon: Home },
+        { href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench },
       ]
     },
     // Stock Management Section
     {
-      title: 'Stock Management',
+      title: dict.sidebar?.stockManagement || 'Stock Management',
       items: [
-        { href: '/inventory', label: 'Inventory', icon: ClipboardList, exact: true },
-        { href: '/inventory/inventory-audit', label: 'Stock Reconciliation', icon: FileCheck },
-        { href: '/inventory/depreciation', label: 'Depreciation', icon: AlertTriangle },
-        { href: '/inventory/transfer', label: 'Stock Transfer', icon: Move },
+        { href: '/inventory', label: dict.sidebar?.inventory || 'Inventory', icon: ClipboardList, exact: true },
+        { href: '/inventory/inventory-audit', label: dict.sidebar?.stockReconciliation || 'Stock Reconciliation', icon: FileCheck },
+        { href: '/inventory/depreciation', label: dict.sidebar?.depreciation || 'Depreciation', icon: AlertTriangle },
+        { href: '/inventory/transfer', label: dict.sidebar?.stockTransfer || 'Stock Transfer', icon: Move },
       ]
     },
     // Material Movement Section
     {
-      title: 'Material Movement',
+      title: dict.sidebar?.materialMovement || 'Material Movement',
       items: [
-        { href: '/inventory/orders', label: 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
-        { href: '/inventory/receive', label: 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
-        { href: '/inventory/issue', label: 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
+        { href: '/inventory/orders', label: dict.sidebar?.materialRequests || 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
+        { href: '/inventory/receive', label: dict.sidebar?.receiveMaterials || 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
+        { href: '/inventory/issue', label: dict.sidebar?.issueMaterials || 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
       ]
     },
     // Reports Section
     {
-      title: 'Reports',
+      title: dict.sidebar?.reports || 'Reports',
       items: [
-        { href: '/reports', label: 'Reports', icon: AreaChart },
+        { href: '/reports', label: dict.sidebar?.reports || 'Reports', icon: AreaChart },
       ],
       subItems: [
-        { href: '/inventory/reports/stock-movement', label: 'Stock Movement Report', icon: TrendingUp },
-        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History },
-        { href: '/inventory/reports/reconciliations', label: 'Reconciliations', icon: FileCheck },
+        { href: '/inventory/reports/stock-movement', label: dict.sidebar?.stockMovementReport || 'Stock Movement Report', icon: TrendingUp },
+        { href: '/inventory/reports/lifespan', label: dict.sidebar?.lifespanReport || 'Lifespan Report', icon: History },
+        { href: '/inventory/reports/reconciliations', label: dict.sidebar?.reconciliations || 'Reconciliations', icon: FileCheck },
       ]
     },
     // Settings Section
     {
-      title: 'Settings',
+      title: dict.sidebar?.settings || 'Settings',
       items: [
-  { href: '/residences', label: 'Residences', icon: Building },
+  { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
         ...(currentUser?.role === 'Admin' ? [
-          { href: '/users', label: 'Users', icon: Users },
-          { href: '/setup', label: 'Setup', icon: Settings },
+          { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
+          { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },
         ] : [] as any),
       ] as any
     },
     // Feedback Section
     {
-      title: 'Feedback',
+      title: dict.feedback || 'Feedback',
       items: [
-        { href: '/feedback', label: 'My Feedback', icon: LifeBuoy },
+        { href: '/feedback', label: dict.myFeedback || 'My Feedback', icon: LifeBuoy },
         ...(currentUser?.role === 'Admin' ? [
-          { href: '/admin/feedback', label: 'Feedback Board', icon: ClipboardList },
-          { href: '/admin/feedback/stats', label: 'Feedback Analytics', icon: AreaChart },
+          { href: '/admin/feedback', label: dict.feedbackBoard || 'Feedback Board', icon: ClipboardList },
+          { href: '/admin/feedback/stats', label: dict.feedbackAnalytics || 'Feedback Analytics', icon: AreaChart },
         ] : [] as any),
       ] as any,
     },

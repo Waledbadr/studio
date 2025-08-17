@@ -14,6 +14,7 @@ import { Filter, TrendingUp, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Link from 'next/link';
+import { useLanguage } from '@/context/language-context';
 
 interface StockMovementFilters {
   residenceId: string;
@@ -30,6 +31,7 @@ export default function StockMovementReportPage() {
   const { getAllInventoryTransactions, items, getMRVById, getMIVById, getReconciliationItems } = useInventory();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
 
   const [filters, setFilters] = useState<StockMovementFilters>({
     residenceId: '',
@@ -253,21 +255,21 @@ export default function StockMovementReportPage() {
   // Helper functions
   const getMovementTypeLabel = (type: string) => {
     switch (type) {
-      case 'IN': return 'Stock In';
-      case 'OUT': return 'Stock Out';
-      case 'TRANSFER_IN': return 'Transfer In';
-      case 'TRANSFER_OUT': return 'Transfer Out';
-      case 'ADJUSTMENT': return 'Adjustment';
-      case 'RETURN': return 'Return';
-      case 'DEPRECIATION': return 'Depreciation';
-      case 'AUDIT': return 'Audit Adjustment';
-      case 'SCRAP': return 'Scrap';
+      case 'IN': return dict.stockIn;
+      case 'OUT': return dict.stockOut;
+      case 'TRANSFER_IN': return (dict as any).transferIn;
+      case 'TRANSFER_OUT': return (dict as any).transferOut;
+      case 'ADJUSTMENT': return dict.adjustmentLabel;
+      case 'RETURN': return dict.returnLabel;
+      case 'DEPRECIATION': return dict.depreciationLabel;
+      case 'AUDIT': return dict.auditAdjustmentLabel;
+      case 'SCRAP': return dict.scrapLabel;
       default: return type;
     }
   };
 
   const getLocationString = (transaction: any) => {
-    return transaction.locationName || 'Location not specified';
+    return transaction.locationName || dict.locationNotSpecified;
   };
 
   const getResidenceName = (residenceId: string) => {
@@ -306,13 +308,11 @@ export default function StockMovementReportPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-100 dark:border-blue-800">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-100 dark:border-blue-800">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Stock Movement Report</h1>
-            <p className="text-muted-foreground text-lg">
-              Comprehensive analysis of inventory movements with advanced filtering capabilities
-            </p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">{dict.stockMovementReportTitle}</h1>
+        <p className="text-muted-foreground text-lg">{dict.stockMovementReportDescription}</p>
           </div>
           <div className="hidden md:block">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
@@ -326,9 +326,9 @@ export default function StockMovementReportPage() {
       <Card className="shadow-lg border-0">
         <CardHeader className="bg-muted/30 dark:bg-card border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-semibold text-foreground flex items-center">
+              <CardTitle className="text-xl font-semibold text-foreground flex items-center">
               <Filter className="mr-3 h-6 w-6 text-primary" />
-              Report Filters
+              {dict.reportFilters}
             </CardTitle>
           </div>
         </CardHeader>
@@ -338,22 +338,20 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-primary rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Location Hierarchy</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.locationHierarchy || 'Location Hierarchy'}</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Residence Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="residence" className="text-sm font-medium">
-                      Residence
-                    </Label>
+                    <Label htmlFor="residence" className="text-sm font-medium">{dict.residenceLabel}</Label>
                     <select 
                       id="residence"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={filters.residenceId} 
                       onChange={(e) => handleFilterChange('residenceId', e.target.value)}
                     >
-                      <option value="">All Assigned Residences</option>
+                      <option value="">{dict.allAssignedResidences}</option>
                       {userResidences.map(residence => {
                         if (!residence?.id) return null;
                         return (
@@ -367,7 +365,7 @@ export default function StockMovementReportPage() {
 
                   {/* Building Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="building" className="text-sm font-medium">Building</Label>
+                    <Label htmlFor="building" className="text-sm font-medium">{dict.buildingLabel}</Label>
                     <select
                       id="building"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
@@ -375,7 +373,7 @@ export default function StockMovementReportPage() {
                       onChange={(e) => handleFilterChange('buildingId', e.target.value)}
                       disabled={!filters.residenceId}
                     >
-                      <option value="">All Buildings</option>
+                      <option value="">{dict.allBuildings}</option>
                       {availableBuildings.map(building => {
                         if (!building?.id) return null;
                         return (
@@ -389,7 +387,7 @@ export default function StockMovementReportPage() {
 
                   {/* Floor Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="floor" className="text-sm font-medium">Floor</Label>
+                    <Label htmlFor="floor" className="text-sm font-medium">{dict.floorLabel}</Label>
                     <select
                       id="floor"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
@@ -397,7 +395,7 @@ export default function StockMovementReportPage() {
                       onChange={(e) => handleFilterChange('floorId', e.target.value)}
                       disabled={!filters.buildingId}
                     >
-                      <option value="">All Floors</option>
+                      <option value="">{dict.allFloors}</option>
                       {availableFloors.map(floor => {
                         if (!floor?.id) return null;
                         return (
@@ -411,7 +409,7 @@ export default function StockMovementReportPage() {
 
                   {/* Room Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="room" className="text-sm font-medium">Room</Label>
+                    <Label htmlFor="room" className="text-sm font-medium">{dict.roomLabel}</Label>
                     <select
                       id="room"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
@@ -419,7 +417,7 @@ export default function StockMovementReportPage() {
                       onChange={(e) => handleFilterChange('roomId', e.target.value)}
                       disabled={!filters.floorId}
                     >
-                      <option value="">All Rooms</option>
+                      <option value="">{dict.allRooms}</option>
                       {availableRooms.map(room => {
                         if (!room?.id) return null;
                         return (
@@ -437,42 +435,42 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-green-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Movement & Item Filters</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.movementAndItemFiltersLabel}</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Movement Type Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="movementType" className="text-sm font-medium">Movement Type</Label>
+                    <Label htmlFor="movementType" className="text-sm font-medium">{dict.movementTypeLabel}</Label>
                     <select
                       id="movementType"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       value={filters.movementType} 
                       onChange={(e) => handleFilterChange('movementType', e.target.value)}
                     >
-                      <option value="">All Movement Types</option>
-                      <option value="IN">Stock In</option>
-                      <option value="OUT">Stock Out</option>
-                      <option value="TRANSFER_IN">Transfer In</option>
-                      <option value="TRANSFER_OUT">Transfer Out</option>
-                      <option value="ADJUSTMENT">Adjustment</option>
-                      <option value="RETURN">Return</option>
-                      <option value="DEPRECIATION">Depreciation</option>
-                      <option value="AUDIT">Audit Adjustment</option>
-                      <option value="SCRAP">Scrap</option>
+                      <option value="">{dict.all}</option>
+                      <option value="IN">{dict.stockIn}</option>
+                      <option value="OUT">{dict.stockOut}</option>
+                      <option value="TRANSFER_IN">{(dict as any).transferIn}</option>
+                      <option value="TRANSFER_OUT">{(dict as any).transferOut}</option>
+                      <option value="ADJUSTMENT">{dict.adjustmentLabel}</option>
+                      <option value="RETURN">{dict.returnLabel}</option>
+                      <option value="DEPRECIATION">{dict.depreciationLabel}</option>
+                      <option value="AUDIT">{dict.auditAdjustmentLabel}</option>
+                      <option value="SCRAP">{dict.scrapLabel}</option>
                     </select>
                   </div>
 
                   {/* Item Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="itemId" className="text-sm font-medium">Specific Item</Label>
+                    <Label htmlFor="itemId" className="text-sm font-medium">{dict.specificItemLabel}</Label>
                     <select
                       id="itemId"
                       className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       value={filters.itemId} 
                       onChange={(e) => handleFilterChange('itemId', e.target.value)}
                     >
-                      <option value="">All Items</option>
+                      <option value="">{dict.allItems}</option>
                       {availableItems.map((item: any) => {
                         if (!item?.id) return null;
                         return (
@@ -490,14 +488,14 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Date Range</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.dateRangeLabel}</h3>
                 </div>
                 
                 <div className="space-y-4">
                   {/* Date Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-sm font-medium">Start Date</Label>
+                      <Label htmlFor="startDate" className="text-sm font-medium">{dict.startDate}</Label>
                       <input
                         id="startDate"
                         type="date"
@@ -508,7 +506,7 @@ export default function StockMovementReportPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-sm font-medium">End Date</Label>
+                      <Label htmlFor="endDate" className="text-sm font-medium">{dict.endDate}</Label>
                       <input
                         id="endDate"
                         type="date"
@@ -525,7 +523,7 @@ export default function StockMovementReportPage() {
         
         {/* Action Footer */}
         <div className="bg-muted/30 dark:bg-card px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
-          <div className="flex items-center gap-4">
+    <div className="flex items-center gap-4">
             <Button 
               onClick={handleGenerateReport} 
               disabled={isGenerating}
@@ -534,27 +532,27 @@ export default function StockMovementReportPage() {
               {isGenerating ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-b-transparent border-white" />
-                  Generating...
+      {dict.generating}
                 </>
               ) : (
                 <>
                   <TrendingUp className="mr-2 h-5 w-5" />
-                  Generate Report
+      {dict.generateReport}
                 </>
               )}
             </Button>
             
-            {hasGenerated && filteredTransactions.length > 0 && (
+      {hasGenerated && filteredTransactions.length > 0 && (
               <Button variant="outline" onClick={exportToCSV} className="border-border hover:bg-accent h-11 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
-                Export CSV
+        {dict.exportCsvButton}
               </Button>
             )}
           </div>
           
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             <span className="text-green-600 flex items-center">
-              ✓ Ready to generate report
+              ✓ {dict.readyToGenerate}
             </span>
           </div>
         </div>
@@ -566,7 +564,7 @@ export default function StockMovementReportPage() {
           <CardHeader className="bg-muted/30 dark:bg-card border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-semibold text-foreground">
-                Report Results ({filteredTransactions.length} transactions)
+                {dict.reportResultsTitle} ({filteredTransactions.length} transactions)
               </CardTitle>
               <Badge variant="secondary">
                 {format(new Date(), 'MMM dd, yyyy')}
@@ -579,13 +577,13 @@ export default function StockMovementReportPage() {
                   <Table>
                     <TableHeader className="sticky top-0 bg-muted/50 dark:bg-card">
                       <TableRow>
-                        <TableHead className="font-semibold">Date & Time</TableHead>
-                        <TableHead className="font-semibold">Item</TableHead>
-                        <TableHead className="font-semibold">Movement Type</TableHead>
-                        <TableHead className="font-semibold text-right">Quantity</TableHead>
-                        <TableHead className="font-semibold">Residence</TableHead>
-                        <TableHead className="font-semibold">Location</TableHead>
-                        <TableHead className="font-semibold">Reference</TableHead>
+                        <TableHead className="font-semibold">{dict.dateTimeLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.itemLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.movementTypeLabel}</TableHead>
+                        <TableHead className="font-semibold text-right">{dict.quantity}</TableHead>
+                        <TableHead className="font-semibold">{dict.residenceLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.location}</TableHead>
+                        <TableHead className="font-semibold">{dict.referenceLabel}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -599,10 +597,10 @@ export default function StockMovementReportPage() {
                             {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {transaction.itemNameEn || 'Unknown Item'}
+                            {transaction.itemNameEn || dict.itemNotFound}
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
+                              <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
                               {getMovementTypeLabel(transaction.type)}
                             </Badge>
                           </TableCell>
@@ -613,7 +611,7 @@ export default function StockMovementReportPage() {
                             {getResidenceName(transaction.residenceId)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {getLocationString(transaction)}
+                            {getLocationString(transaction) || dict.locationNotSpecified}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                             {transaction.referenceDocId || '-'}
@@ -626,22 +624,22 @@ export default function StockMovementReportPage() {
              ) : (
                 <div className="p-8 text-center">
                     <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
-                    <p className="text-muted-foreground">
-                    No transactions were found matching the specified criteria. Try adjusting the filters.
-                    </p>
+          <h3 className="text-lg font-semibold mb-2">{dict.noResultsFoundTitle}</h3>
+        <p className="text-muted-foreground">
+        {dict.noResultsFoundMessage}
+        </p>
                 </div>
              )}
           </CardContent>
         </Card>
       )}
       
-      {isGenerating && (
+  {isGenerating && (
         <Card>
           <CardContent className="p-8 text-center">
               <div className="flex justify-center items-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-b-transparent border-primary" />
-                  <p className="ml-4 text-lg font-semibold">Generating Report...</p>
+      <p className="ml-4 text-lg font-semibold">{dict.generatingReport}</p>
               </div>
           </CardContent>
         </Card>
@@ -649,23 +647,23 @@ export default function StockMovementReportPage() {
 
       {/* Details dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Movement details</DialogTitle>
+            <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
           </DialogHeader>
           {selectedTx ? (
             <div className="text-sm text-muted-foreground space-y-1 mb-3">
               <div>
-                Type: <span className="font-medium text-foreground">{selectedTx.type}</span>
+                {dict.typeLabel}: <span className="font-medium text-foreground">{selectedTx.type}</span>
               </div>
               <div>
-                Date: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), 'PPP p') : ''}
+                {dict.date}: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), 'PPP p') : ''}
               </div>
               <div>
-                Reference: <span className="font-mono">{selectedTx.referenceDocId || '—'}</span>
+                {dict.referenceLabel}: <span className="font-mono">{selectedTx.referenceDocId || '—'}</span>
               </div>
-              <div>Residence: {getResidenceName(selectedTx.residenceId)}</div>
-              {selectedTx.locationName ? <div>Location: {selectedTx.locationName}</div> : null}
+              <div>{dict.residenceLabel}: {getResidenceName(selectedTx.residenceId)}</div>
+              {selectedTx.locationName ? <div>{dict.location}: {selectedTx.locationName}</div> : null}
             </div>
           ) : null}
 
@@ -673,13 +671,13 @@ export default function StockMovementReportPage() {
             <Skeleton className="h-24 w-full" />
           ) : selectedTx?.type === 'IN' && docDetails ? (
             <div className="space-y-3">
-              <div className="text-sm">Supplier: {docDetails.supplierName || '—'} · Invoice: {docDetails.invoiceNo || '—'}</div>
+              <div className="text-sm">{dict.supplierLabel}: {docDetails.supplierName || '—'} · {dict.invoiceLabel}: {docDetails.invoiceNo || '—'}</div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead>{dict.itemLabel}</TableHead>
+                      <TableHead className="text-right">{dict.quantity}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -692,21 +690,21 @@ export default function StockMovementReportPage() {
                   </TableBody>
                 </Table>
               </div>
-              {canOpenDocLink(selectedTx) && (
+                  {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
                   <Button asChild>
-                    <Link href={canOpenDocLink(selectedTx)!}>Open MRV</Link>
+                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMrv}</Link>
                   </Button>
                 </div>
               )}
             </div>
           ) : selectedTx?.type === 'OUT' && docDetails ? (
             <div className="space-y-3">
-              <div className="text-sm">Location: {Object.keys(docDetails.locations || {}).join(', ') || selectedTx.locationName || '—'}</div>
+              <div className="text-sm">{dict.location}: {Object.keys(docDetails.locations || {}).join(', ') || selectedTx.locationName || '—'}</div>
               {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
                   <Button asChild>
-                    <Link href={canOpenDocLink(selectedTx)!}>Open MIV</Link>
+                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMiv}</Link>
                   </Button>
                 </div>
               )}
@@ -714,15 +712,15 @@ export default function StockMovementReportPage() {
           ) : selectedTx?.type === 'ADJUSTMENT' ? (
             <div className="space-y-3">
               {reconItems.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No reconciliation lines found.</div>
+                <div className="text-sm text-muted-foreground">{dict.noReconciliationLinesFound}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Direction</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>{dict.itemLabel}</TableHead>
+                        <TableHead>{dict.directionLabel}</TableHead>
+                        <TableHead className="text-right">{dict.quantity}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -737,16 +735,16 @@ export default function StockMovementReportPage() {
                   </Table>
                 </div>
               )}
-              {!!selectedTx.referenceDocId && (
+      {!!selectedTx.referenceDocId && (
                 <div className="pt-2">
                   <Button asChild variant="secondary">
-                    <Link href={`/inventory/reports/reconciliations/${selectedTx.referenceDocId}`}>Open Reconciliation</Link>
+        <Link href={`/inventory/reports/reconciliations/${selectedTx.referenceDocId}`}>{dict.openReconciliation}</Link>
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No additional details available for this movement.</div>
+    <div className="text-sm text-muted-foreground">{dict.noAdditionalMovementDetails}</div>
           )}
         </DialogContent>
       </Dialog>

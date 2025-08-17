@@ -19,6 +19,7 @@ import type { OrderItem } from '@/context/orders-context';
 import { useRouter } from 'next/navigation';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import type { Complex } from '@/context/residences-context';
@@ -31,6 +32,7 @@ export default function NewOrderPage() {
     const { createOrder, loading: ordersLoading } = useOrders();
     const { currentUser, users, loadUsers } = useUsers();
     const { residences, loadResidences } = useResidences();
+    const { dict } = useLanguage();
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [selectedResidence, setSelectedResidence] = useState<Complex | undefined>(undefined);
@@ -522,10 +524,10 @@ function AddItemButton({
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Create New Material Request</h1>
+                    <h1 className="text-2xl font-bold">{dict.ui?.editMaterialRequest || 'Create New Material Request'}</h1>
                     {userResidences.length > 1 ? (
                         <div className="flex items-center gap-4 mt-2">
-                             <Label htmlFor="residence-select" className="text-muted-foreground">Request for residence:</Label>
+                             <Label htmlFor="residence-select" className="text-muted-foreground">{dict.requestForResidence || 'Request for residence:'}</Label>
                              <Select onValueChange={handleResidenceChange} value={selectedResidence?.id || ''}>
                                 <SelectTrigger id="residence-select" className="w-[250px]">
                                     <SelectValue placeholder="Select a residence" />
@@ -546,16 +548,16 @@ function AddItemButton({
                     {lastDraftSavedAt && (
                         <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
                     )}
-                    {hasDraft && (
+                        {hasDraft && (
                         <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); /* keep residence */ clearDraft(); }}>
-                            Discard Draft
+                            {dict.ui?.discardDraft || 'Discard Draft'}
                         </Button>
                     )}
                     <Button onClick={handleSubmitOrder} disabled={orderItems.length === 0 || isSubmitting || !selectedResidence}>
                         {isSubmitting ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.ui?.loading || 'Submitting...'}</>
                         ) : (
-                            `Submit Request (${totalOrderQuantity} items)`
+                            `${dict.submitRequest || 'Submit Request'} (${totalOrderQuantity} ${dict.items || 'items'})`
                         )}
                     </Button>
                 </div>
@@ -564,14 +566,14 @@ function AddItemButton({
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Available Inventory</CardTitle>
-                        <CardDescription>Click the '+' to add an item to your request.</CardDescription>
+                        <CardTitle>{dict.ui?.availableInventory || 'Available Inventory'}</CardTitle>
+                        <CardDescription>{dict.ui?.addGeneralNotesPlaceholder || `Click the '+' to add an item to your request.`}</CardDescription>
                          <div className="flex gap-2">
                             <div className="relative flex-grow">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input 
                                     type="search"
-                                    placeholder="Search items..."
+                                    placeholder={dict.searchItemsPlaceholder || 'Search items...'}
                                     className="pl-8 w-full"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -582,7 +584,7 @@ function AddItemButton({
                                     <SelectValue placeholder="Filter by category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Categories</SelectItem>
+                                    <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
                                     {categories.map((cat) => (
                                         <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
                                     ))}
@@ -606,7 +608,7 @@ function AddItemButton({
                                             <div className="flex items-center gap-2 mb-3">
                                                 <Clock className="h-4 w-4 text-muted-foreground" />
                                                 <h3 className="text-sm font-medium text-muted-foreground">
-                                                    Recently Used Items • الأصناف المستخدمة حديثاً
+                                                    {dict.recentItemsTitle || 'Recently Used Items • الأصناف المستخدمة حديثاً'}
                                                 </h3>
                                             </div>
                                             <div className="space-y-2">
@@ -668,9 +670,9 @@ function AddItemButton({
                                         )) : (
                                              searchQuery || selectedCategory !== 'all' ? (
                                                 <div className="text-center text-muted-foreground py-10">
-                                                    <p className="mb-4">No items found matching your criteria.</p>
+                                                    <p className="mb-4">{dict.noRecordsFound || 'No items found matching your criteria.'}</p>
                                                      {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
-                                                        <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || `Add "${searchQuery}"`}
                                                     </Button>}
                                                 </div>
                                             ) : (
@@ -690,9 +692,9 @@ function AddItemButton({
                         <CardDescription>Review and adjust the items in your request.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-[450px]">
+                                <ScrollArea className="h-[450px]">
                             {orderItems.length === 0 ? (
-                                <div className="h-60 flex items-center justify-center text-muted-foreground">Your request is empty.</div>
+                                <div className="h-60 flex items-center justify-center text-muted-foreground">{dict.ui?.currentRequestEmpty || 'Your request is empty.'}</div>
                             ) : (
                                 <div className="space-y-4">
                                     {Object.entries(groupedOrderItems).map(([category, items]) => (
@@ -765,10 +767,10 @@ function AddItemButton({
                             )}
                         </ScrollArea>
                         <div className="mt-6 space-y-2">
-                            <Label htmlFor="general-notes">General Notes</Label>
+                            <Label htmlFor="general-notes">{dict.ui?.generalNotes || 'General Notes'}</Label>
                             <Textarea
                                 id="general-notes"
-                                placeholder="Add any general notes for the entire request..."
+                                placeholder={dict.ui?.addGeneralNotesPlaceholder || 'Add any general notes for the entire request...'}
                                 value={generalNotes}
                                 onChange={(e) => setGeneralNotes(e.target.value)}
                             />

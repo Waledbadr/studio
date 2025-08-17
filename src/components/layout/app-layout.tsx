@@ -10,11 +10,13 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useUsers } from '@/context/users-context';
 import { enablePushIfGranted } from '@/lib/messaging';
+import { useLanguage } from '@/context/language-context';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 export function AppLayout({ children }: PropsWithChildren) {
   const { currentUser } = useUsers();
+  const { locale } = useLanguage();
 
   useEffect(() => {
     enablePushIfGranted(currentUser?.id);
@@ -33,7 +35,7 @@ export function AppLayout({ children }: PropsWithChildren) {
   return (
     <RequireAuth>
       <SidebarProvider defaultOpen>
-        <Sidebar className="no-print">
+        <Sidebar side={locale === 'ar' ? 'right' : 'left'} className="no-print">
           <AppSidebar />
         </Sidebar>
         <SidebarInset className="flex flex-col">

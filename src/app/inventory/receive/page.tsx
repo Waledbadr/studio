@@ -14,9 +14,11 @@ import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
 import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus } from "lucide-react";
 import { useResidences } from "@/context/residences-context";
+import { useLanguage } from '@/context/language-context';
 
 export default function ReceiveMaterialsPage() {
     const { getMRVRequests, approveMRVRequest } = useInventory();
+    const { dict } = useLanguage();
     const { orders, loadOrders } = useOrders();
     const router = useRouter();
     const { currentUser } = useUsers();
@@ -183,13 +185,13 @@ export default function ReceiveMaterialsPage() {
         <Table>
             <TableHeader>
                 <TableRow>
-                                        <TableHead>Request ID</TableHead>
-                                        <TableHead>Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="text-right">Action</TableHead>}
+                                            <TableHead>{dict.orderId || 'Request ID'}</TableHead>
+                                            <TableHead>{'Type'}</TableHead>
+                        <TableHead>{dict.date || 'Date'}</TableHead>
+                        <TableHead>{dict.location || 'Residence'}</TableHead>
+                        <TableHead>{dict.items || 'Items'}</TableHead>
+                        <TableHead>{dict.status || 'Status'}</TableHead>
+                        {showActions && <TableHead className="text-right">{dict.actions || 'Action'}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -210,11 +212,11 @@ export default function ReceiveMaterialsPage() {
                                                 )}
                                         </TableRow>
                 )) : (
-                    <TableRow>
-                                                <TableCell colSpan={showActions ? 7 : 6} className="h-32 text-center text-muted-foreground">
-                          No records found.
-                        </TableCell>
-                    </TableRow>
+                                        <TableRow>
+                                                                                                <TableCell colSpan={showActions ? 7 : 6} className="h-32 text-center text-muted-foreground">
+                                                    {dict.noRecordsFound || 'No records found.'}
+                                                </TableCell>
+                                        </TableRow>
                 )}
             </TableBody>
         </Table>
@@ -227,20 +229,20 @@ export default function ReceiveMaterialsPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Receive Materials (MRV)</h1>
-                    <p className="text-muted-foreground">Select an approved request to receive its items.</p>
+                    <h1 className="text-2xl font-bold">{dict.mivTitle || dict.ui?.materialsApp}</h1>
+                    <p className="text-muted-foreground">{dict.mivDescription || dict.ui?.currentRequest}</p>
                 </div>
                  <div className="flex items-center gap-2">
                     <Button variant="secondary" onClick={() => router.push('/inventory/receive/new-approval')}>
-                        New MRV (Approval)
+                            {dict.newMRVApproval || dict.reviewLabel}
                     </Button>
                     {/* View MRV receipts history */}
                     <Button variant="outline" onClick={() => router.push('/inventory/receive/receipts')}>
-                        <History className="mr-2 h-4 w-4" /> View Receipts History
+                        <History className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Receipts History'}
                     </Button>
                     {/* Navigate to MR (Materials Requests) dedicated page */}
                     <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
-                        Materials Requests (MR)
+                            {dict.materialsRequestsLabel || dict.ui?.materialsApp}
                     </Button>
                 </div>
             </div>
@@ -254,7 +256,7 @@ export default function ReceiveMaterialsPage() {
                                 <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Ready to Receive</p>
+                                <p className="text-sm font-medium">{dict.readyToReceive || 'Ready to Receive'}</p>
                                 <p className="text-2xl font-bold">{readyToReceiveCount}</p>
                             </div>
                         </div>
@@ -267,7 +269,7 @@ export default function ReceiveMaterialsPage() {
                                 <Truck className="h-4 w-4 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Delivered</p>
+                                <p className="text-sm font-medium">{dict.delivered || 'Delivered'}</p>
                                 <p className="text-2xl font-bold">{completedDeliveredCount}</p>
                             </div>
                         </div>
@@ -280,7 +282,7 @@ export default function ReceiveMaterialsPage() {
                                 <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Rejected</p>
+                                <p className="text-sm font-medium">{dict.ui?.rejected || 'Rejected'}</p>
                                 <p className="text-2xl font-bold">{rejectedMrvCount}</p>
                             </div>
                         </div>
@@ -293,7 +295,7 @@ export default function ReceiveMaterialsPage() {
                                 <Archive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Total Requests</p>
+                                <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
                                 <p className="text-2xl font-bold">{pendingMrvCount + approvedMrvCount + rejectedMrvCount}</p>
                             </div>
                         </div>
@@ -304,19 +306,19 @@ export default function ReceiveMaterialsPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
-                        <CardTitle>Pending MRV Approvals</CardTitle>
+                        <CardTitle>{dict.pendingMRVApprovals || 'Pending MRV Approvals'}</CardTitle>
                         <CardDescription>
-                            Requests awaiting approval or posting to stock ({pendingMrvCount} requests)
+                            {dict.pendingMrvCardDescription || 'Requests awaiting approval or posting to stock'} ({pendingMrvCount} requests)
                         </CardDescription>
                     </div>
-                    <Button 
+                        <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCompletedToggle(!isCompletedOpen)}
                         className="flex items-center gap-2"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? 'Hide Completed' : 'Show Completed'}
+                        {isCompletedOpen ? dict.ui?.hideCompleted : dict.ui?.showCompleted}
                         <Badge variant="secondary" className="text-xs">
                             {approvedMrvRequests.length}
                         </Badge>

@@ -18,11 +18,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import * as XLSX from 'xlsx';
 
 export default function InventoryPage() {
+  const { dict } = useLanguage();
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
@@ -250,47 +252,48 @@ export default function InventoryPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Inventory Management</h1>
+        <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
         <Button variant="outline" onClick={handleExportExcel}>
-          تصدير الأصناف إلى Excel
+          {dict.exportToExcel || 'Export items to Excel'}
         </Button>
       </div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Inventory Management</h1>
-          <p className="text-muted-foreground">Manage your materials and supplies for each residence.</p>
+          <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
+          <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
         <div className="flex gap-2">
            <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
-                <Move className="mr-2 h-4 w-4" /> Stock Transfer
+                <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
             </Button>
            <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                  <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Category</Button>
-              </DialogTrigger>
-              <DialogContent>
-                  <form onSubmit={handleAddCategory}>
-                      <DialogHeader>
-                          <DialogTitle>Add New Category</DialogTitle>
-                          <DialogDescription>Enter the name for the new inventory category.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                          <Label htmlFor="category-name">Category Name</Label>
-                          <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="e.g., Landscaping"/>
-                      </div>
-                      <DialogFooter>
-                          <Button type="submit">Save Category</Button>
-                      </DialogFooter>
-                  </form>
-              </DialogContent>
-          </Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <form onSubmit={handleAddCategory}>
+              <DialogHeader>
+                <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
+                <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
+                <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
+              </div>
+              <DialogFooter>
+                <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
           <AddItemDialog 
             isOpen={isAddItemDialogOpen} 
             onOpenChange={setIsAddItemDialogOpen} 
             onItemAdded={handleItemAdded}
             triggerButton={
               <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || 'Add Item'}
               </Button>
             }
           />
@@ -301,8 +304,8 @@ export default function InventoryPage() {
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
-                <TabsList>
-                    <TabsTrigger value="all">All Items</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
                     {userResidences.map((res) => (
                       <TabsTrigger key={res.id} value={res.id}>
                         {res.name}
@@ -314,17 +317,17 @@ export default function InventoryPage() {
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search / بحث"
+                      placeholder={dict.searchPlaceholder || 'Search / بحث'}
                       aria-label="Search items"
                     />
                   </div>
                   <div className="w-48">
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Category" />
+                        <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
                         {categories.map((c) => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
                         ))}
