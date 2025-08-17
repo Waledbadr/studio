@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useLanguage } from '@/context/language-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface StockMovementFilters {
   residenceId: string;
@@ -345,88 +346,85 @@ export default function StockMovementReportPage() {
                   {/* Residence Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="residence" className="text-sm font-medium">{dict.residenceLabel}</Label>
-                    <select 
-                      id="residence"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={filters.residenceId} 
-                      onChange={(e) => handleFilterChange('residenceId', e.target.value)}
-                    >
-                      <option value="">{dict.allAssignedResidences}</option>
-                      {userResidences.map(residence => {
-                        if (!residence?.id) return null;
-                        return (
-                          <option key={residence.id} value={residence.id}>
-                            {residence.name || `Residence ${residence.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Select value={filters.residenceId || undefined} onValueChange={(v) => handleFilterChange('residenceId', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="residence" className="h-11">
+                        <SelectValue placeholder={dict.allAssignedResidences} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allAssignedResidences}</SelectItem>
+                        {userResidences.map(residence => {
+                          if (!residence?.id) return null;
+                          return (
+                            <SelectItem key={residence.id} value={residence.id}>
+                              {residence.name || `Residence ${residence.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Building Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="building" className="text-sm font-medium">{dict.buildingLabel}</Label>
-                    <select
-                      id="building"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.buildingId} 
-                      onChange={(e) => handleFilterChange('buildingId', e.target.value)}
-                      disabled={!filters.residenceId}
-                    >
-                      <option value="">{dict.allBuildings}</option>
-                      {availableBuildings.map(building => {
-                        if (!building?.id) return null;
-                        return (
-                          <option key={building.id} value={building.id}>
-                            {building.name || `Building ${building.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Select value={filters.buildingId || undefined} onValueChange={(v) => handleFilterChange('buildingId', v === '__ALL__' ? '' : v)} disabled={!filters.residenceId}>
+                      <SelectTrigger id="building" className="h-11" disabled={!filters.residenceId}>
+                        <SelectValue placeholder={dict.allBuildings} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allBuildings}</SelectItem>
+                        {availableBuildings.map(building => {
+                          if (!building?.id) return null;
+                          return (
+                            <SelectItem key={building.id} value={building.id}>
+                              {building.name || `Building ${building.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Floor Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="floor" className="text-sm font-medium">{dict.floorLabel}</Label>
-                    <select
-                      id="floor"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.floorId} 
-                      onChange={(e) => handleFilterChange('floorId', e.target.value)}
-                      disabled={!filters.buildingId}
-                    >
-                      <option value="">{dict.allFloors}</option>
-                      {availableFloors.map(floor => {
-                        if (!floor?.id) return null;
-                        return (
-                          <option key={floor.id} value={floor.id}>
-                            {floor.name || `Floor ${floor.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Select value={filters.floorId || undefined} onValueChange={(v) => handleFilterChange('floorId', v === '__ALL__' ? '' : v)} disabled={!filters.buildingId}>
+                      <SelectTrigger id="floor" className="h-11" disabled={!filters.buildingId}>
+                        <SelectValue placeholder={dict.allFloors} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allFloors}</SelectItem>
+                        {availableFloors.map(floor => {
+                          if (!floor?.id) return null;
+                          return (
+                            <SelectItem key={floor.id} value={floor.id}>
+                              {floor.name || `Floor ${floor.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Room Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="room" className="text-sm font-medium">{dict.roomLabel}</Label>
-                    <select
-                      id="room"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.roomId} 
-                      onChange={(e) => handleFilterChange('roomId', e.target.value)}
-                      disabled={!filters.floorId}
-                    >
-                      <option value="">{dict.allRooms}</option>
-                      {availableRooms.map(room => {
-                        if (!room?.id) return null;
-                        return (
-                          <option key={room.id} value={room.id}>
-                            {room.name || `Room ${room.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Select value={filters.roomId || undefined} onValueChange={(v) => handleFilterChange('roomId', v === '__ALL__' ? '' : v)} disabled={!filters.floorId}>
+                      <SelectTrigger id="room" className="h-11" disabled={!filters.floorId}>
+                        <SelectValue placeholder={dict.allRooms} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allRooms}</SelectItem>
+                        {availableRooms.map(room => {
+                          if (!room?.id) return null;
+                          return (
+                            <SelectItem key={room.id} value={room.id}>
+                              {room.name || `Room ${room.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -442,44 +440,44 @@ export default function StockMovementReportPage() {
                   {/* Movement Type Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="movementType" className="text-sm font-medium">{dict.movementTypeLabel}</Label>
-                    <select
-                      id="movementType"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      value={filters.movementType} 
-                      onChange={(e) => handleFilterChange('movementType', e.target.value)}
-                    >
-                      <option value="">{dict.all}</option>
-                      <option value="IN">{dict.stockIn}</option>
-                      <option value="OUT">{dict.stockOut}</option>
-                      <option value="TRANSFER_IN">{(dict as any).transferIn}</option>
-                      <option value="TRANSFER_OUT">{(dict as any).transferOut}</option>
-                      <option value="ADJUSTMENT">{dict.adjustmentLabel}</option>
-                      <option value="RETURN">{dict.returnLabel}</option>
-                      <option value="DEPRECIATION">{dict.depreciationLabel}</option>
-                      <option value="AUDIT">{dict.auditAdjustmentLabel}</option>
-                      <option value="SCRAP">{dict.scrapLabel}</option>
-                    </select>
+                    <Select value={filters.movementType || undefined} onValueChange={(v) => handleFilterChange('movementType', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="movementType" className="h-11">
+                        <SelectValue placeholder={dict.all} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.all}</SelectItem>
+                        <SelectItem value="IN">{dict.stockIn}</SelectItem>
+                        <SelectItem value="OUT">{dict.stockOut}</SelectItem>
+                        <SelectItem value="TRANSFER_IN">{(dict as any).transferIn}</SelectItem>
+                        <SelectItem value="TRANSFER_OUT">{(dict as any).transferOut}</SelectItem>
+                        <SelectItem value="ADJUSTMENT">{dict.adjustmentLabel}</SelectItem>
+                        <SelectItem value="RETURN">{dict.returnLabel}</SelectItem>
+                        <SelectItem value="DEPRECIATION">{dict.depreciationLabel}</SelectItem>
+                        <SelectItem value="AUDIT">{dict.auditAdjustmentLabel}</SelectItem>
+                        <SelectItem value="SCRAP">{dict.scrapLabel}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Item Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="itemId" className="text-sm font-medium">{dict.specificItemLabel}</Label>
-                    <select
-                      id="itemId"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      value={filters.itemId} 
-                      onChange={(e) => handleFilterChange('itemId', e.target.value)}
-                    >
-                      <option value="">{dict.allItems}</option>
-                      {availableItems.map((item: any) => {
-                        if (!item?.id) return null;
-                        return (
-                          <option key={item.id} value={item.id}>
-                            {item.nameEn}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Select value={filters.itemId || undefined} onValueChange={(v) => handleFilterChange('itemId', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="itemId" className="h-11">
+                        <SelectValue placeholder={dict.allItems} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allItems}</SelectItem>
+                        {availableItems.map((item: any) => {
+                          if (!item?.id) return null;
+                          return (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.nameEn}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
