@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useInventory } from '@/context/inventory-context';
@@ -10,8 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Filter, TrendingUp, Download, Search } from 'lucide-react';
+import { Filter, TrendingUp, Download, Search, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Link from 'next/link';
+import { useLanguage } from '@/context/language-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 interface StockMovementFilters {
   residenceId: string;
@@ -25,9 +31,10 @@ interface StockMovementFilters {
 }
 
 export default function StockMovementReportPage() {
-  const { getAllInventoryTransactions, items } = useInventory();
+  const { getAllInventoryTransactions, items, getMRVById, getMIVById, getReconciliationItems } = useInventory();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
 
   const [filters, setFilters] = useState<StockMovementFilters>({
     residenceId: '',
@@ -45,6 +52,13 @@ export default function StockMovementReportPage() {
   const [isFetchingInitial, setIsFetchingInitial] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
+
+  // Details dialog state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [docDetails, setDocDetails] = useState<any>(null);
+  const [reconItems, setReconItems] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -103,7 +117,13 @@ export default function StockMovementReportPage() {
   }, [availableFloors, filters.floorId]);
 
   const availableItems = useMemo(() => {
-    return items || [];
+    const arr = (items || []) as any[];
+    const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+    return [...arr].sort((a, b) => {
+      const aLabel = `${a?.nameAr || ''} ${a?.nameEn || ''}`.trim();
+      const bLabel = `${b?.nameAr || ''} ${b?.nameEn || ''}`.trim();
+      return collator.compare(aLabel, bLabel);
+    });
   }, [items]);
 
   // Generate report
@@ -174,6 +194,47 @@ export default function StockMovementReportPage() {
 
   }, [filters, allTransactions, userResidences, availableRooms, availableFloors, availableBuildings]);
 
+  // Build deep links to original documents
+  const canOpenDocLink = (tx: any) => {
+    if (!tx?.referenceDocId) return null;
+    if (tx.type === 'IN') return `/inventory/receive/receipts/${tx.referenceDocId}`;
+    if (tx.type === 'OUT') {
+      return typeof tx.referenceDocId === 'string' && tx.referenceDocId.startsWith('MIV-')
+        ? `/inventory/issue-history/${tx.referenceDocId}`
+        : null;
+    }
+    if (tx.type === 'ADJUSTMENT') {
+      const id = tx.referenceDocId as string;
+      return id.startsWith('CON-') ? `/inventory/reports/reconciliations/${id}` : null;
+    }
+    return null;
+  };
+
+  // Open row details dialog and fetch extra info depending on type
+  const openTxDetails = async (tx: any) => {
+    setSelectedTx(tx);
+    setDocDetails(null);
+    setReconItems([]);
+    setDetailOpen(true);
+    try {
+      setDetailLoading(true);
+      if (tx.type === 'IN' && tx.referenceDocId) {
+        const d = await getMRVById(tx.referenceDocId);
+        setDocDetails(d);
+      } else if (tx.type === 'OUT' && tx.referenceDocId && String(tx.referenceDocId).startsWith('MIV-')) {
+        const d = await getMIVById(tx.referenceDocId);
+        setDocDetails(d);
+      } else if (tx.type === 'ADJUSTMENT' && tx.referenceDocId) {
+        const items = await getReconciliationItems(tx.referenceDocId);
+        setReconItems(items || []);
+      }
+    } catch (e) {
+      // ignore, show minimal info
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
 
   // Export to CSV
   const exportToCSV = () => {
@@ -203,21 +264,21 @@ export default function StockMovementReportPage() {
   // Helper functions
   const getMovementTypeLabel = (type: string) => {
     switch (type) {
-      case 'IN': return 'Stock In';
-      case 'OUT': return 'Stock Out';
-      case 'TRANSFER_IN': return 'Transfer In';
-      case 'TRANSFER_OUT': return 'Transfer Out';
-      case 'ADJUSTMENT': return 'Adjustment';
-      case 'RETURN': return 'Return';
-      case 'DEPRECIATION': return 'Depreciation';
-      case 'AUDIT': return 'Audit Adjustment';
-      case 'SCRAP': return 'Scrap';
+      case 'IN': return dict.stockIn;
+      case 'OUT': return dict.stockOut;
+      case 'TRANSFER_IN': return (dict as any).transferIn;
+      case 'TRANSFER_OUT': return (dict as any).transferOut;
+      case 'ADJUSTMENT': return dict.adjustmentLabel;
+      case 'RETURN': return dict.returnLabel;
+      case 'DEPRECIATION': return dict.depreciationLabel;
+      case 'AUDIT': return dict.auditAdjustmentLabel;
+      case 'SCRAP': return dict.scrapLabel;
       default: return type;
     }
   };
 
   const getLocationString = (transaction: any) => {
-    return transaction.locationName || 'Location not specified';
+    return transaction.locationName || dict.locationNotSpecified;
   };
 
   const getResidenceName = (residenceId: string) => {
@@ -256,13 +317,11 @@ export default function StockMovementReportPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-100 dark:border-blue-800">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-100 dark:border-blue-800">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Stock Movement Report</h1>
-            <p className="text-muted-foreground text-lg">
-              Comprehensive analysis of inventory movements with advanced filtering capabilities
-            </p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">{dict.stockMovementReportTitle}</h1>
+        <p className="text-muted-foreground text-lg">{dict.stockMovementReportDescription}</p>
           </div>
           <div className="hidden md:block">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
@@ -276,9 +335,9 @@ export default function StockMovementReportPage() {
       <Card className="shadow-lg border-0">
         <CardHeader className="bg-muted/30 dark:bg-card border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-semibold text-foreground flex items-center">
+              <CardTitle className="text-xl font-semibold text-foreground flex items-center">
               <Filter className="mr-3 h-6 w-6 text-primary" />
-              Report Filters
+              {dict.reportFilters}
             </CardTitle>
           </div>
         </CardHeader>
@@ -288,97 +347,92 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-primary rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Location Hierarchy</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.locationHierarchy || 'Location Hierarchy'}</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Residence Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="residence" className="text-sm font-medium">
-                      Residence
-                    </Label>
-                    <select 
-                      id="residence"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={filters.residenceId} 
-                      onChange={(e) => handleFilterChange('residenceId', e.target.value)}
-                    >
-                      <option value="">All Assigned Residences</option>
-                      {userResidences.map(residence => {
-                        if (!residence?.id) return null;
-                        return (
-                          <option key={residence.id} value={residence.id}>
-                            {residence.name || `Residence ${residence.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Label htmlFor="residence" className="text-sm font-medium">{dict.residenceLabel}</Label>
+                    <Select value={filters.residenceId || undefined} onValueChange={(v) => handleFilterChange('residenceId', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="residence" className="h-11">
+                        <SelectValue placeholder={dict.allAssignedResidences} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allAssignedResidences}</SelectItem>
+                        {userResidences.map(residence => {
+                          if (!residence?.id) return null;
+                          return (
+                            <SelectItem key={residence.id} value={residence.id}>
+                              {residence.name || `Residence ${residence.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Building Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="building" className="text-sm font-medium">Building</Label>
-                    <select
-                      id="building"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.buildingId} 
-                      onChange={(e) => handleFilterChange('buildingId', e.target.value)}
-                      disabled={!filters.residenceId}
-                    >
-                      <option value="">All Buildings</option>
-                      {availableBuildings.map(building => {
-                        if (!building?.id) return null;
-                        return (
-                          <option key={building.id} value={building.id}>
-                            {building.name || `Building ${building.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Label htmlFor="building" className="text-sm font-medium">{dict.buildingLabel}</Label>
+                    <Select value={filters.buildingId || undefined} onValueChange={(v) => handleFilterChange('buildingId', v === '__ALL__' ? '' : v)} disabled={!filters.residenceId}>
+                      <SelectTrigger id="building" className="h-11" disabled={!filters.residenceId}>
+                        <SelectValue placeholder={dict.allBuildings} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allBuildings}</SelectItem>
+                        {availableBuildings.map(building => {
+                          if (!building?.id) return null;
+                          return (
+                            <SelectItem key={building.id} value={building.id}>
+                              {building.name || `Building ${building.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Floor Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="floor" className="text-sm font-medium">Floor</Label>
-                    <select
-                      id="floor"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.floorId} 
-                      onChange={(e) => handleFilterChange('floorId', e.target.value)}
-                      disabled={!filters.buildingId}
-                    >
-                      <option value="">All Floors</option>
-                      {availableFloors.map(floor => {
-                        if (!floor?.id) return null;
-                        return (
-                          <option key={floor.id} value={floor.id}>
-                            {floor.name || `Floor ${floor.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Label htmlFor="floor" className="text-sm font-medium">{dict.floorLabel}</Label>
+                    <Select value={filters.floorId || undefined} onValueChange={(v) => handleFilterChange('floorId', v === '__ALL__' ? '' : v)} disabled={!filters.buildingId}>
+                      <SelectTrigger id="floor" className="h-11" disabled={!filters.buildingId}>
+                        <SelectValue placeholder={dict.allFloors} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allFloors}</SelectItem>
+                        {availableFloors.map(floor => {
+                          if (!floor?.id) return null;
+                          return (
+                            <SelectItem key={floor.id} value={floor.id}>
+                              {floor.name || `Floor ${floor.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Room Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="room" className="text-sm font-medium">Room</Label>
-                    <select
-                      id="room"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-muted/50 disabled:text-muted-foreground"
-                      value={filters.roomId} 
-                      onChange={(e) => handleFilterChange('roomId', e.target.value)}
-                      disabled={!filters.floorId}
-                    >
-                      <option value="">All Rooms</option>
-                      {availableRooms.map(room => {
-                        if (!room?.id) return null;
-                        return (
-                          <option key={room.id} value={room.id}>
-                            {room.name || `Room ${room.id}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Label htmlFor="room" className="text-sm font-medium">{dict.roomLabel}</Label>
+                    <Select value={filters.roomId || undefined} onValueChange={(v) => handleFilterChange('roomId', v === '__ALL__' ? '' : v)} disabled={!filters.floorId}>
+                      <SelectTrigger id="room" className="h-11" disabled={!filters.floorId}>
+                        <SelectValue placeholder={dict.allRooms} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allRooms}</SelectItem>
+                        {availableRooms.map(room => {
+                          if (!room?.id) return null;
+                          return (
+                            <SelectItem key={room.id} value={room.id}>
+                              {room.name || `Room ${room.id}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -387,51 +441,51 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-green-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Movement & Item Filters</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.movementAndItemFiltersLabel}</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Movement Type Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="movementType" className="text-sm font-medium">Movement Type</Label>
-                    <select
-                      id="movementType"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      value={filters.movementType} 
-                      onChange={(e) => handleFilterChange('movementType', e.target.value)}
-                    >
-                      <option value="">All Movement Types</option>
-                      <option value="IN">Stock In</option>
-                      <option value="OUT">Stock Out</option>
-                      <option value="TRANSFER_IN">Transfer In</option>
-                      <option value="TRANSFER_OUT">Transfer Out</option>
-                      <option value="ADJUSTMENT">Adjustment</option>
-                      <option value="RETURN">Return</option>
-                      <option value="DEPRECIATION">Depreciation</option>
-                      <option value="AUDIT">Audit Adjustment</option>
-                      <option value="SCRAP">Scrap</option>
-                    </select>
+                    <Label htmlFor="movementType" className="text-sm font-medium">{dict.movementTypeLabel}</Label>
+                    <Select value={filters.movementType || undefined} onValueChange={(v) => handleFilterChange('movementType', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="movementType" className="h-11">
+                        <SelectValue placeholder={dict.all} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.all}</SelectItem>
+                        <SelectItem value="IN">{dict.stockIn}</SelectItem>
+                        <SelectItem value="OUT">{dict.stockOut}</SelectItem>
+                        <SelectItem value="TRANSFER_IN">{(dict as any).transferIn}</SelectItem>
+                        <SelectItem value="TRANSFER_OUT">{(dict as any).transferOut}</SelectItem>
+                        <SelectItem value="ADJUSTMENT">{dict.adjustmentLabel}</SelectItem>
+                        <SelectItem value="RETURN">{dict.returnLabel}</SelectItem>
+                        <SelectItem value="DEPRECIATION">{dict.depreciationLabel}</SelectItem>
+                        <SelectItem value="AUDIT">{dict.auditAdjustmentLabel}</SelectItem>
+                        <SelectItem value="SCRAP">{dict.scrapLabel}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Item Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="itemId" className="text-sm font-medium">Specific Item</Label>
-                    <select
-                      id="itemId"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      value={filters.itemId} 
-                      onChange={(e) => handleFilterChange('itemId', e.target.value)}
-                    >
-                      <option value="">All Items</option>
-                      {availableItems.map((item: any) => {
-                        if (!item?.id) return null;
-                        return (
-                          <option key={item.id} value={item.id}>
-                            {item.nameEn}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <Label htmlFor="itemId" className="text-sm font-medium">{dict.specificItemLabel}</Label>
+                    <Select value={filters.itemId || undefined} onValueChange={(v) => handleFilterChange('itemId', v === '__ALL__' ? '' : v)}>
+                      <SelectTrigger id="itemId" className="h-11">
+                        <SelectValue placeholder={dict.allItems} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ALL__">{dict.allItems}</SelectItem>
+        {availableItems.map((item: any) => {
+                          if (!item?.id) return null;
+                          return (
+                            <SelectItem key={item.id} value={item.id}>
+          {item?.nameAr ? `${item.nameAr} • ${item.nameEn}` : item.nameEn}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -440,32 +494,60 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">Date Range</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.dateRangeLabel}</h3>
                 </div>
                 
                 <div className="space-y-4">
-                  {/* Date Inputs */}
+                  {/* Date Inputs (Glass Popovers) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-sm font-medium">Start Date</Label>
-                      <input
-                        id="startDate"
-                        type="date"
-                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        value={filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : ''}
-                        onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value) : undefined)}
-                      />
+                      <Label htmlFor="startDate" className="text-sm font-medium">{dict.startDate}</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button id="startDate" variant="outline" className="w-full h-11 justify-between">
+                            <span>{filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <CalendarIcon className="h-4 w-4 opacity-60" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={filters.startDate}
+                            onSelect={(date) => handleFilterChange('startDate', date ?? undefined)}
+                            initialFocus
+                          />
+                          <div className="flex justify-end pt-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleFilterChange('startDate', undefined)}>
+                              {'Clear'}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                    
+
                     <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-sm font-medium">End Date</Label>
-                      <input
-                        id="endDate"
-                        type="date"
-                        className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        value={filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : ''}
-                        onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value) : undefined)}
-                      />
+                      <Label htmlFor="endDate" className="text-sm font-medium">{dict.endDate}</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button id="endDate" variant="outline" className="w-full h-11 justify-between">
+                            <span>{filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <CalendarIcon className="h-4 w-4 opacity-60" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={filters.endDate}
+                            onSelect={(date) => handleFilterChange('endDate', date ?? undefined)}
+                            initialFocus
+                          />
+                          <div className="flex justify-end pt-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleFilterChange('endDate', undefined)}>
+                              {'Clear'}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   
@@ -475,7 +557,7 @@ export default function StockMovementReportPage() {
         
         {/* Action Footer */}
         <div className="bg-muted/30 dark:bg-card px-6 py-4 border-t flex items-center justify-between rounded-b-lg">
-          <div className="flex items-center gap-4">
+    <div className="flex items-center gap-4">
             <Button 
               onClick={handleGenerateReport} 
               disabled={isGenerating}
@@ -484,27 +566,27 @@ export default function StockMovementReportPage() {
               {isGenerating ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-b-transparent border-white" />
-                  Generating...
+      {dict.generating}
                 </>
               ) : (
                 <>
                   <TrendingUp className="mr-2 h-5 w-5" />
-                  Generate Report
+      {dict.generateReport}
                 </>
               )}
             </Button>
             
-            {hasGenerated && filteredTransactions.length > 0 && (
+      {hasGenerated && filteredTransactions.length > 0 && (
               <Button variant="outline" onClick={exportToCSV} className="border-border hover:bg-accent h-11 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
-                Export CSV
+        {dict.exportCsvButton}
               </Button>
             )}
           </div>
           
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             <span className="text-green-600 flex items-center">
-              ✓ Ready to generate report
+              ✓ {dict.readyToGenerate}
             </span>
           </div>
         </div>
@@ -516,7 +598,7 @@ export default function StockMovementReportPage() {
           <CardHeader className="bg-muted/30 dark:bg-card border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-semibold text-foreground">
-                Report Results ({filteredTransactions.length} transactions)
+                {dict.reportResultsTitle} ({filteredTransactions.length} transactions)
               </CardTitle>
               <Badge variant="secondary">
                 {format(new Date(), 'MMM dd, yyyy')}
@@ -529,26 +611,30 @@ export default function StockMovementReportPage() {
                   <Table>
                     <TableHeader className="sticky top-0 bg-muted/50 dark:bg-card">
                       <TableRow>
-                        <TableHead className="font-semibold">Date & Time</TableHead>
-                        <TableHead className="font-semibold">Item</TableHead>
-                        <TableHead className="font-semibold">Movement Type</TableHead>
-                        <TableHead className="font-semibold text-right">Quantity</TableHead>
-                        <TableHead className="font-semibold">Residence</TableHead>
-                        <TableHead className="font-semibold">Location</TableHead>
-                        <TableHead className="font-semibold">Reference</TableHead>
+                        <TableHead className="font-semibold">{dict.dateTimeLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.itemLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.movementTypeLabel}</TableHead>
+                        <TableHead className="font-semibold text-right">{dict.quantity}</TableHead>
+                        <TableHead className="font-semibold">{dict.residenceLabel}</TableHead>
+                        <TableHead className="font-semibold">{dict.location}</TableHead>
+                        <TableHead className="font-semibold">{dict.referenceLabel}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredTransactions.map((transaction, index) => (
-                        <TableRow key={transaction.id ?? `${transaction.referenceDocId || 'ref'}-${index}`} className="hover:bg-muted/50 dark:hover:bg-muted/20">
+                        <TableRow
+                          key={`${transaction.id || transaction.referenceDocId || 'row'}-${transaction.residenceId || 'res'}-${transaction.date?.toMillis?.() || transaction.date?.toDate?.()?.getTime?.() || index}`}
+                          className="hover:bg-muted/50 dark:hover:bg-muted/20 cursor-pointer"
+                          onClick={() => openTxDetails(transaction)}
+                        >
                           <TableCell className="font-mono text-sm">
                             {format(transaction.date.toDate(), 'MMM dd, yyyy HH:mm')}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {transaction.itemNameEn || 'Unknown Item'}
+                            {transaction.itemNameEn || dict.itemNotFound}
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
+                              <Badge className={`${getMovementTypeColor(transaction.type)} border-0 font-medium`}>
                               {getMovementTypeLabel(transaction.type)}
                             </Badge>
                           </TableCell>
@@ -559,7 +645,7 @@ export default function StockMovementReportPage() {
                             {getResidenceName(transaction.residenceId)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {getLocationString(transaction)}
+                            {getLocationString(transaction) || dict.locationNotSpecified}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                             {transaction.referenceDocId || '-'}
@@ -572,26 +658,130 @@ export default function StockMovementReportPage() {
              ) : (
                 <div className="p-8 text-center">
                     <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
-                    <p className="text-muted-foreground">
-                    No transactions were found matching the specified criteria. Try adjusting the filters.
-                    </p>
+          <h3 className="text-lg font-semibold mb-2">{dict.noResultsFoundTitle}</h3>
+        <p className="text-muted-foreground">
+        {dict.noResultsFoundMessage}
+        </p>
                 </div>
              )}
           </CardContent>
         </Card>
       )}
       
-      {isGenerating && (
+  {isGenerating && (
         <Card>
           <CardContent className="p-8 text-center">
               <div className="flex justify-center items-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-b-transparent border-primary" />
-                  <p className="ml-4 text-lg font-semibold">Generating Report...</p>
+      <p className="ml-4 text-lg font-semibold">{dict.generatingReport}</p>
               </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Details dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+          <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
+          </DialogHeader>
+          {selectedTx ? (
+            <div className="text-sm text-muted-foreground space-y-1 mb-3">
+              <div>
+                {dict.typeLabel}: <span className="font-medium text-foreground">{selectedTx.type}</span>
+              </div>
+              <div>
+                {dict.date}: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), 'PPP p') : ''}
+              </div>
+              <div>
+                {dict.referenceLabel}: <span className="font-mono">{selectedTx.referenceDocId || '—'}</span>
+              </div>
+              <div>{dict.residenceLabel}: {getResidenceName(selectedTx.residenceId)}</div>
+              {selectedTx.locationName ? <div>{dict.location}: {selectedTx.locationName}</div> : null}
+            </div>
+          ) : null}
+
+          {detailLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : selectedTx?.type === 'IN' && docDetails ? (
+            <div className="space-y-3">
+              <div className="text-sm">{dict.supplierLabel}: {docDetails.supplierName || '—'} · {dict.invoiceLabel}: {docDetails.invoiceNo || '—'}</div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{dict.itemLabel}</TableHead>
+                      <TableHead className="text-right">{dict.quantity}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {docDetails.items?.map((it: any, i: number) => (
+                      <TableRow key={`${it.itemId}-${i}`}>
+                        <TableCell>{it.itemNameEn || it.itemNameAr}</TableCell>
+                        <TableCell className="text-right">{it.quantity}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+                  {canOpenDocLink(selectedTx) && (
+                <div className="pt-2">
+                  <Button asChild>
+                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMrv}</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : selectedTx?.type === 'OUT' && docDetails ? (
+            <div className="space-y-3">
+              <div className="text-sm">{dict.location}: {Object.keys(docDetails.locations || {}).join(', ') || selectedTx.locationName || '—'}</div>
+              {canOpenDocLink(selectedTx) && (
+                <div className="pt-2">
+                  <Button asChild>
+                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMiv}</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : selectedTx?.type === 'ADJUSTMENT' ? (
+            <div className="space-y-3">
+              {reconItems.length === 0 ? (
+                <div className="text-sm text-muted-foreground">{dict.noReconciliationLinesFound}</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{dict.itemLabel}</TableHead>
+                        <TableHead>{dict.directionLabel}</TableHead>
+                        <TableHead className="text-right">{dict.quantity}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reconItems.map((it: any, i: number) => (
+                        <TableRow key={`${it.id || it.itemId || 'row'}-${i}`}>
+                          <TableCell>{it.itemNameEn || it.itemNameAr}</TableCell>
+                          <TableCell>{it.adjustmentDirection || '—'}</TableCell>
+                          <TableCell className="text-right">{it.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+      {!!selectedTx.referenceDocId && (
+                <div className="pt-2">
+                  <Button asChild variant="secondary">
+        <Link href={`/inventory/reports/reconciliations/${selectedTx.referenceDocId}`}>{dict.openReconciliation}</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+    <div className="text-sm text-muted-foreground">{dict.noAdditionalMovementDetails}</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

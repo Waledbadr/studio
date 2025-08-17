@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useLanguage } from '@/context/language-context';
 
 interface TransferItem extends InventoryItem {
     transferQuantity: number;
@@ -31,6 +32,7 @@ export default function NewStockTransferPage() {
     const { currentUser } = useUsers();
     const { toast } = useToast();
     const router = useRouter();
+    const { dict } = useLanguage();
 
     const [transferType, setTransferType] = useState<'internal' | 'external'>('internal');
     const [fromResidenceId, setFromResidenceId] = useState<string>('');
@@ -165,12 +167,12 @@ export default function NewStockTransferPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">New Stock Transfer Request</h1>
-                    <p className="text-muted-foreground">Create a request to move inventory between residences.</p>
+                    <h1 className="text-2xl font-bold">{dict.newStockTransferTitle}</h1>
+                    <p className="text-muted-foreground">{dict.newStockTransferDescription}</p>
                 </div>
                 <Button onClick={handleSubmitTransfer} disabled={isSubmitting || transferItems.length === 0}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeftRight className="mr-2 h-4 w-4" />}
-                    Submit Transfer Request
+                    {dict.submitTransferRequest}
                 </Button>
             </div>
 
@@ -182,24 +184,24 @@ export default function NewStockTransferPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
-                             <Label>Transfer Type</Label>
+                 <Label>{dict.transferTypeLabel}</Label>
                              <RadioGroup value={transferType} onValueChange={handleTransferTypeChange} className="flex gap-4">
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="internal" id="r_internal" />
-                                    <Label htmlFor="r_internal">Internal (Within my residences)</Label>
+                     <Label htmlFor="r_internal">{dict.transferTypeInternal}</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="external" id="r_external" />
-                                    <Label htmlFor="r_external">External (To other residences)</Label>
+                     <Label htmlFor="r_external">{dict.transferTypeExternal}</Label>
                                 </div>
                             </RadioGroup>
                         </div>
                         
                         <div className="flex gap-4 items-end">
                             <div className="flex-1 space-y-2">
-                                <Label htmlFor="from-residence">Transfer From</Label>
+                                <Label htmlFor="from-residence">{dict.transferFromLabel}</Label>
                                 <Select value={fromResidenceId} onValueChange={handleFromResidenceChange}>
-                                    <SelectTrigger id="from-residence"><SelectValue placeholder="Select source..." /></SelectTrigger>
+                                    <SelectTrigger id="from-residence"><SelectValue placeholder={dict.selectSourcePlaceholder} /></SelectTrigger>
                                     <SelectContent>
                                         {userResidences.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                                     </SelectContent>
@@ -207,14 +209,14 @@ export default function NewStockTransferPage() {
                             </div>
                             <ArrowLeftRight className="h-6 w-6 text-muted-foreground self-center mb-2" />
                             <div className="flex-1 space-y-2">
-                                <Label htmlFor="to-residence">Transfer To</Label>
+                                <Label htmlFor="to-residence">{dict.transferToPrefix}</Label>
                                 <Select value={toResidenceId} onValueChange={setToResidenceId} disabled={!fromResidenceId}>
-                                    <SelectTrigger id="to-residence"><SelectValue placeholder="Select destination..." /></SelectTrigger>
+                                    <SelectTrigger id="to-residence"><SelectValue placeholder={dict.selectDestinationPlaceholder} /></SelectTrigger>
                                     <SelectContent>
                                         {availableToResidences.length > 0 ? (
                                             availableToResidences.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)
                                         ) : (
-                                            <div className="p-2 text-sm text-muted-foreground">No available residences for this transfer type.</div>
+                                            <div className="p-2 text-sm text-muted-foreground">{dict.noItemsMatchSearch}</div>
                                         )}
                                     </SelectContent>
                                 </Select>
@@ -225,7 +227,7 @@ export default function NewStockTransferPage() {
                             <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
                             <Input
                                 type="search"
-                                placeholder="Search items to add..."
+                                placeholder={dict.searchItemsToAddPlaceholder}
                                 className="pl-8 w-full"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
@@ -248,12 +250,10 @@ export default function NewStockTransferPage() {
                                                 <Plus className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                    )) : <div className="text-center p-8 text-muted-foreground">No items match your search.</div>}
+                                    )) : <div className="text-center p-8 text-muted-foreground">{dict.noItemsMatchSearch}</div>}
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-center h-full text-muted-foreground">
-                                    Select a source residence to see available items.
-                                </div>
+                                <div className="flex items-center justify-center h-full text-muted-foreground">{dict.selectSourceToSeeItems}</div>
                             )}
                         </ScrollArea>
                     </CardContent>
@@ -262,16 +262,16 @@ export default function NewStockTransferPage() {
                 {/* Right Side: Review Transfer */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>2. Review Request</CardTitle>
-                        <CardDescription>Adjust quantities before submitting the transfer request.</CardDescription>
+                        <CardTitle>{dict.transferStep2Title}</CardTitle>
+                        <CardDescription>{dict.transferReviewDescription}</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[550px]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
+                                        <TableHead>{dict.itemLabel}</TableHead>
+                                        <TableHead className="w-[150px] text-center">{dict.quantity}</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -294,7 +294,7 @@ export default function NewStockTransferPage() {
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Add items from the left to begin.</TableCell>
+                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">{dict.addItemsFromLeft}</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>

@@ -14,7 +14,9 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // Glass tabs bar
+      "inline-flex h-10 items-center justify-center rounded-lg p-1 text-muted-foreground backdrop-blur-xl",
+      "bg-white/60 border border-white/30 dark:bg-white/10 dark:border-white/10",
       className
     )}
     {...props}
@@ -44,7 +46,9 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      // Slight glass panel for content area
+      "mt-2 rounded-xl border backdrop-blur-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "bg-white/60 border-white/30 dark:bg-white/10 dark:border-white/10",
       className
     )}
     {...props}

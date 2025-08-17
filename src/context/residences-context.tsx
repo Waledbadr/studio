@@ -2,13 +2,24 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import safeOnSnapshot from '@/lib/firestore-utils';
 import { useToast } from "@/hooks/use-toast";
 
 // Define types for our data structure
 export interface Room {
   id: string;
   name: string;
+  capacity?: number;
+  // dimensions in meters
+  length?: number;
+  width?: number;
+  // area in square meters (derived: length * width)
+  area?: number;
+  occupied?: boolean;
+  // optional reference to parent floor
+  floorId?: string;
 }
 
 export interface Facility {
@@ -22,6 +33,8 @@ export interface Floor {
   name: string;
   rooms: Room[];
   facilities?: Facility[];
+  // optional reference to parent building
+  buildingId?: string;
 }
 
 export interface Building {
@@ -29,6 +42,8 @@ export interface Building {
   name: string;
   floors: Floor[];
   facilities?: Facility[];
+  // optional reference to parent complex/residence
+  residenceId?: string;
 }
 
 export interface Complex {
@@ -39,6 +54,12 @@ export interface Complex {
   buildings: Building[];
   facilities?: Facility[];
   disabled?: boolean; // mark residence as disabled (hidden from active lists)
+  // Legacy/alternate fields sometimes present in older documents or APIs
+  title?: string;
+  address?: string;
+  locationString?: string;
+  location?: any;
+  rooms?: Room[];
 }
 
 export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
@@ -56,7 +77,7 @@ interface ResidencesContextType {
   updateComplex: (id: string, payload: UpdateComplexPayload) => Promise<void>;
   addBuilding: (complexId: string, name: string) => Promise<void>;
   addFloor: (complexId: string, buildingId: string, name: string) => Promise<void>;
-  addRoom: (complexId: string, buildingId: string, floorId: string, name: string) => Promise<void>;
+  addRoom: (complexId: string, buildingId: string, floorId: string, name: string, length?: number, width?: number, area?: number) => Promise<void>;
   addMultipleRooms: (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => Promise<void>;
   addFacility: (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => Promise<void>;
   deleteComplex: (id: string) => Promise<void>;
@@ -113,16 +134,17 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const residencesCollection = collection(db, "residences");
-    
-    unsubscribeRef.current = onSnapshot(residencesCollection, (snapshot) => {
-        const residencesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complex));
-        setResidences(residencesData);
-        setLoading(false);
-    }, (error) => {
+
+    // Use safeOnSnapshot to provide clearer logs and a single retry on transient watch closures
+  unsubscribeRef.current = safeOnSnapshot(residencesCollection, (snapshot) => {
+    const residencesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Complex));
+    setResidences(residencesData);
+    setLoading(false);
+  }, (error) => {
       console.error("Error fetching residences:", error);
       toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
       setLoading(false);
-    });
+    }, { retryOnClose: true });
   }, [toast]);
 
    useEffect(() => {
@@ -275,7 +297,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string) => {
+  const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string, length?: number, width?: number, area?: number) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
@@ -297,7 +319,18 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
+    const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
+    // prefer explicit length/width, else accept area
+    if (typeof length === 'number' && typeof width === 'number' && !isNaN(length) && !isNaN(width)) {
+      const computedArea = length * width;
+      newRoom.length = length;
+      newRoom.width = width;
+      newRoom.area = computedArea;
+      newRoom.capacity = Math.max(1, Math.floor(computedArea / 4));
+    } else if (typeof area === 'number' && !isNaN(area)) {
+      newRoom.area = area;
+      newRoom.capacity = Math.max(1, Math.floor(area / 4));
+    }
         
         const updatedBuildings = complexData.buildings.map(b => 
             b.id === buildingId ? {
@@ -340,11 +373,37 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
         const existingRoomNames = new Set(floor.rooms.map(r => r.name.toLowerCase()));
         
-        const newRooms: Room[] = roomNames
+    const newRooms: Room[] = roomNames
             .map(name => name.trim())
             .filter(name => name)
             .filter(name => !existingRoomNames.has(name.toLowerCase()))
-            .map(name => ({ id: `room-${Date.now()}-${Math.random()}`, name: name }));
+      .map(name => {
+        const room: Room = { id: `room-${Date.now()}-${Math.random()}`, name };
+        // support creating rooms with optional area or dimensions specified in the name using syntax
+        // "Room 101|20" -> area, or "Room 101|5x4" -> length x width
+        const parts = name.split('|').map(p => p.trim());
+        if (parts.length === 2) {
+          const spec = parts[1];
+          // dimensions like 5x4 or 5×4
+          const dimMatch = spec.match(/^(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)$/);
+          if (dimMatch) {
+            const l = Number(dimMatch[1]);
+            const w = Number(dimMatch[2]);
+            if (!isNaN(l) && !isNaN(w)) {
+              room.name = parts[0];
+              room.length = l;
+              room.width = w;
+              room.area = l * w;
+              room.capacity = Math.max(1, Math.floor(room.area / 4));
+            }
+          } else if (!isNaN(Number(spec))) {
+            room.name = parts[0];
+            room.area = Number(spec);
+            room.capacity = Math.max(1, Math.floor(room.area / 4));
+          }
+        }
+        return room;
+      });
         
         const addedCount = newRooms.length;
         const skippedCount = roomNames.length - addedCount;

@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/context/language-context';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +42,7 @@ export default function ReceiveOrderPage() {
     const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
+    const { dict } = useLanguage();
 
     const fetchOrderForPage = useCallback(async (orderId: string) => {
         if (!db) return;
@@ -54,8 +56,8 @@ export default function ReceiveOrderPage() {
              
              if (!receivableStatuses.includes(fetchedOrder.status)) {
                 toast({
-                    title: "Invalid Status",
-                    description: `This request has a status of "${fetchedOrder.status}" and cannot be received.`,
+                    title: dict.invalidStatusTitle,
+                    description: dict.invalidStatusCannotBeReceived.replace('{status}', fetchedOrder.status),
                     variant: "destructive"
                 });
                 router.push('/inventory/receive');
@@ -74,7 +76,7 @@ export default function ReceiveOrderPage() {
             });
             setReceivedItems(initialReceivedItems);
         } else {
-             toast({ title: "Error", description: "Order not found.", variant: "destructive" });
+             toast({ title: dict.invalidStatusTitle, description: dict.orderNotFoundDescription, variant: "destructive" });
              router.push('/inventory/receive');
         }
         setLoading(false);
@@ -90,12 +92,8 @@ export default function ReceiveOrderPage() {
         const itemInfo = receivedItems.find(item => item.id === itemId);
         if (!itemInfo) return;
 
-        const maxReceivable = itemInfo.quantity - itemInfo.alreadyReceived;
-        let quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
-        if (quantity > maxReceivable) {
-            quantity = maxReceivable;
-            toast({ title: "Warning", description: "Cannot receive more than requested quantity." });
-        }
+        // Allow over-receipt: only enforce non-negative numbers
+        const quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
 
         setReceivedItems(prevItems =>
             prevItems.map(item =>
@@ -106,7 +104,7 @@ export default function ReceiveOrderPage() {
 
     const handleConfirmReceipt = async (forceComplete: boolean = false) => {
         if (!order || receivedItems.length === 0) {
-            toast({ title: "Error", description: "No items to receive.", variant: "destructive" });
+                toast({ title: dict.invalidStatusTitle, description: dict.noItemsToReceive, variant: "destructive" });
             return;
         }
         
@@ -120,7 +118,7 @@ export default function ReceiveOrderPage() {
             }));
         
         if (itemsToProcess.length === 0 && !forceComplete) {
-            toast({ title: "No Change", description: "No new quantities were entered to receive." });
+            toast({ title: dict.noChangeTitle, description: dict.noNewQuantitiesDescription });
             return;
         }
 
@@ -167,10 +165,10 @@ export default function ReceiveOrderPage() {
     
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Receive Materials Voucher (MRV)</h1>
-                    <p className="text-muted-foreground">Confirm quantities received for request #{order.id}</p>
+                    <h1 className="text-2xl font-bold">{dict.receiveMrvTitle}</h1>
+                    <p className="text-muted-foreground">{dict.receiveMrvDescription.replace('{id}', order.id)}</p>
                 </div>
                  <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={() => router.back()}>
@@ -186,26 +184,26 @@ export default function ReceiveOrderPage() {
                                 )}
                             </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure you want to close this order?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will receive the currently entered quantities and mark the order as "Delivered", even if not all items were fully received. This action cannot be undone.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleConfirmReceipt(true)}>
-                                    Confirm and Close
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>{dict.confirmCloseTitle}</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        {dict.confirmCloseDescription}
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>{dict.ui.cancel}</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleConfirmReceipt(true)}>
+                                        {dict.confirmAndClose}
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
                     </AlertDialog>
                     <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading}>
                         {ordersLoading ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.processing}</>
                         ) : (
-                            <><PackageCheck className="mr-2 h-4 w-4" /> Confirm Receipt & Update Stock</>
+                            <><PackageCheck className="mr-2 h-4 w-4" /> {dict.confirmReceiptAndUpdateStock}</>
                         )}
                     </Button>
                 </div>
@@ -246,7 +244,6 @@ export default function ReceiveOrderPage() {
                                             onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} 
                                             className="w-24 text-center mx-auto [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                                             min={0}
-                                            max={item.quantity - item.alreadyReceived}
                                         />
                                     </TableCell>
                                 </TableRow>

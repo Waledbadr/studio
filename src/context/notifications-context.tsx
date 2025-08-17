@@ -2,7 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import safeOnSnapshot from '@/lib/firestore-utils';
 import { useUsers } from './users-context';
 import { useToast } from '@/hooks/use-toast';
 
@@ -69,10 +71,10 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = safeOnSnapshot(
       q,
       (snapshot) => {
-        const notificationsData = snapshot.docs.map((d) => {
+        const notificationsData = snapshot.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
           const data = d.data() as any;
           const createdAt = data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now();
           return { id: d.id, ...data, createdAt } as Notification;
@@ -84,7 +86,8 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
         console.error('Error fetching notifications:', error);
         toast({ title: 'Firestore Error', description: 'Could not fetch notifications.', variant: 'destructive' });
         setLoading(false);
-      }
+      },
+      { retryOnClose: true }
     );
 
     return () => {

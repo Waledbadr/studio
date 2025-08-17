@@ -106,7 +106,7 @@ export default function OrderDetailPage() {
         return (
             <div className="text-center py-10">
                 <p className="text-xl text-muted-foreground">Request not found.</p>
-                <Button onClick={() => router.back()} className="mt-4">
+                    <Button onClick={() => router.push('/inventory/orders')} className="mt-4">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
                 </Button>
             </div>
@@ -166,6 +166,16 @@ export default function OrderDetailPage() {
     return (
         <div className="space-y-6">
              <style jsx global>{`
+                                /* Screen: ensure only Notes column uses RTL direction with LTR alignment and bidi isolation */
+                                .notes-cell {
+                                    direction: rtl;
+                                    text-align: left; /* keep visual alignment to the left while base direction is RTL */
+                                    unicode-bidi: isolate; /* isolate mixed LTR/RTL sequences to avoid reordering issues */
+                                }
+                                .notes-cell .bidi-notes {
+                                    direction: rtl;
+                                    unicode-bidi: plaintext; /* let each run resolve its own direction for stable number+unit order */
+                                }
                 @page {
                     size: A4 portrait;
                     margin: 5mm;
@@ -229,6 +239,9 @@ export default function OrderDetailPage() {
                     text-overflow: ellipsis !important;
                     white-space: nowrap !important;
                     color: #374151 !important;
+                    direction: rtl !important;
+                    text-align: left !important;
+                    unicode-bidi: isolate !important;
                   }
 
                   /* Tighten header area */
@@ -248,7 +261,7 @@ export default function OrderDetailPage() {
             `}</style>
             
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print mb-6">
-                <Button variant="outline" onClick={() => router.back()}>
+                <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Requests
                 </Button>
@@ -348,7 +361,9 @@ export default function OrderDetailPage() {
                                                 <TableCell className="font-medium">
                                                     {en.base || item.nameEn} | {ar.base || item.nameAr}
                                                 </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground notes-cell print-notes">{notes}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground notes-cell print-notes">
+                                                    <span className="bidi-notes">{notes}</span>
+                                                </TableCell>
                                                 <TableCell>{item.unit}</TableCell>
                                                 <TableCell className="text-right font-medium">{item.quantity}</TableCell>
                                                 <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>

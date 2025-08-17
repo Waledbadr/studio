@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
@@ -25,6 +26,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const { mode, setMode, resolvedMode } = useTheme();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const pathname = usePathname();
+  const atAccommodation = pathname?.startsWith('/accommodation');
+
+  const toggleApp = () => {
+    if (atAccommodation) router.push('/');
+    else router.push('/accommodation');
+  };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -37,7 +45,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const handleProfileClick = () => {
-    router.push('/users');
+  router.push('/profile');
   };
 
   const handleNotificationClick = (notificationId: string, href: string) => {
@@ -54,6 +62,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       console.error(e);
     }
   };
+
+  const { locale, toggleLanguage } = useLanguage();
+  const { dict } = useLanguage();
 
   // Visual mapping for notification types
   const getNotificationMeta = (type: string) => {
@@ -74,9 +85,24 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     }
   };
 
+  const headerClass = cn(
+    // Glassmorphism header
+    'sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6',
+    'bg-white/60 dark:bg-white/10 backdrop-blur-xl border-white/30 dark:border-white/10',
+    className,
+  );
+
   return (
-    <header className={cn("sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6", className)} {...props}>
+    <header className={headerClass} {...props}>
       <SidebarTrigger className="md:hidden" />
+      <button
+        onClick={toggleApp}
+        className="ml-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
+        title={atAccommodation ? `الرجوع لتطبيق ${dict.ui.materialsApp}` : `فتح ${dict.ui.accommodationApp}`}
+      >
+        {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
+      </button>
+
       <div className="flex-1" />
   {/* Feedback trigger in header */}
   <FeedbackWidget />
@@ -84,31 +110,51 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
             {resolvedMode === 'light' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            <span className="sr-only">Theme settings</span>
+            <span className="sr-only">{dict.ui.theme}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Theme</DropdownMenuLabel>
+          <DropdownMenuLabel>{dict.ui.theme}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setMode('light')}>
             <Sun className="mr-2 h-4 w-4" />
-            Light
+            {dict.ui.light}
             {mode === 'light' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('dark')}>
             <Moon className="mr-2 h-4 w-4" />
-            Dark
+            {dict.ui.dark}
             {mode === 'dark' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMode('system')}>
             <Monitor className="mr-2 h-4 w-4" />
-            System
+            {dict.ui.system}
             {mode === 'system' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleThemeSettingsClick}>
             <Palette className="mr-2 h-4 w-4" />
-            Color Settings
+            {dict.ui.colorSettings}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Language switch */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <ArrowLeftRight className="h-5 w-5" />
+            <span className="sr-only">Change language</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>{dict.changeLanguage}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => { if (locale !== 'en') toggleLanguage(); }}>
+            English {locale === 'en' && <Check className="ml-auto h-4 w-4" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { if (locale !== 'ar') toggleLanguage(); }}>
+            العربية {locale === 'ar' && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -125,8 +171,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-96">
             <DropdownMenuLabel className="flex justify-between items-center">
-                <span className="font-semibold">Notifications</span>
-                {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>Mark all as read</Button>}
+                <span className="font-semibold">{dict.notifications}</span>
+                {isMounted && unreadCount > 0 && <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>{dict.viewAll}</Button>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {isMounted && notifications.length > 0 ? notifications.slice(0, 8).map(notification => {
@@ -157,7 +203,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                 );
             }) : (
               <DropdownMenuItem disabled>
-                <p className="p-2 text-sm text-muted-foreground text-center w-full">No notifications</p>
+                <p className="p-2 text-sm text-muted-foreground text-center w-full">{dict.notifications}</p>
               </DropdownMenuItem>
             )}
         </DropdownMenuContent>
@@ -169,7 +215,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
             <Avatar className="h-9 w-9">
               {isMounted && currentUser ? (
                 <>
-                  <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser.name} data-ai-hint="profile picture" />
+                  <AvatarImage src={`data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23e5e7eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='20'%3EIMG%3C/text%3E%3C/svg%3E`} alt={currentUser.name} data-ai-hint="profile picture" />
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (
@@ -179,13 +225,13 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : 'My Account'}</DropdownMenuLabel>
+            <DropdownMenuLabel>{isMounted && currentUser ? currentUser.name : dict.myAccount}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>{dict.profile}</DropdownMenuItem>
+            <DropdownMenuItem>{dict.settings}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" /> Logout
+              <LogOut className="mr-2 h-4 w-4" /> {dict.logout}
             </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

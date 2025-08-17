@@ -18,10 +18,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
+import * as XLSX from 'xlsx';
 
 export default function InventoryPage() {
+  const { dict } = useLanguage();
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
@@ -192,23 +195,23 @@ export default function InventoryPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Arabic Name</TableHead>
-            <TableHead>English Name</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Unit</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="h-10 px-3">Arabic Name</TableHead>
+            <TableHead className="h-10 px-3">English Name</TableHead>
+            <TableHead className="h-10 px-3">Category</TableHead>
+            <TableHead className="h-10 px-3">Unit</TableHead>
+            <TableHead className="h-10 px-3">Stock</TableHead>
+            <TableHead className="h-10 px-3 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
             <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className="cursor-pointer hover:bg-muted/50">
-              <TableCell className="font-medium">{item.nameAr}</TableCell>
-              <TableCell className="font-medium">{item.nameEn}</TableCell>
-              <TableCell>{item.category}</TableCell>
-              <TableCell>{item.unit}</TableCell>
-              <TableCell>{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="py-2 px-3 font-medium">{item.nameAr}</TableCell>
+              <TableCell className="py-2 px-3 font-medium">{item.nameEn}</TableCell>
+              <TableCell className="py-2 px-3">{item.category}</TableCell>
+              <TableCell className="py-2 px-3">{item.unit}</TableCell>
+              <TableCell className="py-2 px-3">{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
+              <TableCell className="py-2 px-3 text-right">
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
@@ -227,44 +230,67 @@ export default function InventoryPage() {
     );
   };
 
+  // Export inventory items to Excel
+  const handleExportExcel = () => {
+    if (!items || items.length === 0) return;
+    const data = items.map(item => ({
+      'Arabic Name': item.nameAr,
+      'English Name': item.nameEn,
+      'Category': item.category,
+      'Unit': item.unit,
+      'Lifespan (days)': item.lifespanDays ?? '',
+      'Variants': item.variants?.join(', ') ?? '',
+      'Keywords (Ar)': item.keywordsAr?.join(', ') ?? '',
+      'Keywords (En)': item.keywordsEn?.join(', ') ?? '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory');
+    XLSX.writeFile(workbook, 'inventory.xlsx');
+  };
+
   return (
-    <div className="space-y-6">
-       <div className="flex items-center justify-between">
+    <div className="container mx-auto py-8">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Inventory Management</h1>
-          <p className="text-muted-foreground">Manage your materials and supplies for each residence.</p>
+          <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
+          <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
-                <Move className="mr-2 h-4 w-4" /> Stock Transfer
-            </Button>
-           <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                  <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Category</Button>
-              </DialogTrigger>
-              <DialogContent>
-                  <form onSubmit={handleAddCategory}>
-                      <DialogHeader>
-                          <DialogTitle>Add New Category</DialogTitle>
-                          <DialogDescription>Enter the name for the new inventory category.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                          <Label htmlFor="category-name">Category Name</Label>
-                          <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="e.g., Landscaping"/>
-                      </div>
-                      <DialogFooter>
-                          <Button type="submit">Save Category</Button>
-                      </DialogFooter>
-                  </form>
-              </DialogContent>
+          <Button variant="outline" onClick={handleExportExcel}>
+            {dict.exportToExcel || 'Export items to Excel'}
+          </Button>
+          <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
+            <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
+          </Button>
+          <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleAddCategory}>
+                <DialogHeader>
+                  <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
+                  <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
+                  <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
           </Dialog>
+
           <AddItemDialog 
             isOpen={isAddItemDialogOpen} 
             onOpenChange={setIsAddItemDialogOpen} 
             onItemAdded={handleItemAdded}
             triggerButton={
               <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || 'Add Item'}
               </Button>
             }
           />
@@ -275,8 +301,8 @@ export default function InventoryPage() {
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
-                <TabsList>
-                    <TabsTrigger value="all">All Items</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
                     {userResidences.map((res) => (
                       <TabsTrigger key={res.id} value={res.id}>
                         {res.name}
@@ -288,17 +314,17 @@ export default function InventoryPage() {
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search / بحث"
+                      placeholder={dict.searchPlaceholder || 'Search / بحث'}
                       aria-label="Search items"
                     />
                   </div>
                   <div className="w-48">
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Category" />
+                        <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
                         {categories.map((c) => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
                         ))}

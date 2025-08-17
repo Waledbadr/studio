@@ -49,38 +49,59 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setModeState(storedMode);
     
     const resolved = updateResolvedMode(storedMode);
-    
+
     // Apply the theme immediately
     applyTheme(storedColorTheme, resolved);
-    
+
     setIsLoaded(true);
 
-    // Listen for system theme changes
+    // Listen for system theme changes and apply only when mode === 'system'
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleSystemThemeChange = () => {
-      if (mode === 'system') {
-        const newResolved = updateResolvedMode(mode);
-        applyTheme(colorTheme, newResolved);
+      const currentMode = (localStorage.getItem('themeMode') as ThemeMode) || mode || 'system';
+      if (currentMode === 'system') {
+        const newResolved = mediaQuery.matches ? 'dark' : 'light';
+        setResolvedMode(newResolved);
+        // keep classes in sync
+        document.documentElement.classList.toggle('dark', newResolved === 'dark');
+        document.documentElement.classList.toggle('light', newResolved === 'light');
+        applyTheme(storedColorTheme, newResolved);
       }
     };
 
-    // Listen for user theme changes
-    const handleUserThemeChange = (event: CustomEvent) => {
-      const { colorTheme: newColorTheme, mode: newMode } = event.detail;
-      setColorThemeState(newColorTheme);
-      setModeState(newMode);
-      const resolved = updateResolvedMode(newMode);
-      applyTheme(newColorTheme, resolved);
+    // Listen for user theme changes via a custom event (other parts of app may dispatch this)
+    const handleUserThemeChange = (event: Event) => {
+      try {
+        // event may be CustomEvent with detail
+        const ce = event as CustomEvent | Event;
+        const detail = (ce as any).detail || {};
+        const newColorTheme = detail.colorTheme || localStorage.getItem('colorTheme') || colorTheme;
+        const newMode = (detail.mode as ThemeMode) || (localStorage.getItem('themeMode') as ThemeMode) || mode;
+
+        setColorThemeState(newColorTheme);
+        setModeState(newMode);
+
+        const resolvedNew = updateResolvedMode(newMode);
+        applyTheme(newColorTheme, resolvedNew);
+      } catch (e) {
+        console.warn('userThemeChanged handler error', e);
+      }
     };
 
     mediaQuery.addEventListener('change', handleSystemThemeChange);
     window.addEventListener('userThemeChanged', handleUserThemeChange as EventListener);
-    
+
     return () => {
       mediaQuery.removeEventListener('change', handleSystemThemeChange);
       window.removeEventListener('userThemeChanged', handleUserThemeChange as EventListener);
     };
   }, []);
+
+  // Keep theme in sync when colorTheme or explicit mode changes
+  useEffect(() => {
+    const resolved = updateResolvedMode(mode);
+    applyTheme(colorTheme, resolved);
+  }, [colorTheme, mode]);
 
   const setColorTheme = (newColorTheme: string) => {
     setColorThemeState(newColorTheme);

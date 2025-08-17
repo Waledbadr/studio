@@ -7,11 +7,13 @@ import { useInventory } from '@/context/inventory-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/context/language-context';
 
 export default function ReconciliationDetailsPage() {
   const params = useParams();
   const id = params?.id as string;
   const { getReconciliationById, getReconciliationItems } = useInventory();
+  const { dict } = useLanguage();
 
   const [header, setHeader] = useState<any | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -38,25 +40,25 @@ export default function ReconciliationDetailsPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reconciliation {id}</h1>
-        <Button asChild variant="outline"><Link href="/inventory/reports/reconciliations">Back</Link></Button>
+        <h1 className="text-2xl font-semibold">{dict.reconciliationTitle} {id}</h1>
+        <Button asChild variant="outline"><Link href="/inventory/reports/reconciliations">{dict.back}</Link></Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Overview</CardTitle>
+          <CardTitle>{dict.overviewLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           {!header ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <div className="text-sm text-muted-foreground">{dict.ui.loading}</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div><div className="text-xs text-muted-foreground">Residence</div><div className="font-medium">{String(header.residenceId)}</div></div>
-              <div><div className="text-xs text-muted-foreground">Date</div><div className="font-medium">{header.date?.toDate?.()?.toLocaleString?.() || ''}</div></div>
-              <div><div className="text-xs text-muted-foreground">Items</div><div className="font-medium">{header.itemCount}</div></div>
-              <div><div className="text-xs text-muted-foreground">Increase</div><div className="font-medium text-green-700">{header.totalIncrease}</div></div>
-              <div><div className="text-xs text-muted-foreground">Decrease</div><div className="font-medium text-red-700">{header.totalDecrease}</div></div>
-              <div><div className="text-xs text-muted-foreground">By</div><div className="font-medium">{header.performedById || '—'}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.residenceLabel}</div><div className="font-medium">{String(header.residenceId)}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.date}</div><div className="font-medium">{header.date?.toDate?.()?.toLocaleString?.() || ''}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.itemsLabel}</div><div className="font-medium">{header.itemCount}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.increaseLabel}</div><div className="font-medium text-green-700">{header.totalIncrease}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.decreaseLabel}</div><div className="font-medium text-red-700">{header.totalDecrease}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.performedByLabel}</div><div className="font-medium">{header.performedById || '—'}</div></div>
             </div>
           )}
         </CardContent>
@@ -64,22 +66,22 @@ export default function ReconciliationDetailsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Items</CardTitle>
+          <CardTitle>{dict.itemsLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div>Loading...</div>
+            <div>{dict.ui.loading}</div>
           ) : items.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No items found.</div>
+            <div className="text-sm text-muted-foreground">{dict.noRecordsFound}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-left">Item</TableHead>
-                    <TableHead className="text-left">Qty</TableHead>
-                    <TableHead className="text-left">Direction</TableHead>
-                    <TableHead className="text-left">Reason</TableHead>
+                    <TableHead className="text-left">{dict.itemLabel}</TableHead>
+                    <TableHead className="text-left">{dict.quantity}</TableHead>
+                    <TableHead className="text-left">{dict.directionLabel}</TableHead>
+                    <TableHead className="text-left">{dict.notes}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

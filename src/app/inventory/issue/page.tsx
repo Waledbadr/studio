@@ -16,9 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/context/language-context';
 
 
 interface IssuedItem extends InventoryItem {
@@ -46,54 +46,12 @@ export default function IssueMaterialPage() {
     const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
+    const { dict } = useLanguage();
     const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
-    const [searchQuery, setSearchQuery] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isCompletedOpen, setIsCompletedOpen] = useState(false);
-    const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
-    const [loadingMIVs, setLoadingMIVs] = useState(false);
-
-    // Load completed section state from localStorage
-    useEffect(() => {
-        const savedState = localStorage.getItem('issue-completed-open');
-        if (savedState !== null) {
-            setIsCompletedOpen(JSON.parse(savedState));
-        }
-    }, []);
-
-    // Save completed section state to localStorage
-    const handleCompletedToggle = (open: boolean) => {
-        setIsCompletedOpen(open);
-        localStorage.setItem('issue-completed-open', JSON.stringify(open));
-    };
-
-    // Load recent MIVs
-    useEffect(() => {
-        const loadRecentMIVs = async () => {
-            if (!currentUser) return;
-            setLoadingMIVs(true);
-            try {
-                const allMIVs = await getMIVs();
-                // Filter by user permissions and get recent ones
-                let filteredMIVs = allMIVs;
-                if (currentUser.role !== 'Admin') {
-                    filteredMIVs = allMIVs.filter(miv => 
-                        currentUser.assignedResidences.includes(miv.residenceId)
-                    );
-                }
-                // Get last 10 MIVs
-                setRecentMIVs(filteredMIVs.slice(0, 10));
-            } catch (error) {
-                console.error('Error loading MIVs:', error);
-            } finally {
-                setLoadingMIVs(false);
-            }
-        };
-
-        loadRecentMIVs();
-    }, [currentUser, getMIVs]);
+    const [searchQuery, setSearchQuery] = useState('');
     
     const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
@@ -104,8 +62,8 @@ export default function IssueMaterialPage() {
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
     const userResidences = useMemo(() => {
-    if (!currentUser) return [];
-    if (currentUser.role === 'Admin') return residences;
+        if (!currentUser) return [];
+        if (currentUser.role === 'Admin') return residences;
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
@@ -139,13 +97,23 @@ export default function IssueMaterialPage() {
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
+        const q = searchQuery.toLowerCase();
         return allItems
-            .filter(item => getStockForResidence(item, selectedComplexId) > 0)
+            .filter(item => {
+                const stock = getStockForResidence(item, selectedComplexId);
+                if (stock <= 0) return false;
+                // Remaining allocatable = stock - already allocated across voucher locations
+                const allocated = voucherLocations.reduce((sum, loc) => {
+                    const found = loc.items.find(i => i.id === item.id);
+                    return sum + (found ? found.issueQuantity : 0);
+                }, 0);
+                return stock - allocated > 0;
+            })
             .filter(item => 
-                item.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                item.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
+                item.nameEn.toLowerCase().includes(q) || 
+                item.nameAr.toLowerCase().includes(q)
             );
-    }, [selectedComplexId, allItems, getStockForResidence, searchQuery]);
+    }, [selectedComplexId, allItems, getStockForResidence, searchQuery, voucherLocations]);
 
 
     useEffect(() => {
@@ -167,11 +135,19 @@ export default function IssueMaterialPage() {
         }
     }, [selectedFloorId, locationType]);
     
-    const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
-        if (!isLocationSelected || !selectedComplex) {
-            toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
-            return;
-        }
+    const getAggregateIssuedQty = (itemId: string): number => {
+        return voucherLocations.reduce((sum, loc) => {
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+    };
+
+    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+        startTransition(async () => {
+            if (!isLocationSelected || !selectedComplex) {
+                toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
+                return;
+            }
 
             const stock = getStockForResidence(itemToAdd, selectedComplexId);
             if (stock < 1) {
@@ -179,98 +155,126 @@ export default function IssueMaterialPage() {
                 return;
             }
 
+            // Client-side guard: prevent aggregated over-issuing across multiple locations
+            const currentAgg = getAggregateIssuedQty(itemToAdd.id);
+            if (currentAgg >= stock) {
+                toast({ title: "Stock limit reached", description: `You already allocated ${currentAgg} of ${stock} available.`, variant: "destructive" });
+                return;
+            }
+
             let locationId: string, locationName: string, isFacility: boolean;
             let newLocationDetails: Partial<VoucherLocation> = {};
 
-        if (locationType === 'unit') {
-            const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
-            if (!selectedBuilding || !selectedFloor || !selectedRoom) {
-                toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
-                return;
-            }
-            locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
-            locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
-            isFacility = false;
-            newLocationDetails = {
-                buildingId: selectedBuildingId,
-                buildingName: selectedBuilding.name,
-                floorId: selectedFloorId,
-                floorName: selectedFloor.name,
-                roomId: selectedRoomId,
-                roomName: selectedRoom.name,
-            };
-        } else {
-            const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
-             if (!selectedFacility) {
-                toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
-                return;
-            }
-            locationId = selectedFacilityId;
-            locationName = selectedFacility.name;
-            isFacility = true;
-            newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
-        }
-        
-        // Lifespan check
-        if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
-            const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
-            if (lastIssueDate) {
-                const issueDate = lastIssueDate instanceof Timestamp ? lastIssueDate.toDate() : new Date(lastIssueDate as any);
-                const daysSinceLastIssue = differenceInDays(new Date(), issueDate);
-                if (daysSinceLastIssue < itemToAdd.lifespanDays) {
-                    toast({
-                        title: "Lifespan Warning",
-                        description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
-                        variant: "default",
-                        duration: 8000,
-                        className: "bg-yellow-100 border-yellow-400 text-yellow-800"
-                    });
+            if (locationType === 'unit') {
+                const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
+                if (!selectedBuilding || !selectedFloor || !selectedRoom) {
+                    toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                    return;
                 }
-            }
-        }
-        
-        setVoucherLocations(prevLocations => {
-            const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
-
-            if (existingLocationIndex > -1) {
-                const newLocations = [...prevLocations];
-                const targetLocation = { ...newLocations[existingLocationIndex] };
-                const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
-
-                if (existingItemIndex > -1) {
-                    const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                    if (currentQty < stock) {
-                        // Increment quantity without reordering when item already exists
-                        const updatedItems = [...targetLocation.items];
-                        updatedItems[existingItemIndex] = {
-                            ...updatedItems[existingItemIndex],
-                            issueQuantity: currentQty + 1,
-                        };
-                        targetLocation.items = updatedItems;
-                    } else {
-                        toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive" });
-                    }
-                    // keep locations order as is when just incrementing existing item
-                    newLocations[existingLocationIndex] = targetLocation;
-                    return newLocations;
-                } else {
-                    // New item: place it at the top of the item's list
-                    targetLocation.items = [{ ...itemToAdd, issueQuantity: 1 }, ...targetLocation.items];
-                    // Move this location to the top since a new item was added here
-                    newLocations.splice(existingLocationIndex, 1);
-                    return [targetLocation, ...newLocations];
-                }
-            } else {
-                const newLocation: VoucherLocation = {
-                    ...newLocationDetails,
-                    locationId,
-                    locationName,
-                    isFacility,
-                    items: [{ ...itemToAdd, issueQuantity: 1 }]
+                locationId = selectedRoom.id;
+                locationName = `${selectedComplex.name} -> ${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+                isFacility = false;
+                newLocationDetails = {
+                    buildingId: selectedBuildingId,
+                    buildingName: selectedBuilding.name,
+                    floorId: selectedFloorId,
+                    floorName: selectedFloor.name,
+                    roomId: selectedRoomId,
+                    roomName: selectedRoom.name,
                 };
-                // New location: place at the top
-                return [newLocation, ...prevLocations];
+            } else {
+                const selectedFacility = availableFacilities.find(f => f.id === selectedFacilityId);
+                 if (!selectedFacility) {
+                    toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
+                    return;
+                }
+                locationId = selectedFacility.id;
+                // Build a hierarchical name for facilities as well
+                // e.g., Residence -> Building -> (Floor ->) Facility
+                const parts: string[] = [selectedComplex.name];
+                if (selectedBuilding) parts.push(selectedBuilding.name);
+                if (selectedFloor) parts.push(selectedFloor.name);
+                parts.push(selectedFacility.name);
+                locationName = parts.join(' -> ');
+                isFacility = true;
+                newLocationDetails = {
+                    facilityId: selectedFacilityId,
+                    locationId: selectedFacilityId,
+                    // Include building/floor context for facilities when available
+                    ...(selectedBuilding ? { buildingId: selectedBuildingId, buildingName: selectedBuilding.name } : {}),
+                    ...(selectedFloor ? { floorId: selectedFloorId, floorName: selectedFloor.name } : {}),
+                };
             }
+            
+            // Lifespan check
+            if (itemToAdd.lifespanDays && itemToAdd.lifespanDays > 0) {
+                const lastIssueDate = await getLastIssueDateForItemAtLocation(itemToAdd.id, locationId);
+                if (lastIssueDate) {
+                    const daysSinceLastIssue = differenceInDays(new Date(), lastIssueDate.toDate());
+                    if (daysSinceLastIssue < itemToAdd.lifespanDays) {
+                        toast({
+                            title: "Lifespan Warning",
+                            description: `"${itemToAdd.nameEn}" was issued to this location ${daysSinceLastIssue} days ago. Its lifespan is ${itemToAdd.lifespanDays} days. Please ensure replacement is justified.`,
+                            variant: "default",
+                            duration: 8000,
+                            className: "bg-yellow-100 border-yellow-400 text-yellow-800"
+                        });
+                    }
+                }
+            }
+            
+            setVoucherLocations(prevLocations => {
+                const existingLocationIndex = prevLocations.findIndex(l => l.locationId === locationId);
+                
+                if (existingLocationIndex > -1) {
+                    const newLocations = [...prevLocations];
+                    const targetLocation = { ...newLocations[existingLocationIndex] };
+                    const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
+
+                    if (existingItemIndex > -1) {
+                        const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
+                        // Compute residence-wide remaining stock allowance for this item
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id) - currentQty;
+                        const remaining = stock - allocatedElsewhere;
+                        if(currentQty < remaining) {
+                            // Increment quantity without reordering when item already exists
+                            const updatedItems = [...targetLocation.items];
+                            updatedItems[existingItemIndex] = {
+                                ...updatedItems[existingItemIndex],
+                                issueQuantity: Math.min(currentQty + 1, remaining),
+                            };
+                            targetLocation.items = updatedItems;
+                        } else {
+                             toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
+                        }
+                        // keep locations order as is when just incrementing existing item
+                        newLocations[existingLocationIndex] = targetLocation;
+                        return newLocations;
+                    } else {
+                        // New item: place it at the top of the item's list
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id);
+                        const canAdd = Math.max(0, stock - allocatedElsewhere);
+                        if (canAdd <= 0) {
+                            toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
+                            return prevLocations;
+                        }
+                        targetLocation.items = [ { ...itemToAdd, issueQuantity: Math.min(1, canAdd) }, ...targetLocation.items ];
+                        // Move this location to the top since a new item was added here
+                        newLocations.splice(existingLocationIndex, 1);
+                        return [ targetLocation, ...newLocations ];
+                    }
+                } else {
+                    const newLocation: VoucherLocation = {
+                        ...newLocationDetails,
+                        locationId,
+                        locationName,
+                        isFacility,
+                        items: [{ ...itemToAdd, issueQuantity: 1 }]
+                    };
+                    // New location: place at the top
+                    return [ newLocation, ...prevLocations ];
+                }
+            });
         });
     };
 
@@ -279,7 +283,7 @@ export default function IssueMaterialPage() {
          const itemInfo = allItems.find(i => i.id === itemId);
         if (!itemInfo || !selectedComplexId) return;
 
-    const stock = getStockForResidence(itemInfo, selectedComplexId);
+        const stock = getStockForResidence(itemInfo, selectedComplexId);
 
         let quantity = newQuantity;
         if (quantity < 1) {
@@ -287,6 +291,18 @@ export default function IssueMaterialPage() {
         } else if (quantity > stock) {
             quantity = stock;
             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+        }
+
+        // Additional client-side guard: cap by residence-wide remaining allowance considering other locations
+        const allocatedElsewhere = voucherLocations.reduce((sum, loc) => {
+            if (loc.locationId === locationId) return sum;
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+        const remaining = Math.max(0, stock - allocatedElsewhere);
+        if (quantity > remaining) {
+            quantity = remaining;
+            toast({ title: "Stock limit reached", description: `Only ${remaining} left available for this item across locations.`, variant: "destructive"});
         }
         
         setVoucherLocations(prev => prev.map(loc => 
@@ -345,16 +361,16 @@ export default function IssueMaterialPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Material Issue Voucher (MIV)</h1>
-                    <p className="text-muted-foreground">Issue materials from a residence's storeroom to specific locations.</p>
+                    <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
+                    <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
                  <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
-                        <History className="mr-2 h-4 w-4"/> View History
+                        <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
                     <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Submit Voucher
+                        {dict.submitVoucher}
                     </Button>
                 </div>
             </div>
@@ -393,67 +409,84 @@ export default function IssueMaterialPage() {
                                     </div>
                                 </RadioGroup>
                                 
-                                {locationType === 'unit' ? (
-                                    <div className="space-y-2 pt-2">
-                                        <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                            <SelectContent>
-                                                {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                        <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                            <SelectContent>
-                                                {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                <div className="space-y-2 pt-2">
+                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
+                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
+                                        <SelectContent>
+                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    {locationType === 'unit' ? (
                                         <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
                                             <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
                                             <SelectContent>
                                                 {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
-                                    </div>
-                                ) : (
-                                     <div className="space-y-2 pt-2">
+                                    ) : (
                                         <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
                                             <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
                                             <SelectContent>
-                                                {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                                {availableFacilities.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
-                                     </div>
-                                )}
+                                    )}
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-sm">Available Inventory</h3>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        type="search"
+                                        placeholder="Search items..."
+                                        className="pl-8 w-full"
+                                        value={searchQuery}
+                                        onChange={e => setSearchQuery(e.target.value)}
+                                        disabled={!selectedComplexId}
+                                    />
+                                </div>
+                                <ScrollArea className="h-[250px] border rounded-md">
+                                    {selectedComplexId ? (
+                                        <div className="p-2 space-y-2">
+                                            {availableInventory.length > 0 ? availableInventory.map(item => {
+                                                const stock = getStockForResidence(item, selectedComplexId);
+                                                const allocated = voucherLocations.reduce((sum, loc) => {
+                                                    const f = loc.items.find(i => i.id === item.id);
+                                                    return sum + (f ? f.issueQuantity : 0);
+                                                }, 0);
+                                                const remaining = Math.max(0, stock - allocated);
+                                                return (
+                                                    <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
+                                                        <div>
+                                                            <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
+                                                            <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
+                                                        </div>
+                                                        <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending || remaining <= 0}>
+                                                            <Plus className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="text-center text-muted-foreground p-8 text-sm">No inventory found.</div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                                            Select a residence to see items.
+                                        </div>
+                                    )}
+                                </ScrollArea>
+                            </div>
                         </div>
-                        <div className="lg:col-span-3">
-                            <h3 className="font-semibold mb-4">Available Inventory</h3>
-                             <ScrollArea className="h-[250px] border rounded-md">
-                                {selectedComplexId ? (
-                                    <div className="p-2 space-y-2">
-                                        {availableInventory.length > 0 ? availableInventory.map(item => (
-                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                                                <div>
-                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
-                                                </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected}>
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center text-muted-foreground p-8">No inventory with stock found for this residence.</div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        Select a residence to see available items.
-                                    </div>
-                                )}
-                            </ScrollArea>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardHeader>

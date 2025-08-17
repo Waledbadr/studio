@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,7 @@ export default function NewMRVPage() {
   const { residences } = useResidences();
   const { toast } = useToast();
   const router = useRouter();
+  const { dict } = useLanguage();
 
   const [residenceId, setResidenceId] = useState('');
   const [lines, setLines] = useState<Record<string, number>>({});
@@ -59,18 +61,18 @@ export default function NewMRVPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">New MRV</h1>
-          <p className="text-muted-foreground">Receive materials directly into stock.</p>
+          <h1 className="text-2xl font-bold">{dict.createMRV}</h1>
+          <p className="text-muted-foreground">{dict.receiveMrvDescription}</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Header</CardTitle>
+          <CardTitle>{dict.mrvHeaderTitle}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2 md:col-span-2">
-            <Label>Residence</Label>
+            <Label>{dict.requestForResidence}</Label>
             <select
               className="border rounded h-10 px-3 bg-background"
               value={residenceId}
@@ -83,26 +85,26 @@ export default function NewMRVPage() {
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Supplier</Label>
-            <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Optional" />
+            <Label>{dict.supplierLabel}</Label>
+            <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder={dict.optionalPlaceholder} />
           </div>
           <div className="space-y-2">
-            <Label>Invoice No.</Label>
-            <Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Optional" />
+            <Label>{dict.invoiceLabel}</Label>
+            <Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder={dict.optionalPlaceholder} />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Items</CardTitle>
+          <CardHeader>
+          <CardTitle>{dict.items}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead className="w-[160px] text-center">Qty</TableHead>
+                <TableHead>{dict.itemLabel}</TableHead>
+                <TableHead className="w-[160px] text-center">{dict.quantity}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -125,9 +127,9 @@ export default function NewMRVPage() {
               ))}
             </TableBody>
           </Table>
-          <div className="flex justify-end mt-4 gap-2">
-            <Button variant="outline" onClick={() => router.back()}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={loading}>Create MRV</Button>
+            <div className="flex justify-end mt-4 gap-2">
+            <Button variant="outline" onClick={() => router.back()}>{dict.ui.cancel}</Button>
+            <Button onClick={handleSubmit} disabled={loading}>{dict.createMRV}</Button>
           </div>
         </CardContent>
       </Card>

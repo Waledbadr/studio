@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield, User } from "lucide-react";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -113,7 +113,7 @@ export default function LoginForm() {
     setLoading(true);
     setError(null);
     setInfo(null);
-    try {
+  try {
       if (mode === "signin") {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       } else {
@@ -125,7 +125,16 @@ export default function LoginForm() {
       }
       router.replace("/");
     } catch (err: any) {
-      setError(err?.message || "Failed. Try again.");
+      const code = err?.code || '';
+      const map: Record<string, string> = {
+        'auth/invalid-credential': 'Invalid email or password.',
+        'auth/invalid-email': 'The email address is badly formatted.',
+        'auth/user-disabled': 'This user account has been disabled.',
+        'auth/user-not-found': 'No account found with this email.',
+        'auth/wrong-password': 'Invalid email or password.',
+        'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+      };
+      setError(map[code] || err?.message || "Failed. Try again.");
     } finally {
       setLoading(false);
     }
@@ -158,10 +167,20 @@ export default function LoginForm() {
     setError(null);
     setInfo(null);
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      const actionCodeSettings = {
+        url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
+        handleCodeInApp: false,
+      } as const;
+      await sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
       setInfo('Password reset email sent.');
     } catch (err: any) {
-      setError(err?.message || "Failed to send reset email.");
+      const code = err?.code || '';
+      const map: Record<string, string> = {
+        'auth/invalid-email': 'The email address is badly formatted.',
+        'auth/user-not-found': 'If an account exists for this email, a reset link will be sent.',
+        'auth/too-many-requests': 'Too many requests. Please wait and try again.',
+      };
+      setError(map[code] || err?.message || "Failed to send reset email.");
     } finally {
       setLoading(false);
     }
@@ -243,45 +262,91 @@ export default function LoginForm() {
   };
 
   return (
-    <Card className="shadow-xl border border-border/60">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <div className="text-sm text-muted-foreground">EstateCare</div>
+    <Card className="shadow-2xl border border-border/60 backdrop-blur supports-[backdrop-filter]:bg-background/80 overflow-hidden lg:grid lg:grid-cols-2">
+      {/* Left info panel (shown on large screens) */}
+      <div className="relative hidden lg:block">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/25 via-fuchsia-600/20 to-cyan-600/20" />
+        <div className="absolute -top-10 -left-10 h-56 w-56 rounded-full bg-indigo-500/25 blur-3xl" />
+        <div className="absolute -bottom-10 -right-10 h-56 w-56 rounded-full bg-fuchsia-500/20 blur-3xl" />
+        <div className="relative z-10 h-full p-8 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white grid place-items-center font-semibold shadow">
+                EC
+              </div>
+              <span className="font-semibold">EstateCare</span>
+            </div>
+            <h2 className="text-2xl font-semibold leading-tight mb-2">All-in-one operations</h2>
+            <p className="text-sm text-muted-foreground/90 max-w-sm">
+              Streamline inventory, maintenance, and accommodation workflows in one secure workspace.
+            </p>
+          </div>
+          <ul className="text-sm text-muted-foreground/90 grid gap-2 mt-8 marker:text-indigo-500 list-disc pl-4">
+            <li>Secure sign-in with Passkeys and Magic Link</li>
+            <li>Single sign-on with Google & Microsoft</li>
+            <li>Fast, reliable performance</li>
+          </ul>
         </div>
-        <CardDescription>
-          {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4">
-          <div className="flex gap-2 rounded-md bg-muted p-1">
-            <Button variant={mode === "signin" ? "default" : "ghost"} className="w-full" onClick={() => setMode("signin")}>Sign in</Button>
-            <Button variant={mode === "signup" ? "default" : "ghost"} className="w-full" onClick={() => setMode("signup")}>Create account</Button>
+      </div>
+
+      {/* Right form panel */}
+      <div className="p-6">
+        <CardHeader className="pb-3 p-0">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl">Welcome back</CardTitle>
+            <div className="text-sm text-muted-foreground">EstateCare</div>
+          </div>
+          <CardDescription>
+            {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0 pt-4">
+          <div className="grid gap-5">
+          {/* Segmented control */}
+          <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
+            <Button
+              size="sm"
+              variant={mode === "signin" ? "default" : "ghost"}
+              className="rounded-md"
+              onClick={() => setMode("signin")}
+            >
+              Sign in
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "signup" ? "default" : "ghost"}
+              className="rounded-md"
+              onClick={() => setMode("signup")}
+            >
+              Create account
+            </Button>
           </div>
 
-          <form onSubmit={handleEmailPassword} className="grid gap-3">
+          <form onSubmit={handleEmailPassword} className="grid gap-4">
             {mode === "signup" && (
-              <div className="grid gap-1">
+              <div className="grid gap-1.5">
                 <Label htmlFor="name">Full name</Label>
                 <div className="relative">
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" className="pr-10" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" className="pl-9" />
                 </div>
               </div>
             )}
-            <div className="grid gap-1">
+
+            <div className="grid gap-1.5">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pr-10" />
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
               </div>
             </div>
-            <div className="grid gap-1">
+
+            <div className="grid gap-1.5">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
-                <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pr-10" />
-                <Lock className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
+                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -294,7 +359,7 @@ export default function LoginForm() {
               {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
             </Button>
 
-            <div className="flex items-center gap-2 my-2">
+            <div className="flex items-center gap-2">
               <Separator className="flex-1" />
               <span className="text-xs text-muted-foreground">Or continue with</span>
               <Separator className="flex-1" />
@@ -328,7 +393,8 @@ export default function LoginForm() {
             )}
           </form>
         </div>
-      </CardContent>
+        </CardContent>
+      </div>
     </Card>
   );
 }

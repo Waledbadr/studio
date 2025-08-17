@@ -9,7 +9,10 @@ import { UsersProvider } from '@/context/users-context';
 import { OrdersProvider } from '@/context/orders-context';
 import { MaintenanceProvider } from '@/context/maintenance-context';
 import { NotificationsProvider } from '@/context/notifications-context';
-import { LanguageProvider } from '@/context/language-context';
+// LanguageProvider is moved into the client AppLayout to ensure the
+// provider and its consumers share the same client boundary and avoid
+// hydration/order-of-mount warnings. Do not import it here to prevent
+// duplicate providers.
 import { AuthGate } from '@/components/auth-gate';
 
 export const metadata: Metadata = {
@@ -65,25 +68,23 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <LanguageProvider>
-          <ThemeProvider>
-            <AuthGate>
-              <ResidencesProvider>
-                <UsersProvider>
-                  <NotificationsProvider>
-                    <InventoryProvider>
-                      <OrdersProvider>
-                        <MaintenanceProvider>
-                          <AppLayout>{children}</AppLayout>
-                        </MaintenanceProvider>
-                      </OrdersProvider>
-                    </InventoryProvider>
-                  </NotificationsProvider>
-                </UsersProvider>
-              </ResidencesProvider>
-            </AuthGate>
-          </ThemeProvider>
-        </LanguageProvider>
+        <ThemeProvider>
+          <AuthGate>
+            <ResidencesProvider>
+              <UsersProvider>
+                <NotificationsProvider>
+                  <InventoryProvider>
+                    <OrdersProvider>
+                      <MaintenanceProvider>
+                        <AppLayout>{children}</AppLayout>
+                      </MaintenanceProvider>
+                    </OrdersProvider>
+                  </InventoryProvider>
+                </NotificationsProvider>
+              </UsersProvider>
+            </ResidencesProvider>
+          </AuthGate>
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>

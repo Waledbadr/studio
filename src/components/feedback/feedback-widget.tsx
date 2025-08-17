@@ -36,14 +36,30 @@ function captureAppInfo() {
     url: window.location.href,
     path: window.location.pathname,
     referrer: document.referrer,
-  git: gitInfo,
+  // git info intentionally omitted
   };
 }
 
 async function captureScreenshot(): Promise<string | undefined> {
   try {
+    // Defer heavy work to idle time to avoid interfering with navigation/HMR
+    if (typeof window !== 'undefined') {
+      await new Promise((resolve) => {
+        if ('requestIdleCallback' in window) {
+          // @ts-ignore
+          requestIdleCallback(() => resolve(undefined));
+        } else {
+          setTimeout(resolve, 50);
+        }
+      });
+    }
+
     const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(document.body, { useCORS: true, logging: false });
+    // Hide feedback dialog before screenshot
+  const dialog = document.querySelector('[data-feedback-dialog]') as HTMLElement | null;
+  if (dialog) dialog.style.display = 'none';
+    const canvas = await html2canvas(document.body, { useCORS: true, logging: false, ignoreElements: (el) => el.hasAttribute && el.hasAttribute('data-feedback-dialog') });
+  if (dialog) dialog.style.display = '';
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrl;
   } catch (e) {
@@ -79,16 +95,18 @@ export default function FeedbackWidget({ className }: Props) {
   const [category, setCategory] = useState<'Bug' | 'Feature Request' | 'UI Issue' | 'Performance' | 'Other'>('Other');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [includeScreenshot, setIncludeScreenshot] = useState(true);
+  // don't include screenshot automatically to avoid heavy work on navigation
+  const [includeScreenshot, setIncludeScreenshot] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (open && includeScreenshot) {
-      captureScreenshot().then(setScreenshotDataUrl);
-    }
-  }, [open, includeScreenshot]);
+  // Capture on demand to avoid heavy work during navigation/HMR.
+  const handleCapture = async () => {
+    setScreenshotDataUrl(undefined);
+    const data = await captureScreenshot();
+    setScreenshotDataUrl(data);
+  };
 
   useEffect(() => {
     if (lastError && !title) {
@@ -180,6 +198,31 @@ export default function FeedbackWidget({ className }: Props) {
     }
   };
 
+  // Support paste image from clipboard
+  useEffect(() => {
+    if (!open) return;
+    function handlePaste(e: ClipboardEvent) {
+      if (e.clipboardData) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                setScreenshotDataUrl(ev.target?.result as string);
+              };
+              reader.readAsDataURL(file);
+            }
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -187,7 +230,7 @@ export default function FeedbackWidget({ className }: Props) {
           <LifeBuoy className="h-4 w-4 mr-2" /> Feedback
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" data-feedback-dialog>
         <DialogHeader>
           <DialogTitle>Send Feedback</DialogTitle>
           <DialogDescription>Report a problem or send an idea to improve the app.</DialogDescription>
@@ -229,6 +272,13 @@ export default function FeedbackWidget({ className }: Props) {
               )}
             </div>
           )}
+          {/* Manual capture control */}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" onClick={handleCapture} type="button">
+              <Camera className="h-4 w-4 mr-2" /> Capture now
+            </Button>
+            <div className="text-xs text-muted-foreground">Click to attach a screenshot (optional)</div>
+          </div>
         </div>
         <DialogFooter>
       <Button onClick={() => setIncludeScreenshot((v) => !v)} variant="ghost" type="button">

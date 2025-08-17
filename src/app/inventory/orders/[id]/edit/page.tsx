@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare, ChevronDown } from 'lucide-react';
+import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ArrowLeft, MessageSquare, ChevronDown, Edit } from 'lucide-react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { useUsers } from '@/context/users-context';
 import { useRouter, useParams } from 'next/navigation';
@@ -22,11 +23,106 @@ import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
+import { useLanguage } from '@/context/language-context';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
+// Top-level AddItemButton component to avoid remounting when parent re-renders
+function AddItemButton({
+    item,
+    handleAddItemToOrder,
+    variantSelectionsRef,
+}: {
+    item: InventoryItem;
+    handleAddItemToOrder: (item: InventoryItem, variant?: string, qty?: number) => void;
+    variantSelectionsRef: React.MutableRefObject<Record<string, Record<string, boolean>>>;
+}) {
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const [, setTick] = useState(0);
+
+    if (!item.variants || item.variants.length === 0) {
+        return (
+            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+                <Plus className="h-4 w-4" />
+            </Button>
+        );
+    }
+
+    return (
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+                <Button size="icon" variant="outline">
+                    <ChevronDown className="h-4 w-4" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72">
+                <div className="space-y-2">
+                    {item.variants.map((variant) => (
+                        <div key={variant} className="flex items-center justify-between gap-2">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    className="form-checkbox h-4 w-4"
+                                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
+                                    onChange={(e) => {
+                                        const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                                        if (e.target.checked) map[variant] = true;
+                                        else delete map[variant];
+                                        variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                                        setTick(t => t + 1);
+                                    }}
+                                />
+                                <span className="truncate">{variant}</span>
+                            </label>
+                        </div>
+                    ))}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>
+                            Clear
+                        </Button>
+                        <Button size="sm" onClick={() => {
+                            const map = variantSelectionsRef.current[item.id] || {};
+                            const entries = Object.entries(map);
+                            if (entries.length === 0) {
+                                const firstVariant = item.variants?.[0];
+                                handleAddItemToOrder(item, firstVariant ?? undefined, 1);
+                                variantSelectionsRef.current[item.id] = {};
+                                setTick(t => t + 1);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            if (entries.length === 1) {
+                                const [variant] = entries[0];
+                                handleAddItemToOrder(item, variant, 1);
+                                variantSelectionsRef.current[item.id] = {};
+                                setTick(t => t + 1);
+                                setPopoverOpen(true);
+                                return;
+                            }
+
+                            const composedParts = entries.map(([variant]) => variant);
+                            const combinedLabel = composedParts.join(', ');
+                            const totalQty = entries.length;
+                            handleAddItemToOrder(item, combinedLabel, totalQty);
+
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick(t => t + 1);
+                            setPopoverOpen(true);
+                        }}>
+                            Add selected
+                        </Button>
+                    </div>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default function EditOrderPage() {
-    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories } = useInventory();
+    const { dict } = useLanguage();
+    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
     // Add residences context to resolve/display residence name properly
@@ -47,6 +143,9 @@ export default function EditOrderPage() {
 
     // Local saving state for the Save button
     const [isSaving, setIsSaving] = useState(false);
+
+    // Threshold for highlighting stock availability
+    const STOCK_ATTENTION_THRESHOLD = 3;
 
     // Draft support for editing an order
     const restoredDraftRef = useRef(false);
@@ -200,21 +299,34 @@ export default function EditOrderPage() {
         };
     }, [draftKey, orderItems, generalNotes]);
 
-    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string) => {
+    // Support adding a specific quantity and record variant metadata on the order line
+    const handleAddItemToOrder = useCallback((itemToAdd: InventoryItem, variant?: string, qty: number = 1) => {
         const nameAr = variant ? `${itemToAdd.nameAr} - ${variant}` : itemToAdd.nameAr;
         const nameEn = variant ? `${itemToAdd.nameEn} - ${variant}` : itemToAdd.nameEn;
-        const orderItemId = variant ? `${itemToAdd.id}-${variant}` : itemToAdd.id;
+        // Use a safe separator and encode variant text to avoid unsafe chars in id
+        const orderItemId = variant ? `${itemToAdd.id}::${encodeURIComponent(String(variant))}` : itemToAdd.id;
 
         setOrderItems((currentOrderItems) => {
-            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
             isDraftDirtyRef.current = true;
+            const existingItem = currentOrderItems.find(item => item.id === orderItemId);
             if (existingItem) {
                 return currentOrderItems.map(item => 
-                    item.id === orderItemId ? { ...item, quantity: item.quantity + 1 } : item
+                    item.id === orderItemId ? { ...item, quantity: (item.quantity || 0) + qty } : item
                 );
             } else {
-                // Add new item at the beginning (top) like the new order page
-                return [{ ...itemToAdd, id: orderItemId, nameAr, nameEn, quantity: 1, notes: '' }, ...currentOrderItems];
+                // Add new item at the beginning (top) with explicit variant fields
+                const newOrderItem: any = {
+                    ...itemToAdd,
+                    id: orderItemId,
+                    itemId: itemToAdd.id,
+                    variantId: variant ?? null,
+                    variantLabel: variant ?? '',
+                    nameAr,
+                    nameEn,
+                    quantity: qty,
+                    notes: ''
+                };
+                return [newOrderItem, ...currentOrderItems];
             }
         });
     }, []);
@@ -248,7 +360,7 @@ export default function EditOrderPage() {
             return;
         }
         if (orderItems.length === 0) {
-            toast({ title: "Error", description: "Cannot submit an empty request.", variant: "destructive" });
+            toast({ title: 'Error', description: 'Cannot submit an empty request.', variant: 'destructive' });
             return;
         }
 
@@ -263,6 +375,7 @@ export default function EditOrderPage() {
             items: orderItems,
             notes: generalNotes,
         };
+
         setIsSaving(true);
         try {
             await updateOrder(id as string, updatedOrderData);
@@ -273,7 +386,7 @@ export default function EditOrderPage() {
         } finally {
             setIsSaving(false);
         }
-    }
+    };
 
     // Use centralized Arabic synonyms (includes دهان ⇄ بوية)
     const normalizedSynonyms = buildNormalizedSynonyms(AR_SYNONYMS);
@@ -312,6 +425,29 @@ export default function EditOrderPage() {
         setSearchQuery('');
     };
 
+    // Edit item dialog state so users can add/edit variants & keywords inline while editing an order
+    const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+    // Variant selection bookkeeping for the popover UI. Shape: { [itemId]: { [variantLabel]: true } }
+    const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
+
+    const openEditForItem = (item: InventoryItem) => {
+        setItemToEdit(item);
+        setEditDialogOpen(true);
+    };
+
+    const handleItemUpdated = async (updated: InventoryItem) => {
+        try {
+            await updateItem(updated);
+            // close dialog and clear selection
+            setEditDialogOpen(false);
+            setItemToEdit(null);
+        } catch (e) {
+            console.error('Failed to update item from edit order page', e);
+        }
+    };
+
     const getStockForResidence = (item: InventoryItem) => {
         // Use a resolved residenceId to show stock even if the stored name was empty
         const residenceEffectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
@@ -321,6 +457,39 @@ export default function EditOrderPage() {
 
     // Derive a display name for residence using id if the name string is empty
     const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
+
+    // Helper: split name into base and detail using " - " like details/new-order pages
+    const splitNameDetail = (name?: string): { base: string; detail: string } => {
+        const raw = (name || '').trim();
+        if (!raw) return { base: '', detail: '' };
+        const parts = raw.split(' - ');
+        if (parts.length <= 1) return { base: raw, detail: '' };
+        return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
+    };
+
+    // Map order item id (variant possible) to base item stock at current residence
+    const handleGetStockForOrderItem = (item: OrderItem) => {
+        try {
+            const rawId = (item as any).id ?? (item as any).itemId;
+            if (!rawId) return 0;
+            const baseItemId = String(rawId).split('-')[0];
+            const baseItem = allItems.find(i => i.id === baseItemId);
+            if (!baseItem) return 0;
+            const effectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
+            if (!effectiveId || !baseItem.stockByResidence) return 0;
+            return baseItem.stockByResidence[effectiveId] || 0;
+        } catch { return 0; }
+    };
+
+    // Group current order items by category for display similar to new-order/details
+    const groupedOrderItems = useMemo(() => {
+        return orderItems.reduce((acc, item) => {
+            const category = item.category || 'Uncategorized';
+            if (!acc[category]) acc[category] = [];
+            acc[category].push(item);
+            return acc;
+        }, {} as Record<string, OrderItem[]>);
+    }, [orderItems]);
 
 
     if (pageLoading) {
@@ -342,38 +511,14 @@ export default function EditOrderPage() {
          );
     }
 
-    const AddItemButton = ({ item }: { item: InventoryItem }) => {
-        if (!item.variants || item.variants.length === 0) {
-            return (
-                <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
-                    <Plus className="h-4 w-4" />
-                </Button>
-            );
-        }
-        return (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="outline">
-                        <ChevronDown className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {item.variants.map(variant => (
-                        <DropdownMenuItem key={variant} onClick={() => handleAddItemToOrder(item, variant)}>
-                            Add: {variant}
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        );
-    };
+    // Note: using the top-level AddItemButton declared above avoids remounts and keeps popovers stable.
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Edit Material Request</h1>
-                    <p className="text-muted-foreground">Request ID: #{id as string}</p>
+                    <h1 className="text-2xl font-bold">{dict.ui.editMaterialRequest}</h1>
+                    <p className="text-muted-foreground">{dict.orderId || 'Request ID'}: #{id as string}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Last autosave indicator */}
@@ -385,14 +530,14 @@ export default function EditOrderPage() {
                     </Button>
                     {hasDraft && (
                         <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); clearDraft(); }}>
-                            Discard Draft
+                            {dict.ui.discardDraft}
                         </Button>
                     )}
                     <Button onClick={handleUpdateOrder} disabled={!canEdit || orderItems.length === 0 || isSaving}>
                         {isSaving ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                         ) : (
-                            `Save Changes (${totalOrderQuantity} items)`
+                            `${dict.ui.saveChanges} (${totalOrderQuantity} items)`
                         )}
                     </Button>
                 </div>
@@ -401,7 +546,7 @@ export default function EditOrderPage() {
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Available Inventory</CardTitle>
+                        <CardTitle>{dict.ui.availableInventory}</CardTitle>
                         <CardDescription>Click the '+' to add an item to your request.</CardDescription>
                          <div className="flex gap-2">
                             <div className="relative flex-grow">
@@ -428,7 +573,7 @@ export default function EditOrderPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                         <ScrollArea className="h-[450px]">
+                        <ScrollArea className="h-[450px]">
                             {inventoryLoading ? (
                                 <div className="space-y-4">
                                     <Skeleton className="h-12 w-full" />
@@ -441,9 +586,25 @@ export default function EditOrderPage() {
                                         <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                                             <div>
                                                 <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item)} {item.unit}</p>
+                                                {(() => {
+                                                    const stock = getStockForResidence(item);
+                                                    return (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {item.category} - {" "}
+                                                            <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>
+                                                                Stock: {stock}
+                                                            </span>{" "}
+                                                            {item.unit}
+                                                        </p>
+                                                    );
+                                                })()}
                                             </div>
-                                            <AddItemButton item={item} />
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} />
+                                            </div>
                                         </div>
                                     )) : (
                                          searchQuery || selectedCategory !== 'all' ? (
@@ -467,7 +628,7 @@ export default function EditOrderPage() {
                     <CardHeader>
                         <div className="flex justify-between items-center">
                             <div>
-                                <CardTitle>Current Request</CardTitle>
+                                <CardTitle>{dict.ui.currentRequest}</CardTitle>
                                 <CardDescription>Review and adjust the items in your request.</CardDescription>
                             </div>
                             <div className="text-right">
@@ -479,73 +640,83 @@ export default function EditOrderPage() {
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[450px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                        <TableHead className="text-right w-[100px]">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {orderItems.length > 0 ? orderItems.map(item => (
-                                        <TableRow key={item.id}>
-                                            <TableCell className="font-medium">
-                                                {item.nameAr} / {item.nameEn}
-                                                <div className="text-xs text-muted-foreground">{item.category}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
-                                                        <Minus className="h-4 w-4" />
-                                                    </Button>
-                                                    <Input type="number" value={item.quantity} onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                 <div className="flex items-center justify-end gap-1">
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button variant="ghost" size="icon">
-                                                                <MessageSquare className="h-4 w-4" />
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80">
-                                                            <div className="grid gap-4">
-                                                                <div className="space-y-2">
-                                                                    <h4 className="font-medium leading-none">Item Notes</h4>
-                                                                    <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                            {orderItems.length === 0 ? (
+                                <div className="h-60 flex items-center justify-center text-muted-foreground">Your request is empty.</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {Object.entries(groupedOrderItems).map(([category, items]) => (
+                                        <div key={category} className="rounded-md border">
+                                            <div className="bg-muted/50 px-3 py-2 font-semibold text-primary capitalize">{category}</div>
+                                            <div className="divide-y">
+                                                {items.map((item) => {
+                                                    const ar = splitNameDetail(item.nameAr);
+                                                    const en = splitNameDetail(item.nameEn);
+                                                    const detail = ar.detail || en.detail || '';
+                                                    const stock = handleGetStockForOrderItem(item);
+                                                    return (
+                                                        <div key={item.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <div className="font-medium truncate">{en.base || item.nameEn} | {ar.base || item.nameAr}</div>
+                                                                <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                                                                    <span className="capitalize">{item.category}</span>
+                                                                    {item.unit && <span>• {item.unit}</span>}
+                                                                    <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>• Stock: {stock}</span>
+                                                                    {detail && <span className="italic">• {detail}</span>}
                                                                 </div>
-                                                                <Textarea
-                                                                    value={item.notes || ''}
-                                                                    onChange={(e) => handleNotesChange(item.id, e.target.value)}
-                                                                    placeholder="e.g., Please provide the new model."
-                                                                />
                                                             </div>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                                                        <Trash2 className="h-4 w-4 text-destructive"/>
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">Your request is empty.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
+                                                                    <Minus className="h-4 w-4" />
+                                                                </Button>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))}
+                                                                    className="w-16 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
+                                                                    <Plus className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button variant="ghost" size="icon">
+                                                                            <MessageSquare className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-80">
+                                                                        <div className="grid gap-4">
+                                                                            <div className="space-y-2">
+                                                                                <h4 className="font-medium leading-none">Item Notes</h4>
+                                                                                <p className="text-sm text-muted-foreground">Add specific notes for this item.</p>
+                                                                            </div>
+                                                                            <Textarea
+                                                                                value={item.notes || ''}
+                                                                                onChange={(e) => handleNotesChange(item.id, e.target.value)}
+                                                                                placeholder="e.g., Please provide the new model."
+                                                                            />
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </ScrollArea>
                         <div className="mt-6 space-y-2">
-                            <Label htmlFor="general-notes">General Notes</Label>
+                            <Label htmlFor="general-notes">{dict.ui.generalNotes}</Label>
                             <Textarea
                                 id="general-notes"
-                                placeholder="Add any general notes for the entire request..."
+                                placeholder={dict.ui.addGeneralNotesPlaceholder}
                                 value={generalNotes}
                                 onChange={handleGeneralNotesChange}
                             />
@@ -559,6 +730,16 @@ export default function EditOrderPage() {
                 onItemAdded={addItem}
                 onItemAddedAndOrdered={handleNewItemAdded}
                 initialName={searchQuery}
+            />
+            {/* Edit dialog for modifying variants/keywords inline while editing an order */}
+            {/* Use the same EditItemDialog component as the new-order page */}
+            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+            {/* @ts-ignore */}
+            <EditItemDialog
+                isOpen={editDialogOpen}
+                onOpenChange={(v: boolean) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }}
+                onItemUpdated={handleItemUpdated}
+                item={itemToEdit}
             />
         </div>
     )

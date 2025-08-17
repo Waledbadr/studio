@@ -59,33 +59,7 @@ export default function StatusPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Git Info</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">Branch: </span>
-            <Badge variant="outline">{git.branch}</Badge>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Last Commit: </span>
-            <Badge variant="outline">{process.env.NEXT_PUBLIC_LAST_COMMIT_HASH || 'n/a'}</Badge>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Build Time: </span>
-            <span>{git.lastUpdateWithTime}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Relative: </span>
-            <span>{git.lastUpdateRelative}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Current (client): </span>
-            <span>{git.currentDateTime}</span>
-          </div>
-        </CardContent>
-      </Card>
+  {/* Git Info removed */}
     </div>
   );
 }

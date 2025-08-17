@@ -3,6 +3,7 @@ import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { 
   initializeFirestore,
   type Firestore,
+  connectFirestoreEmulator,
   setLogLevel,
   persistentLocalCache,
   persistentMultipleTabManager,
@@ -64,6 +65,38 @@ if (isFirebaseConfigured) {
         ignoreUndefinedProperties: true,
         experimentalForceLongPolling: true,
       } as any);
+    }
+
+    // If an emulator host is provided via env, connect the client to it so
+    // local development doesn't try to reach production Firestore.
+    // Accepts formats like "localhost:8080" or "localhost,8080" or just "localhost"
+    const emulatorEnv =
+      process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST ||
+      process.env.FIRESTORE_EMULATOR_HOST ||
+      process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST;
+
+    if (emulatorEnv) {
+      try {
+        let host = String(emulatorEnv);
+        let port = 8080;
+        if (host.includes(':')) {
+          const [h, p] = host.split(':');
+          host = h;
+          port = Number(p) || port;
+        } else if (host.includes(',')) {
+          const [h, p] = host.split(',');
+          host = h;
+          port = Number(p) || port;
+        }
+
+        if (typeof window !== 'undefined' && db) {
+          // connectFirestoreEmulator is safe to call in the modular SDK v9+/v11
+          connectFirestoreEmulator(db, host, port);
+          console.log(`Firestore emulator enabled at ${host}:${port}`);
+        }
+      } catch (err) {
+        console.warn('Failed to connect to Firestore emulator:', err);
+      }
     }
 
     storage = getStorage(app);

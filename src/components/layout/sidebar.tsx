@@ -15,6 +15,7 @@ import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrder
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
@@ -24,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
+  const { dict } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
 
@@ -35,6 +37,31 @@ export function AppSidebar() {
   // Prevent hydration mismatches by rendering only after mount
   if (!isMounted) {
     return null;
+  }
+
+  // When inside the accommodation app, render an intentionally empty sidebar
+  const isAccommodation = pathname?.startsWith('/accommodation');
+  if (isAccommodation) {
+    return (
+      <>
+        <SidebarHeader>
+          <div className="flex items-center gap-2 p-2">
+            <span className="text-lg font-semibold text-amber-600">Accommodation</span>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <div className="p-2">
+            <nav className="space-y-2">
+              <a href="/accommodation/residences" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
+              <a href="/accommodation/assign" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
+            </nav>
+          </div>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="p-2" />
+        </SidebarFooter>
+      </>
+    );
   }
 
   // Define menu item types
@@ -53,63 +80,66 @@ export function AppSidebar() {
   }
 
   // Menu structure with groupings
+
   const menuStructure: MenuSection[] = [
     // Main Section
     {
-      title: 'Main',
+      title: dict.sidebar?.main || 'Main',
       items: [
-        { href: '/', label: 'Dashboard', icon: Home },
-        { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+        { href: '/', label: dict.sidebar?.dashboard || 'Dashboard', icon: Home },
+        { href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench },
       ]
     },
     // Stock Management Section
     {
-      title: 'Stock Management',
+      title: dict.sidebar?.stockManagement || 'Stock Management',
       items: [
-        { href: '/inventory', label: 'Inventory', icon: ClipboardList, exact: true },
-        { href: '/inventory/inventory-audit', label: 'Stock Reconciliation', icon: FileCheck },
-        { href: '/inventory/depreciation', label: 'Depreciation', icon: AlertTriangle },
-        { href: '/inventory/transfer', label: 'Stock Transfer', icon: Move },
+        { href: '/inventory', label: dict.sidebar?.inventory || 'Inventory', icon: ClipboardList, exact: true },
+        { href: '/inventory/inventory-audit', label: dict.sidebar?.stockReconciliation || 'Stock Reconciliation', icon: FileCheck },
+        { href: '/inventory/depreciation', label: dict.sidebar?.depreciation || 'Depreciation', icon: AlertTriangle },
+        { href: '/inventory/transfer', label: dict.sidebar?.stockTransfer || 'Stock Transfer', icon: Move },
       ]
     },
     // Material Movement Section
     {
-      title: 'Material Movement',
+      title: dict.sidebar?.materialMovement || 'Material Movement',
       items: [
-        { href: '/inventory/orders', label: 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
-        { href: '/inventory/receive', label: 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
-        { href: '/inventory/issue', label: 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
+        { href: '/inventory/orders', label: dict.sidebar?.materialRequests || 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
+        { href: '/inventory/receive', label: dict.sidebar?.receiveMaterials || 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
+        { href: '/inventory/issue', label: dict.sidebar?.issueMaterials || 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
       ]
     },
     // Reports Section
     {
-      title: 'Reports',
+      title: dict.sidebar?.reports || 'Reports',
       items: [
-        { href: '/reports', label: 'Reports', icon: AreaChart },
+        { href: '/reports', label: dict.sidebar?.reports || 'Reports', icon: AreaChart },
       ],
       subItems: [
-        { href: '/inventory/reports/stock-movement', label: 'Stock Movement Report', icon: TrendingUp },
-        { href: '/inventory/reports/lifespan', label: 'Lifespan Report', icon: History },
-        { href: '/inventory/reports/reconciliations', label: 'Reconciliations', icon: FileCheck },
+        { href: '/inventory/reports/stock-movement', label: dict.sidebar?.stockMovementReport || 'Stock Movement Report', icon: TrendingUp },
+        { href: '/inventory/reports/lifespan', label: dict.sidebar?.lifespanReport || 'Lifespan Report', icon: History },
+        { href: '/inventory/reports/reconciliations', label: dict.sidebar?.reconciliations || 'Reconciliations', icon: FileCheck },
       ]
     },
     // Settings Section
     {
-      title: 'Settings',
+      title: dict.sidebar?.settings || 'Settings',
       items: [
-        { href: '/residences', label: 'Residences', icon: Building },
-        { href: '/users', label: 'Users', icon: Users },
-        { href: '/setup', label: 'Setup', icon: Settings },
-      ]
+  { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
+        ...(currentUser?.role === 'Admin' ? [
+          { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
+          { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },
+        ] : [] as any),
+      ] as any
     },
     // Feedback Section
     {
-      title: 'Feedback',
+      title: dict.feedback || 'Feedback',
       items: [
-        { href: '/feedback', label: 'My Feedback', icon: LifeBuoy },
+        { href: '/feedback', label: dict.myFeedback || 'My Feedback', icon: LifeBuoy },
         ...(currentUser?.role === 'Admin' ? [
-          { href: '/admin/feedback', label: 'Feedback Board', icon: ClipboardList },
-          { href: '/admin/feedback/stats', label: 'Feedback Analytics', icon: AreaChart },
+          { href: '/admin/feedback', label: dict.feedbackBoard || 'Feedback Board', icon: ClipboardList },
+          { href: '/admin/feedback/stats', label: dict.feedbackAnalytics || 'Feedback Analytics', icon: AreaChart },
         ] : [] as any),
       ] as any,
     },
@@ -123,24 +153,7 @@ export function AppSidebar() {
                 <Building className="h-8 w-8 text-primary" />
                 <span className="text-xl font-semibold group-data-[collapsible=icon]:hidden">EstateCare</span>
             </div>
-             <div className="group-data-[collapsible=icon]:hidden text-sm pl-1">
-              <Badge variant={process.env.NODE_ENV === 'development' ? "outline" : "default"}>
-                {process.env.NODE_ENV === 'development' ? 'Development' : 'Production'}
-              </Badge>
-            </div>
-            {/* Git Info */}
-            {gitInfo && (
-              <div className="group-data-[collapsible=icon]:hidden space-y-1 mt-2">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <GitBranch className="h-3 w-3" />
-                  <span className="text-primary font-medium">{gitInfo.branch}</span>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  <span className="font-medium" title={gitInfo.lastUpdateWithTime}>{gitInfo.lastUpdateRelative}</span>
-                </div>
-              </div>
-            )}
+            {/* Environment badge and git info removed per request */}
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -199,7 +212,7 @@ export function AppSidebar() {
                      <Avatar className="size-8">
                        {currentUser ? (
                          <>
-                          <AvatarImage src="https://placehold.co/100x100.png" alt={currentUser.name} data-ai-hint="profile picture" />
+                          <AvatarImage src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23e5e7eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='20'%3EIMG%3C/text%3E%3C/svg%3E" alt={currentUser.name} data-ai-hint="profile picture" />
                           <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                          </>
                        ) : (

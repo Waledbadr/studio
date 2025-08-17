@@ -5,8 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useOrders, type Order } from "@/context/orders-context";
 import { useInventory } from "@/context/inventory-context";
+import { useOrders, type Order } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
@@ -14,10 +14,12 @@ import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
 import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus } from "lucide-react";
 import { useResidences } from "@/context/residences-context";
+import { useLanguage } from '@/context/language-context';
 
 export default function ReceiveMaterialsPage() {
-    const { orders, loading, loadOrders } = useOrders();
     const { getMRVRequests, approveMRVRequest } = useInventory();
+    const { dict } = useLanguage();
+    const { orders, loadOrders } = useOrders();
     const router = useRouter();
     const { currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
@@ -27,6 +29,7 @@ export default function ReceiveMaterialsPage() {
     const [approvedMrvCount, setApprovedMrvCount] = useState(0);
     const [pendingMrvRequests, setPendingMrvRequests] = useState<any[]>([]);
     const [approvedMrvRequests, setApprovedMrvRequests] = useState<any[]>([]);
+    const [rejectedMrvCount, setRejectedMrvCount] = useState(0);
     const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
 
     // helper to load MRV stats (pending list, counts)
@@ -40,6 +43,9 @@ export default function ReceiveMaterialsPage() {
             const visibleApproved = isAdmin ? approved : approved.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
             setApprovedMrvRequests(visibleApproved);
             setApprovedMrvCount(visibleApproved.length || 0);
+            const rejected = await getMRVRequests('Rejected');
+            const visibleRejected = isAdmin ? rejected : rejected.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
+            setRejectedMrvCount(visibleRejected.length || 0);
         } catch {}
     };
 
@@ -51,15 +57,16 @@ export default function ReceiveMaterialsPage() {
         }
     }, []);
     
-    // UseEffect to load orders and MRV stats when the component mounts
+    // UseEffect to load MRV stats when the component mounts
     useEffect(() => {
-        loadOrders();
         if (residences.length === 0) {
             loadResidences();
         }
+        // Ensure orders are subscribed so Approved/Partially Delivered MRs appear here
+        loadOrders();
         loadMrvStats();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadOrders, loadResidences, residences.length, isAdmin, currentUser]);
+    }, [loadResidences, residences.length, isAdmin, currentUser]);
 
 
     // Save completed section state to localStorage
@@ -68,36 +75,14 @@ export default function ReceiveMaterialsPage() {
         localStorage.setItem('receive-completed-open', JSON.stringify(open));
     };
 
-
-    const userApprovedOrders = useMemo(() => {
-        if (!currentUser) return [];
-
-        const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
-        const approvedOrders = orders.filter(order => receivableStatuses.includes(order.status));
-        
-        if (isAdmin) {
-            return approvedOrders;
-        }
-        
-        return approvedOrders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
-    }, [orders, currentUser, isAdmin]);
-
-    // فصل الطلبات حسب الحالة
-    const allUserOrders = useMemo(() => {
-        if (!currentUser) return [];
-        
-        if (isAdmin) {
-            return orders;
-        }
-        
-        return orders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
-    }, [orders, currentUser, isAdmin]);
-
-    const completedOrders = useMemo(() => {
-        return allUserOrders.filter(order => 
-            order.status === 'Delivered' || order.status === 'Cancelled'
-        );
-    }, [allUserOrders]);
+    // Derive Approved/Partially Delivered Material Requests (MR) visible to user
+    const userVisibleApprovedMRs = useMemo(() => {
+        const approvable: Order['status'][] = ['Approved', 'Partially Delivered'];
+        const list = (orders || []).filter(o => approvable.includes(o.status));
+        if (isAdmin) return list;
+        const ids = currentUser?.assignedResidences || [];
+        return list.filter(o => ids.includes(o.residenceId));
+    }, [orders, isAdmin, currentUser]);
 
 
     const renderSkeleton = () => (
@@ -113,11 +98,9 @@ export default function ReceiveMaterialsPage() {
         ))
     );
     
-    const handleSelectOrder = (orderId: string) => {
-        router.push(`/inventory/receive/${orderId}`);
-    };
+    // No MR select on MRV page
 
-    // Build unified rows for Ready section (approved orders + pending MRV requests)
+                // Build unified rows for Ready section (Pending MRV requests + Approved/Partially Delivered MRs)
     const readyRows = useMemo(() => {
         const rows: any[] = [];
         // MRV Pending
@@ -125,10 +108,12 @@ export default function ReceiveMaterialsPage() {
           rows.push({
             key: `mrv-${r.id}`,
             id: r.id,
+            type: 'MRV',
             dateLabel: r.requestedAt?.toDate ? format(r.requestedAt.toDate(), 'PPP') : '-',
             residence: residenceName(r.residenceId),
             items: (r.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
             status: <Badge variant="secondary">Pending</Badge>,
+            href: `/inventory/receive/approvals/${r.id}`,
             action: (
               <div className="flex items-center justify-end gap-2">
                 <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/approvals/${r.id}`)}>
@@ -151,129 +136,113 @@ export default function ReceiveMaterialsPage() {
             )
           });
         }
-        // Orders Approved/Partially Delivered
-        for (const order of userApprovedOrders) {
-          rows.push({
-            key: `ord-${order.id}`,
-            id: order.id,
-            dateLabel: format(order.date.toDate(), 'PPP'),
-            residence: order.residence,
-            items: order.items.reduce((acc, item) => acc + item.quantity, 0),
-            status: (
-              <Badge variant={
-                order.status === 'Approved' || order.status === 'Partially Delivered' ? 'secondary' : 'outline'
-              }>
-                {order.status}
-              </Badge>
-            ),
-            action: (
-              <div className="text-right">
-                <Button variant="outline" size="sm" onClick={() => router.push(`/inventory/receive/${order.id}`)}>
-                  Receive <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            )
-          });
-        }
+                // MR Approved or Partially Delivered (ready to receive)
+                for (const o of userVisibleApprovedMRs) {
+                    rows.push({
+                        key: `mr-${o.id}`,
+                        id: o.id,
+                        type: 'MR',
+                        dateLabel: o.date?.toDate ? format(o.date.toDate(), 'PPP') : '-',
+                        residence: residenceName(o.residenceId),
+                        items: (o.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+                        status: (
+                            <Badge variant={o.status === 'Approved' ? 'secondary' : 'outline'}>
+                                {o.status}
+                            </Badge>
+                        ),
+                        href: `/inventory/receive/${o.id}`,
+                        action: (
+                            <div className="flex items-center justify-end gap-2">
+                                <Button size="sm" onClick={() => router.push(`/inventory/receive/${o.id}`)}>
+                                    Receive
+                                </Button>
+                            </div>
+                        )
+                    });
+                }
         return rows;
-      }, [pendingMrvRequests, userApprovedOrders, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats]);
+                        }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats]);
 
-    // Build unified rows for Completed section (approved MRVs + completed/cancelled orders)
+        // Build rows for Completed section (approved MRVs only)
     const completedRows = useMemo(() => {
         const rows: any[] = [];
         for (const r of approvedMrvRequests) {
           rows.push({
             key: `mrvOk-${r.id}`,
             id: r.mrvId || r.mrvShort || r.id,
+            type: 'MRV',
             dateLabel: r.approvedAt?.toDate ? format(r.approvedAt.toDate(), 'PPP') : '-',
             residence: residenceName(r.residenceId),
             items: (r.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
             status: <Badge>Delivered</Badge>,
-            action: (
-              <div className="text-right">
-                {r.mrvId ? (
-                  <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${r.mrvId}`)}>
-                    View
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" disabled>
-                    View
-                  </Button>
-                )}
-              </div>
-            )
-          });
-        }
-        for (const order of completedOrders) {
-          rows.push({
-            key: `ordOk-${order.id}`,
-            id: order.id,
-            dateLabel: format(order.date.toDate(), 'PPP'),
-            residence: order.residence,
-            items: order.items.reduce((acc, item) => acc + item.quantity, 0),
-            status: (
-              <Badge variant={order.status === 'Delivered' ? 'default' : 'destructive'}>
-                {order.status}
-              </Badge>
-            ),
-            action: <div />
+            href: r.mrvId ? `/inventory/receive/receipts/${r.mrvId}` : undefined,
           });
         }
         return rows;
-      }, [approvedMrvRequests, completedOrders, router, residenceName]);
+            }, [approvedMrvRequests, router, residenceName]);
 
-    const renderUnifiedTable = (rows: any[], showActions: boolean = true) => (
+        const renderUnifiedTable = (rows: any[], showActions: boolean = true) => (
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Request ID</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="text-right">Action</TableHead>}
+                                            <TableHead>{dict.orderId || 'Request ID'}</TableHead>
+                                            <TableHead>{'Type'}</TableHead>
+                        <TableHead>{dict.date || 'Date'}</TableHead>
+                        <TableHead>{dict.location || 'Residence'}</TableHead>
+                        <TableHead>{dict.items || 'Items'}</TableHead>
+                        <TableHead>{dict.status || 'Status'}</TableHead>
+                        {showActions && <TableHead className="text-right">{dict.actions || 'Action'}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {rows.length > 0 ? rows.map((row) => (
-                    <TableRow key={row.key}>
-                        <TableCell className="font-medium">{row.id}</TableCell>
-                        <TableCell>{row.dateLabel}</TableCell>
-                        <TableCell>{row.residence}</TableCell>
-                        <TableCell>{row.items}</TableCell>
-                        <TableCell>{row.status}</TableCell>
-                        {showActions && (
-                          <TableCell className="text-right">{row.action}</TableCell>
-                        )}
-                    </TableRow>
+                                        <TableRow
+                                            key={row.key}
+                                            onClick={() => { if (row.href) router.push(row.href); }}
+                                            className={row.href ? 'cursor-pointer hover:bg-muted/50' : ''}
+                                        >
+                                                <TableCell className="font-medium">{row.id}</TableCell>
+                                                <TableCell>{row.type || '-'}</TableCell>
+                                                <TableCell>{row.dateLabel}</TableCell>
+                                                <TableCell>{row.residence}</TableCell>
+                                                <TableCell>{row.items}</TableCell>
+                                                <TableCell>{row.status}</TableCell>
+                                                {showActions && (
+                                                    <TableCell className="text-right">{row.action}</TableCell>
+                                                )}
+                                        </TableRow>
                 )) : (
-                    <TableRow>
-                        <TableCell colSpan={showActions ? 6 : 5} className="h-32 text-center text-muted-foreground">
-                          No records found.
-                        </TableCell>
-                    </TableRow>
+                                        <TableRow>
+                                                                                                <TableCell colSpan={showActions ? 7 : 6} className="h-32 text-center text-muted-foreground">
+                                                    {dict.noRecordsFound || 'No records found.'}
+                                                </TableCell>
+                                        </TableRow>
                 )}
             </TableBody>
         </Table>
     );
 
-    const readyToReceiveCount = userApprovedOrders.length + pendingMrvCount;
-    const completedDeliveredCount = completedOrders.filter(o => o.status === 'Delivered').length + approvedMrvCount;
+    const readyToReceiveCount = pendingMrvCount + userVisibleApprovedMRs.length;
+    const completedDeliveredCount = approvedMrvCount;
 
     return (
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Receive Materials (MRV)</h1>
-                    <p className="text-muted-foreground">Select an approved request to receive its items.</p>
+                    <h1 className="text-2xl font-bold">{dict.mivTitle || dict.ui?.materialsApp}</h1>
+                    <p className="text-muted-foreground">{dict.mivDescription || dict.ui?.currentRequest}</p>
                 </div>
                  <div className="flex items-center gap-2">
                     <Button variant="secondary" onClick={() => router.push('/inventory/receive/new-approval')}>
-                        New MRV (Approval)
+                            {dict.newMRVApproval || dict.reviewLabel}
                     </Button>
-                    {/* Removed Approvals page link per request */}
+                    {/* View MRV receipts history */}
+                    <Button variant="outline" onClick={() => router.push('/inventory/receive/receipts')}>
+                        <History className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Receipts History'}
+                    </Button>
+                    {/* Navigate to MR (Materials Requests) dedicated page */}
                     <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
-                        <History className="mr-2 h-4 w-4" /> View Request History
+                            {dict.materialsRequestsLabel || dict.ui?.materialsApp}
                     </Button>
                 </div>
             </div>
@@ -287,7 +256,7 @@ export default function ReceiveMaterialsPage() {
                                 <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Ready to Receive</p>
+                                <p className="text-sm font-medium">{dict.readyToReceive || 'Ready to Receive'}</p>
                                 <p className="text-2xl font-bold">{readyToReceiveCount}</p>
                             </div>
                         </div>
@@ -300,7 +269,7 @@ export default function ReceiveMaterialsPage() {
                                 <Truck className="h-4 w-4 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Delivered</p>
+                                <p className="text-sm font-medium">{dict.delivered || 'Delivered'}</p>
                                 <p className="text-2xl font-bold">{completedDeliveredCount}</p>
                             </div>
                         </div>
@@ -313,10 +282,8 @@ export default function ReceiveMaterialsPage() {
                                 <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Cancelled</p>
-                                <p className="text-2xl font-bold">
-                                    {completedOrders.filter(o => o.status === 'Cancelled').length}
-                                </p>
+                                <p className="text-sm font-medium">{dict.ui?.rejected || 'Rejected'}</p>
+                                <p className="text-2xl font-bold">{rejectedMrvCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -328,8 +295,8 @@ export default function ReceiveMaterialsPage() {
                                 <Archive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Total Requests</p>
-                                <p className="text-2xl font-bold">{allUserOrders.length}</p>
+                                <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
+                                <p className="text-2xl font-bold">{pendingMrvCount + approvedMrvCount + rejectedMrvCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -339,21 +306,21 @@ export default function ReceiveMaterialsPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
-                        <CardTitle>Ready to Receive</CardTitle>
+                        <CardTitle>{dict.pendingMRVApprovals || 'Pending MRV Approvals'}</CardTitle>
                         <CardDescription>
-                            Approved requests ready for material receiving ({userApprovedOrders.length} requests)
+                            {dict.pendingMrvCardDescription || 'Requests awaiting approval or posting to stock'} ({pendingMrvCount} requests)
                         </CardDescription>
                     </div>
-                    <Button 
+                        <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCompletedToggle(!isCompletedOpen)}
                         className="flex items-center gap-2"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? 'Hide Completed' : 'Show Completed'}
+                        {isCompletedOpen ? dict.ui?.hideCompleted : dict.ui?.showCompleted}
                         <Badge variant="secondary" className="text-xs">
-                            {completedOrders.length}
+                            {approvedMrvRequests.length}
                         </Badge>
                     </Button>
                 </CardHeader>
@@ -363,7 +330,7 @@ export default function ReceiveMaterialsPage() {
             </Card>
 
             {/* Completed Orders - Collapsible */}
-             {(completedOrders.length > 0 || approvedMrvRequests.length > 0) && (
+             {(approvedMrvRequests.length > 0) && (
                  <Collapsible open={isCompletedOpen} onOpenChange={handleCompletedToggle}>
                      <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
                          <CollapsibleTrigger asChild>
@@ -374,9 +341,9 @@ export default function ReceiveMaterialsPage() {
                                              <Archive className="h-4 w-4 text-muted-foreground" />
                                          </div>
                                          <div>
-                                             <CardTitle className="text-base">Completed Requests</CardTitle>
+                                             <CardTitle className="text-base">Approved MRVs</CardTitle>
                                              <CardDescription>
-                                                 Delivered and cancelled requests • Click to {isCompletedOpen ? 'collapse' : 'expand'}
+                                                 Receipts posted to stock • Click to {isCompletedOpen ? 'collapse' : 'expand'}
                                              </CardDescription>
                                          </div>
                                      </div>
@@ -384,12 +351,12 @@ export default function ReceiveMaterialsPage() {
                                          <div className="flex items-center gap-2">
                                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
                                                  <Truck className="h-3 w-3 mr-1" />
-                                                 {completedDeliveredCount} Delivered
+                                                 {approvedMrvCount} Delivered
                                              </Badge>
-                                             {completedOrders.filter(o => o.status === 'Cancelled').length > 0 && (
+                                             {rejectedMrvCount > 0 && (
                                                  <Badge variant="outline" className="text-xs bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
                                                      <XCircle className="h-3 w-3 mr-1" />
-                                                     {completedOrders.filter(o => o.status === 'Cancelled').length} Cancelled
+                                                     {rejectedMrvCount} Rejected
                                                  </Badge>
                                              )}
                                          </div>

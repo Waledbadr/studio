@@ -18,6 +18,9 @@ export interface User {
   role: "Admin" | "Supervisor" | "Technician";
   assignedResidences: string[];
   themeSettings?: UserThemeSettings;
+  // Optional profile fields
+  phone?: string;
+  language?: 'en' | 'ar';
 }
 
 interface UsersContextType {

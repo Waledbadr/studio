@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useInventory } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,7 @@ import { format } from 'date-fns';
 export default function MRVReceiptsPage() {
   const { getMRVs } = useInventory();
   const { residences, loadResidences } = useResidences();
+  const { dict } = useLanguage();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -36,27 +38,27 @@ export default function MRVReceiptsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Material Receipts</h1>
-          <p className="text-muted-foreground">Latest MRVs posted to stock.</p>
+          <h1 className="text-2xl font-bold">{dict.materialReceiptsTitle}</h1>
+          <p className="text-muted-foreground">{dict.materialReceiptsDescription}</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Receipts</CardTitle>
-          <CardDescription>{rows.length} record(s)</CardDescription>
+          <CardTitle>{dict.receiptsLabel}</CardTitle>
+          <CardDescription>{dict.recordsCount.replace('{count}', String(rows.length))}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Residence</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Invoice</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead>{dict.idLabel}</TableHead>
+                <TableHead>{dict.date}</TableHead>
+                <TableHead>{dict.residenceLabel}</TableHead>
+                <TableHead>{dict.items}</TableHead>
+                <TableHead>{dict.supplierLabel}</TableHead>
+                <TableHead>{dict.invoiceLabel}</TableHead>
+                <TableHead className="text-right">{dict.actionLabel}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -71,12 +73,12 @@ export default function MRVReceiptsPage() {
                   <TableCell>{r.supplierName || '-'}</TableCell>
                   <TableCell>{r.invoiceNo || '-'}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${r.id}`)}>View</Button>
+                    <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${r.id}`)}>{dict.viewLabel}</Button>
                   </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-40 text-center text-muted-foreground">No receipts found.</TableCell>
+                  <TableCell colSpan={7} className="h-40 text-center text-muted-foreground">{dict.noReceiptsFound}</TableCell>
                 </TableRow>
               )}
             </TableBody>

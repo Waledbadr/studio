@@ -16,10 +16,12 @@ import { useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useUsers } from "@/context/users-context";
 import { useResidences } from "@/context/residences-context";
+import { useLanguage } from '@/context/language-context';
 
 
 export default function PurchaseOrdersPage() {
     const { orders, loading, loadOrders, deleteOrder, updateOrderStatus } = useOrders();
+    const { dict } = useLanguage();
     // Helper to display ID in new short format for legacy records
     const formatOrderId = (id: string) => {
         if (!id) return id;
@@ -108,12 +110,12 @@ export default function PurchaseOrdersPage() {
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Request ID</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>{dict.orderId || 'Request ID'}</TableHead>
+                    <TableHead>{dict.date || 'Date'}</TableHead>
+                    <TableHead>{dict.location || 'Residence'}</TableHead>
+                    <TableHead>{dict.items || 'Items'}</TableHead>
+                    <TableHead>{dict.status || 'Status'}</TableHead>
+                    {showActions && <TableHead className="text-right">{dict.actions || 'Actions'}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -141,8 +143,8 @@ export default function PurchaseOrdersPage() {
                                         <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
-                                            <Eye className="mr-2 h-4 w-4" /> View Details
+                                                        <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
+                                                        <Eye className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Details'}
                                         </DropdownMenuItem>
                                         {isAdmin && (
                                             <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
@@ -153,16 +155,16 @@ export default function PurchaseOrdersPage() {
                                             <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
                                             <DropdownMenuSubContent>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Pending')}>
-                                                    <XCircle className="mr-2 h-4 w-4" /> Pending
+                                                    <XCircle className="mr-2 h-4 w-4" /> {dict.dashboard?.pending || 'Pending'}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Approved')}>
-                                                    <CheckCircle className="mr-2 h-4 w-4" /> Approved
+                                                    <CheckCircle className="mr-2 h-4 w-4" /> {dict.ui?.saveChanges || 'Approved'}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Delivered')}>
-                                                    <Truck className="mr-2 h-4 w-4" /> Delivered
+                                                    <Truck className="mr-2 h-4 w-4" /> {dict.delivered || 'Delivered'}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Cancelled')}>
-                                                    <XCircle className="mr-2 h-4 w-4 text-destructive" /> Cancelled
+                                                    <XCircle className="mr-2 h-4 w-4 text-destructive" /> {dict.cancelled || 'Cancelled'}
                                                 </DropdownMenuItem>
                                             </DropdownMenuSubContent>
                                         </DropdownMenuSub>}
@@ -174,14 +176,14 @@ export default function PurchaseOrdersPage() {
                                                     Delete Request
                                                 </button>
                                             </AlertDialogTrigger>
-                                            <AlertDialogContent>
+                                                <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                    <AlertDialogDescription>This will permanently delete request #{order.id}. This action cannot be undone.</AlertDialogDescription>
+                                                    <AlertDialogTitle>{'Are you sure?'}</AlertDialogTitle>
+                                                    <AlertDialogDescription>{`This will permanently delete request #${order.id}. This action cannot be undone.`}</AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => deleteOrder(order.id)}>Delete</AlertDialogAction>
+                                                    <AlertDialogCancel>{dict.ui?.cancel || 'Cancel'}</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => deleteOrder(order.id)}>{'Delete'}</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>}
@@ -192,8 +194,8 @@ export default function PurchaseOrdersPage() {
                     </TableRow>
                 )) : (
                     <TableRow>
-                        <TableCell colSpan={showActions ? 6 : 5} className="h-48 text-center text-muted-foreground">
-                            No material requests found.
+                            <TableCell colSpan={showActions ? 6 : 5} className="h-48 text-center text-muted-foreground">
+                            {dict.noRecordsFound || 'No material requests found.'}
                         </TableCell>
                     </TableRow>
                 )}
@@ -206,20 +208,20 @@ export default function PurchaseOrdersPage() {
         <div className="space-y-6">
              <div className="flex items-center justify-between">
                 <div>
-                <h1 className="text-2xl font-bold">Materials Requests</h1>
-                <p className="text-muted-foreground">Review and manage all material requests.</p>
+                <h1 className="text-2xl font-bold">{dict.ui?.materialsApp || 'Materials Requests'}</h1>
+                <p className="text-muted-foreground">{dict.ui?.currentRequest || 'Review and manage all material requests.'}</p>
                 </div>
                  <div className="flex items-center gap-2">
                     {isAdmin && (
                         <Button asChild variant="secondary">
                              <Link href="/inventory/orders/consolidated-report">
-                                <Printer className="mr-2 h-4 w-4" /> Consolidated Printing
+                                <Printer className="mr-2 h-4 w-4" /> {dict.consolidatedPrinting || 'Consolidated Printing'}
                             </Link>
                         </Button>
                     )}
                     <Button asChild>
                         <Link href="/inventory/new-order">
-                        <PlusCircle className="mr-2 h-4 w-4" /> New Request
+                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.newRequest || 'New Request'}
                         </Link>
                     </Button>
                 </div>
@@ -234,7 +236,7 @@ export default function PurchaseOrdersPage() {
                                 <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Active Requests</p>
+                                <p className="text-sm font-medium">{dict.activeRequests || 'Active Requests'}</p>
                                 <p className="text-2xl font-bold">{activeOrders.length}</p>
                             </div>
                         </div>
@@ -247,7 +249,7 @@ export default function PurchaseOrdersPage() {
                                 <Truck className="h-4 w-4 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Delivered</p>
+                                <p className="text-sm font-medium">{dict.delivered || 'Delivered'}</p>
                                 <p className="text-2xl font-bold">
                                     {completedOrders.filter(o => o.status === 'Delivered').length}
                                 </p>
@@ -262,7 +264,7 @@ export default function PurchaseOrdersPage() {
                                 <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Cancelled</p>
+                                <p className="text-sm font-medium">{dict.cancelled || 'Cancelled'}</p>
                                 <p className="text-2xl font-bold">
                                     {completedOrders.filter(o => o.status === 'Cancelled').length}
                                 </p>
@@ -277,7 +279,7 @@ export default function PurchaseOrdersPage() {
                                 <Archive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Total Requests</p>
+                                <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
                                 <p className="text-2xl font-bold">{filteredOrders.length}</p>
                             </div>
                         </div>
@@ -288,19 +290,19 @@ export default function PurchaseOrdersPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
-                        <CardTitle>Active Requests</CardTitle>
+                        <CardTitle>{dict.activeRequests || 'Active Requests'}</CardTitle>
                         <CardDescription>
-                            Pending and in-progress material requests ({activeOrders.length} requests)
+                            {dict.requestsNeedAttention || 'Pending and in-progress material requests'} ({activeOrders.length} {dict.items || 'requests'})
                         </CardDescription>
                     </div>
-                    <Button 
+                        <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCompletedToggle(!isCompletedOpen)}
                         className="flex items-center gap-2"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? 'Hide Completed' : 'Show Completed'}
+                        {isCompletedOpen ? dict.ui?.hideCompleted || 'Hide Completed' : dict.ui?.showCompleted || 'Show Completed'}
                         <Badge variant="secondary" className="text-xs">
                             {completedOrders.length}
                         </Badge>

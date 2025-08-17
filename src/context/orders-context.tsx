@@ -395,11 +395,12 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
     }
     const orderDocRef = doc(db, "orders", id);
     const docSnap = await getDocFromServer(orderDocRef as any);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Order;
-    } else {
-        return null;
-    }
+  if (docSnap.exists()) {
+    const data = docSnap.data() as Record<string, any>;
+    return { id: docSnap.id, ...data } as Order;
+  } else {
+    return null;
+  }
   }
 
   const deleteOrder = async (id: string) => {
