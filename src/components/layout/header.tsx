@@ -45,7 +45,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const handleProfileClick = () => {
-    router.push('/users');
+  router.push('/profile');
   };
 
   const handleNotificationClick = (notificationId: string, href: string) => {

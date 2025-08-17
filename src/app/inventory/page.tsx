@@ -195,23 +195,23 @@ export default function InventoryPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Arabic Name</TableHead>
-            <TableHead>English Name</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Unit</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="h-10 px-3">Arabic Name</TableHead>
+            <TableHead className="h-10 px-3">English Name</TableHead>
+            <TableHead className="h-10 px-3">Category</TableHead>
+            <TableHead className="h-10 px-3">Unit</TableHead>
+            <TableHead className="h-10 px-3">Stock</TableHead>
+            <TableHead className="h-10 px-3 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
             <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className="cursor-pointer hover:bg-muted/50">
-              <TableCell className="font-medium">{item.nameAr}</TableCell>
-              <TableCell className="font-medium">{item.nameEn}</TableCell>
-              <TableCell>{item.category}</TableCell>
-              <TableCell>{item.unit}</TableCell>
-              <TableCell>{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="py-2 px-3 font-medium">{item.nameAr}</TableCell>
+              <TableCell className="py-2 px-3 font-medium">{item.nameEn}</TableCell>
+              <TableCell className="py-2 px-3">{item.category}</TableCell>
+              <TableCell className="py-2 px-3">{item.unit}</TableCell>
+              <TableCell className="py-2 px-3">{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
+              <TableCell className="py-2 px-3 text-right">
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>

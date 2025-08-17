@@ -42,6 +42,18 @@ function captureAppInfo() {
 
 async function captureScreenshot(): Promise<string | undefined> {
   try {
+    // Defer heavy work to idle time to avoid interfering with navigation/HMR
+    if (typeof window !== 'undefined') {
+      await new Promise((resolve) => {
+        if ('requestIdleCallback' in window) {
+          // @ts-ignore
+          requestIdleCallback(() => resolve(undefined));
+        } else {
+          setTimeout(resolve, 50);
+        }
+      });
+    }
+
     const html2canvas = (await import('html2canvas')).default;
     // Hide feedback dialog before screenshot
   const dialog = document.querySelector('[data-feedback-dialog]') as HTMLElement | null;
@@ -83,16 +95,18 @@ export default function FeedbackWidget({ className }: Props) {
   const [category, setCategory] = useState<'Bug' | 'Feature Request' | 'UI Issue' | 'Performance' | 'Other'>('Other');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [includeScreenshot, setIncludeScreenshot] = useState(true);
+  // don't include screenshot automatically to avoid heavy work on navigation
+  const [includeScreenshot, setIncludeScreenshot] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (open && includeScreenshot) {
-      captureScreenshot().then(setScreenshotDataUrl);
-    }
-  }, [open, includeScreenshot]);
+  // Capture on demand to avoid heavy work during navigation/HMR.
+  const handleCapture = async () => {
+    setScreenshotDataUrl(undefined);
+    const data = await captureScreenshot();
+    setScreenshotDataUrl(data);
+  };
 
   useEffect(() => {
     if (lastError && !title) {
@@ -258,6 +272,13 @@ export default function FeedbackWidget({ className }: Props) {
               )}
             </div>
           )}
+          {/* Manual capture control */}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" onClick={handleCapture} type="button">
+              <Camera className="h-4 w-4 mr-2" /> Capture now
+            </Button>
+            <div className="text-xs text-muted-foreground">Click to attach a screenshot (optional)</div>
+          </div>
         </div>
         <DialogFooter>
       <Button onClick={() => setIncludeScreenshot((v) => !v)} variant="ghost" type="button">

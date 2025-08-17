@@ -83,6 +83,7 @@ export function AddItemDialog({
     
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
+    const [isTranslating, setIsTranslating] = useState(false);
     const { categories, items, addCategory } = useInventory();
 
     // Focus first input on open
@@ -162,18 +163,25 @@ export function AddItemDialog({
             toast({ title: 'Missing name', description: 'أدخل اسم بالعربي أو بالإنجليزي ثم اضغط ترجمة.', variant: 'destructive' });
             return;
         }
+        setIsTranslating(true);
         try {
             const res = await fetch('/api/translate-item', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: source }),
             });
-            if (!res.ok) throw new Error(`Translation API failed: ${res.status}`);
             const translationResult = await res.json();
-            setNameAr(translationResult.arabicName || nameAr);
-            setNameEn(translationResult.englishName || nameEn);
-        } catch (e) {
-            toast({ title: 'Translation Error', description: 'تعذر تنفيذ الترجمة.', variant: 'destructive' });
+            if (!res.ok) {
+                const msg = translationResult?.error || `Translation API failed: ${res.status}`;
+                toast({ title: 'Translation Error', description: msg, variant: 'destructive' });
+            } else {
+                setNameAr(translationResult.arabicName || nameAr);
+                setNameEn(translationResult.englishName || nameEn);
+            }
+        } catch (e: any) {
+            toast({ title: 'Translation Error', description: e?.message || 'تعذر تنفيذ الترجمة.', variant: 'destructive' });
+        } finally {
+            setIsTranslating(false);
         }
     };
 
@@ -283,7 +291,10 @@ export function AddItemDialog({
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <Button type="button" variant="secondary" onClick={handleAutoTranslate} className="gap-2"><Languages className="h-4 w-4"/> Auto Translate</Button>
+                        <Button type="button" variant="secondary" onClick={handleAutoTranslate} className="gap-2" disabled={isTranslating}>
+                            {isTranslating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4"/>}
+                            Auto Translate
+                        </Button>
                         {duplicateName && <span className="text-xs text-destructive">Duplicate name already exists.</span>}
                     </div>
                 </section>
