@@ -251,41 +251,38 @@ export default function InventoryPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
-        <Button variant="outline" onClick={handleExportExcel}>
-          {dict.exportToExcel || 'Export items to Excel'}
-        </Button>
-      </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
           <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
-                <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
-            </Button>
-           <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleAddCategory}>
-              <DialogHeader>
-                <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
-                <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
-                <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
-              </div>
-              <DialogFooter>
-                <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+          <Button variant="outline" onClick={handleExportExcel}>
+            {dict.exportToExcel || 'Export items to Excel'}
+          </Button>
+          <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
+            <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
+          </Button>
+          <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleAddCategory}>
+                <DialogHeader>
+                  <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
+                  <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
+                  <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           <AddItemDialog 
             isOpen={isAddItemDialogOpen} 

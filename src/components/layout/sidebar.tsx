@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
+  const { dict } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
 
@@ -79,7 +80,6 @@ export function AppSidebar() {
   }
 
   // Menu structure with groupings
-  const { dict } = useLanguage();
 
   const menuStructure: MenuSection[] = [
     // Main Section

@@ -107,10 +107,10 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">{dict.dashboard?.totalRequests || 'Total Requests'}</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
-            <p className="text-xs text-muted-foreground">{dict.dashboard?.totalRequests || 'Total material requests'}</p>
-          </CardContent>
+                    <CardContent>
+                        {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalRequests}</div>}
+                        <p className="text-xs text-muted-foreground">{dict.dashboard?.totalRequestsDescription || 'Total material requests'}</p>
+                    </CardContent>
         </Card>
         <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -119,7 +119,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{pendingRequests}</div>}
-            <p className="text-xs text-muted-foreground">Requests that need attention</p>
             <p className="text-xs text-muted-foreground">{dict.dashboard?.requestsNeedAttention || 'Requests that need attention'}</p>
           </CardContent>
         </Card>
@@ -130,7 +129,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRequests}</div>}
-            <p className="text-xs text-muted-foreground">Completed requests</p>
             <p className="text-xs text-muted-foreground">{dict.dashboard?.completedRequests || 'Completed requests'}</p>
           </CardContent>
         </Card>
@@ -221,7 +219,6 @@ export default function DashboardPage() {
         <Card className="border-t-4 border-green-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-green-500"/> Recent MRVs</CardTitle>
                     <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-green-500"/> {dict.dashboard?.recentReceipts || 'Recent MRVs'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
@@ -258,7 +255,6 @@ export default function DashboardPage() {
         <Card className="border-t-4 border-orange-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5 text-orange-500"/> Recent MIVs</CardTitle>
                     <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5 text-orange-500"/> {dict.dashboard?.recentIssues || 'Recent MIVs'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
@@ -291,12 +287,11 @@ export default function DashboardPage() {
                     <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> {dict.dashboard?.recentMaintenance || 'Recent Maintenance'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
-                    <Link href="/maintenance">View All<ArrowUpRight className="h-4 w-4" /></Link>
+                    <Link href="/maintenance">{dict.viewAll || 'View All'}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">No maintenance requests found.</div>
                 : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaintenanceRequestsFound || 'No maintenance requests found.'}</div>
                 : (
                     <Table>

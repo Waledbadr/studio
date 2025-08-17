@@ -63,7 +63,8 @@ const en = {
 
     // Dashboard Page
     dashboard: {
-        totalRequests: 'Total Requests',
+    totalRequests: 'Total Requests',
+    totalRequestsDescription: 'Total material requests',
         totalMaintenanceRequests: 'Total maintenance requests',
         pending: 'Pending',
         requestsNeedAttention: 'Requests that need attention',
@@ -449,7 +450,8 @@ const ar = {
 
     // Dashboard Page
     dashboard: {
-        totalRequests: 'إجمالي الطلبات',
+    totalRequests: 'إجمالي الطلبات',
+    totalRequestsDescription: 'إجمالي طلبات المواد',
         totalMaintenanceRequests: 'إجمالي طلبات الصيانة',
         pending: 'قيد الانتظار',
         requestsNeedAttention: 'الطلبات التي تحتاج انتباه',

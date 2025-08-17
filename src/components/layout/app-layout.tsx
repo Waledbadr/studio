@@ -10,11 +10,11 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useUsers } from '@/context/users-context';
 import { enablePushIfGranted } from '@/lib/messaging';
-import { useLanguage } from '@/context/language-context';
+import { LanguageProvider, useLanguage } from '@/context/language-context';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
-export function AppLayout({ children }: PropsWithChildren) {
+function AppLayoutInner({ children }: PropsWithChildren) {
   const { currentUser } = useUsers();
   const { locale } = useLanguage();
 
@@ -46,5 +46,13 @@ export function AppLayout({ children }: PropsWithChildren) {
         </SidebarInset>
       </SidebarProvider>
     </RequireAuth>
+  );
+}
+
+export function AppLayout({ children }: PropsWithChildren) {
+  return (
+    <LanguageProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </LanguageProvider>
   );
 }
