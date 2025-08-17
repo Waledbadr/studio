@@ -86,7 +86,9 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const headerClass = cn(
-    'sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6',
+    // Glassmorphism header
+    'sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6',
+    'bg-white/60 dark:bg-white/10 backdrop-blur-xl border-white/30 dark:border-white/10',
     className,
   );
 
@@ -213,7 +215,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
             <Avatar className="h-9 w-9">
               {isMounted && currentUser ? (
                 <>
-                  <AvatarImage src={`https://placehold.co/100x100.png`} alt={currentUser.name} data-ai-hint="profile picture" />
+                  <AvatarImage src={`data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23e5e7eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='20'%3EIMG%3C/text%3E%3C/svg%3E`} alt={currentUser.name} data-ai-hint="profile picture" />
                   <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
                 </>
               ) : (

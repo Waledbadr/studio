@@ -15,7 +15,8 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
+      // Transparent surface to let parent (e.g., DialogContent) glass show through
+      "flex h-full w-full flex-col overflow-hidden rounded-lg bg-transparent text-popover-foreground",
       className
     )}
     {...props}

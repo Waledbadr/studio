@@ -30,6 +30,17 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     return () => unsub();
   }, [router, pathname]);
 
+  // While determining auth state, render nothing to avoid layout shift
   if (!ready) return null;
+
+  // If auth is ready but no user, don't render protected UI
+  if (!user) {
+    return (
+      <div className="min-h-[40vh] grid place-items-center text-muted-foreground text-sm">
+        Redirecting to login…
+      </div>
+    );
+  }
+
   return <>{children}</>;
 }

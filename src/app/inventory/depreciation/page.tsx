@@ -6,6 +6,7 @@ import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -329,47 +330,39 @@ export default function DepreciationPage() {
                       <Label htmlFor="residence" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Residence <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="residence"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        value={form.residenceId}
-                        onChange={(e) => handleFormChange('residenceId', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Residence</option>
-                        {userResidences.map(residence => (
-                          <option key={residence.id} value={residence.id}>
-                            {residence.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.residenceId} onValueChange={(v) => handleFormChange('residenceId', v)}>
+                        <SelectTrigger id="residence">
+                          <SelectValue placeholder={userResidences.length === 0 ? 'No assigned residences' : 'Select Residence'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userResidences.map((residence) => (
+                            <SelectItem key={residence.id} value={residence.id}>
+                              {residence.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="item" className="text-sm font-medium text-gray-700">
                         Item <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="item"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        value={form.itemId}
-                        onChange={(e) => handleFormChange('itemId', e.target.value)}
-                        disabled={!form.residenceId}
-                        required
-                      >
-                        <option value="">
-                          {!form.residenceId ? "Select Residence First" : 
-                           availableItems.length === 0 ? "No items with stock available" : "Select Item"}
-                        </option>
-                        {availableItems.map(item => {
-                          const stock = getStockForResidence(item, form.residenceId);
-                          return (
-                            <option key={item.id} value={item.id}>
-                              {item.nameEn} ({item.nameAr}) - Stock: {stock}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <Select value={form.itemId} onValueChange={(v) => handleFormChange('itemId', v)}>
+                        <SelectTrigger id="item" disabled={!form.residenceId || availableItems.length === 0}>
+                          <SelectValue placeholder={!form.residenceId ? 'Select Residence First' : availableItems.length === 0 ? 'No items with stock available' : 'Select Item'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableItems.map((item) => {
+                            const stock = getStockForResidence(item, form.residenceId);
+                            return (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.nameEn} ({item.nameAr}) - Stock: {stock}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -418,56 +411,53 @@ export default function DepreciationPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="building" className="dark:text-gray-300">Building</Label>
-                      <select
-                        id="building"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.buildingId}
-                        onChange={(e) => handleFormChange('buildingId', e.target.value)}
-                        disabled={!form.residenceId}
-                      >
-                        <option value="">All Buildings</option>
-                        {availableBuildings.map(building => (
-                          <option key={building.id} value={building.id}>
-                            {building.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.buildingId} onValueChange={(v) => handleFormChange('buildingId', v)}>
+                        <SelectTrigger id="building" disabled={!form.residenceId}>
+                          <SelectValue placeholder="All Buildings" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Buildings</SelectItem>
+                          {availableBuildings.map((building) => (
+                            <SelectItem key={building.id} value={building.id}>
+                              {building.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="floor" className="dark:text-gray-300">Floor</Label>
-                      <select
-                        id="floor"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.floorId}
-                        onChange={(e) => handleFormChange('floorId', e.target.value)}
-                        disabled={!form.buildingId}
-                      >
-                        <option value="">All Floors</option>
-                        {availableFloors.map(floor => (
-                          <option key={floor.id} value={floor.id}>
-                            {floor.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.floorId} onValueChange={(v) => handleFormChange('floorId', v)}>
+                        <SelectTrigger id="floor" disabled={!form.buildingId}>
+                          <SelectValue placeholder="All Floors" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Floors</SelectItem>
+                          {availableFloors.map((floor) => (
+                            <SelectItem key={floor.id} value={floor.id}>
+                              {floor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="room" className="dark:text-gray-300">Room</Label>
-                      <select
-                        id="room"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.roomId}
-                        onChange={(e) => handleFormChange('roomId', e.target.value)}
-                        disabled={!form.floorId}
-                      >
-                        <option value="">All Rooms</option>
-                        {availableRooms.map(room => (
-                          <option key={room.id} value={room.id}>
-                            {room.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.roomId} onValueChange={(v) => handleFormChange('roomId', v)}>
+                        <SelectTrigger id="room" disabled={!form.floorId}>
+                          <SelectValue placeholder="All Rooms" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Rooms</SelectItem>
+                          {availableRooms.map((room) => (
+                            <SelectItem key={room.id} value={room.id}>
+                              {room.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -500,20 +490,18 @@ export default function DepreciationPage() {
                       <Label htmlFor="reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Reason <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="reason"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                        value={form.reason}
-                        onChange={(e) => handleFormChange('reason', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Reason</option>
-                        {commonReasons.map(reason => (
-                          <option key={reason} value={reason}>
-                            {reason}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.reason} onValueChange={(v) => handleFormChange('reason', v)}>
+                        <SelectTrigger id="reason">
+                          <SelectValue placeholder="Select Reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {commonReasons.map((reason) => (
+                            <SelectItem key={reason} value={reason}>
+                              {reason}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
