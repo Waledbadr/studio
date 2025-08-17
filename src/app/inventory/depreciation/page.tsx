@@ -411,51 +411,57 @@ export default function DepreciationPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="building" className="dark:text-gray-300">Building</Label>
-                      <Select value={form.buildingId} onValueChange={(v) => handleFormChange('buildingId', v)}>
+                      <Select value={form.buildingId} onValueChange={(v) => handleFormChange('buildingId', v === '__all__' ? '' : v)}>
                         <SelectTrigger id="building" disabled={!form.residenceId}>
                           <SelectValue placeholder="All Buildings" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All Buildings</SelectItem>
-                          {availableBuildings.map((building) => (
-                            <SelectItem key={building.id} value={building.id}>
-                              {building.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="__all__">All Buildings</SelectItem>
+                          {availableBuildings
+                            .filter((building) => !!building?.id)
+                            .map((building) => (
+                              <SelectItem key={building.id} value={building.id}>
+                                {building.name}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="floor" className="dark:text-gray-300">Floor</Label>
-                      <Select value={form.floorId} onValueChange={(v) => handleFormChange('floorId', v)}>
+                      <Select value={form.floorId} onValueChange={(v) => handleFormChange('floorId', v === '__all__' ? '' : v)}>
                         <SelectTrigger id="floor" disabled={!form.buildingId}>
                           <SelectValue placeholder="All Floors" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All Floors</SelectItem>
-                          {availableFloors.map((floor) => (
-                            <SelectItem key={floor.id} value={floor.id}>
-                              {floor.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="__all__">All Floors</SelectItem>
+                          {availableFloors
+                            .filter((floor) => !!floor?.id)
+                            .map((floor) => (
+                              <SelectItem key={floor.id} value={floor.id}>
+                                {floor.name}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="room" className="dark:text-gray-300">Room</Label>
-                      <Select value={form.roomId} onValueChange={(v) => handleFormChange('roomId', v)}>
+                      <Select value={form.roomId} onValueChange={(v) => handleFormChange('roomId', v === '__all__' ? '' : v)}>
                         <SelectTrigger id="room" disabled={!form.floorId}>
                           <SelectValue placeholder="All Rooms" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All Rooms</SelectItem>
-                          {availableRooms.map((room) => (
-                            <SelectItem key={room.id} value={room.id}>
-                              {room.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="__all__">All Rooms</SelectItem>
+                          {availableRooms
+                            .filter((room) => !!room?.id)
+                            .map((room) => (
+                              <SelectItem key={room.id} value={room.id}>
+                                {room.name}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
