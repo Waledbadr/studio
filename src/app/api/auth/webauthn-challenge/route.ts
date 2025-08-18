@@ -20,14 +20,15 @@ export async function POST(req: NextRequest) {
     const rpID = getSafeRpID(req.nextUrl.hostname);
     const secure = req.nextUrl.protocol === 'https:';
 
-    if (type === 'register') {
+  if (type === 'register') {
       const options = await generateRegistrationOptions({
         rpName: 'EstateCare',
         rpID,
         userID: user.id,
         userName: user.email || user.name,
         attestationType: 'none',
-        authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+    // Prefer platform authenticator (e.g., Windows Hello) in UX
+    authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred', authenticatorAttachment: 'platform' },
       });
       const res = NextResponse.json(options);
       res.cookies.set('webauthn_chal', options.challenge, { httpOnly: true, sameSite: 'lax', secure, path: '/' });

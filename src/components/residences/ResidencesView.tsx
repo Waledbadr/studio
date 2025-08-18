@@ -298,30 +298,54 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
         return !!(matchesId || matchesName || legacyIsId || legacyIsName || legacyObjMatch || legacyNameMatch);
       })
       .map(complex => {
+        // If no search text, keep as-is
         if (!q) return complex;
 
-        const complexNameMatch = includeText(complex.name) || includeText(complex.city);
+        // If the complex itself matches, keep ALL its children (do not filter away buildings/floors/rooms)
+        const complexMatch = includeText(complex.name) || includeText(complex.city);
+        if (complexMatch) {
+          return complex;
+        }
 
-        // Filter buildings/floors/rooms by query
-        const filteredBuildings = complex.buildings.map(b => {
-          const buildingMatch = includeText(b.name);
+        // Otherwise, search within the complex and only keep children that match (or contain matches)
+        const filteredBuildings = complex.buildings
+          .map(b => {
+            const buildingMatch = includeText(b.name);
+            if (buildingMatch) {
+              // Building name matches -> keep all floors/rooms/facilities under it
+              return b;
+            }
 
-          const filteredFloors = b.floors.map(f => {
-            const floorMatch = includeText(f.name);
-            const filteredRooms = f.rooms.filter(r => includeText(r.name));
-            const filteredFacilities = asArray<Facility>(f.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
-            const keepFloor = floorMatch || filteredRooms.length > 0 || filteredFacilities.length > 0;
-            return keepFloor ? { ...f, rooms: filteredRooms.length ? filteredRooms : f.rooms.filter(() => false), facilities: filteredFacilities } : null;
-          }).filter(Boolean) as Floor[];
+            const filteredFloors = b.floors
+              .map(f => {
+                const floorMatch = includeText(f.name);
+                if (floorMatch) {
+                  // Floor name matches -> keep all rooms/facilities under it
+                  return f;
+                }
 
-          const buildingFacilities = asArray<Facility>(b.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
-          const keepBuilding = buildingMatch || filteredFloors.length > 0 || buildingFacilities.length > 0;
-          return keepBuilding ? { ...b, floors: filteredFloors, facilities: buildingFacilities } : null;
-        }).filter(Boolean) as BuildingType[];
+                const filteredRooms = f.rooms.filter(r => includeText(r.name));
+                const filteredFacilities = asArray<Facility>(f.facilities).filter(
+                  fc => includeText(fc.name) || includeText(fc.type)
+                );
+                const keepFloor = filteredRooms.length > 0 || filteredFacilities.length > 0;
+                return keepFloor ? { ...f, rooms: filteredRooms, facilities: filteredFacilities } : null;
+              })
+              .filter(Boolean) as Floor[];
 
-        const complexFacilities = asArray<Facility>(complex.facilities).filter(fc => includeText(fc.name) || includeText(fc.type));
+            const buildingFacilities = asArray<Facility>(b.facilities).filter(
+              fc => includeText(fc.name) || includeText(fc.type)
+            );
+            const keepBuilding = filteredFloors.length > 0 || buildingFacilities.length > 0;
+            return keepBuilding ? { ...b, floors: filteredFloors, facilities: buildingFacilities } : null;
+          })
+          .filter(Boolean) as BuildingType[];
 
-        const keepComplex = complexNameMatch || filteredBuildings.length > 0 || complexFacilities.length > 0;
+        const complexFacilities = asArray<Facility>(complex.facilities).filter(
+          fc => includeText(fc.name) || includeText(fc.type)
+        );
+
+        const keepComplex = filteredBuildings.length > 0 || complexFacilities.length > 0;
         return keepComplex ? { ...complex, buildings: filteredBuildings, facilities: complexFacilities } : null;
       })
       .filter(Boolean) as Complex[];

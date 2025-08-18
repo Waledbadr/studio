@@ -100,6 +100,40 @@ body {
   }
 }
 
+/* Print overrides: force light background and keep layout intact */
+@media print {
+  /* Always print on a white page regardless of dark mode */
+  :root,
+  html,
+  body {
+    color-scheme: light !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Nudge theme variables to light so Tailwind var-based backgrounds render light */
+  :root {
+    --background: 0 0% 100% !important; /* white */
+    --card: 0 0% 100% !important;       /* white */
+    --popover: 0 0% 100% !important;    /* white */
+    --muted: 0 0% 98% !important;       /* very light gray for subtle rows */
+    --sidebar-background: 0 0% 100% !important;
+  }
+
+  /* Neutralize common app container backgrounds/shadows */
+  main,
+  #__next,
+  .bg-background,
+  .dark .bg-background,
+  .printable-area {
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide elements explicitly marked as non-printable */
+  .no-print { display: none !important; }
+}
+
 /* Elegant custom scrollbar for dialogs */
 .custom-scrollbar {
   scrollbar-width: thin;

@@ -58,6 +58,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Inventory collection: Admin-only delete; reads for signed-in; create/update for Admins
+    match /inventory/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     // Default: no broad allow; define explicit rules per collection as needed.
   }
 }

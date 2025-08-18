@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { MoreHorizontal, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useInventory, type StockTransfer } from "@/context/inventory-context";
-import { useEffect, useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 import { useUsers } from "@/context/users-context";
 import { useResidences } from "@/context/residences-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLanguage } from "@/context/language-context";
 
 
 export default function TransferHistoryPage() {
@@ -23,6 +25,10 @@ export default function TransferHistoryPage() {
     const { residences } = useResidences();
     const router = useRouter();
     const isAdmin = currentUser?.role === 'Admin';
+    const { dict } = useLanguage();
+
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [selected, setSelected] = useState<StockTransfer | null>(null);
 
     const userTransfers = useMemo(() => {
         if (!currentUser) return [];
@@ -35,6 +41,19 @@ export default function TransferHistoryPage() {
     }, [transfers, currentUser, isAdmin]);
 
     const getResidenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
+
+    const formatTrsId = (id?: string | null) => {
+        if (!id) return '—';
+        if (id.startsWith('TRS-') && !id.includes('-')) return id; // already short
+        const m = id.match(/^TRS-(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) {
+            const yy = m[1];
+            const mmNoPad = String(parseInt(m[2], 10));
+            const seq = String(parseInt(m[3], 10));
+            return `TRS-${yy}${mmNoPad}${seq}`;
+        }
+        return id; // fallback (e.g., legacy 'internal-...')
+    };
 
     const canApproveOrReject = (transfer: StockTransfer) => {
         if (transfer.status !== 'Pending') return false;
@@ -52,6 +71,11 @@ export default function TransferHistoryPage() {
         if (!currentUser) return;
         rejectTransfer(transferId, currentUser.id);
     }
+
+    const openDetails = useCallback((t: StockTransfer) => {
+        setSelected(t);
+        setDetailOpen(true);
+    }, []);
 
     const renderSkeleton = () => (
         Array.from({ length: 5 }).map((_, i) => (
@@ -89,17 +113,19 @@ export default function TransferHistoryPage() {
                                 <TableHead>From</TableHead>
                                 <TableHead>To</TableHead>
                                 <TableHead>Items</TableHead>
+                                <TableHead>{dict.referenceLabel}</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? renderSkeleton() : userTransfers.length > 0 ? userTransfers.map((transfer) => (
-                                <TableRow key={transfer.id}>
+                                <TableRow key={transfer.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openDetails(transfer)}>
                                     <TableCell>{format(transfer.date.toDate(), 'PPP')}</TableCell>
                                     <TableCell>{getResidenceName(transfer.fromResidenceId)}</TableCell>
                                     <TableCell>{getResidenceName(transfer.toResidenceId)}</TableCell>
                                     <TableCell>{transfer.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
+                    <TableCell className="font-mono">{formatTrsId(transfer.codeShort)}</TableCell>
                                     <TableCell>
                                         <Badge variant={
                                             transfer.status === 'Completed' ? 'default' 
@@ -107,7 +133,7 @@ export default function TransferHistoryPage() {
                                             : transfer.status === 'Rejected' ? 'destructive'
                                             : 'outline'
                                         }>
-                                            {transfer.status}
+                        {transfer.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -137,6 +163,53 @@ export default function TransferHistoryPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Details dialog */}
+            <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+                <DialogContent className="sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
+                    </DialogHeader>
+                    {selected ? (
+                        <div className="text-sm text-muted-foreground space-y-1 mb-3">
+                            <div>
+                                {dict.typeLabel}: <span className="font-medium text-foreground">TRANSFER</span>
+                            </div>
+                            <div>
+                                {dict.date}: {format(selected.date.toDate(), 'PPP p')}
+                            </div>
+                            <div>
+                                {dict.referenceLabel}: <span className="font-mono">{formatTrsId(selected.codeShort)}</span>
+                            </div>
+                            <div>{dict.residenceLabel}: {getResidenceName(selected.toResidenceId)}</div>
+                            <div>{dict.location}: {`${dict.transferFromPrefix} ${getResidenceName(selected.fromResidenceId)}`}</div>
+                        </div>
+                    ) : null}
+
+                    {selected ? (
+                        <div className="overflow-x-auto mt-3">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>{dict.itemLabel}</TableHead>
+                                        <TableHead className="text-right">{dict.quantity}</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {selected.items?.map((it) => (
+                                        <TableRow key={it.id}>
+                                            <TableCell>{it.nameEn || it.nameAr}</TableCell>
+                                            <TableCell className="text-right">{it.quantity}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-muted-foreground">{dict.noAdditionalMovementDetails}</div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

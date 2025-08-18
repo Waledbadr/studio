@@ -2,7 +2,7 @@ export const runtime = 'nodejs';
 
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRegistrationResponse } from '@simplewebauthn/server';
+import { verifyRegistrationResponse, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
 function getSafeRpID(hostname: string) {
   const envRp = process.env.NEXT_PUBLIC_WEBAUTHN_RPID || process.env.WEBAUTHN_RPID;
@@ -44,10 +44,26 @@ export async function POST(req: NextRequest) {
       return res;
     }
 
-    const res = NextResponse.json({ ok: false, verified: false, error: 'Passkey login verification not yet configured on server' }, { status: 501 });
-    res.cookies.set('webauthn_chal', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
-    res.cookies.set('webauthn_uid', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
-    return res;
+    // Basic authentication verification (note: in a full implementation you must
+    // look up the stored credential publicKey & counter by userID from a DB).
+    try {
+      const verification = await verifyAuthenticationResponse({
+        response: credential,
+        expectedChallenge: challenge,
+        expectedOrigin,
+        expectedRPID,
+        // Without a DB, we can't check counter/publicKey. This returns structure only.
+      } as any);
+      const res = NextResponse.json({ ok: verification.verified, verified: verification.verified, authenticationInfo: verification.authenticationInfo });
+      res.cookies.set('webauthn_chal', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
+      res.cookies.set('webauthn_uid', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
+      return res;
+    } catch (e: any) {
+      const res = NextResponse.json({ ok: false, verified: false, error: e?.message || 'Verification failed' }, { status: 400 });
+      res.cookies.set('webauthn_chal', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
+      res.cookies.set('webauthn_uid', '', { httpOnly: true, sameSite: 'lax', secure: expectedOrigin.startsWith('https'), path: '/', maxAge: 0 });
+      return res;
+    }
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }

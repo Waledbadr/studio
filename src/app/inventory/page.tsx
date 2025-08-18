@@ -215,9 +215,11 @@ export default function InventoryPage() {
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           )) : (

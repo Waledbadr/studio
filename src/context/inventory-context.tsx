@@ -162,6 +162,8 @@ export interface StockTransfer {
   approvedAt?: Timestamp;
   rejectedById?: string;
   rejectedAt?: Timestamp;
+  // Optional short formatted code for the transfer (TRS-YYM#)
+  codeShort?: string;
 }
 
 export type NewStockTransferPayload = Omit<StockTransfer, 'id' | 'date' | 'status'>;
@@ -314,6 +316,8 @@ interface InventoryContextType {
   getAllReconciliations: () => Promise<StockReconciliation[]>;
   getReconciliationById: (id: string) => Promise<StockReconciliation | null>;
   getReconciliationItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // Transfer helpers
+  getTransferItems: (referenceId: string) => Promise<InventoryTransaction[]>;
   // Reconciliation approval workflow
   getReconciliationRequests: (residenceId?: string, status?: ReconciliationRequest['status']) => Promise<ReconciliationRequest[]>;
   createReconciliationRequest: (residenceId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string) => Promise<string>;
@@ -348,7 +352,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const isLoaded = useRef(false);
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
-  const { users } = useUsers();
+  const { users, currentUser } = useUsers();
 
 
   const loadInventory = useCallback(() => {
@@ -545,6 +549,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
+    // Enforce admin-only deletion in the client as a first line of defense
+    if (!currentUser || currentUser.role !== 'Admin') {
+      toast({ title: "Forbidden", description: "Only admins can delete items.", variant: "destructive" });
+      return;
+    }
     try {
       await deleteDoc(doc(db!, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
@@ -616,6 +625,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       trx.set(counterRef, { seq: nextSeq, yy, mm: mmNoPad, updatedAt: Timestamp.now() }, { merge: true });
     });
     return `CON-${yy}${mmNoPad}${nextSeq}`;
+  };
+
+  // Reserve a monthly TRS code: TRS-<YY><M><seq>
+  const reserveNewTrsId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2);
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+    const mmNoPad = (now.getMonth() + 1).toString();
+    const counterRef = doc(db!, 'counters', `trs-${yy}-${mm}`);
+
+    let nextSeq = 0;
+    await runTransaction(db!, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    return `TRS-${yy}${mmNoPad}${nextSeq}`;
   };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
@@ -832,6 +860,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
+
+  // Fetch all transfer transactions (IN/OUT) by reference code (e.g., TRS-2582)
+  const getTransferItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    const qRef = query(
+      collection(db!, 'inventoryTransactions'),
+      where('referenceDocId', '==', referenceDocId),
+      where('type', 'in', ['TRANSFER_IN', 'TRANSFER_OUT'] as any)
+    );
+    const snap = await getDocs(qRef);
+    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
+    // Sort by item name for nicer display
+    return rows.sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
+  };
 
  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
@@ -1086,9 +1128,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const isInternalTransfer = currentUser.assignedResidences.includes(fromResidenceId) &&
                                    currentUser.assignedResidences.includes(toResidenceId);
 
-        if (isInternalTransfer) {
+  if (isInternalTransfer) {
             // Direct transfer, no approval needed
             try {
+    // Reserve a TRS code for this completed transfer
+    const trsId = await reserveNewTrsId();
                 await runTransaction(db, async (transaction) => {
                     // Step 1: Read all items first
                     const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
@@ -1150,7 +1194,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_OUT',
                             quantity: item.quantity,
-                            referenceDocId: `internal-${Date.now()}`,
+              referenceDocId: trsId,
                             relatedResidenceId: toResidenceId,
                             locationName: `Internal transfer to residence (${toResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
@@ -1165,7 +1209,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_IN',
                             quantity: item.quantity,
-                            referenceDocId: `internal-${Date.now()}`,
+              referenceDocId: trsId,
                             relatedResidenceId: fromResidenceId,
                             locationName: `Internal transfer from residence (${fromResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
@@ -1179,7 +1223,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         status: 'Completed',
                         approvedById: currentUser.id,
-                        approvedAt: transactionTime
+            approvedAt: transactionTime,
+            // store the TRS short code for reference/display
+            // @ts-ignore - optional property added below on the interface
+            codeShort: trsId
                     };
                     transaction.set(transferDocRef, newTransfer);
                 });
@@ -1229,6 +1276,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const transferRef = doc(db!, 'stockTransfers', transferId);
         
         try {
+            // Reserve TRS code for this approved transfer
+            const trsId = await reserveNewTrsId();
             await runTransaction(db, async (transaction) => {
                 // Step 1: Read all data first
                 const transferDoc = await transaction.get(transferRef);
@@ -1303,7 +1352,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_OUT',
                         quantity: item.quantity,
-                        referenceDocId: transferId,
+            referenceDocId: trsId,
                         relatedResidenceId: toResidenceId,
                         locationName: `Transfer to residence`
                     } as Omit<InventoryTransaction, 'id'>);
@@ -1318,7 +1367,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_IN',
                         quantity: item.quantity,
-                        referenceDocId: transferId,
+            referenceDocId: trsId,
                         relatedResidenceId: fromResidenceId,
                         locationName: `Transfer from residence`
                     } as Omit<InventoryTransaction, 'id'>);
@@ -1327,7 +1376,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 transaction.update(transferRef, {
                     status: 'Completed',
                     approvedById: approverId,
-                    approvedAt: Timestamp.now()
+          approvedAt: Timestamp.now(),
+          // store TRS short code for reference/display on the transfer
+          // @ts-ignore - optional property added below on the interface
+          codeShort: trsId
                 });
             });
             toast({ title: "Success", description: "Transfer approved and stock updated." });
@@ -2053,6 +2105,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getAllReconciliations,
       getReconciliationById,
       getReconciliationItems,
+  getTransferItems,
   getReconciliationRequests,
   createReconciliationRequest,
   approveReconciliationRequest,

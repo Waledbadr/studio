@@ -163,6 +163,12 @@ export default function OrderDetailPage() {
         return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
     };
 
+    // Header: show city/location before residence name, e.g., "Riyadh: Um Al-Salem"
+    const currentResidence = order?.residenceId ? residences.find(r => r.id === order.residenceId) : undefined;
+    const residenceNameText = order?.residence || currentResidence?.name || '—';
+    const cityText = (currentResidence?.city || (currentResidence as any)?.locationString || (currentResidence as any)?.address || '').toString().trim();
+    const residenceHeaderText = cityText ? `${cityText}: ${residenceNameText}` : residenceNameText;
+
     return (
         <div className="space-y-6">
              <style jsx global>{`
@@ -185,7 +191,7 @@ export default function OrderDetailPage() {
                   body {
                     -webkit-print-color-adjust: exact;
                     print-color-adjust: exact;
-                    font-size: 13px !important; /* was 9px */
+                    font-size: 13px !important; /* base body size */
                     line-height: 1.25 !important; /* was 1.15 */
                     margin: 0 !important;
                     padding: 0 !important;
@@ -245,9 +251,24 @@ export default function OrderDetailPage() {
                   }
 
                   /* Tighten header area */
-                  .print-header-title { font-size: 16px !important; /* was 14px */ margin-bottom: 2px !important; }
-                  .print-subtle { font-size: 10px !important; /* was 9px */ color: #4b5563 !important; }
+                  .print-header-title { font-size: 22px !important; margin-bottom: 2px !important; font-weight: 800 !important; }
+                  .print-id { font-size: 16px !important; font-weight: 700 !important; color: #1f2937 !important; }
+                  .print-subtle { font-size: 10px !important; color: #4b5563 !important; }
                   .print-badge { font-size: 10px !important; /* was 9px */ padding: 2px 8px !important; /* slightly larger */ }
+
+                  /* Hide status badge on print */
+                  .status-badge { display: none !important; }
+
+                  /* Header right block: residence and date sizes */
+                  .print-residence-title { font-size: 22px !important; font-weight: 800 !important; }
+                  .print-date { font-size: 14px !important; color: #1f2937 !important; }
+
+                  /* Compact notes card on print */
+                  .print-notes-card { margin-bottom: 8px !important; }
+                  .print-notes-header { padding-top: 4px !important; padding-bottom: 2px !important; }
+                  .print-notes-title { font-size: 12px !important; color: #0f766e !important; font-weight: 700 !important; }
+                  .print-notes-content { padding-top: 0 !important; padding-bottom: 4px !important; }
+                  .print-notes-text { font-size: 11px !important; color: #111 !important; }
 
                   /* Total row */
                   .print-total { margin-top: 6px !important; padding-top: 6px !important; border-top: 1px solid #e5e7eb !important; font-size: 11px !important; /* was 10px */ }
@@ -298,14 +319,14 @@ export default function OrderDetailPage() {
                 <CardHeader className="border-b print:border-b-2">
                     <div className="flex justify-between items-start">
                         <div>
-                            {/* Bilingual compact title for print */}
-                            <CardTitle className="text-3xl print-title print-header-title">طلب مواد • Materials Request</CardTitle>
-                            <CardDescription className="text-lg print-subtle">ID: #{formatOrderId(order.id)}</CardDescription>
+                            {/* Title: English only as requested */}
+                            <CardTitle className="text-3xl print-title print-header-title">Materials Request</CardTitle>
+                            <CardDescription className="text-lg print-id">ID: #{formatOrderId(order.id)}</CardDescription>
                         </div>
                         <div className="text-right">
-                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{order.residence || residences.find(r => r.id === order.residenceId)?.name || '—'}</p>
-                            <p className="text-sm text-muted-foreground print-subtle">Date: {format(order.date.toDate(), 'PPP')}</p>
-                            <Badge className="mt-2 print-badge" variant={
+                            <p className="font-semibold print-residence-title" style={{ fontWeight: 700 }}>{residenceHeaderText}</p>
+                            <p className="text-sm text-muted-foreground print-date">{format(order.date.toDate(), 'PPP')}</p>
+                            <Badge className="mt-2 print-badge status-badge" variant={
                                 order.status === 'Delivered' ? 'default'
                                 : order.status === 'Approved' ? 'secondary'
                                 : order.status === 'Partially Delivered' ? 'secondary'
@@ -319,13 +340,13 @@ export default function OrderDetailPage() {
                 </CardHeader>
                 <CardContent className="pt-6">
                      {order.notes && (
-                        <Card className="mb-6 bg-muted/50 print-bg-muted">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">General Notes</CardTitle>
+                        <Card className="mb-4 bg-muted/50 print-bg-muted print-notes-card">
+                            <CardHeader className="py-2 print-notes-header">
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                    <CardTitle className="text-base text-primary print-notes-title">Notes:</CardTitle>
+                                    <span className="text-sm text-foreground print-notes-text" dir="auto">{order.notes}</span>
+                                </div>
                             </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">{order.notes}</p>
-                            </CardContent>
                         </Card>
                     )}
                     <Table className="print-table print-compact-table">

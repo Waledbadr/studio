@@ -158,6 +158,15 @@ const en = {
     adjustmentLabel: 'Adjustment',
     returnLabel: 'Return',
     depreciationLabel: 'Depreciation',
+    // Date shortcuts
+    today: 'Today',
+    yesterday: 'Yesterday',
+    thisWeek: 'This Week',
+    lastWeek: 'Last Week',
+    thisMonth: 'This Month',
+    lastMonth: 'Last Month',
+    thisYear: 'This Year',
+    lastYear: 'Last Year',
     auditAdjustmentLabel: 'Audit Adjustment',
     scrapLabel: 'Scrap',
     noResultsIconTitle: 'No Results Found',
@@ -395,6 +404,17 @@ const en = {
     stockLimitTitle: 'Stock Limit',
     stockLimitDescription: 'Cannot transfer more than the available {stock} units.',
     invalidTransfer: 'Please select source, destination, and add items to transfer.',
+    // Stock Matrix Report (EN)
+    stockMatrixReportTitle: 'Stock Matrix (By Residences)',
+    stockMatrixReportDescription: 'Tabular matrix of items grouped by category across residences, with per-residence and grand totals.',
+    displaySettingsTitle: 'Display Settings',
+    printLabel: 'Print',
+    searchItemsArEnPlaceholder: 'Search by Arabic/English name',
+    hideZeroStockItemsLabel: 'Hide items with zero stock',
+    categoryItemHeader: 'Category / Item',
+    grandTotalLabel: 'Grand Total',
+    totalLabel: 'Total',
+    noDataToDisplay: 'No data to display',
 };
 
 const ar = {
@@ -477,6 +497,17 @@ const ar = {
     lifespanReportDescription: 'تقرير يبرز الأصناف التي تجاوزت العمر الافتراضي المتوقع أو التي لديها أنماط استخدام غير معتادة.',
     maintenanceReportsTitle: 'تقارير الصيانة',
     maintenanceReportsDescription: 'التقارير المستقبلية لأنشطة الصيانة ستكون متاحة هنا.',
+    // Stock Matrix Report (AR)
+    stockMatrixReportTitle: 'تقرير مصفوفة المخزون (حسب السكنات)',
+    stockMatrixReportDescription: 'مصفوفة جدولة للأصناف حسب التصنيف عبر السكنات مع مجاميع لكل سكن والإجمالي الكلي.',
+    displaySettingsTitle: 'إعدادات العرض',
+    printLabel: 'طباعة',
+    searchItemsArEnPlaceholder: 'بحث بالاسم العربي/الإنجليزي',
+    hideZeroStockItemsLabel: 'إخفاء المواد بصفر مخزون',
+    categoryItemHeader: 'التصنيف / المادة',
+    grandTotalLabel: 'المجموع الكلي',
+    totalLabel: 'الإجمالي',
+    noDataToDisplay: 'لا توجد بيانات لعرضها',
     // Item movement / ledger (AR)
     itemMovementReportTitle: 'تقرير حركة الأصناف (دفتر الأستاذ)',
     itemMovementReportDescription: 'دفتر حركة الأصناف عبر المساكن مع أرصدة جارية.',
@@ -603,6 +634,15 @@ const ar = {
     auditAdjustmentLabel: 'تسوية المراجعة',
     scrapLabel: 'شطب',
     noResultsIconTitle: 'لا توجد نتائج',
+    // Date shortcuts (AR)
+    today: 'اليوم',
+    yesterday: 'أمس',
+    thisWeek: 'هذا الأسبوع',
+    lastWeek: 'الأسبوع السابق',
+    thisMonth: 'هذا الشهر',
+    lastMonth: 'الشهر السابق',
+    thisYear: 'هذه السنة',
+    lastYear: 'السنة السابقة',
     // Common UI
     ui: {
         loading: 'جاري التحميل...',

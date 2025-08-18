@@ -1,5 +1,5 @@
 'use client';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing } from 'lucide-react';
@@ -28,6 +28,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
   const atAccommodation = pathname?.startsWith('/accommodation');
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const toggleApp = () => {
     if (atAccommodation) router.push('/');
@@ -39,6 +40,11 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Auto-close the mobile sidebar whenever the route changes
+  useEffect(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [pathname, isMobile, setOpenMobile]);
 
   const handleThemeSettingsClick = () => {
     router.push('/setup#themes');

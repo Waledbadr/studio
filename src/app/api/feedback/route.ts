@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, query, orderBy, getDocs, where, limit } from 'firebase/firestore';
+import { generateMonthlySequentialTicketId } from '@/lib/feedback';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,12 +10,8 @@ export async function POST(req: NextRequest) {
     const { userId, title, description, category, screenshotUrl, errorCode, errorMessage, stack, deviceInfo, appInfo, settings } = body || {};
     if (!title || !category) return NextResponse.json({ error: 'Missing title or category' }, { status: 400 });
 
-    const now = new Date();
-    const y = now.getFullYear().toString().slice(-2);
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-    const ticketId = `FB-${y}${m}${d}-${rand}`;
+  const now = new Date();
+  const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
 
     const ref = await addDoc(collection(db, 'feedback'), {
       ticketId,
