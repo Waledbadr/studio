@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
-import { UploadCloud, Loader2, Search, ChevronDown } from 'lucide-react';
+import { UploadCloud, Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp } from 'firebase/firestore';
 import { useUsers } from '@/context/users-context';
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 // MRV with Admin approval, UI similar to New Order
 export default function NewMRVApprovalPage() {
@@ -40,6 +41,9 @@ export default function NewMRVApprovalPage() {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [editItemOpen, setEditItemOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+
+  // Variant selection state for popover-based add button (mirrors New Order page UX)
+  const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
 
   useEffect(() => {
     if (residences.length === 0) loadResidences();
@@ -106,6 +110,85 @@ export default function NewMRVApprovalPage() {
   }, [selectedLines, items, residenceId, getStockForResidence]);
 
   const hasBlockingLines = useMemo(() => Object.values(lineWarnings).some(w => w.noNeed), [lineWarnings]);
+
+  // Helper: split name into base/detail parts like in New Order
+  const splitNameDetail = (name?: string): { base: string; detail: string } => {
+    const raw = (name || '').trim();
+    if (!raw) return { base: '', detail: '' };
+    const parts = raw.split(' - ');
+    if (parts.length <= 1) return { base: raw, detail: '' };
+    return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
+  };
+
+  // Group selected lines by category (UI parity with New Order)
+  const groupedLines = useMemo(() => {
+    return selectedLines.reduce((acc, line) => {
+      const cat = line.category || 'Uncategorized';
+      (acc[cat] ||= []).push(line);
+      return acc;
+    }, {} as Record<string, typeof selectedLines>);
+  }, [selectedLines]);
+
+  // Add button with variant popover (adds to quantity map)
+  function AddItemButton({ item, disabled }: { item: InventoryItem; disabled?: boolean }) {
+    const [open, setOpen] = useState(false);
+    const [, setTick] = useState(0);
+
+    const addQty = (qty = 1) => setQty(item.id, (lines[item.id] || 0) + qty);
+
+    if (!item.variants || item.variants.length === 0) {
+      return (
+        <Button size="icon" variant="outline" onClick={() => addQty(1)} disabled={disabled}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      );
+    }
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button size="icon" variant="outline" disabled={disabled}>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72">
+          <div className="space-y-2">
+            {item.variants.map((variant) => (
+              <div key={variant} className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4"
+                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
+                    onChange={(e) => {
+                      const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                      if (e.target.checked) map[variant] = true; else delete map[variant];
+                      variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                      setTick(t => t + 1);
+                    }}
+                  />
+                  <span className="truncate">{variant}</span>
+                </label>
+              </div>
+            ))}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>Clear</Button>
+              <Button size="sm" onClick={() => {
+                const map = variantSelectionsRef.current[item.id] || {};
+                const count = Object.keys(map).length;
+                if (count === 0) { addQty(1); setOpen(true); return; }
+                addQty(count);
+                variantSelectionsRef.current[item.id] = {};
+                setTick(t => t + 1);
+                setOpen(true);
+              }}>Add selected</Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   const handleSubmit = async () => {
     if (!db) {
@@ -265,9 +348,7 @@ export default function NewMRVApprovalPage() {
                 <>
                   {canQuickAdd && (
                     <div className="flex items-center justify-between p-2 rounded-md border border-dashed bg-muted/10">
-                      <div className="text-sm">
-                        لم يتم العثور على "{searchQuery}" كصنف مطابق.
-                      </div>
+                      <div className="text-sm">لم يتم العثور على "{searchQuery}" كصنف مطابق.</div>
                       <Button size="sm" variant="secondary" onClick={() => setAddItemOpen(true)}>+ إضافة صنف جديد</Button>
                     </div>
                   )}
@@ -278,26 +359,10 @@ export default function NewMRVApprovalPage() {
                         <p className="text-sm text-muted-foreground">{it.category} • {it.unit} {residenceId ? `• المتوفر: ${getStockForResidence?.(it as any, residenceId) || 0}` : ''}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Input type="number" min={0} className="w-24 text-center" value={lines[it.id] ?? 0} onChange={(e) => setQty(it.id, parseInt(e.target.value, 10))} />
-                        <Button size="sm" variant="outline" onClick={() => addOne(it)}>+1</Button>
-                        {Array.isArray(it.variants) && it.variants.length > 0 && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="sm" variant="ghost" className="px-2" aria-label="Add by variant">
-                                <ChevronDown className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {it.variants.map((v) => (
-                                <DropdownMenuItem key={v} onSelect={(e) => { e.preventDefault(); addOne(it); }}>
-                                  Add: {v}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                        
-                        <Button size="sm" variant="ghost" onClick={() => { setItemToEdit(it); setEditItemOpen(true); }}>Edit</Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setItemToEdit(it); setEditItemOpen(true); }}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <AddItemButton item={it} disabled={!residenceId} />
                       </div>
                     </div>
                   ))}
@@ -320,43 +385,55 @@ export default function NewMRVApprovalPage() {
             <CardDescription>Review and adjust selected items</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                  <TableHead className="text-right w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {selectedLines.length > 0 ? selectedLines.map(line => (
-                  <TableRow key={line.id} className={lineWarnings[line.id]?.noNeed ? 'bg-destructive/5' : ''}>
-                    <TableCell className="font-medium">{line.nameAr} / {line.nameEn}<div className="text-xs text-muted-foreground">{line.category}</div></TableCell>
-                    <TableCell>
-                      <div className="flex flex-col items-center gap-1">
-                        <Input type="number" min={0} className="w-24 text-center mx-auto" value={line.quantity} onChange={(e) => setQty(line.id, parseInt(e.target.value, 10))} />
-                        {residenceId && (
-                          <div className={`text-[11px] ${lineWarnings[line.id]?.noNeed ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            المتوفر: {lineWarnings[line.id]?.stock || 0}
-                            {lineWarnings[line.id]?.noNeed && ' • لا حاجة للشراء'}
+            {selectedLines.length === 0 ? (
+              <div className="h-60 flex items-center justify-center text-muted-foreground">No items selected.</div>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(groupedLines).map(([category, itemsInCat]) => (
+                  <div key={category} className="rounded-md border">
+                    <div className="bg-muted/50 px-3 py-2 font-semibold text-primary capitalize">{category}</div>
+                    <div className="divide-y">
+                      {itemsInCat.map((line) => {
+                        const ar = splitNameDetail(line.nameAr);
+                        const en = splitNameDetail(line.nameEn);
+                        const detail = ar.detail || en.detail || '';
+                        const warn = lineWarnings[line.id];
+                        return (
+                          <div key={line.id} className={`p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${warn?.noNeed ? 'bg-destructive/5' : ''}`}>
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{en.base || line.nameEn} | {ar.base || line.nameAr}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                                <span className="capitalize">{category}</span>
+                                {line.unit && <span>• {line.unit}</span>}
+                                {residenceId && (
+                                  <span className={warn?.noNeed ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
+                                    • المتوفر: {warn?.stock || 0}{warn?.noNeed ? ' • لا حاجة للشراء' : ''}
+                                  </span>
+                                )}
+                                {detail && <span className="italic">• {detail}</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-center gap-2">
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setQty(line.id, Math.max(0, (line.quantity || 0) - 1))}>
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <Input type="number" min={0} value={line.quantity} onChange={(e) => setQty(line.id, parseInt(e.target.value, 10))} className="w-16 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setQty(line.id, (line.quantity || 0) + 1)}>
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => { const it = items.find(i => i.id === line.id); if (it) { setItemToEdit(it); setEditItemOpen(true); } }}>Edit</Button>
+                              <Button variant="ghost" size="sm" onClick={() => removeLine(line.id)}>Remove</Button>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => { const it = items.find(i => i.id === line.id); if (it) { setItemToEdit(it); setEditItemOpen(true); } }}>Edit</Button>
-                        <Button variant="ghost" size="sm" onClick={() => removeLine(line.id)}>Remove</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow>
-                    <TableCell colSpan={3} className="h-60 text-center text-muted-foreground">No items selected.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
