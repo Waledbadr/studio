@@ -287,34 +287,43 @@ export default function NewMRVApprovalPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>Header</CardTitle>
           <CardDescription>Residence and supplier details</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
-          <div className="space-y-2 md:col-span-2">
+        <CardContent className="grid gap-4 md:grid-cols-12">
+          {/* Row 1 */}
+          <div className="space-y-2 md:col-span-4">
             <Label>Residence</Label>
-            <select className="border rounded h-10 px-3 bg-background" value={residenceId} onChange={(e) => setResidenceId(e.target.value)}>
-              <option value="">Select residence</option>
-              {filteredResidences.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
+            <Select value={residenceId} onValueChange={setResidenceId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select residence" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredResidences.map(r => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-4">
             <Label>Supplier</Label>
-            <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Required" />
+            <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Required" className="w-full" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-4">
             <Label>Invoice No.</Label>
-            <Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Required" />
+            <Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Required" className="w-full" />
           </div>
-          <div className="space-y-2 md:col-span-2">
+
+          {/* Row 2 */}
+          <div className="space-y-2 md:col-span-8">
             <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" className="min-h-[90px]" />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2 md:col-span-4">
             <Label>Invoice Attachment</Label>
             <div className="flex items-center gap-3">
-              <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full" />
               <UploadCloud className="h-5 w-5 text-muted-foreground" />
             </div>
           </div>
