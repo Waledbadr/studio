@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useMemo, useDeferredValue, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, BedDouble, Bath, CookingPot, Warehouse, Users as UsersIcon, Search } from "lucide-react";
+import { Building, DoorOpen, PlusCircle, Trash2, MapPin, Layers, Pencil, Plus, ConciergeBell, BedDouble, Bath, CookingPot, Warehouse, Users as UsersIcon, Search, Move } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -48,15 +49,27 @@ const facilityIcons: { [key: string]: React.ElementType } = {
 // Normalize possible legacy shapes (object maps) into arrays
 const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
 
-const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDelete }: { facility: Facility, canEdit: boolean, onDelete: () => void }) {
+const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDelete, onDragStart, onDragEnd, showMoveBadge, enableDelete, onRename }: { facility: Facility, canEdit: boolean, onDelete: () => void, onDragStart?: (e: React.DragEvent) => void, onDragEnd?: (e: React.DragEvent) => void, showMoveBadge?: boolean, enableDelete?: boolean, onRename?: () => void }) {
   const Icon = facilityIcons[facility.type.toLowerCase()] || facilityIcons.default;
   return (
-    <div className="flex items-center justify-between p-2 bg-background rounded-md text-sm border">
+    <div
+      className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
+      draggable={!!canEdit && !!showMoveBadge}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      title={canEdit ? 'Drag to move this facility' : undefined}
+    >
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
-        {facility.name}
+        <span>{facility.name}</span>
+        {canEdit && onRename && (
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
+        )}
       </div>
-      {canEdit && (
+      {showMoveBadge && (
+        <Move className="h-3 w-3 text-muted-foreground mr-2" />
+      )}
+  {canEdit && enableDelete && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
@@ -80,21 +93,56 @@ const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDel
 const FacilitySection = React.memo(function FacilitySection({ 
   facilities, 
   canEdit,
+  canAdd,
   onAdd,
-  onDelete
+  onDelete,
+  onRename,
+  onItemDragStart,
+  onItemDragEnd,
+  onDrop,
+  dragging,
+  showMoveBadge,
+  enableDelete
 }: { 
   facilities: Facility[] | undefined, 
   canEdit: boolean,
+  canAdd?: boolean,
   onAdd: () => void, 
-  onDelete: (facilityId: string) => void 
+  onDelete: (facilityId: string) => void,
+  onRename?: (facilityId: string) => void,
+  onItemDragStart?: (facilityId: string, e: React.DragEvent) => void,
+  onItemDragEnd?: (e: React.DragEvent) => void,
+  onDrop?: () => void,
+  dragging?: boolean,
+  showMoveBadge?: boolean,
+  enableDelete?: boolean
 }) {
   return (
-    <div className="space-y-2 mt-2">
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+    <div
+      className="space-y-2 mt-2"
+      onDragOver={(e) => { if (canEdit && onDrop) { e.preventDefault(); e.stopPropagation(); } }}
+      onDrop={(e) => { if (onDrop) { e.preventDefault(); e.stopPropagation(); onDrop(); } }}
+    >
+      <div className={`grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 min-h-12 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
         {(facilities || []).map(facility => (
-          <FacilityItem key={facility.id} facility={facility} canEdit={canEdit} onDelete={() => onDelete(facility.id)} />
+          <FacilityItem
+            key={facility.id}
+            facility={facility}
+            canEdit={canEdit}
+            onDelete={() => onDelete(facility.id)}
+            onRename={onRename ? () => onRename(facility.id) : undefined}
+            onDragStart={(e) => onItemDragStart && onItemDragStart(facility.id, e)}
+            onDragEnd={(e) => onItemDragEnd && onItemDragEnd(e)}
+            showMoveBadge={showMoveBadge}
+            enableDelete={enableDelete}
+          />
         ))}
-        {canEdit && (
+        {dragging && (facilities?.length || 0) === 0 && (
+          <div className="col-span-full flex items-center justify-center min-h-12 border-2 border-dashed rounded-md text-xs text-muted-foreground">
+            Drop here
+          </div>
+        )}
+  {canEdit && canAdd && (
           <Button variant="outline" size="sm" className="h-full border-dashed" onClick={onAdd}>
             <Plus className="h-4 w-4 mr-2"/> Add
           </Button>
@@ -104,19 +152,33 @@ const FacilitySection = React.memo(function FacilitySection({
   );
 });
 
-const RoomItem = React.memo(function RoomItem({ room, canEdit, onDelete, showCapacity }: { room: Room, canEdit: boolean, onDelete: () => void, showCapacity: boolean }) {
+const RoomItem = React.memo(function RoomItem({ room, canEdit, onDelete, showCapacity, onDragStart, onDragEnd, showMoveBadge, enableDelete, onRename }: { room: Room, canEdit: boolean, onDelete: () => void, showCapacity: boolean, onDragStart?: (e: React.DragEvent) => void, onDragEnd?: (e: React.DragEvent) => void, showMoveBadge?: boolean, enableDelete?: boolean, onRename?: () => void }) {
   return (
-    <div className="flex items-center justify-between p-2 bg-background rounded-md text-sm border">
+    <div
+      className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
+      draggable={!!canEdit && !!showMoveBadge}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      title={canEdit ? 'Drag to move this room to another floor in the same building' : undefined}
+    >
       <div className="flex items-center gap-2">
         <DoorOpen className="h-4 w-4 text-muted-foreground" />
         <div>
-          <div>{room.name}</div>
+          <div className="flex items-center gap-2">
+            <span>{room.name}</span>
+            {canEdit && onRename && (
+              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
+            )}
+          </div>
           {showCapacity ? (
             <div className="text-xs text-muted-foreground">{room.area ? `${room.area} m² •` : ''} {room.capacity ? `Capacity: ${room.capacity}` : 'Capacity: -'}</div>
           ) : null}
         </div>
       </div>
-      {canEdit && (
+      {showMoveBadge && (
+        <Move className="h-3 w-3 text-muted-foreground mr-2" />
+      )}
+      {canEdit && enableDelete && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
@@ -210,11 +272,22 @@ const AddFacilityDialog = ({
 };
 
 export default function ResidencesView({ showFacilities = true, showCapacity = true }: { showFacilities?: boolean, showCapacity?: boolean }) {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock, moveRoom, moveRoomAnywhere, moveFacility, updateRoomName, updateFacilityName, updateFloorName } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const isAdmin = currentUser?.role === 'Admin';
   const { dict } = useLanguage();
+  const [mode, setMode] = useState<'view' | 'move' | 'edit' | 'delete'>('view');
+  const isMove = mode === 'move';
+  const isEdit = mode === 'edit';
+  const isDelete = mode === 'delete';
+
+  const clearDragImage = (e: React.DragEvent) => {
+    // Minimize drag preview to reduce lag on some browsers
+    const img = new Image();
+    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    e.dataTransfer.setDragImage(img, 0, 0);
+  };
 
   useEffect(() => {
     loadResidences();
@@ -258,6 +331,60 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
   const [contextIds, setContextIds] = useState<{ level: 'complex' | 'building' | 'floor', complexId: string, buildingId?: string, floorId?: string } | null>(null);
+  // Drag & Drop state for moving rooms between floors
+  const [dragging, setDragging] = useState<{ roomId: string; complexId: string; buildingId: string; fromFloorId: string } | null>(null);
+  const handleDragStart = useCallback((payload: { roomId: string; complexId: string; buildingId: string; fromFloorId: string }) => setDragging(payload), []);
+  const handleDragEnd = useCallback(() => setDragging(null), []);
+  const handleDropToFloor = useCallback(async (target: { complexId: string; buildingId: string; floorId: string }) => {
+    if (!dragging) return;
+    const sameComplex = dragging.complexId === target.complexId;
+    if (!sameComplex) {
+      toast({ title: 'غير مسموح', description: 'يمكن نقل الغرف داخل نفس المجمع فقط.', variant: 'destructive' });
+      setDragging(null);
+      return;
+    }
+    if (dragging.fromFloorId === target.floorId) {
+      setDragging(null);
+      return;
+    }
+    if (dragging.buildingId === target.buildingId) {
+      await moveRoom(target.complexId, target.buildingId, dragging.fromFloorId, target.floorId, dragging.roomId);
+    } else {
+      await moveRoomAnywhere(
+        { complexId: target.complexId, buildingId: dragging.buildingId, floorId: dragging.fromFloorId },
+        { complexId: target.complexId, buildingId: target.buildingId, floorId: target.floorId },
+        dragging.roomId
+      );
+    }
+    setDragging(null);
+  }, [dragging, moveRoom, moveRoomAnywhere, toast]);
+
+  // Drag & Drop for facilities
+  const [draggingFacility, setDraggingFacility] = useState<{
+    facilityId: string;
+    complexId: string;
+    from: { level: 'complex' | 'building' | 'floor'; buildingId?: string; floorId?: string };
+  } | null>(null);
+  const handleFacilityDragStart = (facilityId: string, src: { complexId: string; level: 'complex' | 'building' | 'floor'; buildingId?: string; floorId?: string }, e?: React.DragEvent) => {
+    if (e) clearDragImage(e);
+    setDraggingFacility({ facilityId, complexId: src.complexId, from: { level: src.level, buildingId: src.buildingId, floorId: src.floorId } });
+  };
+  const handleFacilityDragEnd = () => setDraggingFacility(null);
+  const handleFacilityDrop = async (target: { complexId: string; level: 'complex' | 'building' | 'floor'; buildingId?: string; floorId?: string }) => {
+    if (!draggingFacility) return;
+    if (draggingFacility.complexId !== target.complexId) {
+      toast({ title: 'غير مسموح', description: 'يمكن نقل التجهيزات داخل نفس المجمع فقط حالياً.', variant: 'destructive' });
+      setDraggingFacility(null);
+      return;
+    }
+    await moveFacility(
+      target.complexId,
+      draggingFacility.from,
+      { level: target.level, buildingId: target.buildingId, floorId: target.floorId },
+      draggingFacility.facilityId
+    );
+    setDraggingFacility(null);
+  };
 
   const userVisibleResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -481,10 +608,10 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
           <h1 className="text-2xl font-bold">{dict.residencesTitle}</h1>
           <p className="text-muted-foreground">{dict.residencesDescription}</p>
         </div>
-        {isAdmin && (
+  {isAdmin && (
             <Dialog open={dialogStates.addComplex} onOpenChange={(open) => open ? openDialog('addComplex') : closeDialog('addComplex')}>
         <DialogTrigger asChild>
-        <Button>
+  <Button disabled={!isEdit} title={!isEdit ? 'فعّل وضع التعديل لإضافة مجمع جديد' : undefined}>
         <PlusCircle className="mr-2 h-4 w-4" /> {dict.addComplex}
         </Button>
       </DialogTrigger>
@@ -525,6 +652,27 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
             </Dialog>
         )}
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3 justify-between rounded-xl p-2 bg-white/5 backdrop-blur supports-[backdrop-filter]:bg-white/10 border border-white/20 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Move</span>
+                <Switch checked={isMove} onCheckedChange={(v) => setMode(v ? 'move' : (isEdit ? 'edit' : isDelete ? 'delete' : 'view'))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Edit</span>
+                <Switch checked={isEdit} onCheckedChange={(v) => setMode(v ? 'edit' : (isMove ? 'move' : isDelete ? 'delete' : 'view'))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Delete</span>
+                <Switch checked={isDelete} onCheckedChange={(v) => setMode(v ? 'delete' : (isMove ? 'move' : isEdit ? 'edit' : 'view'))} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters Bar */}
       <Card>
@@ -651,7 +799,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                           </AccordionTrigger>
                           {isOpen && (
                             <AccordionContent>
-                              <div className="pl-4 border-l-2 border-primary/20 space-y-3">
+                                  <div className="pl-4 border-l-2 border-primary/20 space-y-3">
+                                      {/* Mode switches moved to top toolbar */}
                                   {isAdmin && (
                                       <div className="flex justify-end gap-2 mb-2">
                                           <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}>
@@ -674,30 +823,59 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                           </AlertDialog>
                                       </div>
                                   )}
-                                  <div>
+                                  <div
+                                    onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
+                                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); /* Facility drop handled by FacilitySection */ }}
+                                  >
                                     <Label className="text-xs text-muted-foreground">Building Facilities</Label>
-                                    {showFacilities && (
+                  {showFacilities && (
                                       <FacilitySection 
                                         facilities={asArray<Facility>(building.facilities)}
                                         canEdit={!!isAdmin}
+                                        canAdd={isEdit}
                                         onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
                                         onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
+                    onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id }, e) : undefined}
+                                        onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                        onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'building', buildingId: building.id })}
+                                        dragging={!!draggingFacility}
+                                        showMoveBadge={isMove}
+                                        enableDelete={isDelete}
+                                        onRename={isEdit ? (facilityId) => {
+                                          const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
+                                          const val = prompt('Rename facility', current?.name || '');
+                                          if (val && val.trim() && val.trim() !== current?.name) {
+                                            updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
+                                          }
+                                        } : undefined}
                                       />
                                     )}
                                   </div>
                                   {building.floors.map((floor: Floor) => (
-                                      <div key={floor.id} className="p-3 rounded-md bg-muted/50">
+                                      <div
+                                        key={floor.id}
+                                        className={`p-3 rounded-md bg-muted/50 ${dragging ? 'ring-1 ring-primary/20' : ''}`}
+                                        onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
+                                      >
                                           <div className="flex justify-between items-center mb-2">
                                               <div className="flex items-center gap-2 font-semibold">
                                                   <Layers className="h-4 w-4" />
-                                                  {floor.name}
+                                                  <span>{floor.name}</span>
+                                                  {isEdit && (
+                                                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
+                                                      const val = prompt('Rename floor', floor.name);
+                                                      if (val && val.trim() && val.trim() !== floor.name) {
+                                                        updateFloorName(complex.id, building.id, floor.id, val.trim());
+                                                      }
+                                                    }}>Rename</Button>
+                                                  )}
                                               </div>
                                               {isAdmin && (
                                                   <div className="flex gap-2">
-                                                      <Button variant="outline" size="sm" onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                      <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
                                                           <PlusCircle className="mr-2 h-4 w-4" /> Add Room
                                                       </Button>
-                                                      <Button variant="outline" size="sm" onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                      <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
                                                           <Plus className="mr-2 h-4 w-4" /> Add Multiple Rooms
                                                       </Button>
                                                       <AlertDialog>
@@ -718,8 +896,14 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   </div>
                                               )}
                                           </div>
-                                          <div className="pl-6 space-y-2">
-                                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                          <div
+                                            className={`pl-6 space-y-2`}
+                                            onDragOver={(e) => {
+                                              if (isAdmin) { e.preventDefault(); e.stopPropagation(); }
+                                            }}
+                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
+                                          >
+                                              <div className={`grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
                                                   {floor.rooms.map((room: Room) => (
                                                   <RoomItem
                                                       key={room.id}
@@ -727,17 +911,46 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                       canEdit={!!isAdmin}
                                                       onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
                                                     showCapacity={showCapacity}
+                                                    onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
+                                                    onDragEnd={isMove ? handleDragEnd : undefined}
+                                                    showMoveBadge={isMove}
+                                                    enableDelete={isDelete}
+                                                    onRename={isEdit ? () => {
+                                                      const val = prompt('Rename room', room.name);
+                                                      if (val && val.trim() && val.trim() !== room.name) {
+                                                        updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
+                                                      }
+                                                    } : undefined}
                                                     />
                                                   ))}
                                               </div>
+                                              {dragging && floor.rooms.length === 0 && (
+                                                <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
+                                                  Drop room here
+                                                </div>
+                                              )}
                                               <div>
                                                 <Label className="text-xs text-muted-foreground">Floor Facilities</Label>
                                                 {showFacilities && (
                                                   <FacilitySection 
                                                     facilities={asArray<Facility>(floor.facilities)}
                                                     canEdit={!!isAdmin}
+                                                    canAdd={isEdit}
                                                     onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
                                                     onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
+                                                    onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
+                                                    onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                                    onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                                    dragging={!!draggingFacility}
+                                                    showMoveBadge={isMove}
+                                                    enableDelete={isDelete}
+                                                    onRename={isEdit ? (facilityId) => {
+                                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
+                                                      const val = prompt('Rename facility', current?.name || '');
+                                                      if (val && val.trim() && val.trim() !== current?.name) {
+                                                        updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
+                                                      }
+                                                    } : undefined}
                                                   />
                                                 )}
                                               </div>
@@ -755,12 +968,26 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                       <>
                         <Separator className="my-4" />
                         <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> General Facilities</h4>
-                        {showFacilities && (
+            {showFacilities && (
                           <FacilitySection 
                             facilities={asArray<Facility>(complex.facilities)}
                             canEdit={!!isAdmin}
+                            canAdd={isEdit}
                             onAdd={() => openDialog('addFacility', { level: 'complex', complexId: complex.id })}
                             onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
+              onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'complex' }, e) : undefined}
+                            onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                            onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'complex' })}
+                            dragging={!!draggingFacility}
+                            showMoveBadge={isMove}
+                            enableDelete={isDelete}
+                            onRename={isEdit ? (facilityId) => {
+                              const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
+                              const val = prompt('Rename facility', current?.name || '');
+                              if (val && val.trim() && val.trim() !== current?.name) {
+                                updateFacilityName(complex.id, 'complex', facilityId, val.trim());
+                              }
+                            } : undefined}
                           />
                         )}
                       </>
