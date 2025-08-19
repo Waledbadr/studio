@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useServiceOrders } from "@/context/service-orders-context";
 import { useResidences } from "@/context/residences-context";
 import { useInventory } from "@/context/inventory-context";
@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button as UIButton } from "@/components/ui/button";
 import { includesNormalized } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+// removed ChevronDown; infinite scroll now auto-expands
 
 export default function NewServiceOrderPage() {
   const { createAndDispatchServiceOrder } = useServiceOrders();
@@ -34,10 +34,20 @@ export default function NewServiceOrderPage() {
   const availableItems = useMemo(() => items, [items]);
   const [comboOpen, setComboOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [visibleCount, setVisibleCount] = useState(24);
   const onSearchChange = (val: string) => {
     setSearch(val);
-    setVisibleCount(12);
+    setVisibleCount(24);
+  };
+
+  // Infinite scroll: grow visibleCount as user scrolls to the bottom of the list
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const onListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    // When 1.5 rows from the end, load more
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+      setVisibleCount((v) => v + 24);
+    }
   };
 
   // Build a searchable blob for each item: names + keywords + variants + category + unit
@@ -145,10 +155,10 @@ export default function NewServiceOrderPage() {
                     <span className="text-xs text-muted-foreground">EN | AR</span>
                   </UIButton>
                 </PopoverTrigger>
-        <PopoverContent className="w-96 p-0" side="bottom" align="start">
+                <PopoverContent className="w-96 p-0" side="bottom" align="start">
                   <Command shouldFilter={false}>
                     <CommandInput placeholder="Search items (EN | AR | keywords)" value={search} onValueChange={onSearchChange} />
-          <CommandList className="max-h-[60vh] overflow-y-auto">
+                    <CommandList ref={listRef} className="max-h-[60vh] overflow-y-auto" onScroll={onListScroll}>
                         <CommandEmpty>No matches</CommandEmpty>
                         <CommandGroup>
                         {(() => {
@@ -171,7 +181,7 @@ export default function NewServiceOrderPage() {
                                   addRow(it.id);
                                   setTimeout(() => setComboOpen(false), 0);
                                   setSearch("");
-                                  setVisibleCount(12);
+                                  setVisibleCount(24);
                                 }}
                               >
                                 <div className="flex flex-col">
@@ -179,25 +189,6 @@ export default function NewServiceOrderPage() {
                                 </div>
                               </CommandItem>
                             ));
-                        })()}
-                        {(() => {
-                          const tokens = search.trim().split(/\s+/).filter(Boolean);
-                          const list = tokens.length === 0 ? availableItems : availableItems.filter((it) => {
-                            const blob = searchIndex.get(it.id) || "";
-                            return tokens.every((t) => includesNormalized(blob, t));
-                          });
-                          const selectedIds = new Set(rows.map(r => r.id));
-                          const remainingCount = list.filter((it) => !selectedIds.has(it.id)).length - visibleCount;
-                          if (remainingCount > 0) {
-                            return (
-                              <div className="flex justify-center py-2">
-                                <UIButton size="icon" variant="ghost" onClick={() => setVisibleCount((v) => v + 12)} aria-label="Show more">
-                                  <ChevronDown className="h-5 w-5" />
-                                </UIButton>
-                              </div>
-                            );
-                          }
-                          return null;
                         })()}
                         </CommandGroup>
                       </CommandList>
