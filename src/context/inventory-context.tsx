@@ -318,6 +318,8 @@ interface InventoryContextType {
   getReconciliationItems: (referenceId: string) => Promise<InventoryTransaction[]>;
   // Transfer helpers
   getTransferItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // Maintenance tools
+  fixNegativeStocks: () => Promise<{ fixedCount: number; affectedItems: string[] }>;
   // Reconciliation approval workflow
   getReconciliationRequests: (residenceId?: string, status?: ReconciliationRequest['status']) => Promise<ReconciliationRequest[]>;
   createReconciliationRequest: (residenceId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string) => Promise<string>;
@@ -367,15 +369,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     isLoaded.current = true;
     setLoading(true);
 
-    inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
+  inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
           // Ensure totalStock is a valid number, defaulting to 0 if not.
-          const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
-              const num = Number(current);
-              return sum + (isNaN(num) ? 0 : num);
-          }, 0);
+      // Clamp any negative values when computing totals for safety/display
+      const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
+        const num = Number(current);
+        const safe = isNaN(num) ? 0 : Math.max(0, num);
+        return sum + safe;
+      }, 0);
           return {
               id: doc.id,
               ...data,
@@ -442,7 +446,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   const getStockForResidence = (item: InventoryItem, residenceId: string) => {
       if (!item.stockByResidence) return 0;
-      return item.stockByResidence[residenceId] || 0;
+      const v = Number(item.stockByResidence[residenceId] || 0);
+      return isNaN(v) ? 0 : Math.max(0, v);
   }
 
   const addCategory = async (newCategory: string) => {
@@ -679,7 +684,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       for (const [itemId, totalToIssue] of totalsByItem.entries()) {
         const snap = itemSnapshots.get(itemId);
         const data: any = snap?.data() || {};
-        const currentStock = Number(data.stockByResidence?.[residenceId] || 0);
+  const currentStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
         if (currentStock < totalToIssue) {
           // Get item name for better message
           const nameEn = data.nameEn || data.name || itemId;
@@ -691,7 +696,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       for (const [itemId, totalToIssue] of totalsByItem.entries()) {
         const itemRef = doc(db!, "inventory", itemId);
         const stockUpdateKey = `stockByResidence.${residenceId}`;
-        transaction.update(itemRef, { [stockUpdateKey]: increment(-totalToIssue) });
+        // Decrement safely via read-modify-write to avoid underflow if another adjustment snuck in
+        const snap = itemSnapshots.get(itemId);
+        const cur = Math.max(0, Number((snap?.data() as any)?.stockByResidence?.[residenceId] || 0));
+        const next = Math.max(0, cur - totalToIssue);
+        const newSbr = { ...((snap?.data() as any)?.stockByResidence || {}) };
+        newSbr[residenceId] = next;
+        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
       }
             
             const transactionTime = Timestamp.now();
@@ -835,7 +850,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+  transactions.sort((a, b) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
         
         return transactions;
 
@@ -858,7 +873,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const querySnapshot = await getDocs(q);
     const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
 
-    return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+  return transactions.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
   }
 
   // Fetch all transfer transactions (IN/OUT) by reference code (e.g., TRS-2582)
@@ -1149,26 +1164,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             throw new Error(`Item ${item.nameEn} not found.`);
                         }
                         
-                        const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                        const data = itemDoc.data();
+                        const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
+                        const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
                         if (currentFromStock < item.quantity) {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
-
-                        // Prepare update object
-                        const updateData: any = {
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
-                        };
                         
-                        // Handle 'to' residence stock
-                        if (!itemDoc.data().stockByResidence?.[toResidenceId]) {
-                            updateData[`stockByResidence.${toResidenceId}`] = item.quantity;
-                        } else {
-                            updateData[`stockByResidence.${toResidenceId}`] = increment(item.quantity);
-                        }
+                        // Prepare read-modify-write updates with clamping
+                        const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+                        newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
+                        newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
+                        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+                          const n = Number(v);
+                          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+                        }, 0);
                         
                         updates.push({
                             ref: itemRefs[i],
-                            updates: updateData
+                            updates: { stockByResidence: newSbr, stock: newTotal }
                         });
                     }
                     
@@ -1315,18 +1329,24 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Item ${item.nameEn} not found.`);
                     }
                     
-                    const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                    const data = itemDoc.data();
+                    const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
+                    const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
                     if (currentFromStock < item.quantity) {
                         throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                     }
                     
-                    // Prepare updates for later
+                    // Prepare updates for later using read-modify-write with clamping
+                    const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+                    newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
+                    newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
+                    const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+                      const n = Number(v);
+                      return sum + (isNaN(n) ? 0 : Math.max(0, n));
+                    }, 0);
                     updates.push({
                         ref: itemRefs[i],
-                        updates: {
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
-                            [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
-                        }
+                        updates: { stockByResidence: newSbr, stock: newTotal }
                     });
                 }
 
@@ -1417,19 +1437,19 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const itemData = itemSnap.data() as InventoryItem;
                 
                 // Check if there's enough stock
-                const currentStock = itemData.stockByResidence?.[depreciationRequest.residenceId] || 0;
+        const currentStock = Math.max(0, Number(itemData.stockByResidence?.[depreciationRequest.residenceId] || 0));
                 if (currentStock < depreciationRequest.quantity) {
                     throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
                 }
                 
                 // Update stock for the residence
-                const newStockByResidence = { ...itemData.stockByResidence };
-                newStockByResidence[depreciationRequest.residenceId] = currentStock - depreciationRequest.quantity;
+        const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
+        newStockByResidence[depreciationRequest.residenceId] = Math.max(0, currentStock - depreciationRequest.quantity);
                 
                 // Calculate new total stock
                 const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
-                    const num = Number(stock);
-                    return sum + (isNaN(num) ? 0 : num);
+          const num = Number(stock);
+          return sum + (isNaN(num) ? 0 : Math.max(0, num));
                 }, 0);
                 
                 // Update item document
@@ -1679,15 +1699,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                   if (!itemSnap.exists()) continue;
 
                   const itemData = itemSnap.data() as InventoryItem;
-                  const currentResidenceStock = itemData.stockByResidence?.[adjustment.locationId] || 0;
-                  const newResidenceStock = adjustment.newStock;
+                  const currentResidenceStock = Math.max(0, Number(itemData.stockByResidence?.[adjustment.locationId] || 0));
+                  const newResidenceStock = Math.max(0, Number(adjustment.newStock));
 
                   // Compute new stockByResidence and total
                   const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
                   newStockByResidence[adjustment.locationId] = newResidenceStock;
                   const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
                     const num = Number(stock);
-                    return sum + (isNaN(num) ? 0 : num);
+                    return sum + (isNaN(num) ? 0 : Math.max(0, num));
                   }, 0);
 
                   // Queue item update
@@ -1695,18 +1715,22 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
                   // Queue adjustment transaction
                   const adjustmentTransactionRef = doc(collection(db!, 'inventoryTransactions'));
-                  const txData: Omit<InventoryTransaction, 'id'> = {
+                  const diffAbs = Math.abs(newResidenceStock - currentResidenceStock);
+                  const txData: Omit<InventoryTransaction, 'id'> & { adjustmentDirection?: 'INCREASE' | 'DECREASE' } = {
                     itemId: adjustment.itemId,
                     itemNameEn: (itemData as any).nameEn,
                     itemNameAr: (itemData as any).nameAr,
                     residenceId: adjustment.locationId,
                     date: now,
                     type: 'ADJUSTMENT',
-                    quantity: Math.abs(adjustment.difference),
+                    quantity: diffAbs,
                     referenceDocId: auditId,
                     locationId: adjustment.locationId,
                     locationName: adjustment.locationName,
                   };
+                  if (diffAbs > 0) {
+                    txData.adjustmentDirection = newResidenceStock >= currentResidenceStock ? 'INCREASE' : 'DECREASE';
+                  }
                   writes.push({ type: 'txSet', ref: adjustmentTransactionRef, data: txData });
 
                   // Queue audit adjustment record storage
@@ -1882,6 +1906,73 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: 'Error', description: 'Failed to fetch reconciliations.', variant: 'destructive' });
         return [];
       }
+    };
+
+    // Maintenance: scan and fix any negative stock values at the residence level
+    const fixNegativeStocks = async (): Promise<{ fixedCount: number; affectedItems: string[] }> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      // Read all inventory docs
+      const snap = await getDocs(collection(db!, 'inventory'));
+      if (snap.empty) return { fixedCount: 0, affectedItems: [] };
+      let fixedCount = 0;
+      const affected: string[] = [];
+      // We'll run in batches of transactions for safety and to log corrections
+      const now = Timestamp.now();
+      for (const d of snap.docs) {
+        const item = d.data() as any;
+        const sbr = { ...(item.stockByResidence || {}) } as Record<string, number>;
+        const original = { ...sbr };
+        let changed = false;
+        for (const key of Object.keys(sbr)) {
+          const val = Number(sbr[key] ?? 0);
+          if (!isNaN(val) && val < 0) {
+            sbr[key] = 0; // clamp to zero
+            changed = true;
+          }
+        }
+        if (!changed) continue;
+        // Recompute total
+        const newTotal = Object.values(sbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+
+        await runTransaction(db!, async (trx) => {
+          const itemRef = doc(db!, 'inventory', d.id);
+          const fresh = await trx.get(itemRef);
+          if (!fresh.exists()) return;
+          // Update stockByResidence and stock
+          trx.update(itemRef, { stockByResidence: sbr, stock: newTotal });
+          // For every negative that was clamped, log an ADJUSTMENT with reason
+          for (const rid of Object.keys(original)) {
+            const before = Number(original[rid] ?? 0);
+            const after = Number(sbr[rid] ?? 0);
+            if (before < 0 && after === 0) {
+              const diff = Math.abs(before); // amount removed to reach 0
+              const txRef = doc(collection(db!, 'inventoryTransactions'));
+              trx.set(txRef, {
+                itemId: d.id,
+                itemNameEn: item.nameEn || item.name || d.id,
+                itemNameAr: item.nameAr || '',
+                residenceId: rid,
+                date: now,
+                type: 'ADJUSTMENT',
+                quantity: diff,
+                referenceDocId: 'AUTO-FIX-NEGATIVE',
+                locationName: 'System auto-fix',
+                adjustmentReason: 'Clamped negative stock to zero',
+                adjustmentDirection: 'INCREASE',
+              } as any);
+            }
+          }
+        });
+        fixedCount++;
+        affected.push(d.id);
+      }
+      if (fixedCount > 0) {
+        toast({ title: 'Inventory corrected', description: `Fixed ${fixedCount} item(s) with negative stock values.` });
+      }
+      return { fixedCount, affectedItems: affected };
     };
 
     const getAllReconciliations = async (): Promise<StockReconciliation[]> => {
@@ -2092,6 +2183,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       approveTransfer, 
       rejectTransfer, 
       depreciateItems,
+  fixNegativeStocks,
       createAudit,
       getAudits,
       getAuditById,

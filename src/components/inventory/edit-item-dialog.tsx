@@ -285,8 +285,8 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 	};
 
 	const dialogContent = (
-		<DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6">
-			<form onSubmit={handleUpdateItem} className="flex flex-col gap-6 max-h-[72vh] overflow-y-auto px-0 pr-4 custom-scrollbar" ref={formRef}>
+		<DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col">
+			<form id="edit-item-form" onSubmit={handleUpdateItem} className="flex-1 flex flex-col gap-6 overflow-y-auto px-0 pr-4 pb-16 custom-scrollbar" ref={formRef}>
 				<DialogHeader>
 					<DialogTitle className="text-lg">Edit Inventory Item</DialogTitle>
 				</DialogHeader>
@@ -473,14 +473,14 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 					</div>
 				</section>
 
-				<DialogFooter className="flex flex-row gap-2 justify-end mt-4">
-					<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-					<Button type="submit" disabled={isPending}>
-						{isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-						Save Changes
-					</Button>
-				</DialogFooter>
 			</form>
+			<DialogFooter className="sticky bottom-2 flex flex-row gap-2 justify-end">
+				<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+				<Button type="submit" form="edit-item-form" disabled={isPending}>
+					{isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+					Save Changes
+				</Button>
+			</DialogFooter>
 		</DialogContent>
 	);
 

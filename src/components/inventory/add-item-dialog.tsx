@@ -267,10 +267,11 @@ export function AddItemDialog({
     };
     
     const dialogContent = (
-        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6">
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col">
             <form
+                id="add-item-form"
                 onSubmit={(e) => handleAddItem(e, 'save')}
-                className="flex flex-col gap-6 max-h-[72vh] overflow-y-auto px-0 pr-4 custom-scrollbar"
+                className="flex-1 flex flex-col gap-6 overflow-y-auto px-0 pr-4 pb-16 custom-scrollbar"
                 ref={formRef}
             >
                 <DialogHeader>
@@ -474,18 +475,21 @@ export function AddItemDialog({
                         )}
                     </div>
                 </section>
-                <DialogFooter className="flex flex-row gap-2 justify-end mt-4">
-                    {onItemAddedAndOrdered && (
-                        <Button type="button" variant="outline" onClick={(e) => handleAddItem(e as any, 'save-and-order')} disabled={isPending}>
-                            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save & Add to Order
-                        </Button>
-                    )}
-                    <Button type="submit" disabled={isPending}>
-                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Item
-                    </Button>
-                </DialogFooter>
             </form>
+            <DialogFooter className="sticky bottom-2 flex flex-row gap-2 justify-end">
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                    Cancel
+                </Button>
+                {onItemAddedAndOrdered && (
+                    <Button type="button" variant="outline" onClick={(e) => handleAddItem(e as any, 'save-and-order')} disabled={isPending}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save & Add to Order
+                    </Button>
+                )}
+                <Button type="submit" form="add-item-form" disabled={isPending}>
+                    {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Item
+                </Button>
+            </DialogFooter>
         </DialogContent>
     );
 

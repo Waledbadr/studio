@@ -13,6 +13,20 @@
 				"$npm-stylish"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Run dev server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }
