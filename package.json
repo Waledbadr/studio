@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "keep-alive": "node scripts/keep-alive.mjs"
+  "keep-alive": "node scripts/keep-alive.mjs",
+  "lookup:uid": "node --env-file=.env.local scripts/lookup-uid.mjs"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",

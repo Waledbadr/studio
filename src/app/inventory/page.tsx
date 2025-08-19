@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { useLanguage } from '@/context/language-context';
@@ -25,7 +26,7 @@ import * as XLSX from 'xlsx';
 
 export default function InventoryPage() {
   const { dict } = useLanguage();
-  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
+  const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence, fixNegativeStocks } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
   const router = useRouter();
@@ -58,6 +59,14 @@ export default function InventoryPage() {
   const [search, setSearch] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
+
+  const negativeCount = useMemo(() => {
+    return items.reduce((acc, it) => {
+      const sbr = it.stockByResidence || {};
+      const hasNegative = Object.values(sbr).some(v => Number(v) < 0);
+      return acc + (hasNegative ? 1 : 0);
+    }, 0);
+  }, [items]);
 
   useEffect(() => {
     if (userResidences.length > 0 && activeTab === 'all') {
@@ -131,7 +140,7 @@ export default function InventoryPage() {
     }
     // Other users see sum of stock from their assigned residences
     return currentUser.assignedResidences.reduce((acc, residenceId) => {
-      return acc + (item.stockByResidence?.[residenceId] || 0);
+      return acc + getStockForResidence(item, residenceId);
     }, 0);
   };
 
@@ -215,9 +224,11 @@ export default function InventoryPage() {
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           )) : (
@@ -257,6 +268,22 @@ export default function InventoryPage() {
           <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button variant="outline" onClick={async () => {
+              try {
+                const res = await fixNegativeStocks();
+                if (res.fixedCount === 0) {
+                  toast({ title: 'No issues found', description: 'All stock values are non-negative.' });
+                } else {
+                  toast({ title: 'Fixed negative stock', description: `Corrected ${res.fixedCount} item(s).` });
+                }
+              } catch (e: any) {
+                toast({ title: 'Error', description: e?.message || 'Failed to run fix.', variant: 'destructive' });
+              }
+            }}>
+              Fix Negative Stock
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExportExcel}>
             {dict.exportToExcel || 'Export items to Excel'}
           </Button>
@@ -296,6 +323,24 @@ export default function InventoryPage() {
           />
         </div>
       </div>
+
+      {isAdmin && negativeCount > 0 && (
+        <div className="mb-4">
+          <Alert>
+            <AlertDescription>
+              Detected {negativeCount} item(s) with negative stock values. This indicates a data issue. You can fix these automatically.
+              <Button className="ml-2" size="sm" variant="secondary" onClick={async () => {
+                try {
+                  const res = await fixNegativeStocks();
+                  toast({ title: 'Fix completed', description: `Corrected ${res.fixedCount} item(s).` });
+                } catch (e: any) {
+                  toast({ title: 'Error', description: e?.message || 'Failed to run fix.', variant: 'destructive' });
+                }
+              }}>Run Auto-Fix</Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
       
       <Card>
         <CardContent className="p-0">

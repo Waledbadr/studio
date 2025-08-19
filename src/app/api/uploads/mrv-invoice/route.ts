@@ -26,7 +26,11 @@ export async function POST(req: Request) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const blobPath = `mrvs/invoices/${Date.now()}_${safeName}`;
 
-    const { url } = await put(blobPath, file, { access: 'public' });
+    const { url } = await put(blobPath, file, {
+      access: 'public',
+      // Ensure the Vercel Blob token is provided in all environments
+      token: process.env.BLOB_READ_WRITE_TOKEN as string | undefined,
+    } as any);
 
     return NextResponse.json({ url, path: blobPath });
   } catch (err: any) {

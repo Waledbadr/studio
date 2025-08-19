@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, runTransaction } from "firebase/firestore";
 
 export type FeedbackCategory = 'Bug' | 'Feature Request' | 'UI Issue' | 'Performance' | 'Other';
 export type FeedbackStatus = 'new' | 'in_progress' | 'resolved' | 'rejected';
@@ -29,20 +29,38 @@ export interface FeedbackUpdate {
   developerComment?: string;
 }
 
-export function makeTicketId(): string {
+export function formatMonthlyTicketId(year: number, month1Based: number, counter: number): string {
+  const yy = String(year).slice(-2);
+  const m = String(month1Based); // no leading zero per requirement
+  return `FB-${yy}${m}${counter}`;
+}
+
+export async function generateMonthlySequentialTicketId(year: number, month1Based: number): Promise<string> {
+  if (!db) throw new Error('Firestore not configured');
+  const yy = String(year).slice(-2);
+  const m = String(month1Based);
+  const counterId = `feedback-${yy}${m}`;
+  const ref = doc(db, 'counters', counterId);
+  const next = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const last = snap.exists() ? (snap.data() as any).last || 0 : 0;
+    const n = last + 1;
+    tx.set(ref, { last: n, updatedAt: serverTimestamp() }, { merge: true });
+    return n as number;
+  });
+  return formatMonthlyTicketId(year, month1Based, next);
+}
+
+export async function makeTicketId(): Promise<string> {
   const now = new Date();
-  const y = now.getFullYear().toString().slice(-2);
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `FB-${y}${m}${d}-${rand}`;
+  return generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
 }
 
 export async function createFeedback(payload: Omit<Feedback, 'id' | 'ticketId' | 'status' | 'createdAt'>) {
   if (!db) throw new Error('Firestore not configured');
   const ref = await addDoc(collection(db, 'feedback'), {
     ...payload,
-    ticketId: makeTicketId(),
+  ticketId: await makeTicketId(),
     status: 'new' as FeedbackStatus,
     createdAt: serverTimestamp(),
   });

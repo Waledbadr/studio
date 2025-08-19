@@ -77,14 +77,7 @@ function autoCategorize(title: string, description?: string): 'Bug' | 'Feature R
   return 'Other';
 }
 
-function makeTicketId(): string {
-  const now = new Date();
-  const y = now.getFullYear().toString().slice(-2);
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `FB-${y}${m}${d}-${rand}`;
-}
+// Ticket IDs are generated server-side/centralized now
 
 export default function FeedbackWidget({ className }: Props) {
   const { currentUser } = useUsers();
@@ -115,13 +108,14 @@ export default function FeedbackWidget({ className }: Props) {
     }
   }, [lastError, title]);
 
-  const deviceInfo = useMemo(captureDeviceInfo, []);
-  const appInfo = useMemo(captureAppInfo, []);
+  // Note: capture live info at submit time to avoid stale path after route changes
 
   const submit = async () => {
     setLoading(true);
     try {
       if (!db) throw new Error('Firestore غير مُهيأ');
+  const deviceInfo = captureDeviceInfo();
+  const appInfo = captureAppInfo();
       const payload = {
         userId: currentUser?.id,
         title: title.trim() || 'No title',
@@ -151,9 +145,12 @@ export default function FeedbackWidget({ className }: Props) {
         if (data?.url) screenshotUrl = data.url;
       }
 
-      const autoCat = autoCategorize(payload.title, payload.description);
-      const ticketId = makeTicketId();
-      const feedbackRef = await addDoc(collection(db, 'feedback'), {
+  const autoCat = autoCategorize(payload.title, payload.description);
+  // Generate sequential ticket id per (YY)(M)(counter)
+  const { generateMonthlySequentialTicketId } = await import('@/lib/feedback');
+  const now = new Date();
+  const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
+  const feedbackRef = await addDoc(collection(db, 'feedback'), {
         ...payload,
         categoryAuto: autoCat,
         ticketId,

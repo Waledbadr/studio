@@ -21,6 +21,7 @@ import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
 import { getFormattedGitInfo } from '@/lib/git-info';
 import { Badge } from '@/components/ui/badge';
+import { useSidebar } from '@/components/ui/sidebar';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -28,11 +29,17 @@ export function AppSidebar() {
   const { dict } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
+  const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     setIsMounted(true);
     setGitInfo(getFormattedGitInfo());
   }, []);
+
+  // Close the mobile sidebar immediately after a navigation item is clicked
+  const handleNavigate = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   // Prevent hydration mismatches by rendering only after mount
   if (!isMounted) {
@@ -52,8 +59,8 @@ export function AppSidebar() {
         <SidebarContent>
           <div className="p-2">
             <nav className="space-y-2">
-              <a href="/accommodation/residences" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
-              <a href="/accommodation/assign" className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
+              <a href="/accommodation/residences" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
+              <a href="/accommodation/assign" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
             </nav>
           </div>
         </SidebarContent>
@@ -173,7 +180,7 @@ export function AppSidebar() {
                     isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
                     tooltip={item.label}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} onClick={handleNavigate}>
                       <item.icon />
                       <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
                     </Link>
@@ -185,7 +192,7 @@ export function AppSidebar() {
                       {section.subItems.map(subItem => (
                         <SidebarMenuSubItem key={subItem.href}>
                           <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
-                            <Link href={subItem.href}>
+                            <Link href={subItem.href} onClick={handleNavigate}>
                               <subItem.icon />
                               <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
                             </Link>

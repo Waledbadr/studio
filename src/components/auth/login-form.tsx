@@ -15,6 +15,8 @@ import {
   isSignInWithEmailLink,
   sendSignInLinkToEmail,
   signInWithEmailLink,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, deleteDoc } from "firebase/firestore";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
@@ -23,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield, User } from "lucide-react";
 
@@ -37,6 +40,30 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const { toast } = useToast();
+  
+  // Restrict inputs to ASCII (English) characters only for email & password
+  const toASCII = (s: string) => s.replace(/[^\x00-\x7F]/g, "");
+  const [emailNonAscii, setEmailNonAscii] = useState(false);
+  const [passwordNonAscii, setPasswordNonAscii] = useState(false);
+  const onEmailChange = (v: string) => {
+    const ascii = toASCII(v);
+    const isNonAscii = v !== ascii;
+    if (isNonAscii && !emailNonAscii) {
+      toast({ title: 'English only', description: 'Please type using English (ASCII) characters.', variant: 'destructive' });
+    }
+    setEmailNonAscii(isNonAscii);
+    setEmail(ascii);
+  };
+  const onPasswordChange = (v: string) => {
+    const ascii = toASCII(v);
+    const isNonAscii = v !== ascii;
+    if (isNonAscii && !passwordNonAscii) {
+      toast({ title: 'English only', description: 'Please type using English (ASCII) characters.', variant: 'destructive' });
+    }
+    setPasswordNonAscii(isNonAscii);
+    setPassword(ascii);
+  };
 
   useEffect(() => {
     if (!auth) return;
@@ -44,6 +71,19 @@ export default function LoginForm() {
       if (u) router.replace("/");
     });
     return () => unsub();
+  }, [router]);
+
+  // Handle OAuth redirect result if popup fallback was used
+  useEffect(() => {
+    if (!auth) return;
+    getRedirectResult(auth)
+      .then(async (res) => {
+        if (res && res.user) {
+          await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
+          router.replace('/');
+        }
+      })
+      .catch(() => {/* ignore */});
   }, [router]);
 
   // Complete magic link sign-in if applicable
@@ -110,18 +150,29 @@ export default function LoginForm() {
       setError("Authentication is not configured.");
       return;
     }
+    // Guard: ensure English-only (ASCII) for email & password
+    const sanitizedEmail = toASCII(email).trim();
+    const sanitizedPassword = toASCII(password);
+    if (sanitizedEmail !== email.trim() || sanitizedPassword !== password) {
+      const msg = "Please use English (ASCII) characters for email and password only.";
+      setError(msg);
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      setEmail(sanitizedEmail);
+      setPassword(sanitizedPassword);
+      return;
+    }
     setLoading(true);
     setError(null);
     setInfo(null);
   try {
       if (mode === "signin") {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        await signInWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
       } else {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const cred = await createUserWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
         if (name.trim()) {
           try { await updateProfile(cred.user, { displayName: name.trim() }); } catch {}
         }
-        await ensureUserProfile(cred.user.uid, { name: name || cred.user.displayName || "User", email: cred.user.email || email });
+        await ensureUserProfile(cred.user.uid, { name: name || cred.user.displayName || "User", email: cred.user.email || sanitizedEmail });
       }
       router.replace("/");
     } catch (err: any) {
@@ -134,7 +185,9 @@ export default function LoginForm() {
         'auth/wrong-password': 'Invalid email or password.',
         'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
       };
-      setError(map[code] || err?.message || "Failed. Try again.");
+  const msg = map[code] || err?.message || "Failed. Try again.";
+  setError(msg);
+  toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -150,9 +203,20 @@ export default function LoginForm() {
     setInfo(null);
     try {
       const prov = provider === "google" ? new GoogleAuthProvider() : new OAuthProvider("microsoft.com");
-      const res = await signInWithPopup(auth, prov);
-      await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
-      router.replace("/");
+      try {
+        const res = await signInWithPopup(auth, prov);
+        await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
+        router.replace("/");
+      } catch (popupErr: any) {
+        const c = popupErr?.code || '';
+        const msg = popupErr?.message || '';
+        // Fallback to redirect for browsers/extensions that block popups or third-party cookies
+        if (c === 'auth/popup-blocked' || c === 'auth/popup-closed-by-user' || /blocked|cookies|third.?party/i.test(msg)) {
+          await signInWithRedirect(auth, prov);
+          return; // result handled in getRedirectResult effect
+        }
+        throw popupErr;
+      }
     } catch (err: any) {
       setError(err?.message || "OAuth failed.");
     } finally {
@@ -171,16 +235,19 @@ export default function LoginForm() {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: false,
       } as const;
-      await sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
-      setInfo('Password reset email sent.');
+  await sendPasswordResetEmail(auth, toASCII(email).trim(), actionCodeSettings);
+  setInfo('Password reset email sent.');
+  toast({ title: 'Email sent', description: 'Password reset email sent.' });
     } catch (err: any) {
-      const code = err?.code || '';
-      const map: Record<string, string> = {
+  const code = err?.code || '';
+  const map: Record<string, string> = {
         'auth/invalid-email': 'The email address is badly formatted.',
         'auth/user-not-found': 'If an account exists for this email, a reset link will be sent.',
         'auth/too-many-requests': 'Too many requests. Please wait and try again.',
       };
-      setError(map[code] || err?.message || "Failed to send reset email.");
+  const msg = map[code] || err?.message || "Failed to send reset email.";
+  setError(msg);
+  toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -197,11 +264,15 @@ export default function LoginForm() {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: true,
       } as const;
-      await sendSignInLinkToEmail(auth, email.trim(), actionCodeSettings);
-      window.localStorage.setItem('pendingEmailForLink', email.trim());
-      setInfo('Magic link sent to your email.');
+  const asciiEmail = toASCII(email).trim();
+  await sendSignInLinkToEmail(auth, asciiEmail, actionCodeSettings);
+  window.localStorage.setItem('pendingEmailForLink', asciiEmail);
+  setInfo('Magic link sent to your email.');
+  toast({ title: 'Email sent', description: 'Magic link sent to your email.' });
     } catch (e: any) {
-      setError(e?.message || 'Failed to send magic link.');
+  const msg = e?.message || 'Failed to send magic link.';
+  setError(msg);
+  toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -226,9 +297,12 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.uid, name: user.displayName || 'User', email: user.email || '' }, response: attResp })
       });
-      setInfo('Passkey registered successfully.');
+  setInfo('Passkey registered successfully.');
+  toast({ title: 'Passkey', description: 'Passkey registered successfully.' });
     } catch (e: any) {
-      setError(e?.message || 'Passkey registration failed.');
+  const msg = e?.message || 'Passkey registration failed.';
+  setError(msg);
+  toast({ title: 'Error', description: msg, variant: 'destructive' });
     }
   };
 
@@ -252,12 +326,17 @@ export default function LoginForm() {
       const verified = await verifyRes.json();
       if (verified.verified) {
         setInfo('Passkey verified.');
+        toast({ title: 'Passkey', description: 'Passkey verified.' });
         router.replace('/');
       } else {
-        setError('Passkey authentication failed.');
+        const msg = 'Passkey authentication failed.';
+        setError(msg);
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
       }
     } catch (e: any) {
-      setError(e?.message || 'Passkey login failed.');
+      const msg = e?.message || 'Passkey login failed.';
+      setError(msg);
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     }
   };
 
@@ -337,23 +416,24 @@ export default function LoginForm() {
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
+                <Input id="email" type="email" dir="ltr" inputMode="email" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
               </div>
+                {/* Inline non-ASCII tip removed in favor of red toast popup */}
             </div>
 
             <div className="grid gap-1.5">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
+                <Input id="password" type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => onPasswordChange(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
                 <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {/* Inline non-ASCII tip removed in favor of red toast popup */}
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            {info && <p className="text-sm text-green-600">{info}</p>}
+            {/* Errors and infos are surfaced via toast popups for a compact, consistent UX */}
 
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}

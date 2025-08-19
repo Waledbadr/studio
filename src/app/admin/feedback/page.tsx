@@ -22,6 +22,12 @@ interface Item {
   userId?: string;
   screenshotUrl?: string;
   createdAt?: { toDate: () => Date } | string | number;
+  description?: string;
+  errorCode?: string | number;
+  errorMessage?: string;
+  stack?: string;
+  appInfo?: { url?: string; path?: string; referrer?: string };
+  deviceInfo?: { userAgent?: string; language?: string; platform?: string };
 }
 
 export default function AdminFeedbackPage() {
@@ -35,6 +41,7 @@ export default function AdminFeedbackPage() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [closedOpen, setClosedOpen] = useState(false);
+  const [ticketEdits, setTicketEdits] = useState<Record<string, string>>({});
 
   const load = async () => {
     setLoading(true);
@@ -139,6 +146,25 @@ export default function AdminFeedbackPage() {
     }
   };
 
+  const setTicketId = async (id: string, newTicketId?: string, autoRenumber?: boolean) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTicketId ? { ticketId: newTicketId } : { autoRenumber: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed');
+      setTicketEdits((p) => ({ ...p, [id]: '' }));
+      await load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {currentUser?.role !== 'Admin' && (
@@ -190,46 +216,95 @@ export default function AdminFeedbackPage() {
       <div className="grid gap-3">
         <h2 className="text-lg font-semibold">Open</h2>
         {openItemsSorted.map((f) => (
-          <Card key={f.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base">{f.title} <span className="text-muted-foreground">({f.ticketId})</span></CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{f.category}</Badge>
-                  <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{f.status}</Badge>
+          <Collapsible key={f.id} open={!!expanded[f.id]} onOpenChange={(v) => setExpanded((prev) => ({ ...prev, [f.id]: v }))}>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base">{f.title} <span className="text-muted-foreground">({f.ticketId})</span></CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{f.category}</Badge>
+                    <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{f.status}</Badge>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm">{expanded[f.id] ? 'Hide details' : 'Show details'}</Button>
+                    </CollapsibleTrigger>
+                  </div>
                 </div>
-              </div>
-              <CardDescription>
-                {f.createdAt ? formatDistanceToNow(typeof f.createdAt === 'object' ? (f.createdAt as any).toDate?.() || new Date() : new Date(f.createdAt as any), { addSuffix: true }) : ''}
-                {" "}• by {f.userId ? (getUserById(f.userId)?.name || 'Unknown') : 'Unknown'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {f.screenshotUrl && <img src={f.screenshotUrl} alt="screenshot" className="max-h-64 rounded border" />}
-              <div className="grid gap-1">
-                <label className="text-sm text-muted-foreground">Developer comment</label>
-                <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a note to the user" />
-              </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Priority:</span>
-                  <Select value={f.priority || 'medium'} onValueChange={(v: any) => updateItem(f.id, undefined, v)}>
-                    <SelectTrigger className="w-32"><SelectValue placeholder="Priority" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <CardDescription>
+                  {f.createdAt ? formatDistanceToNow(typeof f.createdAt === 'object' ? (f.createdAt as any).toDate?.() || new Date() : new Date(f.createdAt as any), { addSuffix: true }) : ''}
+                  {" "}• by {f.userId ? (getUserById(f.userId)?.name || 'Unknown') : 'Unknown'}
+                </CardDescription>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input className="border rounded px-2 py-1 text-xs w-44" placeholder="Set ticket ID" value={ticketEdits[f.id] ?? ''} onChange={(e) => setTicketEdits((p) => ({ ...p, [f.id]: e.target.value }))} />
+                    <Button size="sm" variant="outline" onClick={() => setTicketId(f.id, ticketEdits[f.id])} disabled={!ticketEdits[f.id]}>Set</Button>
+                    <Button size="sm" variant="secondary" onClick={() => setTicketId(f.id, undefined, true)}>Auto</Button>
+                  </div>
+                  {f.description && (
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Details</div>
+                      <div className="text-sm whitespace-pre-wrap">{f.description}</div>
+                    </div>
+                  )}
+                  {(f.errorCode || f.errorMessage) && (
+                    <div className="text-sm">
+                      <div className="text-muted-foreground mb-1">Error</div>
+                      <div>Code: <span className="font-mono">{String(f.errorCode || '')}</span></div>
+                      {f.errorMessage && <div className="font-mono whitespace-pre-wrap text-sm mt-1">{f.errorMessage}</div>}
+                    </div>
+                  )}
+                  {f.stack && (
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Stack</div>
+                      <pre className="text-xs overflow-auto max-h-40 p-2 bg-muted rounded"><code>{f.stack}</code></pre>
+                    </div>
+                  )}
+                  {(f.appInfo?.url || f.appInfo?.path || f.appInfo?.referrer) && (
+                    <div className="grid gap-1 text-sm">
+                      <div className="text-muted-foreground">App</div>
+                      {f.appInfo?.url && <div className="truncate">URL: <a className="underline" href={f.appInfo.url} target="_blank" rel="noreferrer">{f.appInfo.url}</a></div>}
+                      {f.appInfo?.path && <div>Path: <span className="font-mono">{f.appInfo.path}</span></div>}
+                      {f.appInfo?.referrer && <div className="truncate">Referrer: <span className="font-mono">{f.appInfo.referrer}</span></div>}
+                    </div>
+                  )}
+                  {(f.deviceInfo?.userAgent || f.deviceInfo?.platform || f.deviceInfo?.language) && (
+                    <div className="grid gap-1 text-sm">
+                      <div className="text-muted-foreground">Device</div>
+                      {f.deviceInfo?.platform && <div>Platform: {f.deviceInfo.platform}</div>}
+                      {f.deviceInfo?.language && <div>Lang: {f.deviceInfo.language}</div>}
+                      {f.deviceInfo?.userAgent && <div className="break-all text-xs">UA: {f.deviceInfo.userAgent}</div>}
+                    </div>
+                  )}
+                  {f.screenshotUrl && <img src={f.screenshotUrl} alt="screenshot" className="max-h-64 rounded border" />}
+                </CardContent>
+              </CollapsibleContent>
+              <CardContent className="space-y-3">
+                <div className="grid gap-1">
+                  <label className="text-sm text-muted-foreground">Developer comment</label>
+                  <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a note to the user" />
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => updateItem(f.id, 'in_progress')}>In Progress</Button>
-                  <Button onClick={() => updateItem(f.id, 'resolved')}>Resolved</Button>
-                  <Button variant="destructive" onClick={() => updateItem(f.id, 'rejected')}>Rejected</Button>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Priority:</span>
+                    <Select value={f.priority || 'medium'} onValueChange={(v: any) => updateItem(f.id, undefined, v)}>
+                      <SelectTrigger className="w-32"><SelectValue placeholder="Priority" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => updateItem(f.id, 'in_progress')}>In Progress</Button>
+                    <Button onClick={() => updateItem(f.id, 'resolved')}>Resolved</Button>
+                    <Button variant="destructive" onClick={() => updateItem(f.id, 'rejected')}>Rejected</Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Collapsible>
         ))}
         {openItems.length === 0 && (
           <div className="text-muted-foreground text-sm p-8 text-center">No open items.</div>
@@ -271,6 +346,46 @@ export default function AdminFeedbackPage() {
                   </CardHeader>
                   <CollapsibleContent>
                     <CardContent className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <input className="border rounded px-2 py-1 text-xs w-44" placeholder="Set ticket ID" value={ticketEdits[f.id] ?? ''} onChange={(e) => setTicketEdits((p) => ({ ...p, [f.id]: e.target.value }))} />
+                        <Button size="sm" variant="outline" onClick={() => setTicketId(f.id, ticketEdits[f.id])} disabled={!ticketEdits[f.id]}>Set</Button>
+                        <Button size="sm" variant="secondary" onClick={() => setTicketId(f.id, undefined, true)}>Auto</Button>
+                      </div>
+                      {f.description && (
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Details</div>
+                          <div className="text-sm whitespace-pre-wrap">{f.description}</div>
+                        </div>
+                      )}
+                      {(f.errorCode || f.errorMessage) && (
+                        <div className="text-sm">
+                          <div className="text-muted-foreground mb-1">Error</div>
+                          <div>Code: <span className="font-mono">{String(f.errorCode || '')}</span></div>
+                          {f.errorMessage && <div className="font-mono whitespace-pre-wrap text-sm mt-1">{f.errorMessage}</div>}
+                        </div>
+                      )}
+                      {f.stack && (
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Stack</div>
+                          <pre className="text-xs overflow-auto max-h-40 p-2 bg-muted rounded"><code>{f.stack}</code></pre>
+                        </div>
+                      )}
+                      {(f.appInfo?.url || f.appInfo?.path || f.appInfo?.referrer) && (
+                        <div className="grid gap-1 text-sm">
+                          <div className="text-muted-foreground">App</div>
+                          {f.appInfo?.url && <div className="truncate">URL: <a className="underline" href={f.appInfo.url} target="_blank" rel="noreferrer">{f.appInfo.url}</a></div>}
+                          {f.appInfo?.path && <div>Path: <span className="font-mono">{f.appInfo.path}</span></div>}
+                          {f.appInfo?.referrer && <div className="truncate">Referrer: <span className="font-mono">{f.appInfo.referrer}</span></div>}
+                        </div>
+                      )}
+                      {(f.deviceInfo?.userAgent || f.deviceInfo?.platform || f.deviceInfo?.language) && (
+                        <div className="grid gap-1 text-sm">
+                          <div className="text-muted-foreground">Device</div>
+                          {f.deviceInfo?.platform && <div>Platform: {f.deviceInfo.platform}</div>}
+                          {f.deviceInfo?.language && <div>Lang: {f.deviceInfo.language}</div>}
+                          {f.deviceInfo?.userAgent && <div className="break-all text-xs">UA: {f.deviceInfo.userAgent}</div>}
+                        </div>
+                      )}
                       {f.screenshotUrl && <img src={f.screenshotUrl} alt="screenshot" className="max-h-64 rounded border" />}
                       <div className="flex flex-wrap gap-2 items-center">
                         <div className="flex items-center gap-2">
