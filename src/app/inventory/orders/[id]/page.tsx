@@ -66,6 +66,8 @@ export default function OrderDetailPage() {
         if (!ok) return;
         await updateOrderStatus(order.id, 'Approved', currentUser.id);
         // UI will update via onSnapshot
+        // Navigate back to orders list per flow requirement
+        router.push('/inventory/orders');
     };
 
     const handleReject = async () => {

@@ -138,11 +138,21 @@ export default function PurchaseOrdersPage() {
                         </TableCell>
                         {showActions && (
                             <TableCell className="text-right">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                <div className="flex items-center justify-end gap-1">
+                                    {(['Approved', 'Partially Delivered'] as OrderStatus[]).includes(order.status) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => router.push(`/inventory/receive/${order.id}`)}
+                                        >
+                                            <Truck className="mr-2 h-4 w-4" /> {(dict.receiveButton || 'Receive') + ' MRV'}
+                                        </Button>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
                                                         <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                                         <Eye className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Details'}
                                         </DropdownMenuItem>
@@ -187,8 +197,9 @@ export default function PurchaseOrdersPage() {
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </TableCell>
                         )}
                     </TableRow>

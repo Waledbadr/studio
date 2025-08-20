@@ -20,7 +20,7 @@ const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
     // Glassmorphism popover surface
-  "z-50 w-72 rounded-lg border p-4 text-popover-foreground shadow-lg outline-none backdrop-blur-xl",
+  "z-50 w-72 rounded-lg border p-4 text-popover-foreground shadow-lg outline-none backdrop-blur-xl pointer-events-auto",
   // Translucent backgrounds for light/dark (match Card)
   "bg-white/40 border-white/20 dark:bg-white/5 dark:border-white/5",
     // Animations

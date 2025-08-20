@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/context/language-context';
+import { useUsers } from '@/context/users-context';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +44,7 @@ export default function ReceiveOrderPage() {
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const { dict } = useLanguage();
+    const { currentUser } = useUsers();
 
     const fetchOrderForPage = useCallback(async (orderId: string) => {
         if (!db) return;
@@ -88,6 +90,18 @@ export default function ReceiveOrderPage() {
         }
     }, [id, fetchOrderForPage]);
 
+    // Admin/Supervisor guard for receiving actions to avoid Firestore permission errors
+    useEffect(() => {
+        if (currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor')) {
+            toast({
+                title: 'Insufficient permissions',
+                description: 'Only Admins or Supervisors can receive materials and update stock.',
+                variant: 'destructive'
+            });
+            router.push('/inventory/receive');
+        }
+    }, [currentUser, router, toast]);
+
     const handleQuantityChange = (itemId: string, newQuantity: number) => {
         const itemInfo = receivedItems.find(item => item.id === itemId);
         if (!itemInfo) return;
@@ -103,6 +117,10 @@ export default function ReceiveOrderPage() {
     };
 
     const handleConfirmReceipt = async (forceComplete: boolean = false) => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can perform this action.', variant: 'destructive' });
+            return;
+        }
         if (!order || receivedItems.length === 0) {
                 toast({ title: dict.invalidStatusTitle, description: dict.noItemsToReceive, variant: "destructive" });
             return;
@@ -112,8 +130,6 @@ export default function ReceiveOrderPage() {
             .filter(item => item.quantityReceived > 0)
             .map(item => ({
                 id: item.id,
-                nameAr: item.nameAr,
-                nameEn: item.nameEn,
                 quantityReceived: item.quantityReceived,
             }));
         
@@ -199,7 +215,7 @@ export default function ReceiveOrderPage() {
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                     </AlertDialog>
-                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading}>
+                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
                         {ordersLoading ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.processing}</>
                         ) : (

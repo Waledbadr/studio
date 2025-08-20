@@ -1,4 +1,3 @@
-
 const en = {
     // General
     viewAll: 'View All',
@@ -78,6 +77,10 @@ const en = {
         noRecentReceiptsFound: 'No recent receipts found.',
         recentIssues: 'Recent Issues',
         noRecentIssuesFound: 'No recent issues found.',
+    recentServiceOrders: 'Recent Service Orders',
+    noServiceOrdersFound: 'No service orders found.',
+    recentDepreciation: 'Recent Depreciation',
+    recentStockTransfers: 'Recent Stock Transfers',
     },
     // Reports
     reportsTitle: 'Reports',
@@ -415,6 +418,15 @@ const en = {
     grandTotalLabel: 'Grand Total',
     totalLabel: 'Total',
     noDataToDisplay: 'No data to display',
+    // Services / service orders in reports
+    openServiceOrder: 'Open Service Order',
+    serviceFilterLabel: 'Service Movements',
+    serviceFilterAll: 'All',
+    serviceFilterOnly: 'Only service',
+    serviceFilterExclude: 'Exclude service',
+    serviceDispatch: 'Service Dispatch',
+    serviceReturn: 'Service Return',
+    serviceScrap: 'Service Scrap',
 };
 
 const ar = {
@@ -485,6 +497,10 @@ const ar = {
         noRecentReceiptsFound: 'لا توجد إيصالات حديثة.',
         recentIssues: 'القضايا الأخيرة',
         noRecentIssuesFound: 'لا توجد قضايا حديثة.',
+    recentServiceOrders: 'أوامر الخدمة الأخيرة',
+    noServiceOrdersFound: 'لا توجد أوامر خدمة.',
+    recentDepreciation: 'الاستهلاكات الأخيرة',
+    recentStockTransfers: 'تحويلات المخزون الأخيرة',
     },
     // Reports (AR)
     reportsTitle: 'التقارير',
@@ -695,6 +711,15 @@ const ar = {
     stockLabel: 'المخزون',
     actionsLabel: 'الإجراءات',
     noItemsWithStock: 'لا توجد أصناف بالمخزون في هذا السكن.',
+    // Services / service orders in reports (AR)
+    openServiceOrder: 'فتح أمر صيانة/خدمة',
+    serviceFilterLabel: 'حركات الخدمة/الصيانة',
+    serviceFilterAll: 'الكل',
+    serviceFilterOnly: 'الخدمة فقط',
+    serviceFilterExclude: 'استبعاد الخدمة',
+    serviceDispatch: 'إرسال للخدمة',
+    serviceReturn: 'عائد من الخدمة',
+    serviceScrap: 'شطب بالخدمة',
 };
 
 export const dictionaries = { en, ar };

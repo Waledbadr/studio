@@ -11,16 +11,13 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, Boxes, ArrowUpDown, Package2, GitBranch, Clock, LifeBuoy } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
-import { Button } from '../ui/button';
 import { useState, useEffect } from 'react';
-import { getFormattedGitInfo } from '@/lib/git-info';
-import { Badge } from '@/components/ui/badge';
 import { useSidebar } from '@/components/ui/sidebar';
 
 export function AppSidebar() {
@@ -28,12 +25,12 @@ export function AppSidebar() {
   const { currentUser, loading } = useUsers();
   const { dict } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
-  const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
+  // const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
   const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     setIsMounted(true);
-    setGitInfo(getFormattedGitInfo());
+  // setGitInfo(getFormattedGitInfo());
   }, []);
 
   // Close the mobile sidebar immediately after a navigation item is clicked
@@ -78,6 +75,7 @@ export function AppSidebar() {
     icon: any;
     exact?: boolean;
     abbreviation?: string;
+  external?: boolean;
   }
 
   interface MenuSection {
@@ -94,7 +92,13 @@ export function AppSidebar() {
       title: dict.sidebar?.main || 'Main',
       items: [
         { href: '/', label: dict.sidebar?.dashboard || 'Dashboard', icon: Home },
-        { href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench },
+  // Moved Service Orders directly under Dashboard
+  { href: '/inventory/service-orders', label: 'Service Orders', icon: GitBranch },
+        // Single Maintenance entry: external in dev, internal in prod
+        ...(process.env.NODE_ENV !== 'production'
+          ? [{ href: process.env.NEXT_PUBLIC_DEV_MAINTENANCE_URL || 'http://localhost:9002/maintenance', label: 'Maintenance (Dev)', icon: Wrench, external: true }]
+          : [{ href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench }]
+        ),
       ]
     },
     // Stock Management Section
@@ -104,7 +108,7 @@ export function AppSidebar() {
         { href: '/inventory', label: dict.sidebar?.inventory || 'Inventory', icon: ClipboardList, exact: true },
         { href: '/inventory/inventory-audit', label: dict.sidebar?.stockReconciliation || 'Stock Reconciliation', icon: FileCheck },
         { href: '/inventory/depreciation', label: dict.sidebar?.depreciation || 'Depreciation', icon: AlertTriangle },
-        { href: '/inventory/transfer', label: dict.sidebar?.stockTransfer || 'Stock Transfer', icon: Move },
+  { href: '/inventory/transfer', label: dict.sidebar?.stockTransfer || 'Stock Transfer', icon: Move },
       ]
     },
     // Material Movement Section
@@ -180,10 +184,17 @@ export function AppSidebar() {
                     isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
                     tooltip={item.label}
                   >
-                    <Link href={item.href} onClick={handleNavigate}>
-                      <item.icon />
-                      <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
-                    </Link>
+                    {item.external ? (
+                      <a href={item.href} target="_blank" rel="noopener noreferrer" onClick={handleNavigate}>
+                        <item.icon />
+                        <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
+                      </a>
+                    ) : (
+                      <Link href={item.href} onClick={handleNavigate}>
+                        <item.icon />
+                        <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
+                      </Link>
+                    )}
                   </SidebarMenuButton>
                   
                   {/* Sub-items for Reports section */}

@@ -63,6 +63,13 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       lastAuthUidRef.current = u?.uid || null;
       if (!u) {
         // Signed out
+        // Unsubscribe any active listeners and reset state to avoid permission errors
+        if (unsubscribeRef.current) {
+          try { unsubscribeRef.current(); } catch {}
+          unsubscribeRef.current = null;
+        }
+        isLoaded.current = false;
+        setUsers([]);
         setCurrentUser(null);
         try { localStorage.removeItem('currentUser'); } catch {}
       } else if (!isLoaded.current) {

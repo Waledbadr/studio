@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { useUsers } from './users-context';
@@ -65,11 +65,11 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     }
 
     setLoading(true);
-    const q = query(
-      collection(db!, 'notifications'),
-      where('userId', '==', currentUser.id),
-      orderBy('createdAt', 'desc')
-    );
+    const authEmail = auth?.currentUser?.email || null;
+    const baseCol = collection(db!, 'notifications');
+    const q = authEmail
+      ? query(baseCol, where('userEmail', '==', authEmail), orderBy('createdAt', 'desc'))
+      : query(baseCol, where('userId', '==', currentUser.id), orderBy('createdAt', 'desc'));
 
     const unsubscribe = safeOnSnapshot(
       q,
@@ -102,10 +102,21 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       return;
     }
     try {
+      // Attempt to enrich with recipient email for rules-based access
+      let userEmail: string | null = null;
+      try {
+        const userRef = doc(db!, 'users', payload.userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const d = userSnap.data() as any;
+          userEmail = (d.email && String(d.email)) || null;
+        }
+      } catch {}
       await addDoc(collection(db!, 'notifications'), {
         ...payload,
         isRead: false,
         createdAt: serverTimestamp(),
+        userEmail: userEmail || null,
       });
     } catch (error) {
       console.error('Error adding notification:', error);

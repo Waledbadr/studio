@@ -5,9 +5,36 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
+    function isSupervisor() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor';
+    }
     function isOwner(userId) { return isSignedIn() && userId == request.auth.uid; }
     function isAdminUser(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data.role == 'Admin';
+    }
+    // Some legacy user docs may not use the Firebase Auth UID as the document ID.
+    // This helper allows matching by email when both user docs exist.
+    function hasSameUserEmail(uidA, uidB) {
+      return exists(/databases/$(database)/documents/users/$(uidA)) &&
+             exists(/databases/$(database)/documents/users/$(uidB)) &&
+             get(/databases/$(database)/documents/users/$(uidA)).data.email ==
+             get(/databases/$(database)/documents/users/$(uidB)).data.email;
+    }
+    // Match a users/{uid} doc by comparing its email to the signed-in user's auth token email.
+    function emailMatchesAuth(uid) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(uid)) &&
+             get(/databases/$(database)/documents/users/$(uid)).data.email == request.auth.token.email;
+    }
+    // Map auth email (case-insensitive) to a userId using the unique email mapping.
+    function userIdMatchesAuthEmailByMap(userId) {
+      return isSignedIn() && request.auth.token.email != null &&
+             exists(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)).data.userId == userId;
+    }
+    function stockOnlyChange() {
+      // Allow only stock fields to change
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'stockByResidence']);
     }
 
     // Feedback documents
@@ -30,9 +57,22 @@ service cloud.firestore {
     // Notifications
     match /notifications/{notificationId} {
       // Allow creating notifications for self, or targeting Admin users
-      allow create: if isAdmin() || (isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdminUser(request.resource.data.userId)));
-      allow read: if isAdmin() || isOwner(resource.data.userId);
-      allow update: if isAdmin() || isOwner(resource.data.userId);
+      allow create: if isAdmin() || (isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        emailMatchesAuth(request.resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(request.resource.data.userId) ||
+        isAdminUser(request.resource.data.userId)
+      ));
+      // Allow Admins, or the signed-in user if the notification targets their UID or matches by email
+      allow read: if isAdmin() || isOwner(resource.data.userId) ||
+        emailMatchesAuth(resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(resource.data.userId) ||
+        (isSignedIn() && hasSameUserEmail(request.auth.uid, resource.data.userId)) ||
+        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
+      allow update: if isAdmin() || isOwner(resource.data.userId) ||
+        emailMatchesAuth(resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(resource.data.userId) ||
+        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
       allow delete: if isAdmin();
     }
 
@@ -63,14 +103,146 @@ service cloud.firestore {
       allow read: if isSignedIn();
   // Require non-negative aggregate stock; detailed per-residence validation is enforced in server/app logic
   allow create: if isAdmin() && request.resource.data.stock >= 0;
-  allow update: if isAdmin() && request.resource.data.stock >= 0;
+  // Admins can update any fields; Supervisors can only update stock fields
+  allow update: if (
+        (isAdmin() && request.resource.data.stock >= 0) ||
+        (isSupervisor() && request.resource.data.stock >= 0 && stockOnlyChange())
+      );
       allow delete: if isAdmin();
     }
 
     // Inventory transactions: readable by signed-in; write only by Admin
     match /inventoryTransactions/{txId} {
       allow read: if isSignedIn();
+      // Supervisors can create transaction entries; updates/deletes remain Admin-only
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
+    }
+
+    // Residential complexes (residences)
+    match /residences/{residenceId} {
+      // Everyone signed-in can read structures
+      allow read: if isSignedIn();
+      // Only Admins manage the master structure
       allow create, update, delete: if isAdmin();
+    }
+
+    // Maintenance Requests
+    match /maintenanceRequests/{requestId} {
+      allow read: if isSignedIn();
+      // Any signed-in user can create a request for themselves
+      allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
+      // Requester can update their own request while not completed/cancelled; Admins can always update/delete
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.requestedById == request.auth.uid &&
+        !(resource.data.status in ['Completed', 'Cancelled'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Material Requests (Orders)
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      // Allow any signed-in user to create a request
+      allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
+      // Allow requester to update while Pending; Admins can always update/delete
+      allow update: if isAdmin() || isSupervisor() || (
+        isSignedIn() &&
+        resource.data.requestedById == request.auth.uid &&
+        resource.data.status == 'Pending'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Short ID counters (used to generate MR- / SVC- ids)
+    match /counters/{counterId} {
+      // Read is fine for signed-in to show sequences if needed
+      allow read: if isSignedIn();
+      // Writes from clients are allowed for creating/incrementing counters (guarded by app logic)
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Service Orders
+    match /serviceOrders/{svcId} {
+      allow read: if isSignedIn();
+      // Creating/receiving service orders adjusts inventory; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Inventory categories
+    match /inventory-categories/{catId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Stock Transfers between residences
+    match /stockTransfers/{transferId} {
+      allow read: if isSignedIn();
+      // Creation typically by signed-in users; approvals handled by Admins in app logic
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Inventory Audits
+    match /inventoryAudits/{auditId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Material Issue Vouchers (MIVs)
+    match /mivs/{mivId} {
+      allow read: if isSignedIn();
+      // Creating MIVs affects stock via transactions; allow Admins and Supervisors to create
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
+    }
+
+    // Material Receipt Vouchers (MRVs)
+    match /mrvs/{mrvId} {
+      allow read: if isSignedIn();
+      // Posting MRVs adjusts inventory; allow Admins and Supervisors to create
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
+    }
+
+    // Pending MRV Requests awaiting approval
+    match /mrvRequests/{reqId} {
+      allow read: if isSignedIn();
+      // Any signed-in user can create a request for their residence; approvers are Admins
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Inventory audit line items
+    match /auditItems/{itemId} {
+      allow read: if isSignedIn();
+      // Allow signed-in users to submit counts; Admins can manage all
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory audit adjustments generated on completion
+    match /auditAdjustments/{adjId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Stock reconciliation summaries (reference documents)
+    match /stockReconciliations/{refId} {
+      allow read: if isSignedIn();
+      // Creation adjusts stock via transactions; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Reconciliation approval workflow (requests before posting)
+    match /reconciliationRequests/{requestId} {
+      allow read: if isSignedIn();
+      // Any signed-in user may propose a reconciliation; Admins approve
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     // Default: no broad allow; define explicit rules per collection as needed.

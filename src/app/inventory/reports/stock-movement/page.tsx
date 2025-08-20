@@ -204,13 +204,27 @@ export default function StockMovementReportPage() {
       allowedLocationIds = [...buildingRooms, ...buildingFacilities, ...floorFacilities];
     }
 
-    const filtered = allTransactions.filter(transaction => {
+  const filtered = allTransactions.filter(transaction => {
         let keep = true;
 
         // Filter by user's assigned residences if no specific residence is selected
         if (!allowedResidenceIds.has(transaction.residenceId)) keep = false;
         
-        if (filters.movementType && transaction.type !== filters.movementType) keep = false;
+        // Movement type filtering including service sub-options
+        if (filters.movementType) {
+          const mv = String(filters.movementType);
+          const refId = String(transaction.referenceDocId || '');
+          const isService = refId.startsWith('SVC-');
+          if (mv === 'SERVICE_DISPATCH') {
+            if (!(transaction.type === 'OUT' && isService)) keep = false;
+          } else if (mv === 'SERVICE_RETURN') {
+            if (!(transaction.type === 'IN' && isService)) keep = false;
+          } else if (mv === 'SERVICE_SCRAP') {
+            if (!(transaction.type === 'DEPRECIATION' && isService)) keep = false;
+          } else {
+            if (transaction.type !== mv) keep = false;
+          }
+        }
         if (filters.itemId && transaction.itemId !== filters.itemId) keep = false;
 
         // Date filtering
@@ -261,6 +275,10 @@ export default function StockMovementReportPage() {
   // Build deep links to original documents
   const canOpenDocLink = (tx: any) => {
     if (!tx?.referenceDocId) return null;
+    // Link to Service Orders
+    if (typeof tx.referenceDocId === 'string' && tx.referenceDocId.startsWith('SVC-')) {
+      return `/inventory/service-orders/${tx.referenceDocId}`;
+    }
     if (tx.type === 'IN') return `/inventory/receive/receipts/${tx.referenceDocId}`;
     if (tx.type === 'OUT') {
       return typeof tx.referenceDocId === 'string' && tx.referenceDocId.startsWith('MIV-')
@@ -569,6 +587,11 @@ export default function StockMovementReportPage() {
                         <SelectItem value="DEPRECIATION">{dict.depreciationLabel}</SelectItem>
                         <SelectItem value="AUDIT">{dict.auditAdjustmentLabel}</SelectItem>
                         <SelectItem value="SCRAP">{dict.scrapLabel}</SelectItem>
+                        {/* Service sub-options */}
+                        <div className="px-2 py-1 text-xs text-muted-foreground select-none">{(dict as any).serviceFilterLabel || 'Service Movements'}</div>
+                        <SelectItem value="SERVICE_DISPATCH">{(dict as any).serviceDispatch || 'Service Dispatch'}</SelectItem>
+                        <SelectItem value="SERVICE_RETURN">{(dict as any).serviceReturn || 'Service Return'}</SelectItem>
+                        <SelectItem value="SERVICE_SCRAP">{(dict as any).serviceScrap || 'Service Scrap'}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -879,7 +902,11 @@ export default function StockMovementReportPage() {
                   {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
                   <Button asChild>
-                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMrv}</Link>
+                        <Link href={canOpenDocLink(selectedTx)!}>{
+                          String(selectedTx.referenceDocId || '').startsWith('SVC-')
+                            ? ((dict as any).openServiceOrder || 'Open Service Order')
+                            : dict.openMrv
+                        }</Link>
                   </Button>
                 </div>
               )}
@@ -941,7 +968,11 @@ export default function StockMovementReportPage() {
               {canOpenDocLink(selectedTx) && (
                 <div className="pt-2">
                   <Button asChild>
-                    <Link href={canOpenDocLink(selectedTx)!}>{dict.openMiv}</Link>
+                    <Link href={canOpenDocLink(selectedTx)!}>{
+                      String(selectedTx.referenceDocId || '').startsWith('SVC-')
+                        ? ((dict as any).openServiceOrder || 'Open Service Order')
+                        : dict.openMiv
+                    }</Link>
                   </Button>
                 </div>
               )}

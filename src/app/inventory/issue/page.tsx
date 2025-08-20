@@ -143,6 +143,10 @@ export default function IssueMaterialPage() {
     };
 
     const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can issue materials.', variant: 'destructive' });
+            return;
+        }
         startTransition(async () => {
             if (!isLocationSelected || !selectedComplex) {
                 toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
@@ -325,6 +329,10 @@ export default function IssueMaterialPage() {
     };
     
     const handleSubmitVoucher = async () => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can submit issue vouchers.', variant: 'destructive' });
+            return;
+        }
         if (!selectedComplexId || !isVoucherSubmittable) {
             toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
             return;
@@ -368,7 +376,7 @@ export default function IssueMaterialPage() {
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
                         <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
-                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
+                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         {dict.submitVoucher}
                     </Button>

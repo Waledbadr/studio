@@ -36,6 +36,7 @@ export default function MRVApprovalDetailPage() {
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Record<string, number>>({});
   const [file, setFile] = useState<File | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
 
   useEffect(() => {
     if (residences.length === 0) loadResidences();
@@ -123,13 +124,26 @@ export default function MRVApprovalDetailPage() {
   };
 
   const handleApprove = async () => {
-    if (!data || !currentUser) return;
+    if (!data || !currentUser || isApproving) return;
+    setIsApproving(true);
     try {
       await handleSave();
       const mrvId = await approveMRVRequest(data.id, currentUser.id);
       toast({ title: 'Approved', description: `Created MRV ${mrvId}.` });
       router.push(`/inventory/receive/receipts/${mrvId}`);
-    } catch (e: any) {}
+    } catch (e: any) {
+      // If already approved in another click/session, route to its receipt
+      if (db && e && (e.code === 'ALREADY_APPROVED' || String(e.message).includes('already processed'))) {
+        try {
+          const ref = doc(collection(db, 'mrvRequests'), data.id);
+          const snap = await getDoc(ref);
+          const mrvId = (snap.data() as any)?.mrvId;
+          if (mrvId) router.push(`/inventory/receive/receipts/${mrvId}`);
+        } catch {}
+      }
+    } finally {
+      setIsApproving(false);
+    }
   };
 
   const handleReject = async () => {
@@ -150,9 +164,9 @@ export default function MRVApprovalDetailPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>Back</Button>
-          <Button variant="secondary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-          <Button onClick={handleApprove} disabled={currentUser?.role !== 'Admin'}>Approve</Button>
-          <Button variant="destructive" onClick={handleReject} disabled={currentUser?.role !== 'Admin'}>Reject</Button>
+          <Button variant="secondary" onClick={handleSave} disabled={saving || isApproving}>{saving ? 'Saving…' : 'Save'}</Button>
+          <Button onClick={handleApprove} disabled={currentUser?.role !== 'Admin' || isApproving}>{isApproving ? 'Approving…' : 'Approve'}</Button>
+          <Button variant="destructive" onClick={handleReject} disabled={currentUser?.role !== 'Admin' || isApproving}>Reject</Button>
         </div>
       </div>
 

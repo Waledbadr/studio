@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { getAuth, type Auth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -43,6 +44,30 @@ if (isFirebaseConfigured) {
 
     // Quieter console: only errors
     setLogLevel('error');
+
+    // Initialize App Check if configured (helps when enforcement is enabled)
+    if (typeof window !== 'undefined') {
+      try {
+        const enableDebug = String(process.env.NEXT_PUBLIC_APPCHECK_DEBUG || '').toLowerCase() === 'true';
+        const siteKey = process.env.NEXT_PUBLIC_APPCHECK_SITE_KEY;
+        if (enableDebug) {
+          // Enable debug token in development; copy the token from console if needed
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        }
+        if (siteKey) {
+          initializeAppCheck(app, {
+            provider: new ReCaptchaV3Provider(siteKey),
+            isTokenAutoRefreshEnabled: true,
+          });
+          if (enableDebug) {
+            console.log('Firebase App Check initialized (debug mode)');
+          }
+        }
+      } catch (e) {
+        console.warn('App Check init skipped:', e);
+      }
+    }
 
     // Decide cache strategy
     const useMemoryCache = (process.env.NEXT_PUBLIC_FIRESTORE_CACHE || '').toLowerCase() === 'memory'
