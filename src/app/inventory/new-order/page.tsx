@@ -65,10 +65,11 @@ export default function NewOrderPage() {
     const isDraftDirtyRef = useRef(false);
 
     useEffect(() => {
+        if (!currentUser) return;
         loadInventory();
         if (users.length === 0) loadUsers();
         if (residences.length === 0) loadResidences();
-    }, [loadInventory, loadUsers, loadResidences, users.length, residences.length]);
+    }, [currentUser, loadInventory, loadUsers, loadResidences, users.length, residences.length]);
 
     // Restore draft once when user and residences are available
     useEffect(() => {

@@ -36,8 +36,9 @@ export default function MaintenancePage() {
 
 
     useEffect(() => {
+        if (!currentUser) return;
         loadRequests();
-    }, [loadRequests]);
+    }, [currentUser, loadRequests]);
     
     const userRequests = useMemo(() => {
         if (!currentUser || isAdmin) return requests;

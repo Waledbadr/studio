@@ -59,6 +59,7 @@ export default function ReceiveMaterialsPage() {
     
     // UseEffect to load MRV stats when the component mounts
     useEffect(() => {
+        if (!currentUser) return;
         if (residences.length === 0) {
             loadResidences();
         }
@@ -66,7 +67,7 @@ export default function ReceiveMaterialsPage() {
         loadOrders();
         loadMrvStats();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadResidences, residences.length, isAdmin, currentUser]);
+    }, [currentUser, loadResidences, residences.length, isAdmin]);
 
 
     // Save completed section state to localStorage

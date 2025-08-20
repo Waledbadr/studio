@@ -20,7 +20,11 @@ export default function MRVReceiptsPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (residences.length === 0) loadResidences();
+    // انتظر تحميل المجمعات (وغالباً المستخدم) قبل القراءة
+    if (residences.length === 0) {
+      loadResidences();
+      return;
+    }
     (async () => {
       setLoading(true);
       try {

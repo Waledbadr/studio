@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 
 export default function UsersPage() {
-    const { users, loading: usersLoading, saveUser, deleteUser, loadUsers } = useUsers();
+    const { users, loading: usersLoading, saveUser, deleteUser, loadUsers, currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -25,9 +25,10 @@ export default function UsersPage() {
     const { toast } = useToast();
 
     useEffect(() => {
+        if (!currentUser) return; // wait until signed-in
         loadUsers();
         loadResidences();
-    }, [loadUsers, loadResidences]);
+    }, [currentUser, loadUsers, loadResidences]);
 
     const handleAddNewUser = () => {
         setSelectedUser(null);

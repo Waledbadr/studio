@@ -73,6 +73,130 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Residential complexes (residences)
+    match /residences/{residenceId} {
+      // Everyone signed-in can read structures
+      allow read: if isSignedIn();
+      // Only Admins manage the master structure
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Maintenance Requests
+    match /maintenanceRequests/{requestId} {
+      allow read: if isSignedIn();
+      // Any signed-in user can create a request for themselves
+      allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
+      // Requester can update their own request while not completed/cancelled; Admins can always update/delete
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.requestedById == request.auth.uid &&
+        !(resource.data.status in ['Completed', 'Cancelled'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Material Requests (Orders)
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      // Allow any signed-in user to create a request
+      allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
+      // Allow requester to update while Pending; Admins can always update/delete
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.requestedById == request.auth.uid &&
+        resource.data.status == 'Pending'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Short ID counters (used to generate MR- / SVC- ids)
+    match /counters/{counterId} {
+      // Read is fine for signed-in to show sequences if needed
+      allow read: if isSignedIn();
+      // Writes from clients are allowed for creating/incrementing counters (guarded by app logic)
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Service Orders
+    match /serviceOrders/{svcId} {
+      allow read: if isSignedIn();
+      // Creating/receiving service orders adjusts inventory; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Inventory categories
+    match /inventory-categories/{catId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Stock Transfers between residences
+    match /stockTransfers/{transferId} {
+      allow read: if isSignedIn();
+      // Creation typically by signed-in users; approvals handled by Admins in app logic
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Inventory Audits
+    match /inventoryAudits/{auditId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Material Issue Vouchers (MIVs)
+    match /mivs/{mivId} {
+      allow read: if isSignedIn();
+      // Creating/adjusting MIVs affects stock via transactions; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Material Receipt Vouchers (MRVs)
+    match /mrvs/{mrvId} {
+      allow read: if isSignedIn();
+      // Posting MRVs adjusts inventory; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Pending MRV Requests awaiting approval
+    match /mrvRequests/{reqId} {
+      allow read: if isSignedIn();
+      // Any signed-in user can create a request for their residence; approvers are Admins
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Inventory audit line items
+    match /auditItems/{itemId} {
+      allow read: if isSignedIn();
+      // Allow signed-in users to submit counts; Admins can manage all
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory audit adjustments generated on completion
+    match /auditAdjustments/{adjId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Stock reconciliation summaries (reference documents)
+    match /stockReconciliations/{refId} {
+      allow read: if isSignedIn();
+      // Creation adjusts stock via transactions; restrict to Admins
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Reconciliation approval workflow (requests before posting)
+    match /reconciliationRequests/{requestId} {
+      allow read: if isSignedIn();
+      // Any signed-in user may propose a reconciliation; Admins approve
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
     // Default: no broad allow; define explicit rules per collection as needed.
   }
 }

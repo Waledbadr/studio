@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from "firebase/firestore";
+import { onAuthStateChanged } from 'firebase/auth';
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
@@ -77,6 +78,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
+    // Defer subscription until signed-in user is available
+    if (auth && !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
 
@@ -91,6 +97,25 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
   }, [toast]);
+
+  // Ensure we auto-subscribe once the user signs in (in case pages call before auth)
+  useEffect(() => {
+    if (!auth) return; // local mode; page will call explicitly
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        loadOrders();
+      } else {
+        // Signed out: stop listener and reset state
+        if (unsubscribeRef.current) {
+          try { unsubscribeRef.current(); } catch {}
+          unsubscribeRef.current = null;
+        }
+        setOrders([]);
+        setLoading(false);
+      }
+    });
+    return () => unsub();
+  }, [loadOrders]);
   
   const generateNewOrderId = async (): Promise<string> => {
     if (!db) {

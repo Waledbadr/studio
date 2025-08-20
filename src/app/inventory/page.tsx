@@ -43,11 +43,12 @@ export default function InventoryPage() {
   const { toast } = useToast();
   
   useEffect(() => {
+    if (!currentUser) return;
     loadInventory();
     if (residences.length === 0) {
       loadResidencesContext();
     }
-  }, [loadInventory, loadResidencesContext, residences.length]);
+  }, [currentUser, loadInventory, loadResidencesContext, residences.length]);
 
   const userResidences = useMemo(() => {
     if (!currentUser) return [];

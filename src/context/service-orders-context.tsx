@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import {
   collection,
   onSnapshot,
@@ -16,6 +16,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import type { Timestamp as TsType, Firestore } from "firebase/firestore";
+import { onAuthStateChanged } from 'firebase/auth';
 
 export type DestinationType = "InternalMaintenance" | "ExternalWorkshop" | "Vendor";
 
@@ -103,6 +104,11 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       toast({ title: "Config error", description: "Firebase not configured.", variant: "destructive" });
       return;
     }
+    // Wait for auth to satisfy Firestore rules
+    if (auth && !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
     isLoaded.current = true;
     setLoading(true);
   const fdb = db as Firestore;
@@ -124,9 +130,20 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     load();
+    const unsub = auth ? onAuthStateChanged(auth, (u) => {
+      if (u) {
+        if (!isLoaded.current) load();
+      } else {
+        subRef.current?.();
+        isLoaded.current = false;
+        setServiceOrders([]);
+        setLoading(false);
+      }
+    }) : undefined;
     return () => {
       subRef.current?.();
       isLoaded.current = false;
+      unsub?.();
     };
   }, [load]);
 

@@ -33,11 +33,13 @@ export default function DashboardPage() {
   const router = useRouter();
 
 
-  useEffect(() => {
-    loadRequests();
-    loadOrders();
-    setMivsLoading(true);
-    getMIVs().then(setMivs).finally(() => setMivsLoading(false));
+    useEffect(() => {
+        // لا تبدأ أي تحميل قبل توفر مستخدم مُسجّل دخول
+        if (!currentUser) return;
+        loadRequests();
+        loadOrders();
+        setMivsLoading(true);
+        getMIVs().then(setMivs).finally(() => setMivsLoading(false));
         if (isAdmin) {
             setPendingReconsLoading(true);
             getReconciliationRequests(undefined, 'Pending').then(setPendingRecons).finally(() => setPendingReconsLoading(false));
@@ -45,7 +47,7 @@ export default function DashboardPage() {
             setPendingRecons([]);
             setPendingReconsLoading(false);
         }
-  }, [loadRequests, loadOrders, getMIVs]);
+    }, [currentUser, isAdmin, loadRequests, loadOrders, getMIVs, getReconciliationRequests]);
   
   const filteredMaintenance = useMemo(() => {
     if (!currentUser || isAdmin) return requests;

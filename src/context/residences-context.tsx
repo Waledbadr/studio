@@ -1,10 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import safeOnSnapshot from '@/lib/firestore-utils';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from "@/hooks/use-toast";
 
 // Define types for our data structure
@@ -159,6 +160,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     
+    // If Firebase is configured but user isn't signed in yet, defer loading until auth is ready
+    if (auth && !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
     isLoaded.current = true;
     setLoading(true);
 
@@ -177,12 +184,32 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
    useEffect(() => {
+    // Try once on mount (will no-op if waiting for auth)
     loadResidences();
+    // Also subscribe to auth changes to trigger loading after sign-in
+    let unsubAuth: (() => void) | undefined;
+    if (auth) {
+      unsubAuth = onAuthStateChanged(auth, (u) => {
+        if (u) {
+          if (!isLoaded.current) loadResidences();
+        } else {
+          // Signed out: clean up listeners and state
+          if (unsubscribeRef.current) {
+            try { unsubscribeRef.current(); } catch {}
+            unsubscribeRef.current = null;
+          }
+          isLoaded.current = false;
+          setResidences([]);
+          setLoading(false);
+        }
+      });
+    }
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         isLoaded.current = false;
       }
+      unsubAuth?.();
     };
   }, [loadResidences]);
 
