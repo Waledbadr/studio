@@ -30,6 +30,7 @@ export default function ReceiveMaterialsPage() {
     const [pendingMrvRequests, setPendingMrvRequests] = useState<any[]>([]);
     const [approvedMrvRequests, setApprovedMrvRequests] = useState<any[]>([]);
     const [rejectedMrvCount, setRejectedMrvCount] = useState(0);
+    const [approveBusy, setApproveBusy] = useState<Record<string, boolean>>({});
     const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
 
     // helper to load MRV stats (pending list, counts)
@@ -106,6 +107,7 @@ export default function ReceiveMaterialsPage() {
         const rows: any[] = [];
         // MRV Pending
         for (const r of pendingMrvRequests) {
+          const busy = !!approveBusy[r.id];
           rows.push({
             key: `mrv-${r.id}`,
             id: r.id,
@@ -123,14 +125,18 @@ export default function ReceiveMaterialsPage() {
                 {isAdmin && (
                   <Button
                     size="sm"
+                    disabled={busy}
                     onClick={async () => {
+                      if (busy) return;
+                      setApproveBusy(prev => ({ ...prev, [r.id]: true }));
                       try {
                         await approveMRVRequest(r.id, currentUser!.id);
                         await loadMrvStats();
                       } catch {}
+                      setApproveBusy(prev => ({ ...prev, [r.id]: false }));
                     }}
                   >
-                    Approve
+                    {busy ? 'Approving…' : 'Approve'}
                   </Button>
                 )}
               </div>
@@ -162,7 +168,7 @@ export default function ReceiveMaterialsPage() {
                     });
                 }
         return rows;
-                        }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats]);
+                        }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats, approveBusy]);
 
         // Build rows for Completed section (approved MRVs only)
     const completedRows = useMemo(() => {

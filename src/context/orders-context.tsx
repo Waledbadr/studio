@@ -50,7 +50,8 @@ interface OrdersContextType {
   updateOrderStatus: (id: string, status: OrderStatus, approverId?: string) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
-  receiveOrderItems: (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => Promise<void>;
+  // For receiving, only id and quantity are required; names are optional and resolved from inventory when available
+  receiveOrderItems: (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -267,24 +268,44 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, nameAr: string, nameEn: string, quantityReceived: number}[], forceComplete: boolean) => {
+const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
+  // Client-side guard to avoid Firestore permission errors; allow Admin or Supervisor
+  if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+    toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can receive materials and update stock.', variant: 'destructive' });
+    throw new Error('Forbidden');
+  }
     setLoading(true);
 
     const firestore = db;
     const orderRef = doc(firestore, "orders", orderId);
 
-    // Helper to get base id safely (handles variant suffix without breaking random Firestore IDs)
-    const toBaseId = (rawId: string) => {
-        const idx = rawId.indexOf('-');
-        return idx === -1 ? rawId : rawId.slice(0, idx);
+    // Candidate generator: try raw, before '::', before '-' (to support multiple variant schemes)
+    const candidateBaseIds = (rawId: string): string[] => {
+      const out: string[] = [];
+      const push = (v?: string) => { if (v && !out.includes(v)) out.push(v); };
+      const s = String(rawId);
+      push(s);
+      if (s.includes('::')) push(s.split('::')[0]);
+      if (s.includes('-')) push(s.split('-')[0]);
+      return out;
+    };
+    
+    // Best-effort decode of possibly URL-encoded labels
+    const pretty = (s?: string) => {
+      if (!s) return s;
+      try {
+        // only attempt when string appears encoded
+        if (/%[0-9A-Fa-f]{2}/.test(s)) return decodeURIComponent(s);
+      } catch {}
+      return s;
     };
 
     try {
-        let skippedItemsNames: string[] = [];
+  // We no longer "skip" lines. If any item is missing from inventory, we fail the whole transaction.
         await runTransaction(firestore, async (transaction) => {
             // --- STAGE 1: ALL READS ---
             const orderSnap = await transaction.get(orderRef);
@@ -308,13 +329,12 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
                 throw new Error('No valid items to receive.');
             }
             
-            // Use a Map to fetch each base item only once
+            // Build unique candidate IDs and fetch them once
             const itemRefsToFetch = new Map<string, DocumentReference>();
             for (const item of itemsToProcess) {
-                const baseItemId = toBaseId(String(item.id));
-                if (!itemRefsToFetch.has(baseItemId)) {
-                    itemRefsToFetch.set(baseItemId, doc(firestore, "inventory", baseItemId));
-                }
+              for (const cid of candidateBaseIds(String(item.id))) {
+                if (!itemRefsToFetch.has(cid)) itemRefsToFetch.set(cid, doc(firestore, 'inventory', cid));
+              }
             }
 
             const uniqueItemRefs = Array.from(itemRefsToFetch.values());
@@ -329,53 +349,128 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
                 }
             }
 
-            // Partition items into valid vs missing
-            const validItems: typeof itemsToProcess = [];
-            const missingItems: string[] = [];
+            // Resolver: pick the first candidate that exists in inventory
+            const resolveBaseId = (id: string): string | null => {
+              const candidates = candidateBaseIds(id);
+              for (const c of candidates) if (itemDataMap.has(c)) return c;
+              return null;
+            };
+
+      // Validate: ALL base items must exist; otherwise abort (no skipping)
             for (const receivedItem of itemsToProcess) {
-                const baseItemId = toBaseId(String(receivedItem.id));
-                if (itemDataMap.has(baseItemId)) {
-                    validItems.push(receivedItem);
-                } else {
-                    missingItems.push(`${receivedItem.nameEn} (ID: ${baseItemId})`);
-                }
+              const baseItemId = resolveBaseId(String(receivedItem.id));
+              if (!baseItemId) {
+                const label = pretty(receivedItem.nameEn) || String(receivedItem.id);
+                throw new Error(`Item not found in inventory: ${label}`);
+              }
             }
-            skippedItemsNames = missingItems;
+
+      const validItems = itemsToProcess;
 
             // --- STAGE 3: ALL WRITES ---
             const transactionTime = Timestamp.now();
             
-            // 3.a Update inventory stock and log transactions for valid items only
-            for (const receivedItem of validItems) {
-                const baseItemId = toBaseId(String(receivedItem.id));
-                const itemRef = doc(firestore, "inventory", baseItemId);
-                transaction.update(itemRef, {
-                    [`stockByResidence.${residenceId}`]: increment(receivedItem.quantityReceived)
-                });
+      // Aggregate quantities per base item to ensure single atomic stock update per item
+      const totalsByBaseItem = new Map<string, number>();
+      for (const r of validItems) {
+        const baseId = ((): string => {
+          const rb = resolveBaseId(String(r.id));
+          return rb || String(r.id);
+        })();
+        totalsByBaseItem.set(baseId, (totalsByBaseItem.get(baseId) || 0) + Number(r.quantityReceived || 0));
+      }
 
-                const transactionRef = doc(collection(firestore, "inventoryTransactions"));
-                transaction.set(transactionRef, {
-                    itemId: baseItemId,
-                    itemNameEn: receivedItem.nameEn,
-                    itemNameAr: receivedItem.nameAr,
-                    residenceId: residenceId,
-                    date: transactionTime,
-                    type: 'IN',
-                    quantity: receivedItem.quantityReceived,
-                    referenceDocId: orderId,
-                } as Omit<InventoryTransaction, 'id'>);
+      // 3.a Update inventory stock (stockByResidence and total stock) per item
+      for (const [baseItemId, totalQty] of totalsByBaseItem.entries()) {
+  const prevData = itemDataMap.get(baseItemId) || {};
+        const prevSbr = { ...(prevData.stockByResidence || {}) } as Record<string, number>;
+        const prevAtResidence = Math.max(0, Number(prevSbr[residenceId] || 0));
+        const nextAtResidence = prevAtResidence + totalQty;
+        const newSbr = { ...prevSbr, [residenceId]: nextAtResidence };
+        const newTotal = Object.values(newSbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        const itemRef = doc(firestore, 'inventory', baseItemId);
+        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
+      }
+
+      // 3.b Log transactions for each received line (for reporting)
+      for (const receivedItem of validItems) {
+        const baseItemId = ((): string => {
+          const rb = resolveBaseId(String(receivedItem.id));
+          return rb || String(receivedItem.id);
+        })();
+        const inv = itemDataMap.get(baseItemId) || {};
+        const transactionRef = doc(collection(firestore, 'inventoryTransactions'));
+        transaction.set(transactionRef, {
+          itemId: baseItemId,
+          itemNameEn: inv.nameEn || pretty(receivedItem.nameEn) || inv.name || '',
+          itemNameAr: inv.nameAr || pretty(receivedItem.nameAr) || inv.name || '',
+          residenceId: residenceId,
+          date: transactionTime,
+          type: 'IN',
+          quantity: receivedItem.quantityReceived,
+          referenceDocId: orderId,
+        } as Omit<InventoryTransaction, 'id'>);
+      }
+
+      // 3.c Update order's received items and status, aggregating by base item across variants
+            const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
+
+            // Build helper: map of current received per line id for quick lookup
+            const currentReceivedById = new Map<string, number>();
+            for (const r of existingReceived) currentReceivedById.set(r.id, Number(r.quantityReceived) || 0);
+
+            // Distribute totals per baseId onto the order's lines that share that baseId (resolved)
+            const linesByBaseId = new Map<string, { id: string; requestedQty: number }[]>();
+            for (const line of orderData.items) {
+              const rb = resolveBaseId(String(line.id));
+              const key = rb || String(line.id);
+              const arr = linesByBaseId.get(key) || [];
+              arr.push({ id: line.id, requestedQty: Number(line.quantity) || 0 });
+              linesByBaseId.set(key, arr);
             }
 
-            // 3.b Update order's received items and status using valid items (skip missing)
-            const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
-            for (const receivedItem of validItems) {
-                const idx = existingReceived.findIndex(item => item.id === receivedItem.id);
-                if (idx > -1) {
-                    const current = Number(existingReceived[idx].quantityReceived) || 0;
-                    existingReceived[idx].quantityReceived = current + receivedItem.quantityReceived;
-                } else {
-                    existingReceived.push({ id: receivedItem.id, quantityReceived: receivedItem.quantityReceived });
+            for (const [baseItemId, totalQty] of totalsByBaseItem.entries()) {
+              let remaining = Number(totalQty) || 0;
+              const lines = (linesByBaseId.get(baseItemId) || []).slice();
+              if (lines.length === 0) {
+                // No matching order lines (should not happen). Skip allocation to lines but continue.
+                continue;
+              }
+              // Allocate to each line up to its remaining-to-fulfill amount
+              for (const line of lines) {
+                if (remaining <= 0) break;
+                const already = currentReceivedById.get(line.id) || 0;
+                const remainingForLine = Math.max(0, line.requestedQty - already);
+                const allocate = remainingForLine > 0 ? Math.min(remaining, remainingForLine) : 0;
+                if (allocate > 0) {
+                  const newVal = already + allocate;
+                  currentReceivedById.set(line.id, newVal);
+                  const idx = existingReceived.findIndex(it => it.id === line.id);
+                  if (idx > -1) {
+                    existingReceived[idx].quantityReceived = newVal;
+                  } else {
+                    existingReceived.push({ id: line.id, quantityReceived: newVal });
+                  }
+                  remaining -= allocate;
                 }
+              }
+              // If we still have remaining (over-receipt), add it to the first line
+              if (remaining > 0 && lines.length > 0) {
+                const first = lines[0];
+                const already = currentReceivedById.get(first.id) || 0;
+                const newVal = already + remaining;
+                currentReceivedById.set(first.id, newVal);
+                const idx = existingReceived.findIndex(it => it.id === first.id);
+                if (idx > -1) {
+                  existingReceived[idx].quantityReceived = newVal;
+                } else {
+                  existingReceived.push({ id: first.id, quantityReceived: newVal });
+                }
+                remaining = 0;
+              }
             }
 
             // Determine status
@@ -397,11 +492,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             });
         });
 
-        if (skippedItemsNames.length > 0) {
-            toast({ title: "Some items were skipped", description: `Missing in inventory: ${skippedItemsNames.join(', ')}`, variant: "destructive" });
-        } else {
-            toast({ title: "Success", description: "Stock updated and request status changed." });
-        }
+  toast({ title: "Success", description: "Stock updated and request status changed." });
     } catch (error) {
         console.error("Error receiving order items:", error);
         const err = error as Error;

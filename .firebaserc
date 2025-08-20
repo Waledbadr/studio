@@ -1,7 +1,8 @@
 {
   "projects": {
-  "estatecare": "estatecare",
-  "sample": "sample-firebase-ai-app-55f54"
+    "default": "sample-firebase-ai-app-55f54",
+    "estatecare": "estatecare",
+    "sample": "sample-firebase-ai-app-55f54"
   },
   "targets": {},
   "etags": {}

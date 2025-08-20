@@ -36,6 +36,9 @@ const toastVariants = cva(
         // Keep destructive strong/legible while matching glass aesthetic
         destructive:
           "destructive group text-destructive-foreground bg-destructive/85 border-destructive/40",
+        // Warning (yellow) style for gentle alerts
+        warning:
+          "group text-amber-950 bg-amber-100/90 border-amber-300/80 dark:text-amber-100 dark:bg-amber-500/20 dark:border-amber-400/30",
       },
     },
     defaultVariants: {

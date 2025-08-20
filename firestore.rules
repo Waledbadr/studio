@@ -5,9 +5,16 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
+    function isSupervisor() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor';
+    }
     function isOwner(userId) { return isSignedIn() && userId == request.auth.uid; }
     function isAdminUser(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data.role == 'Admin';
+    }
+    function stockOnlyChange() {
+      // Allow only stock fields to change
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'stockByResidence']);
     }
 
     // Feedback documents
@@ -63,14 +70,20 @@ service cloud.firestore {
       allow read: if isSignedIn();
   // Require non-negative aggregate stock; detailed per-residence validation is enforced in server/app logic
   allow create: if isAdmin() && request.resource.data.stock >= 0;
-  allow update: if isAdmin() && request.resource.data.stock >= 0;
+  // Admins can update any fields; Supervisors can only update stock fields
+  allow update: if (
+        (isAdmin() && request.resource.data.stock >= 0) ||
+        (isSupervisor() && request.resource.data.stock >= 0 && stockOnlyChange())
+      );
       allow delete: if isAdmin();
     }
 
     // Inventory transactions: readable by signed-in; write only by Admin
     match /inventoryTransactions/{txId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      // Supervisors can create transaction entries; updates/deletes remain Admin-only
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
     }
 
     // Residential complexes (residences)
@@ -101,7 +114,7 @@ service cloud.firestore {
       // Allow any signed-in user to create a request
       allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
       // Allow requester to update while Pending; Admins can always update/delete
-      allow update: if isAdmin() || (
+      allow update: if isAdmin() || isSupervisor() || (
         isSignedIn() &&
         resource.data.requestedById == request.auth.uid &&
         resource.data.status == 'Pending'
@@ -149,15 +162,17 @@ service cloud.firestore {
     // Material Issue Vouchers (MIVs)
     match /mivs/{mivId} {
       allow read: if isSignedIn();
-      // Creating/adjusting MIVs affects stock via transactions; restrict to Admins
-      allow create, update, delete: if isAdmin();
+      // Creating MIVs affects stock via transactions; allow Admins and Supervisors to create
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
     }
 
     // Material Receipt Vouchers (MRVs)
     match /mrvs/{mrvId} {
       allow read: if isSignedIn();
-      // Posting MRVs adjusts inventory; restrict to Admins
-      allow create, update, delete: if isAdmin();
+      // Posting MRVs adjusts inventory; allow Admins and Supervisors to create
+      allow create: if isAdmin() || isSupervisor();
+      allow update, delete: if isAdmin();
     }
 
     // Pending MRV Requests awaiting approval

@@ -26,6 +26,7 @@ import type { Complex } from '@/context/residences-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
+import { QuantityStepper } from '@/components/ui/quantity-stepper';
 
 export default function NewOrderPage() {
     const { items: allItems, loading, loadInventory, addItem, categories, getStockForResidence, updateItem } = useInventory();
@@ -241,7 +242,24 @@ export default function NewOrderPage() {
 
         // Add to recent items
         addToRecentItems(itemToAdd);
-    }, [addToRecentItems]);
+
+        // Notify user in English if there is stock available in the selected residence (yellow/warning)
+        try {
+            if (selectedResidence) {
+                const available = getStockForResidence(itemToAdd, selectedResidence.id);
+                if (available > STOCK_ATTENTION_THRESHOLD) {
+                    toast({
+                        title: `Heads up: Stock available`,
+                        description:
+                            `You already have stock for this item. ` +
+                            `Stock: ${available} ${itemToAdd.unit || ''} • ${selectedResidence.name}. ` +
+                            `Please consider using available stock before creating a new purchase request.`,
+                        variant: "warning",
+                    });
+                }
+            }
+        } catch {}
+    }, [addToRecentItems, selectedResidence, getStockForResidence, dict, toast, STOCK_ATTENTION_THRESHOLD]);
 
     // When orderItems change and we have a target to focus, focus and select its quantity input
     useEffect(() => {
@@ -397,7 +415,9 @@ export default function NewOrderPage() {
             if (!selectedResidence) return 0;
             const rawId = (item as any).id ?? (item as any).itemId;
             if (!rawId) return 0;
-            const baseItemId = String(rawId).split('-')[0];
+            // Order items may append a variant after '::', keep the base document id
+            const raw = String(rawId);
+            const baseItemId = raw.includes('::') ? raw.split('::')[0] : raw;
             const baseItem = allItems.find(i => i.id === baseItemId);
             if (!baseItem) return 0;
             return getStockForResidence(baseItem, selectedResidence.id);
@@ -708,7 +728,7 @@ function AddItemButton({
                                                     const detail = ar.detail || en.detail || '';
                                                     const stock = handleGetStockForOrderItem(item);
                                                     return (
-                                                        <div key={item.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                        <div key={item.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] items-start sm:items-center gap-3">
                                                             <div className="min-w-0">
                                                                 <div className="font-medium truncate">{en.base || item.nameEn} | {ar.base || item.nameAr}</div>
                                                                 <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -718,22 +738,15 @@ function AddItemButton({
                                                                     {detail && <span className="italic">• {detail}</span>}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center justify-center gap-2">
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
-                                                                    <Minus className="h-4 w-4" />
-                                                                </Button>
-                                                                <Input
-                                                                    type="number"
+                                                            <div className="flex items-center justify-center sm:justify-start">
+                                                                <QuantityStepper
                                                                     value={item.quantity}
-                                                                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))}
+                                                                    onValueChange={(n) => handleQuantityChange(item.id, n)}
+                                                                    disallowedValues={[3]}
                                                                     ref={(el) => { qtyRefs.current[item.id] = el; }}
-                                                                    className="w-16 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 />
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
-                                                                    <Plus className="h-4 w-4" />
-                                                                </Button>
                                                             </div>
-                                                            <div className="flex items-center justify-end gap-1">
+                                                            <div className="flex items-center justify-end gap-1 sm:justify-end">
                                                                 <Popover>
                                                                     <PopoverTrigger asChild>
                                                                         <Button variant="ghost" size="icon">

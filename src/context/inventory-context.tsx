@@ -138,7 +138,7 @@ export interface MRVRequest {
   attachmentUrl?: string | null;
   attachmentPath?: string | null;
   notes?: string | null;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Processing' | 'Approved' | 'Rejected';
   requestedById?: string | null;
   requestedAt: Timestamp;
   approvedById?: string;
@@ -287,7 +287,8 @@ interface InventoryContextType {
   createTransferRequest: (payload: NewStockTransferPayload, currentUser: User) => Promise<void>;
   approveTransfer: (transferId: string, approverId: string) => Promise<void>;
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
-  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
+  // For issuing, only id and quantity are required; names are optional and resolved from inventory when available
+  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
   getAllInventoryTransactionsRaw?: () => Promise<any[]>;
@@ -676,7 +677,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return `TRS-${yy}${mmNoPad}${nextSeq}`;
   };
 
-  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
+  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
     }
@@ -690,7 +691,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       // Step 1: Read all items first
       const itemSnapshots = new Map<string, DocumentSnapshot>();
-      for (const id of uniqueItemIds) {
+  for (const id of uniqueItemIds) {
         const itemRef = doc(db!, "inventory", id);
         const itemSnap = await transaction.get(itemRef);
         if (!itemSnap.exists()) {
@@ -740,6 +741,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             
             const mivDocRef = doc(db!, 'mivs', mivId);
             
+            // Best-effort decode helper
+            const pretty = (s?: string) => {
+              if (!s) return s as any;
+              try { if (/%[0-9A-Fa-f]{2}/.test(String(s))) return decodeURIComponent(String(s)); } catch {}
+              return s;
+            };
+
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
@@ -747,10 +755,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
                     // Log transaction
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
+                    const snap = itemSnapshots.get(issuedItem.id);
+                    const inv: any = snap?.data() || {};
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
-                        itemNameEn: issuedItem.nameEn,
-                        itemNameAr: issuedItem.nameAr,
+                        itemNameEn: inv.nameEn || inv.name || pretty(issuedItem.nameEn) || '',
+                        itemNameAr: inv.nameAr || inv.name || pretty(issuedItem.nameAr) || '',
                         residenceId: residenceId,
                         date: transactionTime,
                         type: 'OUT',
@@ -786,6 +796,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
       throw new Error(firebaseErrorMessage);
     }
+    // Client-side guard: only Admin or Supervisor can post MRVs
+    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+      toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can post MRVs.', variant: 'destructive' });
+      throw new Error('Forbidden');
+    }
     const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
     if (!payload.residenceId || validItems.length === 0) {
       throw new Error('Residence and at least one item with quantity > 0 are required.');
@@ -807,23 +822,43 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const itemRefs = uniqueItemIds.map(id => doc(db!, 'inventory', id));
       const itemSnaps = await Promise.all(itemRefs.map(r => transaction.get(r)));
 
-      // Validate items existence
+      // Validate items existence and build lookup
+      const existingById = new Map<string, any>();
       for (let i = 0; i < itemSnaps.length; i++) {
-        if (!itemSnaps[i].exists()) {
+        const snap = itemSnaps[i];
+        if (!snap.exists()) {
           throw new Error(`Item not found (ID: ${uniqueItemIds[i]})`);
         }
+        existingById.set(snap.id, snap.data());
+      }
+
+      // Aggregate quantities per item for a single atomic update per item
+      const totalsByItem = new Map<string, number>();
+      for (const line of validItems) {
+        totalsByItem.set(line.id, (totalsByItem.get(line.id) || 0) + Number(line.quantity || 0));
       }
 
       const now = Timestamp.now();
       let totalItemCount = 0;
 
-      // Perform stock increments and write transactions
-      for (const line of validItems) {
-        const itemRef = doc(db!, 'inventory', line.id);
-        transaction.update(itemRef, {
-          [`stockByResidence.${payload.residenceId}`]: increment(line.quantity)
-        });
+      // Update stock (stockByResidence and total stock) per item
+      for (const [itemId, totalQty] of totalsByItem.entries()) {
+        const prev = existingById.get(itemId) || {};
+        const prevSbr = { ...(prev.stockByResidence || {}) } as Record<string, number>;
+        const prevAtRes = Math.max(0, Number(prevSbr[payload.residenceId] || 0));
+        const nextAtRes = prevAtRes + totalQty;
+        const newSbr = { ...prevSbr, [payload.residenceId]: nextAtRes };
+        const newTotal = Object.values(newSbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        const itemRef = doc(db!, 'inventory', itemId);
+        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
+        totalItemCount += totalQty;
+      }
 
+      // Log transactions for each line
+      for (const line of validItems) {
         const txRef = doc(collection(db!, 'inventoryTransactions'));
         transaction.set(txRef, {
           itemId: line.id,
@@ -836,8 +871,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           referenceDocId: mrvId,
           locationName: 'Receiving'
         } as Omit<InventoryTransaction, 'id'>);
-
-        totalItemCount += line.quantity;
       }
 
       // Write MRV master record
@@ -1117,33 +1150,48 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
     if (!db) throw new Error(firebaseErrorMessage);
-     // Read request
-     const reqRef = doc(db!, 'mrvRequests', requestId);
-     const reqSnap = await getDoc(reqRef);
-     if (!reqSnap.exists()) throw new Error('Request not found');
-     const reqData = reqSnap.data() as MRVRequest;
-     if (reqData.status !== 'Pending') throw new Error('Request already processed');
+    const reqRef = doc(db!, 'mrvRequests', requestId);
+
+    // Step 1: Atomically move Pending -> Processing to prevent double approvals
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as MRVRequest;
+      if (data.status === 'Approved' && data.mrvId) {
+        // Already approved earlier: short-circuit
+        throw Object.assign(new Error('ALREADY_APPROVED'), { code: 'ALREADY_APPROVED', mrvId: data.mrvId });
+      }
+      if (data.status !== 'Pending') {
+        throw new Error('Request already processed');
+      }
+      // Mark as Processing to lock it
+      trx.update(reqRef, { status: 'Processing', processingAt: Timestamp.now(), processingById: approverId } as any);
+    });
+
+    // Step 2: Read the fresh data and proceed to create MRV
+    const freshSnap = await getDoc(reqRef);
+    const reqData = freshSnap.data() as MRVRequest;
 
     // Reserve an MRV id/code to ensure consistent monthly sequence
     const reserved = await reserveNewMrvId();
-     // Create posted MRV and update request status
-     const mrvId = await createMRV({
-       residenceId: reqData.residenceId,
-       items: reqData.items.map(i => ({ id: i.id, nameEn: i.nameEn, nameAr: i.nameAr, quantity: i.quantity })),
-       meta: { supplierName: reqData.supplierName || undefined, invoiceNo: reqData.invoiceNo || undefined, notes: reqData.notes || undefined, attachmentUrl: reqData.attachmentUrl || null, attachmentPath: reqData.attachmentPath || null, mrvId: reserved.short, mrvShort: reserved.short }
-     });
+    // Create posted MRV and update request status
+    const mrvId = await createMRV({
+      residenceId: reqData.residenceId,
+      items: reqData.items.map(i => ({ id: i.id, nameEn: i.nameEn, nameAr: i.nameAr, quantity: i.quantity })),
+      meta: { supplierName: reqData.supplierName || undefined, invoiceNo: reqData.invoiceNo || undefined, notes: reqData.notes || undefined, attachmentUrl: reqData.attachmentUrl || null, attachmentPath: reqData.attachmentPath || null, mrvId: reserved.short, mrvShort: reserved.short }
+    });
 
-     await updateDoc(reqRef, {
-       status: 'Approved',
-       approvedById: approverId,
-       approvedAt: Timestamp.now(),
-       mrvId,
-       mrvShort: reserved.short
-     });
+    await updateDoc(reqRef, {
+      status: 'Approved',
+      approvedById: approverId,
+      approvedAt: Timestamp.now(),
+      mrvId,
+      mrvShort: reserved.short
+    });
 
-     toast({ title: 'Approved', description: `MRV request approved and posted (${mrvId}).` });
-     return mrvId;
-   };
+    toast({ title: 'Approved', description: `MRV request approved and posted (${mrvId}).` });
+    return mrvId;
+  };
 
   const rejectMRVRequest = async (requestId: string, rejecterId: string, reason?: string) => {
     if (!db) throw new Error(firebaseErrorMessage);
