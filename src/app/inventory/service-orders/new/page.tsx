@@ -13,9 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandGroup, CommandInput, CommandList } from "@/components/ui/command";
 import { Button as UIButton } from "@/components/ui/button";
 import { includesNormalized } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 // removed ChevronDown; infinite scroll now auto-expands
 
 export default function NewServiceOrderPage() {
@@ -24,6 +25,7 @@ export default function NewServiceOrderPage() {
   const { items, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [residenceId, setResidenceId] = useState("");
   const [destinationType, setDestinationType] = useState("ExternalWorkshop");
@@ -32,6 +34,11 @@ export default function NewServiceOrderPage() {
 
   const residence = useMemo(() => residences.find((r) => r.id === residenceId), [residences, residenceId]);
   const availableItems = useMemo(() => items, [items]);
+  // Only show items that have stock > 0 in the selected residence (if any)
+  const availableAtResidence = useMemo(() => {
+    if (!residenceId) return availableItems;
+    return availableItems.filter((it) => (getStockForResidence(it, residenceId) || 0) > 0);
+  }, [availableItems, residenceId, getStockForResidence]);
   const [comboOpen, setComboOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(24);
@@ -78,6 +85,16 @@ export default function NewServiceOrderPage() {
     const it = availableItems.find((x) => x.id === id);
     if (!it) return;
     if (rows.some((r) => r.id === id)) return;
+    // Prevent adding items that have zero stock for the selected residence
+    const curStock = residence ? getStockForResidence(it, residence.id) : 0;
+    if (!residence || curStock <= 0) {
+      toast({
+        title: "غير متوفر في المخزون",
+        description: "يرجى اختيار السكن ثم اختيار صنف متوفر في المخزون لهذا السكن.",
+        variant: "destructive",
+      });
+      return;
+    }
     setRows((prev) => [...prev, { id: it.id, nameEn: it.nameEn, nameAr: it.nameAr, quantity: 1 }]);
   };
 
@@ -87,12 +104,42 @@ export default function NewServiceOrderPage() {
 
   const removeRow = (id: string) => setRows((prev) => prev.filter((r) => r.id !== id));
 
+  const handleAddItem = (id: string) => {
+    addRow(id);
+    setTimeout(() => setComboOpen(false), 0);
+    setSearch("");
+    setVisibleCount(24);
+  };
+
   const handleSubmit = async () => {
     if (!currentUser) return;
     if (!residence) return;
     if (!destinationName.trim()) return;
     const invalid = rows.some((r) => r.quantity <= 0);
-    if (invalid) return;
+    if (invalid) {
+      toast({ title: "كمية غير صالحة", description: "يرجى إدخال كمية أكبر من 0 لكل صنف.", variant: "destructive" });
+      return;
+    }
+
+    // Validate stock before submit and show a clear message listing the problematic items
+    const problems: { name: string; required: number; available: number }[] = [];
+    for (const r of rows) {
+      const it = availableItems.find((x) => x.id === r.id);
+      const curStock = it ? getStockForResidence(it, residence.id) : 0;
+      if (r.quantity > curStock) {
+        problems.push({ name: `${r.nameEn} | ${r.nameAr}`, required: r.quantity, available: curStock });
+      }
+    }
+    if (problems.length > 0) {
+      const first = problems[0];
+      const more = problems.length > 1 ? ` (+${problems.length - 1} عناصر أخرى)` : "";
+      toast({
+        title: "الكمية غير متوفرة في المخزون",
+        description: `${first.name}: المطلوب ${first.required} والمتاح ${first.available}${more}`,
+        variant: "destructive",
+      });
+      return;
+    }
     const payload = {
       residenceId: residence.id,
       residenceName: residence.name,
@@ -101,8 +148,13 @@ export default function NewServiceOrderPage() {
       createdById: currentUser.id,
       dispatchedById: currentUser.id,
     };
-  await createAndDispatchServiceOrder(payload as any);
-    router.push("/inventory/service-orders");
+    try {
+      await createAndDispatchServiceOrder(payload as any);
+      router.push("/inventory/service-orders");
+    } catch (err: any) {
+      console.error("Failed to create service order:", err);
+      toast({ title: "فشل إنشاء أمر الصيانة", description: "تعذر إنشاء أمر الصيانة. يرجى المحاولة لاحقًا.", variant: "destructive" });
+    }
   };
 
   return (
@@ -113,60 +165,85 @@ export default function NewServiceOrderPage() {
           <CardDescription>Send items to maintenance/workshop and deduct stock.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Residence</Label>
-              <Select value={residenceId} onValueChange={setResidenceId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select residence" /></SelectTrigger>
-                <SelectContent>
-                  {allowedResidences.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                  {allowedResidences.length === 0 && (
-                    <div className="px-2 py-2 text-sm text-muted-foreground">No residences assigned</div>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Destination Type</Label>
-              <Select value={destinationType} onValueChange={setDestinationType}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Choose type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="InternalMaintenance">Internal Maintenance</SelectItem>
-                  <SelectItem value="ExternalWorkshop">External Workshop</SelectItem>
-                  <SelectItem value="Vendor">Vendor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Destination Name</Label>
-              <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder="Workshop name" />
-            </div>
+          {/* Residence selection */}
+          <div>
+            <Label>Residence</Label>
+            <Select value={residenceId} onValueChange={setResidenceId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select residence" /></SelectTrigger>
+              <SelectContent>
+                {allowedResidences.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+                {allowedResidences.length === 0 && (
+                  <div className="px-2 py-2 text-sm text-muted-foreground">No residences assigned</div>
+                )}
+              </SelectContent>
+            </Select>
           </div>
+
+          {!residence && (
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 text-yellow-900 text-sm px-3 py-2">
+              اختر السكن لعرض الأصناف المتوفرة في المخزون
+            </div>
+          )}
+
+          {/* Blocked wrapper until residence is selected */}
+          <div className="relative">
+            {!residence && (
+              <div
+                className="absolute inset-0 z-10 cursor-not-allowed"
+                onClick={() => toast({ title: "يرجى اختيار السكن", description: "اختر السكن أولاً لتمكين باقي الحقول.", variant: "destructive" })}
+              />
+            )}
+            <div className={!residence ? "opacity-50 pointer-events-none" : ""}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Destination Type</Label>
+                  <Select value={destinationType} onValueChange={setDestinationType}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="InternalMaintenance">Internal Maintenance</SelectItem>
+                      <SelectItem value="ExternalWorkshop">External Workshop</SelectItem>
+                      <SelectItem value="Vendor">Vendor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Destination Name</Label>
+                  <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder="Workshop name" />
+                </div>
+              </div>
 
           <div className="space-y-2">
             <Label>Items</Label>
-            <div className="flex flex-wrap gap-2 items-end">
+    <div className="flex flex-wrap gap-2 items-end">
               <Popover open={comboOpen} onOpenChange={setComboOpen}>
                 <PopoverTrigger asChild>
-                  <UIButton variant="outline" className="w-96 justify-between">
+      <UIButton variant="outline" className="w-96 justify-between" disabled={!residence}>
                     Add item
                     <span className="text-xs text-muted-foreground">EN | AR</span>
                   </UIButton>
                 </PopoverTrigger>
-                <PopoverContent className="w-96 p-0" side="bottom" align="start">
+                <PopoverContent
+                  className="w-96 p-0 z-50 max-h-[70vh] overflow-hidden"
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  collisionPadding={12}
+                  avoidCollisions
+                >
                   <Command shouldFilter={false}>
                     <CommandInput placeholder="Search items (EN | AR | keywords)" value={search} onValueChange={onSearchChange} />
-                    <CommandList ref={listRef} className="max-h-[60vh] overflow-y-auto" onScroll={onListScroll}>
-                        <CommandEmpty>No matches</CommandEmpty>
+                    <CommandList ref={listRef} className="max-h-[68vh] overflow-y-auto overscroll-contain" onScroll={onListScroll}>
+                        {/* Intentionally no empty state message */}
                         <CommandGroup>
                         {(() => {
                           const tokens = search.trim().split(/\s+/).filter(Boolean);
                           const selectedIds = new Set(rows.map(r => r.id));
+                          const source = residence ? availableAtResidence : availableItems;
                           const list = tokens.length === 0
-                            ? availableItems
-                            : availableItems.filter((it) => {
+                            ? source
+                            : source.filter((it) => {
                                 const blob = searchIndex.get(it.id) || "";
                                 return tokens.every((t) => includesNormalized(blob, t));
                               });
@@ -174,20 +251,20 @@ export default function NewServiceOrderPage() {
                           const page = remaining.slice(0, visibleCount);
                           return page
                             .map((it) => (
-                              <CommandItem
+                              <div
                                 key={it.id}
-                                value={(it.nameEn || it.name || "") + " " + (it.nameAr || "")}
-                                onSelect={() => {
-                                  addRow(it.id);
-                                  setTimeout(() => setComboOpen(false), 0);
-                                  setSearch("");
-                                  setVisibleCount(24);
+                                role="button"
+                                tabIndex={0}
+                                className="relative flex select-none items-center rounded-sm px-2 py-2 text-sm outline-none cursor-pointer hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                                onClick={() => handleAddItem(it.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") handleAddItem(it.id);
                                 }}
                               >
-                                <div className="flex flex-col">
+                                <div className="flex flex-col w-full">
                                   <span className="text-sm">{it.nameEn || it.name} <span className="text-muted-foreground">| {it.nameAr}</span></span>
                                 </div>
-                              </CommandItem>
+                              </div>
                             ));
                         })()}
                         </CommandGroup>
@@ -216,11 +293,17 @@ export default function NewServiceOrderPage() {
                   {rows.map((r) => {
                     const it = availableItems.find((x) => x.id === r.id);
                     const curStock = it ? getStockForResidence(it, residence?.id || "") : 0;
+                    const exceeds = r.quantity > curStock;
                     return (
                       <TableRow key={r.id}>
                         <TableCell>
                           <div className="flex flex-col">
                             <span>{r.nameEn} <span className="text-muted-foreground">| {r.nameAr}</span></span>
+                            {residence && (
+                              <span className={`text-xs ${curStock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                                Available: {curStock}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{residence ? curStock : "-"}</TableCell>
@@ -230,7 +313,9 @@ export default function NewServiceOrderPage() {
                             type="number"
                             min={0}
                             value={r.quantity}
+                            data-invalid={exceeds ? "true" : undefined}
                             onChange={(e) => updateQty(r.id, Number(e.target.value))}
+                            style={exceeds ? { borderColor: "hsl(var(--destructive))" } : undefined}
                           />
                         </TableCell>
                         <TableCell className="text-right">
@@ -242,10 +327,14 @@ export default function NewServiceOrderPage() {
                 </TableBody>
               </Table>
             </div>
-          </div>
+            </div>
 
-          <div className="flex justify-end gap-2">
-            <Button onClick={handleSubmit} disabled={!residence || !destinationName.trim() || rows.every((r) => r.quantity <= 0)}>Dispatch</Button>
+            {/* Actions */}
+            <div className="flex justify-end gap-2 mt-4">
+              <Button onClick={handleSubmit} disabled={!residence || !destinationName.trim() || rows.every((r) => r.quantity <= 0)}>Dispatch</Button>
+            </div>
+            {/* End blocked content */}
+            </div>
           </div>
         </CardContent>
       </Card>

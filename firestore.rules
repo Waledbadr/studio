@@ -12,6 +12,26 @@ service cloud.firestore {
     function isAdminUser(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data.role == 'Admin';
     }
+    // Some legacy user docs may not use the Firebase Auth UID as the document ID.
+    // This helper allows matching by email when both user docs exist.
+    function hasSameUserEmail(uidA, uidB) {
+      return exists(/databases/$(database)/documents/users/$(uidA)) &&
+             exists(/databases/$(database)/documents/users/$(uidB)) &&
+             get(/databases/$(database)/documents/users/$(uidA)).data.email ==
+             get(/databases/$(database)/documents/users/$(uidB)).data.email;
+    }
+    // Match a users/{uid} doc by comparing its email to the signed-in user's auth token email.
+    function emailMatchesAuth(uid) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(uid)) &&
+             get(/databases/$(database)/documents/users/$(uid)).data.email == request.auth.token.email;
+    }
+    // Map auth email (case-insensitive) to a userId using the unique email mapping.
+    function userIdMatchesAuthEmailByMap(userId) {
+      return isSignedIn() && request.auth.token.email != null &&
+             exists(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)).data.userId == userId;
+    }
     function stockOnlyChange() {
       // Allow only stock fields to change
       return request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'stockByResidence']);
@@ -37,9 +57,22 @@ service cloud.firestore {
     // Notifications
     match /notifications/{notificationId} {
       // Allow creating notifications for self, or targeting Admin users
-      allow create: if isAdmin() || (isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdminUser(request.resource.data.userId)));
-      allow read: if isAdmin() || isOwner(resource.data.userId);
-      allow update: if isAdmin() || isOwner(resource.data.userId);
+      allow create: if isAdmin() || (isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        emailMatchesAuth(request.resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(request.resource.data.userId) ||
+        isAdminUser(request.resource.data.userId)
+      ));
+      // Allow Admins, or the signed-in user if the notification targets their UID or matches by email
+      allow read: if isAdmin() || isOwner(resource.data.userId) ||
+        emailMatchesAuth(resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(resource.data.userId) ||
+        (isSignedIn() && hasSameUserEmail(request.auth.uid, resource.data.userId)) ||
+        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
+      allow update: if isAdmin() || isOwner(resource.data.userId) ||
+        emailMatchesAuth(resource.data.userId) ||
+        userIdMatchesAuthEmailByMap(resource.data.userId) ||
+        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
       allow delete: if isAdmin();
     }
 

@@ -173,7 +173,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   const fdb = db as Firestore;
     const validItems = (payload.items || []).filter((i) => i.quantity && i.quantity > 0);
     if (!payload.residenceId || validItems.length === 0) {
-      throw new Error("Residence and at least one item with qty > 0 are required.");
+  throw new Error("يرجى اختيار السكن وإضافة صنف واحد على الأقل بكمية أكبر من 0.");
     }
 
     const codeShort = await reserveNewSvcId();
@@ -186,7 +186,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       const itemSnaps = await Promise.all(itemRefs.map((r) => trx.get(r)));
 
       for (let i = 0; i < uniqueItemIds.length; i++) {
-        if (!itemSnaps[i].exists()) throw new Error(`Item not found: ${uniqueItemIds[i]}`);
+        if (!itemSnaps[i].exists()) throw new Error(`الصنف غير موجود: ${uniqueItemIds[i]}`);
       }
 
       // Aggregate quantities per item to validate once
@@ -203,8 +203,8 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
         const data: any = snap.data();
         const currentStock = Math.max(0, Number(data?.stockByResidence?.[payload.residenceId] || 0));
         if (currentStock < totalToSend) {
-          const nameEn = data?.nameEn || data?.name || itemId;
-          throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToSend}`);
+          const name = data?.nameEn || data?.nameAr || data?.name || itemId;
+          throw new Error(`الكمية غير متوفرة للصنف ${name}. المتاح: ${currentStock} | المطلوب: ${totalToSend}`);
         }
       }
 
