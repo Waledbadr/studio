@@ -191,9 +191,16 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     try {
       const newId = await generateNewRequestId();
       const newRequestRef = doc(db, "maintenanceRequests", newId);
+      // Ensure requester is the actual signed-in Firebase Auth UID to satisfy security rules
+      const authUid = auth?.currentUser?.uid;
+      if (!authUid) {
+        toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
+        return null;
+      }
       
       const newRequest: Omit<MaintenanceRequest, 'id'> = {
           ...payload,
+          requestedById: authUid,
           date: Timestamp.now(),
           status: 'Pending'
       };

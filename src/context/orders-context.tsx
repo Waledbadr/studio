@@ -148,11 +148,24 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     
     setLoading(true);
     try {
+      // Guard: ensure the requester on the document matches the signed-in Firebase Auth UID
+      // This avoids Firestore rule failures when users docs don't use auth.uid as ID.
+      const authUid = auth?.currentUser?.uid;
+      if (!authUid) {
+        toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
+        return null;
+      }
+      const safeOrderData: NewOrderPayload = {
+        ...orderData,
+        // Force requestedById to the real auth uid to satisfy security rules
+        requestedById: authUid,
+      };
+
       const newOrderId = await generateNewOrderId();
       const newOrderRef = doc(db, "orders", newOrderId);
 
       const newOrder: Omit<Order, 'id'> = {
-        ...orderData,
+        ...safeOrderData,
         date: Timestamp.now(),
         status: 'Pending'
       }

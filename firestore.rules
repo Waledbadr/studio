@@ -76,7 +76,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Users collection: basic access model
+  // Users collection: basic access model
     match /users/{uid} {
       allow read: if isSignedIn();
       // A user can create/update their own profile; Admins can manage all
@@ -144,8 +144,13 @@ service cloud.firestore {
     // Material Requests (Orders)
     match /orders/{orderId} {
       allow read: if isSignedIn();
-      // Allow any signed-in user to create a request
-      allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
+      // Allow any signed-in user to create a request where the requester matches their identity
+      // Accept direct UID match, user doc email match, or unique email mapping match
+      allow create: if isSignedIn() && (
+        request.resource.data.requestedById == request.auth.uid ||
+        emailMatchesAuth(request.resource.data.requestedById) ||
+        userIdMatchesAuthEmailByMap(request.resource.data.requestedById)
+      );
       // Allow requester to update while Pending; Admins can always update/delete
       allow update: if isAdmin() || isSupervisor() || (
         isSignedIn() &&
