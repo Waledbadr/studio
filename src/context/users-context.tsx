@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, getDocs, getDoc, query, where, limit, runTransaction, Timestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from 'firebase/auth';
 
 export interface UserThemeSettings {
@@ -213,70 +213,41 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       if ('id' in user && user.id) {
-        // Update existing user with unique email enforcement (including email change)
+        // Update existing user document directly (users/{id})
         const { id, ...payload } = user as User;
         const userRef = doc(db!, 'users', id);
-        const emailKeyNew = String(payload.email || '').trim().toLowerCase();
-        if (!emailKeyNew) throw new Error('Email is required');
-
-        await runTransaction(db!, async (trx) => {
-          const snap = await trx.get(userRef);
-          if (!snap.exists()) throw new Error('User not found');
-          const prevEmail = String((snap.data() as any).email || '').trim().toLowerCase();
-
-          if (prevEmail !== emailKeyNew) {
-            const newMapRef = doc(db!, 'unique_users_emails', emailKeyNew);
-            const newMapSnap = await trx.get(newMapRef);
-            if (newMapSnap.exists() && (newMapSnap.data() as any).userId !== id) {
-              throw new Error('Email already in use by another user.');
-            }
-            // Remove old mapping if present
-            if (prevEmail) {
-              const oldMapRef = doc(db!, 'unique_users_emails', prevEmail);
-              const oldMapSnap = await trx.get(oldMapRef);
-              if (oldMapSnap.exists() && (oldMapSnap.data() as any).userId === id) {
-                trx.delete(oldMapRef);
-              }
-            }
-            // Set new mapping
-            trx.set(newMapRef, { userId: id, updatedAt: Timestamp.now() });
-          }
-          trx.update(userRef, { ...payload });
-        });
-
+        await updateDoc(userRef, { ...payload });
         toast({ title: "Success", description: "User updated successfully." });
       } else {
-        // Create new user with unique email enforcement via mapping doc
+        // Create user via Admin API using Auth as source of truth.
         const payload = user as Omit<User, 'id'>;
         const emailKey = String(payload.email || '').trim().toLowerCase();
         if (!emailKey) throw new Error('Email is required');
 
-        await runTransaction(db!, async (trx) => {
-          const mapRef = doc(db!, 'unique_users_emails', emailKey);
-          const mapSnap = await trx.get(mapRef);
+        const idToken = await auth?.currentUser?.getIdToken();
+        if (!idToken) throw new Error('Not authenticated');
 
-          if (mapSnap.exists()) {
-            // Link to existing user by email
-            const existingUserId = (mapSnap.data() as any).userId;
-            const existingUserRef = doc(db!, 'users', existingUserId);
-            const existingUserSnap = await trx.get(existingUserRef);
-            if (existingUserSnap.exists()) {
-              trx.update(existingUserRef, { ...payload });
-            } else {
-              // Mapping stale: create the user now with mapped id
-              trx.set(existingUserRef, { ...payload, id: existingUserId });
-            }
-          } else {
-            // Create new user, prefer auth UID if matching email
-            const currentAuth = auth?.currentUser || null;
-            const preferUid = currentAuth && currentAuth.email && currentAuth.email.toLowerCase() === emailKey ? currentAuth.uid : null;
-            const newUserRef = preferUid ? doc(db!, 'users', preferUid) : doc(collection(db!, 'users'));
-            trx.set(newUserRef, { ...payload, id: newUserRef.id });
-            trx.set(mapRef, { userId: newUserRef.id, createdAt: Timestamp.now() });
-          }
+        const res = await fetch('/api/admin/users/ensure', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            name: payload.name,
+            email: emailKey,
+            role: payload.role,
+            assignedResidences: payload.assignedResidences,
+            themeSettings: payload.themeSettings,
+          })
         });
 
-        toast({ title: "Success", description: "User saved." });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || 'Failed to create user');
+        }
+
+        toast({ title: "Success", description: "User created and linked to Auth." });
       }
     } catch (error) {
       console.error('Error saving user:', error);
@@ -319,7 +290,17 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const getUserById = (id: string): User | null => {
-    return users.find(user => user.id === id) || null;
+    if (!id) return null;
+    // Try direct ID
+    let u = users.find(user => user.id === id) || null;
+    if (u) return u;
+    // Fallback: if id looks like an email, match by email
+    const looksLikeEmail = /@/.test(id);
+    if (looksLikeEmail) {
+      u = users.find(user => (user.email || '').toLowerCase() === id.toLowerCase()) || null;
+      if (u) return u;
+    }
+    return null;
   }
 
 

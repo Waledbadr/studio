@@ -2,36 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
-    function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-    }
-    function isSupervisor() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor';
-    }
+  // Roles based strictly on users/{auth.uid}
+  function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'; }
+  function isSupervisor() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor'; }
     function isOwner(userId) { return isSignedIn() && userId == request.auth.uid; }
     function isAdminUser(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data.role == 'Admin';
     }
-    // Some legacy user docs may not use the Firebase Auth UID as the document ID.
-    // This helper allows matching by email when both user docs exist.
-    function hasSameUserEmail(uidA, uidB) {
-      return exists(/databases/$(database)/documents/users/$(uidA)) &&
-             exists(/databases/$(database)/documents/users/$(uidB)) &&
-             get(/databases/$(database)/documents/users/$(uidA)).data.email ==
-             get(/databases/$(database)/documents/users/$(uidB)).data.email;
-    }
-    // Match a users/{uid} doc by comparing its email to the signed-in user's auth token email.
-    function emailMatchesAuth(uid) {
-      return isSignedIn() &&
-             exists(/databases/$(database)/documents/users/$(uid)) &&
-             get(/databases/$(database)/documents/users/$(uid)).data.email == request.auth.token.email;
-    }
-    // Map auth email (case-insensitive) to a userId using the unique email mapping.
-    function userIdMatchesAuthEmailByMap(userId) {
-      return isSignedIn() && request.auth.token.email != null &&
-             exists(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)) &&
-             get(/databases/$(database)/documents/unique_users_emails/$(request.auth.token.email)).data.userId == userId;
-    }
+  // Legacy helpers removed: we now require users/{auth.uid} as the single source of truth.
     function stockOnlyChange() {
       // Allow only stock fields to change
       return request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'stockByResidence']);
@@ -59,20 +37,11 @@ service cloud.firestore {
       // Allow creating notifications for self, or targeting Admin users
       allow create: if isAdmin() || (isSignedIn() && (
         request.resource.data.userId == request.auth.uid ||
-        emailMatchesAuth(request.resource.data.userId) ||
-        userIdMatchesAuthEmailByMap(request.resource.data.userId) ||
         isAdminUser(request.resource.data.userId)
       ));
-      // Allow Admins, or the signed-in user if the notification targets their UID or matches by email
-      allow read: if isAdmin() || isOwner(resource.data.userId) ||
-        emailMatchesAuth(resource.data.userId) ||
-        userIdMatchesAuthEmailByMap(resource.data.userId) ||
-        (isSignedIn() && hasSameUserEmail(request.auth.uid, resource.data.userId)) ||
-        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
-      allow update: if isAdmin() || isOwner(resource.data.userId) ||
-        emailMatchesAuth(resource.data.userId) ||
-        userIdMatchesAuthEmailByMap(resource.data.userId) ||
-        (isSignedIn() && resource.data.userEmail != null && resource.data.userEmail == request.auth.token.email);
+      // Allow Admins, or the signed-in user if the notification targets their UID
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      allow update: if isAdmin() || isOwner(resource.data.userId);
       allow delete: if isAdmin();
     }
 
@@ -93,10 +62,8 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // Unique email mapping used by admin user management
-    match /unique_users_emails/{emailKey} {
-      allow read, write: if isAdmin();
-    }
+  // unique_users_emails no longer used; block direct client access if collection remains
+  match /unique_users_emails/{emailKey} { allow read, write: if false; }
 
     // Inventory collection: Admin-only delete; reads for signed-in; create/update for Admins
     match /inventory/{itemId} {
@@ -144,13 +111,8 @@ service cloud.firestore {
     // Material Requests (Orders)
     match /orders/{orderId} {
       allow read: if isSignedIn();
-      // Allow any signed-in user to create a request where the requester matches their identity
-      // Accept direct UID match, user doc email match, or unique email mapping match
-      allow create: if isSignedIn() && (
-        request.resource.data.requestedById == request.auth.uid ||
-        emailMatchesAuth(request.resource.data.requestedById) ||
-        userIdMatchesAuthEmailByMap(request.resource.data.requestedById)
-      );
+  // Allow any signed-in user to create a request where the requester matches their UID
+  allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
       // Allow requester to update while Pending; Admins can always update/delete
       allow update: if isAdmin() || isSupervisor() || (
         isSignedIn() &&

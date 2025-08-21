@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import type { QueryDocumentSnapshot, DocumentData, Query } from 'firebase/firestore';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { useUsers } from './users-context';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +18,7 @@ export interface Notification {
   referenceId: string;
   isRead: boolean;
   createdAt: Timestamp;
+  userEmail?: string;
 }
 
 export type NewNotificationPayload = Omit<Notification, 'id' | 'isRead' | 'createdAt'>;
@@ -65,33 +66,55 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     }
 
     setLoading(true);
-    const authEmail = auth?.currentUser?.email || null;
+  const authEmail = auth?.currentUser?.email || null;
+  const authUid = auth?.currentUser?.uid || null;
     const baseCol = collection(db!, 'notifications');
-    const q = authEmail
-      ? query(baseCol, where('userEmail', '==', authEmail), orderBy('createdAt', 'desc'))
-      : query(baseCol, where('userId', '==', currentUser.id), orderBy('createdAt', 'desc'));
 
-    const unsubscribe = safeOnSnapshot(
-      q,
-      (snapshot) => {
-        const notificationsData = snapshot.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
-          const data = d.data() as any;
-          const createdAt = data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now();
-          return { id: d.id, ...data, createdAt } as Notification;
-        });
-        setNotifications(notificationsData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching notifications:', error);
-        toast({ title: 'Firestore Error', description: 'Could not fetch notifications.', variant: 'destructive' });
-        setLoading(false);
-      },
-      { retryOnClose: true }
+    // Subscribe by email when available AND also by userId to cover docs missing userEmail
+  const queries: Query<DocumentData, DocumentData>[] = [];
+    // Prefer email when available (most flexible with current rules)
+    if (authEmail) {
+      queries.push(query(baseCol, where('userEmail', '==', authEmail), orderBy('createdAt', 'desc')));
+    }
+    // Also add UID-based query strictly using auth.uid to satisfy rules
+    if (authUid) {
+      queries.push(query(baseCol, where('userId', '==', authUid), orderBy('createdAt', 'desc')));
+    }
+    if (queries.length === 0) {
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribers = queries.map((qry) =>
+      safeOnSnapshot(
+        qry,
+        (snapshot) => {
+          // Merge results from multiple listeners by id
+          const all = new Map<string, Notification>();
+          // Include existing to avoid flicker when second stream arrives later
+          for (const n of notifications) all.set(n.id, n);
+          for (const d of snapshot.docs) {
+            const data = d.data() as any;
+            const createdAt = data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now();
+            all.set(d.id, { id: d.id, ...data, createdAt } as Notification);
+          }
+          // Sort by createdAt desc
+          const merged = Array.from(all.values()).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+          setNotifications(merged);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error fetching notifications:', error);
+          toast({ title: 'Firestore Error', description: 'Could not fetch notifications.', variant: 'destructive' });
+          setLoading(false);
+        },
+        { retryOnClose: true }
+      )
     );
 
     return () => {
-      unsubscribe();
+      unsubscribers.forEach((u) => u());
     };
   }, [currentUser, toast]);
 
@@ -102,16 +125,18 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       return;
     }
     try {
-      // Attempt to enrich with recipient email for rules-based access
-      let userEmail: string | null = null;
-      try {
-        const userRef = doc(db!, 'users', payload.userId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data() as any;
-          userEmail = (d.email && String(d.email)) || null;
-        }
-      } catch {}
+      // If payload already has userEmail, prefer it; otherwise attempt to look it up
+      let userEmail: string | null = (payload as any).userEmail || null;
+      if (!userEmail) {
+        try {
+          const userRef = doc(db!, 'users', payload.userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const d = userSnap.data() as any;
+            userEmail = (d.email && String(d.email)) || null;
+          }
+        } catch {}
+      }
       await addDoc(collection(db!, 'notifications'), {
         ...payload,
         isRead: false,
