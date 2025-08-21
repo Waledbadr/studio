@@ -30,7 +30,10 @@ export interface Order {
   residence: string; // This is the residence name
   residenceId: string; // This is the residence ID
   requestedById: string;
+  requestedByName?: string;
+  requestedByEmail?: string;
   approvedById?: string;
+  approvedByName?: string;
   items: OrderItem[];
   itemsReceived?: ReceivedOrderItem[]; // Tracks total received quantities per item
   status: OrderStatus;
@@ -155,6 +158,12 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
         return null;
       }
+      const requesterEmail = auth?.currentUser?.email || undefined;
+      // Prefer UsersContext name, fallback to Auth displayName, then email
+      const requesterName = (currentUser?.id === authUid ? currentUser?.name : (users?.find(u => u.id === authUid)?.name))
+        || auth?.currentUser?.displayName
+        || requesterEmail
+        || '—';
       const safeOrderData: NewOrderPayload = {
         ...orderData,
         // Force requestedById to the real auth uid to satisfy security rules
@@ -166,6 +175,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
       const newOrder: Omit<Order, 'id'> = {
         ...safeOrderData,
+        requestedByName: requesterName,
+        requestedByEmail: requesterEmail,
         date: Timestamp.now(),
         status: 'Pending'
       }
@@ -242,22 +253,24 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-   const updateOrderStatus = async (id: string, status: OrderStatus, approverId?: string) => {
+  const updateOrderStatus = async (id: string, status: OrderStatus, approverId?: string) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     try {
         const orderDocRef = doc(db, "orders", id);
-        const updatePayload: {status: OrderStatus, approvedById?: string} = { status };
+  const updatePayload: {status: OrderStatus, approvedById?: string, approvedByName?: string} = { status };
         
         let requestedById: string | null = null;
-        if (status === 'Approved' && approverId) {
+    if (status === 'Approved' && approverId) {
             const orderDoc = await getDoc(orderDocRef);
             if (orderDoc.exists()) {
                 requestedById = orderDoc.data().requestedById;
             }
-            updatePayload.approvedById = approverId;
+      updatePayload.approvedById = approverId;
+      const approver = (users?.find(u => u.id === approverId)) || (currentUser?.id === approverId ? currentUser : null);
+      updatePayload.approvedByName = approver?.name || auth?.currentUser?.displayName || undefined;
         }
 
         await updateDoc(orderDocRef, updatePayload);

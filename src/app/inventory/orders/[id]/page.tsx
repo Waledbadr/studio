@@ -17,7 +17,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { useResidences } from '@/context/residences-context';
 // Subscribe to Firestore document for real-time updates
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs } from 'firebase/firestore';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -32,6 +32,38 @@ export default function OrderDetailPage() {
     const isAdmin = currentUser?.role === 'Admin';
     const requestedBy = order?.requestedById ? getUserById(order.requestedById) : null;
     const approvedBy = order?.approvedById ? getUserById(order.approvedById) : null;
+    const [requestedByNameLocal, setRequestedByNameLocal] = useState<string>('...');
+    const requestedByName = order?.requestedByName || requestedBy?.name || requestedByNameLocal || order?.requestedByEmail || '...';
+    const approvedByName = order?.approvedByName || approvedBy?.name || '...';
+
+    // Resolve requester name if missing by fetching users/{requestedById} or by email
+    useEffect(() => {
+        const run = async () => {
+            if (!db) return;
+            const missing = !(order?.requestedByName) && !requestedBy?.name;
+            if (!order?.requestedById || !missing) return;
+            try {
+                // Try direct doc by ID
+                const uref = doc(db, 'users', order.requestedById);
+                const usnap = await getDoc(uref);
+                if (usnap.exists()) {
+                    const nm = (usnap.data() as any)?.name || '';
+                    if (nm) { setRequestedByNameLocal(nm); return; }
+                }
+                // Fallback: query by email when available on order
+                const em = (order as any)?.requestedByEmail;
+                if (em) {
+                    const q = fbQuery(collection(db, 'users'), where('email', '==', em));
+                    const qs = await getDocs(q);
+                    const nm = qs.docs.map(d => (d.data() as any)?.name).find(Boolean);
+                    if (nm) { setRequestedByNameLocal(nm as string); return; }
+                }
+            } catch {}
+        };
+        run();
+        // We intentionally do not depend on requestedByNameLocal to avoid loops
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [db, order?.requestedById, order?.requestedByName, requestedBy?.name, (order as any)?.requestedByEmail]);
 
     // Real-time subscription to keep page in sync without hard refresh
     useEffect(() => {
@@ -407,12 +439,12 @@ export default function OrderDetailPage() {
                     <div className="grid grid-cols-2 gap-8 w-full">
                         <div className="space-y-1">
                             <p className="text-sm text-muted-foreground label">Requested By:</p>
-                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{requestedBy?.name || '...'}</p>
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{requestedByName}</p>
                             <div className="mt-2 border-t-2 w-48 line slot"></div>
                         </div>
                         <div className="space-y-1">
                             <p className="text-sm text-muted-foreground label">Approved By:</p>
-                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{approvedBy?.name || '...'}</p>
+                            <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{approvedByName}</p>
                             <div className="mt-2 border-t-2 w-48 line slot"></div>
                         </div>
                     </div>

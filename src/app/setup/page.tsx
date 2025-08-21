@@ -148,50 +148,123 @@ export default function SetupPage() {
         setIsResetting(true);
 
         try {
-            const batch = writeBatch(db);
-            const collectionsToDelete = [
-                "orders",
-                "inventoryTransactions",
-                "mivs",
-                "mrvs",
-                "mrvRequests",
-                "stockTransfers",
-                "inventoryAudits",
-                "auditItems",
-                "auditAdjustments",
-                "stockReconciliations",
-                "maintenanceRequests",
-                "notifications"
-            ];
+                        // Admin emails to keep
+                        const keepEmails = [
+                            'm.alabdali@sacodeco.net',
+                            'abdalim2@gmail.com',
+                        ].map(e => e.trim().toLowerCase());
+
+                        // Simple helper to commit in chunks to avoid 500 ops limit
+                        let batch = writeBatch(db);
+                        let ops = 0;
+                        const commitIfNeeded = async (force = false) => {
+                            if (ops >= 400 || force) {
+                                await batch.commit();
+                                batch = writeBatch(db);
+                                ops = 0;
+                            }
+                        };
+
+                        const collectionsToDelete = [
+                                'orders',
+                                'inventoryTransactions',
+                                'mivs',
+                                'mrvs',
+                                'mrvRequests',
+                                'stockTransfers',
+                                'inventoryAudits',
+                                'auditItems',
+                                'auditAdjustments',
+                                'stockReconciliations',
+                            'reconciliationRequests',
+                                'maintenanceRequests',
+                                'serviceOrders',
+                                'notifications',
+                                'fcmTokens',
+                            'feedback',
+                        ];
 
             // 1. Reset all inventory item stocks to zero
-            const inventorySnapshot = await getDocs(collection(db, "inventory"));
-            inventorySnapshot.forEach(doc => {
-                batch.update(doc.ref, { stockByResidence: {} });
-            });
+                        const inventorySnapshot = await getDocs(collection(db, 'inventory'));
+                        for (const d of inventorySnapshot.docs) {
+                            batch.update(d.ref, { stockByResidence: {}, stock: 0 });
+                            ops++; await commitIfNeeded();
+                        }
             console.log("Prepared to reset inventory stock.");
 
             // 2. Delete all documents from operational collections
-            for (const collectionName of collectionsToDelete) {
-                const snapshot = await getDocs(collection(db, collectionName));
-                snapshot.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                console.log(`Prepared to delete all documents from: ${collectionName}`);
-            }
+                                    for (const collectionName of collectionsToDelete) {
+                            const snapshot = await getDocs(collection(db, collectionName));
+                                        for (const d of snapshot.docs) {
+                                            // Special case: feedback has subcollection 'updates'
+                                            if (collectionName === 'feedback') {
+                                                const updatesSnap = await getDocs(collection(db, `feedback/${d.id}/updates`));
+                                                for (const u of updatesSnap.docs) {
+                                                    batch.delete(u.ref);
+                                                    ops++; await commitIfNeeded();
+                                                }
+                                            }
+                                            batch.delete(d.ref);
+                                            ops++; await commitIfNeeded();
+                                        }
+                            console.log(`Prepared to delete all documents from: ${collectionName}`);
+                        }
 
             // 3. Clear monthly counters (MR, MIV, MRV, Reconciliation)
-            const countersSnap = await getDocs(collection(db, 'counters'));
-            countersSnap.forEach(d => {
-                const id = d.id || '';
-                if (/^(mr|miv|mrv|con)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con)-/i.test(id)) {
-                    batch.delete(d.ref);
-                }
-            });
+                        const countersSnap = await getDocs(collection(db, 'counters'));
+                        for (const d of countersSnap.docs) {
+                            const id = d.id || '';
+                            if (/^(mr|miv|mrv|con|svc|trs)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|svc|trs)-/i.test(id)) {
+                                batch.delete(d.ref);
+                                ops++; await commitIfNeeded();
+                            }
+                        }
             console.log('Prepared to clear monthly counters.');
 
+                        // 4. Delete users except keepEmails
+                        const usersSnap = await getDocs(collection(db, 'users'));
+                        let kept = 0, removed = 0;
+                        for (const d of usersSnap.docs) {
+                            const data: any = d.data() || {};
+                            const email = String(data.email || '').trim().toLowerCase();
+                            if (keepEmails.includes(email)) {
+                                kept++;
+                                continue;
+                            }
+                            batch.delete(d.ref);
+                            removed++; ops++; await commitIfNeeded();
+                        }
+                        console.log(`Prepared users deletion. kept=${kept}, removed=${removed}`);
+
+                                                // 5. Clean unique_users_emails entirely (collection no longer used)
+                                                try {
+                                                    const emailsSnap = await getDocs(collection(db, 'unique_users_emails'));
+                                                    for (const d of emailsSnap.docs) {
+                                                        batch.delete(d.ref);
+                                                        ops++; await commitIfNeeded();
+                                                    }
+                                                    console.log('Prepared to remove unique_users_emails.');
+                                                } catch {}
+
             // Commit all batched writes
-            await batch.commit();
+                        await commitIfNeeded(true);
+
+                        // Optional: delete Firebase Auth users (server-side) except keepEmails
+                        try {
+                            const res = await fetch('/api/setup/reset-auth', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ keepEmails, password: RESET_PASSWORD })
+                            });
+                            if (res.ok) {
+                                const info = await res.json();
+                                console.log('Auth reset:', info);
+                            } else {
+                                console.warn('Auth reset skipped or failed:', await res.text());
+                            }
+                        } catch (e) {
+                            console.warn('Auth reset request failed:', e);
+                        }
 
             toast({ title: "Success", description: "System has been reset. All operational data deleted, and inventory stock zeroed out." });
             setPassword('');
