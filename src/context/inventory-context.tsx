@@ -1189,6 +1189,32 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       mrvShort: reserved.short
     });
 
+    // Notify requester and all Admins
+    try {
+      const requesterId = reqData.requestedById || null;
+      if (requesterId) {
+        await addNotification?.({
+          userId: requesterId,
+          title: 'MRV Approved',
+          message: `Your MRV request has been approved and posted (${mrvId}).`,
+          type: 'generic',
+          href: `/inventory/receive/receipts/${mrvId}`,
+          referenceId: mrvId,
+        } as any);
+      }
+      const admins = (users || []).filter(u => u.role === 'Admin');
+      for (const admin of admins) {
+        await addNotification?.({
+          userId: admin.id,
+          title: 'MRV Posted',
+          message: `MRV ${mrvId} has been posted to stock.`,
+          type: 'generic',
+          href: `/inventory/receive/receipts/${mrvId}`,
+          referenceId: mrvId,
+        } as any);
+      }
+    } catch {}
+
     toast({ title: 'Approved', description: `MRV request approved and posted (${mrvId}).` });
     return mrvId;
   };
@@ -1201,6 +1227,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const data = snap.data() as MRVRequest;
     if (data.status !== 'Pending') throw new Error('Request already processed');
     await updateDoc(reqRef, { status: 'Rejected', rejectedById: rejecterId, rejectedAt: Timestamp.now(), rejectReason: reason || null });
+    // Notify requester
+    try {
+      const requesterId = data.requestedById || null;
+      if (requesterId) {
+        await addNotification?.({
+          userId: requesterId,
+          title: 'MRV Rejected',
+          message: `Your MRV request was rejected${reason ? `: ${reason}` : ''}.`,
+          type: 'generic',
+          href: `/inventory/receive`,
+          referenceId: requestId,
+        } as any);
+      }
+    } catch {}
     toast({ title: 'Rejected', description: 'MRV request has been rejected.' });
   };
 

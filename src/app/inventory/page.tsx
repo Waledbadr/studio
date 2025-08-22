@@ -268,26 +268,28 @@ export default function InventoryPage() {
           <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
             <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
           </Button>
-          <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleAddCategory}>
-                <DialogHeader>
-                  <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
-                  <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
-                  <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          {isAdmin && (
+            <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAddCategory}>
+                  <DialogHeader>
+                    <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
+                    <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
+                    <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
 
           <AddItemDialog 
             isOpen={isAddItemDialogOpen} 
