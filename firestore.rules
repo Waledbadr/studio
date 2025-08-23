@@ -195,7 +195,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Posting MRVs adjusts inventory; allow Admins and Supervisors to create
       allow create: if isAdmin() || isSupervisor();
-      allow update, delete: if isAdmin();
+      // Allow Admins to update anything; Supervisors may update only attachment fields
+      allow update: if (
+        isAdmin() || (
+          isSupervisor() && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'attachmentUrl', 'attachmentPath', 'attachmentRef', 'updatedAt'
+          ])
+        )
+      );
+      allow delete: if isAdmin();
     }
 
     // Pending MRV Requests awaiting approval

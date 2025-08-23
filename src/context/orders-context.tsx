@@ -54,7 +54,8 @@ interface OrdersContextType {
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
   // For receiving, only id and quantity are required; names are optional and resolved from inventory when available
-  receiveOrderItems: (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean) => Promise<void>;
+  // Returns the MRV id created for this receipt when items were posted to stock; null if none created
+  receiveOrderItems: (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean) => Promise<{ mrvId: string | null }>;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -294,11 +295,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
+const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean): Promise<{ mrvId: string | null }> => {
+  if (!db) {
+    toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    return { mrvId: null };
+  }
   // Client-side guard to avoid Firestore permission errors; allow Admin or Supervisor
   if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
     toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can receive materials and update stock.', variant: 'destructive' });
@@ -330,9 +331,10 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
       return s;
     };
 
-    try {
+  let outMrvId: string | null = null;
+  try {
   // We no longer "skip" lines. If any item is missing from inventory, we fail the whole transaction.
-        await runTransaction(firestore, async (transaction) => {
+  await runTransaction(firestore, async (transaction) => {
             // --- STAGE 1: ALL READS ---
             const orderSnap = await transaction.get(orderRef);
             if (!orderSnap.exists()) {
@@ -370,6 +372,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
               const currentSeq = (counterSnap.exists() ? (counterSnap.data() as any).seq : 0) || 0;
               nextSeqFromCounter = currentSeq + 1;
               reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeqFromCounter}`;
+              outMrvId = reservedMrvShort;
             }
             
             // Build unique candidate IDs and fetch them once
@@ -465,7 +468,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
       }
 
       // 3.c.1 Write MRV master record if we actually received items in stock
-      if (reservedMrvShort) {
+    if (reservedMrvShort) {
         // Compute total items count received in this posting
         let totalItemsCount = 0;
         for (const [, qty] of totalsByBaseItem.entries()) totalItemsCount += Number(qty) || 0;
@@ -480,6 +483,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
           notes: `From MR ${orderId}`,
           attachmentUrl: null,
           attachmentPath: null,
+      attachmentRef: null,
           codeShort: reservedMrvShort,
           orderId: orderId,
         } as any);
@@ -563,6 +567,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
         });
 
   toast({ title: "Success", description: "Stock updated and request status changed." });
+      return { mrvId: outMrvId };
     } catch (error) {
         console.error("Error receiving order items:", error);
         const err = error as Error;
@@ -605,7 +610,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
 
   return (
-    <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, updateOrder, updateOrderStatus, getOrderById, deleteOrder, receiveOrderItems }}>
+  <OrdersContext.Provider value={{ orders, loading, loadOrders, createOrder, updateOrder, updateOrderStatus, getOrderById, deleteOrder, receiveOrderItems }}>
       {children}
     </OrdersContext.Provider>
   );

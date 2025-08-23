@@ -9,6 +9,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { Printer } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
@@ -19,6 +23,9 @@ export default function MRVDetailsPage() {
 
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
   const handlePrint = () => {
     if (typeof window !== 'undefined') window.print();
   };
@@ -77,6 +84,47 @@ export default function MRVDetailsPage() {
           <p className="text-muted-foreground">MRV: {mrvId}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Replace/Upload attachment */}
+          <div className="flex items-center gap-2">
+    <Label htmlFor="mrv-attach">Attachment</Label>
+            <Input id="mrv-attach" type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="max-w-[240px]" disabled={uploading} />
+            <Button
+              variant="secondary"
+              disabled={!file || uploading}
+              onClick={async () => {
+                if (!file) return;
+                try {
+                  setUploading(true);
+                  const form = new FormData();
+                  form.append('mrvId', mrvId);
+                  form.append('file', file);
+                  const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || `Upload failed (${res.status})`);
+                  } else {
+                    // Use server response to update UI immediately; if server couldn't write to Firestore, refetch
+                    const body = await res.json().catch(() => ({}));
+                    if (body?.url) {
+                      setData((prev: any) => ({ ...(prev || {}), attachmentUrl: body.url, attachmentPath: body.path || null, attachmentRef: body.attachmentRef || null }));
+                      if (!body?.wroteToFirestore) {
+                        const snap = await (await import('firebase/firestore')).getDoc((await import('firebase/firestore')).doc(db!, 'mrvs', mrvId));
+                        const meta = snap.exists() ? (snap.data() as any) : {};
+                        setData((prev: any) => ({ ...(prev || {}), ...meta }));
+                      }
+                    }
+                  }
+                  setFile(null);
+                  toast({ title: 'Attachment uploaded' });
+                } catch (e) {
+                  console.error(e);
+                  toast({ title: 'Upload failed', variant: 'destructive' });
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            >{uploading ? 'Uploading…' : 'Upload'}</Button>
+          </div>
           <Button onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" /> Print MRV
           </Button>
@@ -161,6 +209,25 @@ export default function MRVDetailsPage() {
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Residence • الموقع:</span><span className="font-medium">{residenceName(data?.residenceId)}</span></div>
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Supplier • المورد:</span><span className="font-medium">{data?.supplierName || '-'}</span></div>
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Invoice No. • رقم الفاتورة:</span><span className="font-medium">{data?.invoiceNo || '-'}</span></div>
+            <div className="flex items-center gap-2 text-sm col-span-1 sm:col-span-2">
+              <span className="text-muted-foreground">Attachment • مرفق:</span>
+              {data?.attachmentUrl ? (
+                <a href={data.attachmentUrl} target="_blank" rel="noreferrer" className="text-primary underline">Open</a>
+              ) : (
+                <span className="font-medium">—</span>
+              )}
+              {data?.attachmentRef && (
+                <span className="text-xs text-muted-foreground">({data.attachmentRef})</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm col-span-1 sm:col-span-2">
+              <span className="text-muted-foreground">Attachment • مرفق:</span>
+              {data?.attachmentUrl ? (
+                <a href={data.attachmentUrl} target="_blank" rel="noreferrer" className="text-primary underline">Open</a>
+              ) : (
+                <span className="font-medium">—</span>
+              )}
+            </div>
           </div>
 
           {/* Items table (merged duplicates) */}

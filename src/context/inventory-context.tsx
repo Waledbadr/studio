@@ -109,6 +109,7 @@ export interface MRV {
   attachmentUrl?: string | null;
   attachmentPath?: string | null;
   codeShort?: string | null;
+  attachmentRef?: string | null;
   // Optional link back to an originating Material Request (order)
   orderId?: string | null;
 }
@@ -220,6 +221,7 @@ export interface AuditItem {
   status: 'PENDING' | 'COUNTED' | 'VERIFIED' | 'DISCREPANCY' | 'ADJUSTED';
   notes: string;
   countedBy?: string;
+  attachmentRef?: string | null;
   countedAt?: Timestamp;
   verifiedBy?: string;
   verifiedAt?: Timestamp;
@@ -1100,6 +1102,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         attachmentUrl: meta?.attachmentUrl || null,
         attachmentPath: meta?.attachmentPath || null,
         codeShort: meta?.codeShort || null,
+  attachmentRef: meta?.attachmentRef || null,
+  orderId: meta?.orderId || null,
       } as MRVDetails;
     } catch (e) {
       console.error('Error fetching MRV details:', e);
