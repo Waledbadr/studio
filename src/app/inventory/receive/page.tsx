@@ -17,7 +17,7 @@ import { useResidences } from "@/context/residences-context";
 import { useLanguage } from '@/context/language-context';
 
 export default function ReceiveMaterialsPage() {
-    const { getMRVRequests, approveMRVRequest } = useInventory();
+    const { getMRVRequests, approveMRVRequest, getMRVs } = useInventory();
     const { dict } = useLanguage();
     const { orders, loadOrders } = useOrders();
     const router = useRouter();
@@ -31,6 +31,7 @@ export default function ReceiveMaterialsPage() {
     const [approvedMrvRequests, setApprovedMrvRequests] = useState<any[]>([]);
     const [rejectedMrvCount, setRejectedMrvCount] = useState(0);
     const [approveBusy, setApproveBusy] = useState<Record<string, boolean>>({});
+    const [mrvsList, setMrvsList] = useState<any[]>([]);
     const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
 
     // helper to load MRV stats (pending list, counts)
@@ -43,10 +44,15 @@ export default function ReceiveMaterialsPage() {
             const approved = await getMRVRequests('Approved');
             const visibleApproved = isAdmin ? approved : approved.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
             setApprovedMrvRequests(visibleApproved);
-            setApprovedMrvCount(visibleApproved.length || 0);
             const rejected = await getMRVRequests('Rejected');
             const visibleRejected = isAdmin ? rejected : rejected.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
             setRejectedMrvCount(visibleRejected.length || 0);
+
+            // Load posted MRVs (completed receipts) from MRV master collection
+            const allMrvs = await getMRVs();
+            const visibleMrvs = isAdmin ? allMrvs : allMrvs.filter((m: any) => currentUser?.assignedResidences?.includes(m.residenceId));
+            setMrvsList(visibleMrvs);
+            setApprovedMrvCount(visibleMrvs.length || 0);
         } catch {}
     };
 
@@ -110,7 +116,7 @@ export default function ReceiveMaterialsPage() {
           const busy = !!approveBusy[r.id];
           rows.push({
             key: `mrv-${r.id}`,
-            id: r.id,
+            id: r.mrvShort || r.id,
             type: 'MRV',
             dateLabel: r.requestedAt?.toDate ? format(r.requestedAt.toDate(), 'PPP') : '-',
             residence: residenceName(r.residenceId),
@@ -170,30 +176,32 @@ export default function ReceiveMaterialsPage() {
         return rows;
                         }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats, approveBusy]);
 
-        // Build rows for Completed section (approved MRVs only)
+                // Build rows for Completed section from MRVs (posted receipts)
     const completedRows = useMemo(() => {
-        const rows: any[] = [];
-        for (const r of approvedMrvRequests) {
-          rows.push({
-            key: `mrvOk-${r.id}`,
-            id: r.mrvId || r.mrvShort || r.id,
-            type: 'MRV',
-            dateLabel: r.approvedAt?.toDate ? format(r.approvedAt.toDate(), 'PPP') : '-',
-            residence: residenceName(r.residenceId),
-            items: (r.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
-            status: <Badge>Delivered</Badge>,
-            href: r.mrvId ? `/inventory/receive/receipts/${r.mrvId}` : undefined,
-          });
-        }
-        return rows;
-            }, [approvedMrvRequests, router, residenceName]);
+                const rows: any[] = [];
+                for (const mrv of mrvsList) {
+                    rows.push({
+                        key: `mrv-${mrv.id}`,
+                        id: mrv.id,
+                        type: 'MRV',
+            mrRef: mrv.orderId || null,
+                        dateLabel: mrv.date?.toDate ? format(mrv.date.toDate(), 'PPP') : '-',
+                        residence: residenceName(mrv.residenceId),
+                        items: Number(mrv.itemCount || 0),
+                        status: <Badge>Delivered</Badge>,
+                        href: `/inventory/receive/receipts/${mrv.id}`,
+                    });
+                }
+                return rows;
+                        }, [mrvsList, router, residenceName]);
 
-        const renderUnifiedTable = (rows: any[], showActions: boolean = true) => (
+    const renderUnifiedTable = (rows: any[], showActions: boolean = true, showMrRef: boolean = false) => (
         <Table>
             <TableHeader>
                 <TableRow>
                                             <TableHead>{dict.orderId || 'Request ID'}</TableHead>
                                             <TableHead>{'Type'}</TableHead>
+            {showMrRef && <TableHead>{'MR Ref'}</TableHead>}
                         <TableHead>{dict.date || 'Date'}</TableHead>
                         <TableHead>{dict.location || 'Residence'}</TableHead>
                         <TableHead>{dict.items || 'Items'}</TableHead>
@@ -210,6 +218,7 @@ export default function ReceiveMaterialsPage() {
                                         >
                                                 <TableCell className="font-medium">{row.id}</TableCell>
                                                 <TableCell>{row.type || '-'}</TableCell>
+                        {showMrRef && (<TableCell>{row.mrRef || '-'}</TableCell>)}
                                                 <TableCell>{row.dateLabel}</TableCell>
                                                 <TableCell>{row.residence}</TableCell>
                                                 <TableCell>{row.items}</TableCell>
@@ -220,7 +229,7 @@ export default function ReceiveMaterialsPage() {
                                         </TableRow>
                 )) : (
                                         <TableRow>
-                                                                                                <TableCell colSpan={showActions ? 7 : 6} className="h-32 text-center text-muted-foreground">
+                                                <TableCell colSpan={(showActions ? 7 : 6) + (showMrRef ? 1 : 0)} className="h-32 text-center text-muted-foreground">
                                                     {dict.noRecordsFound || 'No records found.'}
                                                 </TableCell>
                                         </TableRow>
@@ -230,15 +239,16 @@ export default function ReceiveMaterialsPage() {
     );
 
     const readyToReceiveCount = pendingMrvCount + userVisibleApprovedMRs.length;
-    const completedDeliveredCount = approvedMrvCount;
+    const completedDeliveredCount = approvedMrvCount; // equals mrvsList.length
+    const totalRequestsCount = pendingMrvCount + approvedMrvRequests.length + rejectedMrvCount;
 
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">{dict.mivTitle || dict.ui?.materialsApp}</h1>
-                    <p className="text-muted-foreground">{dict.mivDescription || dict.ui?.currentRequest}</p>
-                </div>
+            <div className="flex items-center justify-between">
+               <div>
+                   <h1 className="text-2xl font-bold">{dict.receiveMrvTitle || 'Material Receive Voucher (MRV)'}</h1>
+                   <p className="text-muted-foreground">{dict.receiveMrvPageDescription || dict.ui?.currentRequest}</p>
+               </div>
                  <div className="flex items-center gap-2">
                     <Button variant="secondary" onClick={() => router.push('/inventory/receive/new-approval')}>
                             {dict.newMRVApproval || dict.reviewLabel}
@@ -303,7 +313,7 @@ export default function ReceiveMaterialsPage() {
                             </div>
                             <div>
                                 <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
-                                <p className="text-2xl font-bold">{pendingMrvCount + approvedMrvCount + rejectedMrvCount}</p>
+                                <p className="text-2xl font-bold">{totalRequestsCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -327,7 +337,7 @@ export default function ReceiveMaterialsPage() {
                         <Archive className="h-4 w-4" />
                         {isCompletedOpen ? dict.ui?.hideCompleted : dict.ui?.showCompleted}
                         <Badge variant="secondary" className="text-xs">
-                            {approvedMrvRequests.length}
+                            {mrvsList.length}
                         </Badge>
                     </Button>
                 </CardHeader>
@@ -337,7 +347,7 @@ export default function ReceiveMaterialsPage() {
             </Card>
 
             {/* Completed Orders - Collapsible */}
-             {(approvedMrvRequests.length > 0) && (
+             {(mrvsList.length > 0) && (
                  <Collapsible open={isCompletedOpen} onOpenChange={handleCompletedToggle}>
                      <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
                          <CollapsibleTrigger asChild>
@@ -348,9 +358,9 @@ export default function ReceiveMaterialsPage() {
                                              <Archive className="h-4 w-4 text-muted-foreground" />
                                          </div>
                                          <div>
-                                             <CardTitle className="text-base">Approved MRVs</CardTitle>
+                                             <CardTitle className="text-base">Completed MRV Requests</CardTitle>
                                              <CardDescription>
-                                                 Receipts posted to stock • Click to {isCompletedOpen ? 'collapse' : 'expand'}
+                                                 All posted MRV receipts • Click to {isCompletedOpen ? 'collapse' : 'expand'}
                                              </CardDescription>
                                          </div>
                                      </div>
@@ -378,7 +388,7 @@ export default function ReceiveMaterialsPage() {
                          </CollapsibleTrigger>
                          <CollapsibleContent>
                              <CardContent className="pt-4 space-y-8">
-                                 {renderUnifiedTable(completedRows, false)}
+                                 {renderUnifiedTable(completedRows, false, true)}
                              </CardContent>
                          </CollapsibleContent>
                      </Card>

@@ -155,12 +155,14 @@ export default function SetupPage() {
                         ].map(e => e.trim().toLowerCase());
 
                         // Simple helper to commit in chunks to avoid 500 ops limit
-                        let batch = writeBatch(db);
+                        // db is ensured above; narrow type for TS
+                        const dbStrict = db!;
+                        let batch = writeBatch(dbStrict);
                         let ops = 0;
                         const commitIfNeeded = async (force = false) => {
                             if (ops >= 400 || force) {
                                 await batch.commit();
-                                batch = writeBatch(db);
+                                batch = writeBatch(dbStrict);
                                 ops = 0;
                             }
                         };
@@ -214,7 +216,7 @@ export default function SetupPage() {
                         const countersSnap = await getDocs(collection(db, 'counters'));
                         for (const d of countersSnap.docs) {
                             const id = d.id || '';
-                            if (/^(mr|miv|mrv|con|svc|trs)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|svc|trs)-/i.test(id)) {
+                            if (/^(mr|miv|mrv|con|svc|trs|dep|mnt)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|svc|trs|dep|mnt)-/i.test(id)) {
                                 batch.delete(d.ref);
                                 ops++; await commitIfNeeded();
                             }

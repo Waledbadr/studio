@@ -291,7 +291,10 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 			<form id="edit-item-form" onSubmit={handleUpdateItem} className="flex-1 flex flex-col gap-6 overflow-y-auto px-0 pr-4 pb-16 custom-scrollbar" ref={formRef}>
 				<DialogHeader>
 					<DialogTitle className="text-lg">Edit Inventory Item</DialogTitle>
+					<p className="sr-only" id="edit-item-dialog-desc">Update the item details such as names, category, unit, lifespan, variants and keywords.</p>
 				</DialogHeader>
+				{/* Associate description using aria-describedby for a11y linters */}
+				<div aria-describedby="edit-item-dialog-desc" />
 
 				<section className="flex flex-col gap-4">
 					<SectionHeader icon={<Hash className="h-5 w-5 text-primary" />}>Basic Information</SectionHeader>

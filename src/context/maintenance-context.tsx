@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from "firebase/firestore";
 import { onAuthStateChanged } from 'firebase/auth';
 
 export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
@@ -146,30 +146,26 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   }, [loadRequests]);
 
   const generateNewRequestId = async (): Promise<string> => {
-    if (!db) {
-      // Local ID pattern when offline
-      const now = new Date();
-      return `REQ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}-${Date.now().toString().slice(-4)}`;
-    }
+    // Use monthly counter similar to other modules: MNT-YYM#
     const now = new Date();
-    const prefix = `REQ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}-`;
-    
-    const requestsQuery = query(collection(db, "maintenanceRequests"), where("id", ">=", prefix));
-    const querySnapshot = await getDocs(requestsQuery);
-    
-    let maxNum = 0;
-    querySnapshot.forEach(doc => {
-        const docId = doc.id;
-        if (docId.startsWith(prefix)) {
-            const numPart = parseInt(docId.substring(prefix.length), 10);
-            if (!isNaN(numPart) && numPart > maxNum) {
-                maxNum = numPart;
-            }
-        }
+    const yy = now.getFullYear().toString().slice(-2);
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+    const mmNoPad = (now.getMonth() + 1).toString();
+    if (!db) {
+      return `MNT-${yy}${mmNoPad}${Date.now().toString().slice(-3)}`;
+    }
+    // Use counters/mnt-YY-MM
+    const counterId = `mnt-${yy}-${mm}`;
+    const counterRef = doc(db, 'counters', counterId);
+    let nextSeq = 0;
+    // We are not in a broader transaction context here; rely on Firestore transaction for atomicity of the counter
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
     });
-
-    const nextRequestNumber = (maxNum + 1).toString().padStart(4, '0');
-    return `${prefix}${nextRequestNumber}`;
+    return `MNT-${yy}${mmNoPad}${nextSeq}`;
   };
 
   const createRequest = async (payload: NewRequestPayload): Promise<string | null> => {
@@ -189,8 +185,8 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
     try {
-      const newId = await generateNewRequestId();
-      const newRequestRef = doc(db, "maintenanceRequests", newId);
+  const newId = await generateNewRequestId();
+  const newRequestRef = doc(db, "maintenanceRequests", newId);
       // Ensure requester is the actual signed-in Firebase Auth UID to satisfy security rules
       const authUid = auth?.currentUser?.uid;
       if (!authUid) {
@@ -198,7 +194,7 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
         return null;
       }
       
-      const newRequest: Omit<MaintenanceRequest, 'id'> = {
+  const newRequest: Omit<MaintenanceRequest, 'id'> = {
           ...payload,
           requestedById: authUid,
           date: Timestamp.now(),

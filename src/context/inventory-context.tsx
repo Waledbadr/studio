@@ -109,6 +109,8 @@ export interface MRV {
   attachmentUrl?: string | null;
   attachmentPath?: string | null;
   codeShort?: string | null;
+  // Optional link back to an originating Material Request (order)
+  orderId?: string | null;
 }
 
 export interface MRVDetails {
@@ -126,6 +128,7 @@ export interface MRVDetails {
   attachmentUrl?: string | null;
   attachmentPath?: string | null;
   codeShort?: string | null;
+  orderId?: string | null;
 }
 
 // MRV Request (needs admin approval before posting)
@@ -328,7 +331,8 @@ interface InventoryContextType {
   approveReconciliationRequest: (requestId: string, approverId: string) => Promise<string>;
   rejectReconciliationRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
   // MRV helpers
-  createMRV: (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string } }) => Promise<string>;
+  createMRV: (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }) => Promise<string>;
+  // meta now optionally supports orderId to link receipt to an MR
   getMRVs: () => Promise<MRV[]>;
   getMRVById: (mrvId: string) => Promise<MRVDetails | null>;
   // MRV Requests (approval flow)
@@ -790,7 +794,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Create MRV (manual receipt without order)
-  const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string } }): Promise<string> => {
+  const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }): Promise<string> => {
     // Note: If meta.mrvId is not provided, we reserve an MRV id using monthly counters (reserveNewMrvId)
     if (!db) {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
@@ -886,6 +890,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         attachmentUrl: payload.meta?.attachmentUrl || null,
         attachmentPath: payload.meta?.attachmentPath || null,
         codeShort: mrvShort || null,
+  orderId: payload.meta?.orderId || null,
       } as any);
     });
 
@@ -1172,8 +1177,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const freshSnap = await getDoc(reqRef);
     const reqData = freshSnap.data() as MRVRequest;
 
-    // Reserve an MRV id/code to ensure consistent monthly sequence
-    const reserved = await reserveNewMrvId();
+    // Use pre-reserved short code if exists to keep unified numbering; otherwise reserve now
+    const reservedShort = reqData.mrvShort && String(reqData.mrvShort).startsWith('MRV-') ? reqData.mrvShort : null;
+    const reserved = reservedShort ? { id: reservedShort, short: reservedShort } : await reserveNewMrvId();
     // Create posted MRV and update request status
     const mrvId = await createMRV({
       residenceId: reqData.residenceId,
@@ -1186,7 +1192,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       approvedById: approverId,
       approvedAt: Timestamp.now(),
       mrvId,
-      mrvShort: reserved.short
+  mrvShort: reserved.short
     });
 
     // Notify requester and all Admins
@@ -1234,10 +1240,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         await addNotification?.({
           userId: requesterId,
           title: 'MRV Rejected',
-          message: `Your MRV request was rejected${reason ? `: ${reason}` : ''}.`,
+          message: `Your MRV request (${data.mrvShort || requestId}) was rejected${reason ? `: ${reason}` : ''}.`,
           type: 'generic',
           href: `/inventory/receive`,
-          referenceId: requestId,
+          referenceId: data.mrvShort || requestId,
         } as any);
       }
     } catch {}
@@ -1534,11 +1540,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
          toast({ title: "Success", description: "Transfer request has been rejected." });
     };
 
-    const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
+  const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (transaction) => {
                 // Get the item to verify it exists and get its names
                 const itemRef = doc(db!, "inventory", depreciationRequest.itemId);
                 const itemSnap = await transaction.get(itemRef);
@@ -1555,22 +1561,35 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
                 }
                 
-                // Update stock for the residence
-        const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
-        newStockByResidence[depreciationRequest.residenceId] = Math.max(0, currentStock - depreciationRequest.quantity);
-                
-                // Calculate new total stock
-                const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
-          const num = Number(stock);
-          return sum + (isNaN(num) ? 0 : Math.max(0, num));
-                }, 0);
-                
-                // Update item document
-                transaction.update(itemRef, {
-                    stock: newTotalStock,
-                    stockByResidence: newStockByResidence
-                });
-                
+        // Prepare counter read BEFORE any writes (Firestore rule)
+        const now = new Date();
+        const yy = now.getFullYear().toString().slice(-2);
+        const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+        const mmNoPad = (now.getMonth() + 1).toString();
+        const depCounterId = `dep-${yy}-${mm}`;
+        const depCounterRef = doc(db!, 'counters', depCounterId);
+        const depSnap = await transaction.get(depCounterRef);
+        const depCurrent = (depSnap.exists() ? (depSnap.data() as any).seq : 0) || 0;
+        const depNextSeq = depCurrent + 1;
+        const depCodeShort = `DEP-${yy}${mmNoPad}${depNextSeq}`;
+
+        // Now perform writes
+        // Update stock for the residence
+    const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
+    newStockByResidence[depreciationRequest.residenceId] = Math.max(0, currentStock - depreciationRequest.quantity);
+        // Calculate new total stock
+        const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
+      const num = Number(stock);
+      return sum + (isNaN(num) ? 0 : Math.max(0, num));
+        }, 0);
+        // Update item document
+        transaction.update(itemRef, {
+          stock: newTotalStock,
+          stockByResidence: newStockByResidence
+        });
+        // Update counter (write after all reads)
+        transaction.set(depCounterRef, { seq: depNextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+
                 // Create depreciation transaction
                 const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
                 const transactionData: Omit<InventoryTransaction, 'id'> = {
@@ -1581,7 +1600,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     date: Timestamp.now(),
                     type: 'DEPRECIATION',
                     quantity: depreciationRequest.quantity,
-                    referenceDocId: `DEP-${Date.now()}`,
+          referenceDocId: depCodeShort,
                     locationId: depreciationRequest.locationId,
                     locationName: depreciationRequest.locationName,
                     depreciationReason: depreciationRequest.reason

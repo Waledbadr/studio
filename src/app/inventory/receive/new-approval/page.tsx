@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { UploadCloud, Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
@@ -240,6 +240,21 @@ export default function NewMRVApprovalPage() {
         attachmentUrl = data.url;
         attachmentPath = data.path;
       }
+      // Reserve a unified MRV short code now so Pending and Approved share the same number
+      const now = new Date();
+      const yy = now.getFullYear().toString().slice(-2);
+      const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+      const mmNoPad = (now.getMonth() + 1).toString();
+      const counterId = `mrv-${yy}-${mm}`;
+      let nextSeq = 0;
+      await runTransaction(db, async (trx) => {
+        const counterRef = doc(db!, 'counters', counterId);
+        const snap = await trx.get(counterRef);
+        const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+        nextSeq = current + 1;
+        trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      });
+      const reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
       const reqRef = doc(collection(db, 'mrvRequests'));
       await setDoc(reqRef, {
         id: reqRef.id,
@@ -253,6 +268,7 @@ export default function NewMRVApprovalPage() {
         status: 'Pending',
         requestedById: currentUser?.id || null,
         requestedAt: Timestamp.now(),
+        mrvShort: reservedMrvShort,
       });
 
       toast({ title: 'Submitted', description: 'MRV request submitted for admin approval.' });

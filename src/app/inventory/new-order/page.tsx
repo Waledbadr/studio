@@ -742,7 +742,6 @@ function AddItemButton({
                                                                 <QuantityStepper
                                                                     value={item.quantity}
                                                                     onValueChange={(n) => handleQuantityChange(item.id, n)}
-                                                                    disallowedValues={[3]}
                                                                     ref={(el) => { qtyRefs.current[item.id] = el; }}
                                                                 />
                                                             </div>

@@ -269,7 +269,7 @@ export function AddItemDialog({
     };
     
     const dialogContent = (
-        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col">
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col" aria-describedby="add-item-dialog-desc">
             <form
                 id="add-item-form"
                 onSubmit={(e) => handleAddItem(e, 'save')}
@@ -278,7 +278,7 @@ export function AddItemDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-lg">Add New Inventory Item</DialogTitle>
-                    <DialogDescription className="text-sm">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
+                    <DialogDescription className="text-sm" id="add-item-dialog-desc">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
                 </DialogHeader>
                 {/* Basic Info Section */}
                 <section className="flex flex-col gap-4">

@@ -257,7 +257,9 @@ export default function DashboardPage() {
                          <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentReceipts.map((rec: any, i: number) => {
-                                const href = rec.type === 'MRV' ? `/inventory/receive/receipts/${rec.id}` : (rec.status === 'Partially Delivered' ? `/inventory/receive/${rec.id}` : `/inventory/orders/${rec.id}`);
+                                                                const href = rec.type === 'MRV'
+                                                                    ? `/inventory/receive/receipts/${rec.id}`
+                                                                    : (rec.status === 'Partially Delivered' ? `/inventory/receive/${rec.id}` : `/inventory/orders/${rec.id}`);
                                 return (
                                     <TableRow key={`${rec.id}-${i}`} onClick={() => router.push(href)} className="cursor-pointer hover:bg-accent/30">
                                         <TableCell>

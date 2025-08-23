@@ -344,6 +344,15 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
                 throw new Error("Residence ID not found on order.");
             }
 
+            // Build counter ref for MRV code reservation (reads now, write later)
+            const nowDate = new Date();
+            const yy = nowDate.getFullYear().toString().slice(-2);
+            const mm = (nowDate.getMonth() + 1).toString().padStart(2, '0');
+            const mmNoPad = (nowDate.getMonth() + 1).toString();
+            const counterRef = doc(firestore, 'counters', `mrv-${yy}-${mm}`);
+            let reservedMrvShort: string | null = null;
+            let nextSeqFromCounter = 0;
+
             // Strict validation & sanitization of inputs
             const itemsToProcess = (newlyReceivedItems || [])
                 .filter((item) => item && typeof item.id === 'string' && item.id.trim().length > 0)
@@ -353,6 +362,14 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
             // Allow force-complete even if no new quantities entered
             if (itemsToProcess.length === 0 && !forceComplete) {
                 throw new Error('No valid items to receive.');
+            }
+
+            // Read counter value (no writes yet). We will write it later after all reads.
+            if (itemsToProcess.length > 0) {
+              const counterSnap = await transaction.get(counterRef);
+              const currentSeq = (counterSnap.exists() ? (counterSnap.data() as any).seq : 0) || 0;
+              nextSeqFromCounter = currentSeq + 1;
+              reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeqFromCounter}`;
             }
             
             // Build unique candidate IDs and fetch them once
@@ -406,7 +423,13 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
         totalsByBaseItem.set(baseId, (totalsByBaseItem.get(baseId) || 0) + Number(r.quantityReceived || 0));
       }
 
-      // 3.a Update inventory stock (stockByResidence and total stock) per item
+      // --- STAGE 3: ALL WRITES ---
+      // 3.a Persist counter reservation first (if any)
+      if (itemsToProcess.length > 0 && reservedMrvShort) {
+        transaction.set(counterRef, { seq: nextSeqFromCounter, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      }
+
+      // 3.b Update inventory stock (stockByResidence and total stock) per item
       for (const [baseItemId, totalQty] of totalsByBaseItem.entries()) {
   const prevData = itemDataMap.get(baseItemId) || {};
         const prevSbr = { ...(prevData.stockByResidence || {}) } as Record<string, number>;
@@ -421,7 +444,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
         transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
       }
 
-      // 3.b Log transactions for each received line (for reporting)
+      // 3.c Log transactions for each received line (for reporting)
       for (const receivedItem of validItems) {
         const baseItemId = ((): string => {
           const rb = resolveBaseId(String(receivedItem.id));
@@ -437,11 +460,32 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
           date: transactionTime,
           type: 'IN',
           quantity: receivedItem.quantityReceived,
-          referenceDocId: orderId,
+          referenceDocId: reservedMrvShort || orderId,
         } as Omit<InventoryTransaction, 'id'>);
       }
 
-      // 3.c Update order's received items and status, aggregating by base item across variants
+      // 3.c.1 Write MRV master record if we actually received items in stock
+      if (reservedMrvShort) {
+        // Compute total items count received in this posting
+        let totalItemsCount = 0;
+        for (const [, qty] of totalsByBaseItem.entries()) totalItemsCount += Number(qty) || 0;
+        const mrvRef = doc(firestore, 'mrvs', reservedMrvShort);
+        transaction.set(mrvRef, {
+          id: reservedMrvShort,
+          date: transactionTime,
+          residenceId,
+          itemCount: totalItemsCount,
+          supplierName: null,
+          invoiceNo: null,
+          notes: `From MR ${orderId}`,
+          attachmentUrl: null,
+          attachmentPath: null,
+          codeShort: reservedMrvShort,
+          orderId: orderId,
+        } as any);
+      }
+
+      // 3.d Update order's received items and status, aggregating by base item across variants
             const existingReceived = orderData.itemsReceived ? [...orderData.itemsReceived] : [];
 
             // Build helper: map of current received per line id for quick lookup
