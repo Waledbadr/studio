@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type MutableRefObject } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,7 @@ import { Plus, Minus, Trash2, Search, PlusCircle, Loader2, ChevronDown, MessageS
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { useOrders } from '@/context/orders-context';
@@ -454,13 +455,27 @@ function AddItemButton({
 }: {
     item: InventoryItem;
     handleAddItemToOrder: (item: InventoryItem, variant?: string, qty?: number) => void;
-    variantSelectionsRef: React.MutableRefObject<Record<string, Record<string, boolean>>>;
+    variantSelectionsRef: MutableRefObject<Record<string, Record<string, boolean>>>;
     disabled?: boolean;
 }) {
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [, setTick] = useState(0);
 
-    if (!item.variants || item.variants.length === 0) {
+    // Build options from VARIANTS ONLY (keywords are for search only)
+    const optionList = useMemo(() => {
+        const set = new Set<string>();
+        const push = (v?: string) => {
+            const s = (v || '').trim();
+            if (s) set.add(s);
+        };
+        (item.variants || []).forEach(push);
+        const arr = Array.from(set);
+        const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+        arr.sort((a, b) => collator.compare(a, b));
+        return arr;
+    }, [item.variants]);
+
+    if (!optionList || optionList.length === 0) {
         return (
             <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={disabled}>
                 <Plus className="h-4 w-4" />
@@ -475,37 +490,55 @@ function AddItemButton({
                     <ChevronDown className="h-4 w-4" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-72">
-                <div className="space-y-2">
-                    {item.variants.map((variant) => (
-                        <div key={variant} className="flex items-center justify-between gap-2">
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    className="form-checkbox h-4 w-4"
-                                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
-                                    onChange={(e) => {
-                                        const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
-                                        if (e.target.checked) map[variant] = true;
-                                        else delete map[variant];
-                                        variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
-                                        setTick(t => t + 1);
-                                    }}
-                                />
-                                <span className="truncate">{variant}</span>
-                            </label>
-                        </div>
-                    ))}
+            {/* Match glass dropdown styling used by Select in stock-movement */}
+            <PopoverContent className="w-[300px] p-0">
+                {/* Scrollable options list */}
+                <ScrollArea className="h-80 max-h-[60vh]">
+                    <div className="p-1">
+                        {optionList.map((variant) => {
+                            const selected = Boolean((variantSelectionsRef.current[item.id] || {})[variant]);
+                            return (
+                                <div
+                                    key={variant}
+                                    className="relative flex w-full select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                        <Checkbox
+                                            checked={selected}
+                                            onCheckedChange={(v) => {
+                                                const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                                                if (Boolean(v)) map[variant] = true; else delete map[variant];
+                                                variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                                                setTick((t) => t + 1);
+                                            }}
+                                        />
+                                    </span>
+                                    <span className="truncate">{variant}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </ScrollArea>
 
-                    <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>
-                            Clear
-                        </Button>
-                        <Button size="sm" onClick={() => {
+                {/* Sticky action bar */}
+                <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t p-2 bg-white/60 dark:bg-black/20 backdrop-blur">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick((t) => t + 1);
+                        }}
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={() => {
                             const map = variantSelectionsRef.current[item.id] || {};
                             const entries = Object.entries(map);
                             if (entries.length === 0) {
-                                handleAddItemToOrder(item, item.variants?.[0]);
+                                handleAddItemToOrder(item, optionList?.[0]);
                                 setPopoverOpen(true);
                                 return;
                             }
@@ -514,7 +547,7 @@ function AddItemButton({
                                 const [variant] = entries[0];
                                 handleAddItemToOrder(item, variant, 1);
                                 variantSelectionsRef.current[item.id] = {};
-                                setTick(t => t + 1);
+                                setTick((t) => t + 1);
                                 setPopoverOpen(true);
                                 return;
                             }
@@ -526,11 +559,11 @@ function AddItemButton({
 
                             setPopoverOpen(true);
                             variantSelectionsRef.current[item.id] = {};
-                            setTick(t => t + 1);
-                        }}>
-                            Add selected
-                        </Button>
-                    </div>
+                            setTick((t) => t + 1);
+                        }}
+                    >
+                        Add selected
+                    </Button>
                 </div>
             </PopoverContent>
         </Popover>

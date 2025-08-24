@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 
 export default function StockReconciliationPage() {
   const { items, categories, loading, getStockForResidence, reconcileStock, getReconciliations, getAllReconciliations, getReconciliationItems, createReconciliationRequest, getReconciliationRequests, approveReconciliationRequest, rejectReconciliationRequest } = useInventory();
@@ -38,6 +40,7 @@ export default function StockReconciliationPage() {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isAdmin = (currentUser?.role === 'Admin');
+  const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
 
   // Reconciliation history state
   type Rec = { id: string; residenceId: string; date: any; itemCount: number; totalIncrease: number; totalDecrease: number; performedById?: string };
@@ -131,10 +134,34 @@ export default function StockReconciliationPage() {
     let list = itemsForResidence;
     if (categoryFilter) list = list.filter((it) => it.category === categoryFilter);
     if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(
-        (it) => it.nameAr?.toLowerCase().includes(q) || it.nameEn?.toLowerCase().includes(q)
-      );
+      const qN = normalizeText(query);
+      list = list.filter((it) => {
+        const cand = [
+          it.nameEn,
+          it.nameAr,
+          it.category,
+          it.unit,
+          ...(it.keywordsAr || []),
+          ...(it.keywordsEn || []),
+          ...(it.variants || []),
+        ]
+          .filter(Boolean)
+          .join(' ');
+        if (includesNormalized(cand as string, qN)) return true;
+        // Check centralized Arabic synonyms (map query alias to canonical term)
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+          if (aliasSet.has(qN)) {
+            const itemMatchesCanon =
+              includesNormalized(it.nameAr as string, canonN) ||
+              includesNormalized(it.nameEn as string, canonN) ||
+              (it.keywordsAr || []).some((k) => includesNormalized(k, canonN)) ||
+              (it.keywordsEn || []).some((k) => includesNormalized(k, canonN)) ||
+              (it.variants || []).some((v) => includesNormalized(v, canonN));
+            if (itemMatchesCanon) return true;
+          }
+        }
+        return false;
+      });
     }
     if (showOnlyChanged) {
       list = list.filter((it) => {
@@ -580,13 +607,13 @@ export default function StockReconciliationPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Reconciliation details</DialogTitle>
-            <DialogDescription>
-              {selectedRec ? (
+            {selectedRec ? (
+              <DialogDescription asChild>
                 <div className="text-sm text-gray-600">
                   Reference: <span className="font-mono">{selectedRec.id}</span> · Residence: {residenceNameById.get(String(selectedRec.residenceId)) || selectedRec.residenceId}
                 </div>
-              ) : null}
-            </DialogDescription>
+              </DialogDescription>
+            ) : null}
           </DialogHeader>
           {detailLoading ? (
             <Skeleton className="h-24 w-full" />
@@ -631,15 +658,15 @@ export default function StockReconciliationPage() {
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Review reconciliation request</DialogTitle>
-            <DialogDescription>
-              {selectedReq ? (
+            {selectedReq ? (
+              <DialogDescription asChild>
                 <div className="text-sm text-gray-600 space-y-1">
                   <div>Code: <span className="font-mono">{selectedReq.reservedId || selectedReq.id}</span></div>
                   <div>Residence: {residenceNameById.get(String(selectedReq.residenceId)) || selectedReq.residenceId}</div>
                   <div>Requested by: {userName(selectedReq.requestedById)}</div>
                 </div>
-              ) : null}
-            </DialogDescription>
+              </DialogDescription>
+            ) : null}
           </DialogHeader>
           {(!selectedReq || reqDetailItems.length === 0) ? (
             <div className="text-sm text-gray-600">No items.</div>
