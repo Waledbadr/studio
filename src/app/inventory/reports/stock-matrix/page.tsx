@@ -53,7 +53,7 @@ export default function StockMatrixReportPage() {
   const normalizedSearch = search.trim();
     const group: Record<string, any[]> = {};
 
-    const filteredItems = (items || []).filter((it) => {
+  const filteredItems = (items || []).filter((it: any) => {
       // Optional normalized search (same approach as Inventory page, plus a few extra fields)
       if (normalizedSearch) {
         const qN = normalizeText(normalizedSearch);

@@ -9,6 +9,22 @@ service cloud.firestore {
     function isAdminUser(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data.role == 'Admin';
     }
+    // Utility: allow supervisors to edit only inventory metadata fields (not IDs or dangerous fields)
+    function itemMetadataOnlyChange() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        'name','nameAr','nameEn','category','unit','lifespanDays','variants','keywordsAr','keywordsEn'
+      ]);
+    }
+    // Utility: validate safe item creation payload for supervisors (no initial stock allowed)
+    function supervisorItemCreateAllowed() {
+      return request.resource.data.keys().hasOnly([
+        'id','name','nameAr','nameEn','category','unit','stock','stockByResidence','lifespanDays','variants','keywordsAr','keywordsEn'
+      ]) &&
+      // Either no 'stock' field, or explicitly zero
+      (!('stock' in request.resource.data) || request.resource.data.stock == 0) &&
+      // Either no per-residence stock, or empty map
+      (!('stockByResidence' in request.resource.data) || request.resource.data.stockByResidence.size() == 0);
+    }
   // Legacy helpers removed: we now require users/{auth.uid} as the single source of truth.
     function stockOnlyChange() {
       // Allow only stock fields to change
@@ -34,14 +50,16 @@ service cloud.firestore {
 
     // Notifications
     match /notifications/{notificationId} {
-      // Allow creating notifications for self, or targeting Admin users
-      allow create: if isAdmin() || (isSignedIn() && (
-        request.resource.data.userId == request.auth.uid ||
-        isAdminUser(request.resource.data.userId)
-      ));
-      // Allow Admins, or the signed-in user if the notification targets their UID
-      allow read: if isAdmin() || isOwner(resource.data.userId);
-      allow update: if isAdmin() || isOwner(resource.data.userId);
+  // Allow creating notifications for self. Also allow Admins/Supervisors to create for any user.
+  allow create: if isAdmin() || isSupervisor() || (isSignedIn() && request.resource.data.userId == request.auth.uid) || (isSignedIn() && isAdminUser(request.resource.data.userId));
+      // Allow Admins, or the signed-in user if the notification targets their UID or their email
+      allow read: if isAdmin() || isOwner(resource.data.userId) || (
+        isSignedIn() && resource.data.userEmail != null && request.auth.token.email == resource.data.userEmail
+      );
+      // Allow marking as read by owner (by uid or by email) or Admin
+      allow update: if isAdmin() || isOwner(resource.data.userId) || (
+        isSignedIn() && resource.data.userEmail != null && request.auth.token.email == resource.data.userEmail
+      );
       allow delete: if isAdmin();
     }
 
@@ -69,11 +87,14 @@ service cloud.firestore {
     match /inventory/{itemId} {
       allow read: if isSignedIn();
   // Require non-negative aggregate stock; detailed per-residence validation is enforced in server/app logic
-  allow create: if isAdmin() && request.resource.data.stock >= 0;
-  // Admins can update any fields; Supervisors can only update stock fields
+  allow create: if (
+        (isAdmin() && request.resource.data.stock >= 0) ||
+        (isSupervisor() && supervisorItemCreateAllowed())
+      );
+  // Admins can update any fields; Supervisors can update either stock-only (via flows) OR metadata-only
   allow update: if (
         (isAdmin() && request.resource.data.stock >= 0) ||
-        (isSupervisor() && request.resource.data.stock >= 0 && stockOnlyChange())
+        (isSupervisor() && (stockOnlyChange() || itemMetadataOnlyChange()))
       );
       allow delete: if isAdmin();
     }
@@ -113,11 +134,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
   // Allow any signed-in user to create a request where the requester matches their UID
   allow create: if isSignedIn() && request.resource.data.requestedById == request.auth.uid;
-      // Allow requester to update while Pending; Admins can always update/delete
-      allow update: if isAdmin() || isSupervisor() || (
-        isSignedIn() &&
-        resource.data.requestedById == request.auth.uid &&
-        resource.data.status == 'Pending'
+      // Allow: Admin/Supervisor can update; requester can update while Pending
+      allow update: if (
+        isAdmin() || isSupervisor() || (
+          isSignedIn() && resource.data.requestedById == request.auth.uid && resource.data.status == 'Pending'
+        )
       );
       allow delete: if isAdmin();
     }
@@ -134,8 +155,9 @@ service cloud.firestore {
     // Service Orders
     match /serviceOrders/{svcId} {
       allow read: if isSignedIn();
-      // Creating/receiving service orders adjusts inventory; restrict to Admins
-      allow create, update, delete: if isAdmin();
+  // Creating/receiving service orders adjusts inventory; allow Admins and Supervisors to create/update; delete remains Admin-only
+  allow create, update: if isAdmin() || isSupervisor();
+  allow delete: if isAdmin();
     }
 
     // Inventory categories
@@ -147,9 +169,10 @@ service cloud.firestore {
     // Stock Transfers between residences
     match /stockTransfers/{transferId} {
       allow read: if isSignedIn();
-      // Creation typically by signed-in users; approvals handled by Admins in app logic
+      // Creation by any signed-in user (originator); updates by Admin/Supervisor
       allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || isSupervisor();
+  allow delete: if isAdmin();
     }
 
     // Inventory Audits
@@ -172,7 +195,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Posting MRVs adjusts inventory; allow Admins and Supervisors to create
       allow create: if isAdmin() || isSupervisor();
-      allow update, delete: if isAdmin();
+      // Allow Admins to update anything; Supervisors may update only attachment fields
+      allow update: if (
+        isAdmin() || (
+          isSupervisor() && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'attachmentUrl', 'attachmentPath', 'attachmentRef', 'updatedAt'
+          ])
+        )
+      );
+      allow delete: if isAdmin();
     }
 
     // Pending MRV Requests awaiting approval

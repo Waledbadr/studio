@@ -568,6 +568,7 @@ export default function DepreciationPage() {
                     <TableHeader className="sticky top-0 bg-gray-50 dark:bg-gray-800">
                       <TableRow>
                         <TableHead className="text-xs">Item</TableHead>
+                        <TableHead className="text-xs">Ref</TableHead>
                         <TableHead className="text-xs">Residence</TableHead>
                         <TableHead className="text-xs">Qty</TableHead>
                         <TableHead className="text-xs">Reason</TableHead>
@@ -579,6 +580,9 @@ export default function DepreciationPage() {
                         <TableRow key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                           <TableCell className="font-medium text-xs p-2">
                             {transaction.itemNameEn}
+                          </TableCell>
+                          <TableCell className="text-[11px] p-2 font-mono text-muted-foreground">
+                            {transaction.referenceDocId || '-'}
                           </TableCell>
                           <TableCell className="text-xs p-2 text-gray-600 dark:text-gray-400">
                             {userResidences.find(r => r.id === transaction.residenceId)?.name || transaction.residenceId}

@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from "@/context/inventory-context";
-import { Loader2, Plus, X, Languages, Eye, Box, Tag, Image as ImageIcon, Hash } from "lucide-react";
+import { useUsers } from "@/context/users-context";
+import { Loader2, Plus, X, Languages, Eye, Tag, Hash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '../ui/textarea';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
@@ -85,6 +85,8 @@ export function AddItemDialog({
     const [isPending, startTransition] = useTransition();
     const [isTranslating, setIsTranslating] = useState(false);
     const { categories, items, addCategory } = useInventory();
+    const { currentUser } = useUsers();
+    const isAdmin = currentUser?.role === 'Admin';
 
     // Focus first input on open
     useEffect(() => {
@@ -234,8 +236,8 @@ export function AddItemDialog({
                     }
                 }
 
-                // Persist new category if needed
-                if (isCustomCategory && finalCategory) {
+                // Persist new category if needed (Admins only)
+                if (isAdmin && isCustomCategory && finalCategory) {
                     try { await addCategory(finalCategory); } catch {}
                 }
 
@@ -267,7 +269,7 @@ export function AddItemDialog({
     };
     
     const dialogContent = (
-        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col">
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col" aria-describedby="add-item-dialog-desc">
             <form
                 id="add-item-form"
                 onSubmit={(e) => handleAddItem(e, 'save')}
@@ -276,7 +278,7 @@ export function AddItemDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-lg">Add New Inventory Item</DialogTitle>
-                    <DialogDescription className="text-sm">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
+                    <DialogDescription className="text-sm" id="add-item-dialog-desc">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
                 </DialogHeader>
                 {/* Basic Info Section */}
                 <section className="flex flex-col gap-4">
@@ -313,10 +315,12 @@ export function AddItemDialog({
                                     {categories.map((cat) => (
                                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                                     ))}
-                                    <SelectItem value="__custom__">+ Add new category…</SelectItem>
+                                    {isAdmin && (
+                                        <SelectItem value="__custom__">+ Add new category…</SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
-                            {isCustomCategory && (
+                            {isCustomCategory && isAdmin && (
                                 <Input placeholder="New category name" value={categoryCustom} onChange={e => setCategoryCustom(e.target.value)} className="mt-2" />
                             )}
                         </div>

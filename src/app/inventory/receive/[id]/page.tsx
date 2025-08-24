@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface ReceivedItem extends OrderItem {
@@ -45,6 +45,8 @@ export default function ReceiveOrderPage() {
     const { toast } = useToast();
     const { dict } = useLanguage();
     const { currentUser } = useUsers();
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [uploading, setUploading] = useState(false);
 
     const fetchOrderForPage = useCallback(async (orderId: string) => {
         if (!db) return;
@@ -139,8 +141,51 @@ export default function ReceiveOrderPage() {
         }
 
         try {
-            await receiveOrderItems(order.id, itemsToProcess, forceComplete);
-            router.push('/inventory/orders');
+            const { mrvId } = await receiveOrderItems(order.id, itemsToProcess, forceComplete);
+            // If there's an attachment and an MRV was created, upload via server API to avoid CORS
+            if (attachmentFile && mrvId) {
+                setUploading(true);
+                try {
+                    const form = new FormData();
+                    form.append('mrvId', mrvId);
+                    form.append('file', attachmentFile);
+                    const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || `Upload failed (${res.status})`);
+                    } else {
+                        // Server persists metadata; fallback to client write if needed
+                        const data = await res.json().catch(() => null);
+                        if (data && data.url && !data.wroteToFirestore) {
+                            try {
+                                await updateDoc(doc(db!, 'mrvs', mrvId), {
+                                    attachmentUrl: data.url,
+                                    attachmentPath: data.path || null,
+                                    attachmentRef: data.attachmentRef || null,
+                                });
+                            } catch (e) {
+                                // ignore; UI will still navigate
+                                console.warn('Client fallback MRV update failed:', e);
+                            }
+                        }
+                        toast({ title: 'Attachment uploaded', description: 'Linked to MRV successfully.' });
+                    }
+                } catch (e) {
+                    console.error('Attachment upload failed', e);
+                    toast({ title: 'Upload failed', description: 'Receipt saved, but attachment could not be uploaded.', variant: 'destructive' });
+                } finally {
+                    setUploading(false);
+                }
+            } else if (attachmentFile && !mrvId) {
+                // No MRV created (e.g., close without receiving quantities)
+                toast({ title: 'No MRV created', description: 'Order was closed without posting items; attachment was not uploaded.' });
+            }
+            // Navigate to MRV details if available, else back to orders
+            if (mrvId) {
+                router.push(`/inventory/receive/receipts/${mrvId}`);
+            } else {
+                router.push('/inventory/orders');
+            }
         } catch (error) {
             // Error toast is handled by the context
             console.error(error);
@@ -181,19 +226,31 @@ export default function ReceiveOrderPage() {
     
     return (
         <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">{dict.receiveMrvTitle}</h1>
                     <p className="text-muted-foreground">{dict.receiveMrvDescription.replace('{id}', order.id)}</p>
                 </div>
-                 <div className="flex items-center gap-2">
+                                 <div className="flex items-center gap-2">
+                                        {/* Optional attachment upload */}
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="mrv-attachment" className="whitespace-nowrap">Attachment</Label>
+                                            <Input
+                                                id="mrv-attachment"
+                                                type="file"
+                                                accept="application/pdf,image/*"
+                                                onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)}
+                                                className="max-w-[240px]"
+                                                disabled={ordersLoading || uploading}
+                                            />
+                                        </div>
                     <Button variant="outline" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="secondary" disabled={ordersLoading}>
-                                 {ordersLoading ? (
+                                                        <Button variant="secondary" disabled={ordersLoading || uploading}>
+                                                                 {ordersLoading || uploading ? (
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /></>
                                 ) : (
                                     <><PackageX className="mr-2 h-4 w-4" /> Receive & Close Order</>
@@ -215,8 +272,8 @@ export default function ReceiveOrderPage() {
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                     </AlertDialog>
-                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
-                        {ordersLoading ? (
+                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading || uploading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
+                        {ordersLoading || uploading ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.processing}</>
                         ) : (
                             <><PackageCheck className="mr-2 h-4 w-4" /> {dict.confirmReceiptAndUpdateStock}</>

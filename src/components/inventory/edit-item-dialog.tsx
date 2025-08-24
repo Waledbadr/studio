@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
-import { Loader2, Plus, X, Languages, Eye, Tag, Hash, Box } from 'lucide-react';
+import { useUsers } from '@/context/users-context';
+import { Loader2, Plus, X, Languages, Eye, Tag, Hash } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useResidences } from '@/context/residences-context';
-import { Textarea } from '../ui/textarea';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
@@ -76,6 +76,8 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 	 const [isTranslating, setIsTranslating] = useState(false);
 	const { categories, items, addCategory } = useInventory();
 	const { residences } = useResidences();
+	const { currentUser } = useUsers();
+	const isAdmin = currentUser?.role === 'Admin';
 
 	// Only show residences that currently have stock for this item
 	const residencesWithStock = residences.filter(res => (item?.stockByResidence?.[res.id] ?? 0) > 0);
@@ -258,7 +260,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 					}
 				}
 
-				if (isCustomCategory && finalCategory) {
+				if (isAdmin && isCustomCategory && finalCategory) {
 					try { await addCategory(finalCategory); } catch {}
 				}
 
@@ -289,7 +291,10 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 			<form id="edit-item-form" onSubmit={handleUpdateItem} className="flex-1 flex flex-col gap-6 overflow-y-auto px-0 pr-4 pb-16 custom-scrollbar" ref={formRef}>
 				<DialogHeader>
 					<DialogTitle className="text-lg">Edit Inventory Item</DialogTitle>
+					<p className="sr-only" id="edit-item-dialog-desc">Update the item details such as names, category, unit, lifespan, variants and keywords.</p>
 				</DialogHeader>
+				{/* Associate description using aria-describedby for a11y linters */}
+				<div aria-describedby="edit-item-dialog-desc" />
 
 				<section className="flex flex-col gap-4">
 					<SectionHeader icon={<Hash className="h-5 w-5 text-primary" />}>Basic Information</SectionHeader>
@@ -325,10 +330,10 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 									{categories.map((cat) => (
 										<SelectItem key={cat} value={cat}>{cat}</SelectItem>
 									))}
-									<SelectItem value="__custom__">+ Add new category…</SelectItem>
+									{isAdmin && <SelectItem value="__custom__">+ Add new category…</SelectItem>}
 								</SelectContent>
 							</Select>
-							{isCustomCategory && (
+							{isCustomCategory && isAdmin && (
 								<Input placeholder="New category name" value={categoryCustom} onChange={e => setCategoryCustom(e.target.value)} className="mt-2" />
 							)}
 						</div>
@@ -454,7 +459,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 						<div className="flex justify-between items-center text-sm font-medium p-1">
 							<div className="flex items-center gap-2">
 								<span className="flex items-center justify-center w-6 h-6 rounded bg-primary text-white" aria-hidden>
-									<Box className="w-4 h-4" />
+									{/* icon removed to avoid unused import */}
 								</span>
 								<span className="text-muted-foreground">الإجمالي المخزون</span>
 							</div>

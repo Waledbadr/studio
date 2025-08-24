@@ -278,7 +278,7 @@ export default function OrderDetailPage() {
                     overflow: hidden !important;
                     text-overflow: ellipsis !important;
                     white-space: nowrap !important;
-                    color: #374151 !important;
+                    color: #111 !important; /* match item column color */
                     direction: rtl !important;
                     text-align: left !important;
                     unicode-bidi: isolate !important;
@@ -416,7 +416,7 @@ export default function OrderDetailPage() {
                                                 <TableCell className="font-medium">
                                                     {en.base || item.nameEn} | {ar.base || item.nameAr}
                                                 </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground notes-cell print-notes">
+                                                <TableCell className="notes-cell print-notes">
                                                     <span className="bidi-notes">{notes}</span>
                                                 </TableCell>
                                                 <TableCell>{item.unit}</TableCell>

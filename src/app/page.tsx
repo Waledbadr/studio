@@ -22,12 +22,14 @@ export default function DashboardPage() {
     const { dict } = useLanguage();
   const { requests, loading: maintenanceLoading, loadRequests } = useMaintenance();
     const { orders, loading: ordersLoading, loadOrders } = useOrders();
-    const { getMIVs, getReconciliationRequests, getAllInventoryTransactions, getAllReconciliations, loading: inventoryLoading, transfers } = useInventory();
+    const { getMIVs, getMRVs, getReconciliationRequests, getAllInventoryTransactions, getAllReconciliations, loading: inventoryLoading, transfers } = useInventory();
     const { currentUser, loading: usersLoading, getUserById } = useUsers();
     const { residences } = useResidences();
   const { serviceOrders, loading: svcLoading } = useServiceOrders();
   
     const [mivs, setMivs] = useState<MIV[]>([]);
+    const [mrvs, setMrvs] = useState<any[]>([]);
+    const [mrvsLoading, setMrvsLoading] = useState(true);
   const [mivsLoading, setMivsLoading] = useState(true);
     const [deprTxs, setDeprTxs] = useState<InventoryTransaction[]>([]);
     const [deprLoading, setDeprLoading] = useState(true);
@@ -44,8 +46,11 @@ export default function DashboardPage() {
         if (!currentUser) return;
         loadRequests();
         loadOrders();
-        setMivsLoading(true);
-                getMIVs().then(setMivs).finally(() => setMivsLoading(false));
+    setMivsLoading(true);
+        getMIVs().then(setMivs).finally(() => setMivsLoading(false));
+    // Load recent MRVs (posted receipts)
+    setMrvsLoading(true);
+    getMRVs().then(setMrvs).finally(() => setMrvsLoading(false));
         // Load recent depreciation transactions
                 setDeprLoading(true);
                 getAllInventoryTransactions()
@@ -78,10 +83,14 @@ export default function DashboardPage() {
     return orders.filter(o => currentUser.assignedResidences.includes(o.residenceId));
   }, [orders, currentUser, isAdmin]);
   
-  const filteredMIVs = useMemo(() => {
+    const filteredMIVs = useMemo(() => {
     if (!currentUser || isAdmin) return mivs;
     return mivs.filter(miv => currentUser.assignedResidences.includes(miv.residenceId));
   }, [mivs, currentUser, isAdmin]);
+    const filteredMRVs = useMemo(() => {
+        if (!currentUser || isAdmin) return mrvs;
+        return mrvs.filter((m: any) => currentUser.assignedResidences.includes(m.residenceId));
+    }, [mrvs, currentUser, isAdmin]);
 
     const filteredServiceOrders = useMemo(() => {
     if (!currentUser || isAdmin) return serviceOrders;
@@ -102,7 +111,20 @@ export default function DashboardPage() {
 
   const recentMaintenance = filteredMaintenance.slice(0, 5);
   const recentMaterialRequests = filteredOrders.slice(0, 5);
-  const recentReceipts = filteredOrders.filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered').slice(0, 5);
+    // Recent receipts: combine Delivered/Partially Delivered MRs and posted MRVs
+    const recentReceipts = useMemo(() => {
+        const fromOrders = filteredOrders
+            .filter(o => o.status === 'Delivered' || o.status === 'Partially Delivered')
+            .map(o => ({ id: o.id, residenceId: o.residenceId, residence: o.residence, status: o.status, type: 'MR' as const }));
+        const fromMrvs = filteredMRVs
+            .map((m: any) => ({ id: m.id, residenceId: m.residenceId, residence: residences.find(r => String(r.id) === String(m.residenceId))?.name || m.residenceId, status: 'Delivered' as const, type: 'MRV' as const, date: m.date }));
+        // Sort by date desc when available; fall back to orders order
+        const combined = [
+            ...fromMrvs.sort((a, b) => ((b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0))),
+            ...fromOrders,
+        ];
+        return combined.slice(0, 5);
+    }, [filteredOrders, filteredMRVs, residences]);
   const recentIssues = filteredMIVs.slice(0, 5);
     const recentServiceOrders = filteredServiceOrders.slice(0, 5);
     const recentDepreciation = filteredDepreciation.slice(0, 5);
@@ -228,22 +250,24 @@ export default function DashboardPage() {
                 </Button>
             </CardHeader>
             <CardContent>
-                {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                {loading || mrvsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                 : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentReceiptsFound || 'No recent receipts found.'}</div>
                 : (
                     <Table>
                          <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {recentReceipts.map((order, i) => {
-                                const href = order.status === 'Partially Delivered' ? `/inventory/receive/${order.id}` : `/inventory/orders/${order.id}`;
+                            {recentReceipts.map((rec: any, i: number) => {
+                                                                const href = rec.type === 'MRV'
+                                                                    ? `/inventory/receive/receipts/${rec.id}`
+                                                                    : (rec.status === 'Partially Delivered' ? `/inventory/receive/${rec.id}` : `/inventory/orders/${rec.id}`);
                                 return (
-                                    <TableRow key={`${order.id}-${i}`} onClick={() => router.push(href)} className="cursor-pointer hover:bg-accent/30">
+                                    <TableRow key={`${rec.id}-${i}`} onClick={() => router.push(href)} className="cursor-pointer hover:bg-accent/30">
                                         <TableCell>
-                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{order.id}</div>
-                                            <div className="text-sm text-muted-foreground">{order.residence}</div>
+                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{rec.id}</div>
+                                            <div className="text-sm text-muted-foreground">{rec.residence}</div>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant={order.status === 'Delivered' ? 'default' : 'secondary'}>{order.status}</Badge>
+                                            <Badge variant={rec.status === 'Delivered' ? 'default' : 'secondary'}>{rec.status}{rec.type === 'MRV' ? ' • MRV' : ''}</Badge>
                                         </TableCell>
                                     </TableRow>
                                 );

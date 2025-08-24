@@ -107,7 +107,7 @@ export default function MaintenancePage() {
                 <TableBody>
                     {requestsToRender.length > 0 ? requestsToRender.map((request) => (
                         <TableRow key={request.id}>
-                            <TableCell className="font-medium">{request.id}</TableCell>
+                            <TableCell className="font-medium font-mono">{request.id}</TableCell>
                             <TableCell>{`${request.complexName}, ${request.buildingName}, ${request.roomName}`}</TableCell>
                             <TableCell>{request.issueTitle}</TableCell>
                             <TableCell>

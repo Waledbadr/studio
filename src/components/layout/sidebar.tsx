@@ -94,11 +94,8 @@ export function AppSidebar() {
         { href: '/', label: dict.sidebar?.dashboard || 'Dashboard', icon: Home },
   // Moved Service Orders directly under Dashboard
   { href: '/inventory/service-orders', label: 'Service Orders', icon: GitBranch },
-        // Single Maintenance entry: external in dev, internal in prod
-        ...(process.env.NODE_ENV !== 'production'
-          ? [{ href: process.env.NEXT_PUBLIC_DEV_MAINTENANCE_URL || 'http://localhost:9002/maintenance', label: 'Maintenance (Dev)', icon: Wrench, external: true }]
-          : [{ href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench }]
-        ),
+  // Single Maintenance entry (always internal)
+  { href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench },
       ]
     },
     // Stock Management Section
