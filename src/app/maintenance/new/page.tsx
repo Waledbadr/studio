@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMaintenance } from "@/context/maintenance-context";
 import { Loader2 } from "lucide-react";
 import { useUsers } from "@/context/users-context";
+import { useLanguage } from "@/context/language-context";
 
 
 const formSchema = z.object({
@@ -43,6 +44,7 @@ export default function NewMaintenanceRequestPage() {
   const { residences, loading: residencesLoading, loadResidences } = useResidences();
   const { createRequest, loading: maintenanceLoading } = useMaintenance();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
   const router = useRouter();
 
    useEffect(() => {
@@ -152,7 +154,7 @@ export default function NewMaintenanceRequestPage() {
                                     <FormLabel>Complex</FormLabel>
                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select a complex" /></SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder={dict.selectComplex} /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             {residences.map(complex => (
@@ -172,7 +174,7 @@ export default function NewMaintenanceRequestPage() {
                                     <FormLabel>Building</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value} disabled={!selectedComplexId}>
                                         <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select a building" /></SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder={dict.selectBuilding} /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             {buildings.map(building => (
@@ -192,7 +194,7 @@ export default function NewMaintenanceRequestPage() {
                                     <FormLabel>Room / Unit</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value} disabled={!selectedBuildingId}>
                                         <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select a room" /></SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder={dict.selectRoom} /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             {rooms.map(room => (
@@ -212,7 +214,7 @@ export default function NewMaintenanceRequestPage() {
                             <FormItem>
                                 <FormLabel>Issue Title</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="e.g., Leaky Faucet in Kitchen" {...field} />
+                                    <Input placeholder={dict.leakyFaucetExample} {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -225,7 +227,7 @@ export default function NewMaintenanceRequestPage() {
                             <FormItem>
                                 <FormLabel>Issue Description</FormLabel>
                                 <FormControl>
-                                    <Textarea placeholder="Provide a detailed description of the issue..." className="min-h-[150px]" {...field} />
+                                    <Textarea placeholder={dict.detailedDescription} className="min-h-[150px]" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -239,7 +241,7 @@ export default function NewMaintenanceRequestPage() {
                                 <FormLabel>Priority</FormLabel>
                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <FormControl>
-                                        <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder={dict.selectPriority} /></SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
                                         <SelectItem value="Low">Low</SelectItem>

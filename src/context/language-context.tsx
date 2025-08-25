@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { dictionaries, type Dictionary } from '@/lib/dictionaries';
+import { getCustomDictionaries } from '@/lib/custom-translations';
 
 type Locale = 'en' | 'ar';
 
@@ -11,6 +12,7 @@ interface LanguageContextType {
   setLocale: (locale: Locale) => void;
   toggleLanguage: () => void;
   dict: Dictionary;
+  refreshTranslations: () => void;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -27,6 +29,20 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     return 'en';
   });
 
+  const [currentDictionaries, setCurrentDictionaries] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return getCustomDictionaries();
+    }
+    return dictionaries;
+  });
+
+  const refreshTranslations = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const customDicts = getCustomDictionaries();
+      setCurrentDictionaries(customDicts);
+    }
+  }, []);
+
   useEffect(() => {
     try {
       document.documentElement.lang = locale;
@@ -38,6 +54,25 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('locale', locale);
     } catch {}
   }, [locale]);
+
+  // Listen for custom translations updates
+  useEffect(() => {
+    const handleCustomTranslationsUpdate = () => {
+      refreshTranslations();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('customTranslationsUpdated', handleCustomTranslationsUpdate);
+      return () => {
+        window.removeEventListener('customTranslationsUpdated', handleCustomTranslationsUpdate);
+      };
+    }
+  }, [refreshTranslations]);
+
+  // Load custom translations on mount
+  useEffect(() => {
+    refreshTranslations();
+  }, [refreshTranslations]);
   
   const toggleLanguage = useCallback(() => {
       setLocale(prev => prev === 'ar' ? 'en' : 'ar');
@@ -47,8 +82,9 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     locale,
     setLocale,
     toggleLanguage,
-    // Use fallback dictionary for unknown locales
-    dict: (dictionaries as any)[locale] || dictionaries.en,
+    refreshTranslations,
+    // Use custom dictionaries if available, fallback to original
+    dict: (currentDictionaries as any)[locale] || dictionaries.en,
   };
 
   return (
@@ -72,6 +108,7 @@ export const useLanguage = () => {
       locale: 'en',
       setLocale: () => {},
       toggleLanguage: () => {},
+      refreshTranslations: () => {},
       dict: dictionaries.en as Dictionary,
     } as LanguageContextType;
   }

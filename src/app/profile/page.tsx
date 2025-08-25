@@ -208,7 +208,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional phone number" />
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={dict.optionalPhone} />
           </div>
 
           <div className="flex gap-2">

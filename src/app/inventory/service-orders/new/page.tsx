@@ -17,6 +17,7 @@ import { Command, CommandGroup, CommandInput, CommandList } from "@/components/u
 import { Button as UIButton } from "@/components/ui/button";
 import { includesNormalized } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/context/language-context";
 // removed ChevronDown; infinite scroll now auto-expands
 
 export default function NewServiceOrderPage() {
@@ -24,6 +25,7 @@ export default function NewServiceOrderPage() {
   const { residences } = useResidences();
   const { items, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -169,7 +171,7 @@ export default function NewServiceOrderPage() {
           <div>
             <Label>Residence</Label>
             <Select value={residenceId} onValueChange={setResidenceId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select residence" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder={dict.selectResidence} /></SelectTrigger>
               <SelectContent>
                 {allowedResidences.map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
@@ -200,7 +202,7 @@ export default function NewServiceOrderPage() {
                 <div>
                   <Label>Destination Type</Label>
                   <Select value={destinationType} onValueChange={setDestinationType}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose type" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={dict.chooseType} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="InternalMaintenance">Internal Maintenance</SelectItem>
                       <SelectItem value="ExternalWorkshop">External Workshop</SelectItem>
@@ -210,7 +212,7 @@ export default function NewServiceOrderPage() {
                 </div>
                 <div>
                   <Label>Destination Name</Label>
-                  <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder="Workshop name" />
+                  <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder={dict.workshopName} />
                 </div>
               </div>
 
@@ -233,7 +235,7 @@ export default function NewServiceOrderPage() {
                   avoidCollisions
                 >
                   <Command shouldFilter={false}>
-                    <CommandInput placeholder="Search items (EN | AR | keywords)" value={search} onValueChange={onSearchChange} />
+                    <CommandInput placeholder={dict.searchItemsCommand} value={search} onValueChange={onSearchChange} />
                     <CommandList ref={listRef} className="max-h-[68vh] overflow-y-auto overscroll-contain" onScroll={onListScroll}>
                         {/* Intentionally no empty state message */}
                         <CommandGroup>

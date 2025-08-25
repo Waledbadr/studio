@@ -154,3 +154,177 @@ body {
   border-radius: 8px;
 }
 
+/* RTL Support */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .text-left {
+  text-align: right !important;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left !important;
+}
+
+/* RTL Margin and Padding adjustments */
+[dir="rtl"] .ml-auto {
+  margin-left: unset !important;
+  margin-right: auto !important;
+}
+
+[dir="rtl"] .mr-auto {
+  margin-right: unset !important;
+  margin-left: auto !important;
+}
+
+[dir="rtl"] .ml-2 {
+  margin-left: unset !important;
+  margin-right: 0.5rem !important;
+}
+
+[dir="rtl"] .mr-2 {
+  margin-right: unset !important;
+  margin-left: 0.5rem !important;
+}
+
+[dir="rtl"] .ml-4 {
+  margin-left: unset !important;
+  margin-right: 1rem !important;
+}
+
+[dir="rtl"] .mr-4 {
+  margin-right: unset !important;
+  margin-left: 1rem !important;
+}
+
+[dir="rtl"] .pl-2 {
+  padding-left: unset !important;
+  padding-right: 0.5rem !important;
+}
+
+[dir="rtl"] .pr-2 {
+  padding-right: unset !important;
+  padding-left: 0.5rem !important;
+}
+
+[dir="rtl"] .pl-4 {
+  padding-left: unset !important;
+  padding-right: 1rem !important;
+}
+
+[dir="rtl"] .pr-4 {
+  padding-right: unset !important;
+  padding-left: 1rem !important;
+}
+
+[dir="rtl"] .pl-6 {
+  padding-left: unset !important;
+  padding-right: 1.5rem !important;
+}
+
+[dir="rtl"] .pr-6 {
+  padding-right: unset !important;
+  padding-left: 1.5rem !important;
+}
+
+/* RTL Border radius */
+[dir="rtl"] .rounded-l {
+  border-top-left-radius: unset !important;
+  border-bottom-left-radius: unset !important;
+  border-top-right-radius: 0.25rem !important;
+  border-bottom-right-radius: 0.25rem !important;
+}
+
+[dir="rtl"] .rounded-r {
+  border-top-right-radius: unset !important;
+  border-bottom-right-radius: unset !important;
+  border-top-left-radius: 0.25rem !important;
+  border-bottom-left-radius: 0.25rem !important;
+}
+
+/* RTL Transform */
+[dir="rtl"] .rotate-90 {
+  transform: rotate(-90deg) !important;
+}
+
+[dir="rtl"] .rotate-180 {
+  transform: rotate(180deg) !important;
+}
+
+/* RTL Flexbox */
+[dir="rtl"] .flex-row-reverse {
+  flex-direction: row !important;
+}
+
+[dir="rtl"] .flex-row {
+  flex-direction: row-reverse !important;
+}
+
+/* Arabic font improvements */
+[dir="rtl"] {
+  font-family: 'Tajawal', 'Arabic UI Text', 'SF Arabic', 'Segoe UI Arabic', Arial, sans-serif;
+  font-feature-settings: "liga" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure icons don't flip in RTL */
+[dir="rtl"] .lucide {
+  transform: none !important;
+}
+
+/* Special cases for specific icons that should flip */
+[dir="rtl"] .lucide-chevron-left {
+  transform: scaleX(-1) !important;
+}
+
+[dir="rtl"] .lucide-chevron-right {
+  transform: scaleX(-1) !important;
+}
+
+[dir="rtl"] .lucide-arrow-left {
+  transform: scaleX(-1) !important;
+}
+
+[dir="rtl"] .lucide-arrow-right {
+  transform: scaleX(-1) !important;
+}
+
+/* RTL Table alignment */
+[dir="rtl"] table {
+  text-align: right;
+}
+
+[dir="rtl"] th,
+[dir="rtl"] td {
+  text-align: right;
+}
+
+/* RTL Form elements */
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
+}
+
+[dir="rtl"] input[type="number"] {
+  text-align: left; /* Keep numbers LTR */
+}
+
+/* RTL Dropdown menus */
+[dir="rtl"] .dropdown-menu {
+  right: 0;
+  left: auto;
+}
+
+/* RTL Sidebar adjustments */
+[dir="rtl"] .sidebar {
+  right: 0;
+  left: auto;
+}
+
+[dir="rtl"] .sidebar-content {
+  padding-right: 1rem;
+  padding-left: 0;
+}
+

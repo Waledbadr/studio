@@ -668,7 +668,7 @@ export default function EditOrderPage() {
                             </div>
                             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                                 <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Filter by category" />
+                                    <SelectValue placeholder={dict.filterByCategory} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
@@ -836,7 +836,7 @@ export default function EditOrderPage() {
                                                                             <Textarea
                                                                                 value={item.notes || ''}
                                                                                 onChange={(e) => handleNotesChange(item.id, e.target.value)}
-                                                                                placeholder="e.g., Please provide the new model."
+                                                                                placeholder={dict.pleaseProvideNewModel}
                                                                             />
                                                                         </div>
                                                                     </PopoverContent>

@@ -16,11 +16,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUsers } from "@/context/users-context";
+import { useLanguage } from "@/context/language-context";
 
 
 export default function SetupPage() {
     const { toast } = useToast();
     const { currentUser } = useUsers();
+    const { dict } = useLanguage();
     const isAdmin = currentUser?.role === 'Admin';
     const dangerousEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DANGEROUS_TOOLS === 'true';
     const [isLoading, setIsLoading] = useState(false);
@@ -352,7 +354,7 @@ export default function SetupPage() {
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold">System Setup & Configuration</h1>
-                <p className="text-muted-foreground">Configure your system settings and manage data</p>
+                <p className="text-muted-foreground">{dict.configureSettings}</p>
             </div>
             
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -365,7 +367,7 @@ export default function SetupPage() {
                                         )}
                                         <TabsTrigger value="themes" className="flex items-center gap-2">
                         <Palette className="h-4 w-4" />
-                        Theme Settings
+                        {dict.themeSettings}
                     </TabsTrigger>
                 </TabsList>
                 
@@ -374,7 +376,7 @@ export default function SetupPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Palette className="h-5 w-5" />
-                                Personalization Settings
+                                {dict.personalizationSettings}
                             </CardTitle>
                             <CardDescription>
                                 Customize the appearance of your application with different color themes and modes.

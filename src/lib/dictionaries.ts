@@ -35,6 +35,7 @@ const en = {
         materialRequests: 'Material Requests',
         receiveMaterials: 'Receive Materials',
         issueMaterials: 'Issue Materials',
+        serviceOrders: 'Service Orders',
         
         // Reports Section
         reports: 'Reports',
@@ -49,6 +50,7 @@ const en = {
         users: 'Users',
         aiTools: 'AI Tools',
         setup: 'Setup',
+        translations: 'Translations Management',
         
         // Legacy items
         stockTransferHistory: 'Transfer History'
@@ -428,6 +430,42 @@ const en = {
     serviceDispatch: 'Service Dispatch',
     serviceReturn: 'Service Return',
     serviceScrap: 'Service Scrap',
+    
+    // Common placeholders and texts
+    filterByCategory: 'Filter by category',
+    filterBy: 'Filter by',
+    searchItems: 'Search items...',
+    selectRole: 'Select a role',
+    selectComplex: 'Select a complex',
+    selectBuilding: 'Select a building', 
+    selectRoom: 'Select a room',
+    selectPriority: 'Select priority level',
+    selectResidence: 'Select residence',
+    selectStatus: 'Select status',
+    chooseType: 'Choose type',
+    workshopName: 'Workshop name',
+    typeToConfirm: 'Type RESET123 to confirm',
+    optionalPhone: 'Optional phone number',
+    noResultsFound: 'No results found',
+    configureSettings: 'Configure your system settings and manage data',
+    themeSettings: 'Theme Settings',
+    personalizationSettings: 'Personalization Settings',
+    searchByReference: 'Search by ref/destination/residence',
+    leakyFaucetExample: 'e.g., Leaky Faucet in Kitchen',
+    detailedDescription: 'Provide a detailed description of the issue...',
+    searchItemsCommand: 'Search items (EN | AR | keywords)',
+    pleaseProvideNewModel: 'e.g., Please provide the new model.',
+    ahmadExample: 'e.g., Ahmed Al-Farsi',
+    emailExample: 'e.g., ahmed@email.com',
+    enterZero: '0',
+    enterItemNameAndTranslate: 'Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.',
+    englishName: 'English Name',
+    arabicName: 'Arabic Name',
+    englishKeywords: 'English Keywords',
+    arabicKeywords: 'Arabic Keywords',
+    
+    // Sidebar navigation
+    mainPage: 'Main Page',
 };
 
 const ar = {
@@ -462,6 +500,7 @@ const ar = {
         materialRequests: 'طلبات المواد',
         receiveMaterials: 'استلام المواد',
         issueMaterials: 'صرف المواد',
+        serviceOrders: 'أوامر الخدمة',
         reports: 'التقارير',
         stockMovementReport: 'تقرير حركة المخزون',
         lifespanReport: 'تقرير العمر الافتراضي',
@@ -472,6 +511,7 @@ const ar = {
         users: 'المستخدمون',
         aiTools: 'أدوات الذكاء الاصطناعي',
         setup: 'إعداد',
+        translations: 'إدارة الترجمات',
         stockTransferHistory: 'سجل النقل'
     },
 
@@ -723,6 +763,42 @@ const ar = {
     serviceDispatch: 'إرسال للخدمة',
     serviceReturn: 'عائد من الخدمة',
     serviceScrap: 'شطب بالخدمة',
+    
+    // Common placeholders and texts (AR)
+    filterByCategory: 'تصفية حسب التصنيف',
+    filterBy: 'تصفية حسب',
+    searchItems: 'البحث في الأصناف...',
+    selectRole: 'اختر دور',
+    selectComplex: 'اختر مجمع',
+    selectBuilding: 'اختر مبنى',
+    selectRoom: 'اختر غرفة',
+    selectPriority: 'اختر مستوى الأولوية',
+    selectResidence: 'اختر السكن',
+    selectStatus: 'اختر الحالة',
+    chooseType: 'اختر النوع',
+    workshopName: 'اسم الورشة',
+    typeToConfirm: 'اكتب RESET123 للتأكيد',
+    optionalPhone: 'رقم الهاتف (اختياري)',
+    noResultsFound: 'لم يتم العثور على نتائج',
+    configureSettings: 'تكوين إعدادات النظام وإدارة البيانات',
+    themeSettings: 'إعدادات السمة',
+    personalizationSettings: 'إعدادات التخصيص',
+    searchByReference: 'البحث بالرقم المرجعي/الوجهة/السكن',
+    leakyFaucetExample: 'مثال: صنبور متسرب في المطبخ',
+    detailedDescription: 'قدم وصفاً تفصيلياً للمشكلة...',
+    searchItemsCommand: 'البحث في الأصناف (عربي | انجليزي | كلمات مفتاحية)',
+    pleaseProvideNewModel: 'مثال: يرجى توفير الموديل الجديد.',
+    ahmadExample: 'مثال: أحمد الفارسي',
+    emailExample: 'مثال: ahmed@email.com',
+    enterZero: '0',
+    enterItemNameAndTranslate: 'أدخل اسم الصنف بالعربية أو الإنجليزية واضغط ترجمة إذا رغبت. المخزون الأولي صفر ويزداد عبر إيصالات MRV.',
+    englishName: 'الاسم الإنجليزي',
+    arabicName: 'الاسم العربي',
+    englishKeywords: 'الكلمات المفتاحية الإنجليزية',
+    arabicKeywords: 'الكلمات المفتاحية العربية',
+    
+    // Sidebar navigation (AR)
+    mainPage: 'الشاشة الرئيسية',
 };
 
 export const dictionaries = { en, ar };

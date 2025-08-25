@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Languages } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -91,7 +91,7 @@ export function AppSidebar() {
     {
       title: dict.sidebar?.main || 'Main',
       items: [
-        { href: '/', label: dict.sidebar?.dashboard || 'Dashboard', icon: Home },
+        { href: '/', label: dict.sidebar?.dashboard || dict.mainPage || 'Dashboard', icon: Home },
   // Moved Service Orders directly under Dashboard
   { href: '/inventory/service-orders', label: 'Service Orders', icon: GitBranch },
   // Single Maintenance entry (always internal)
@@ -136,6 +136,7 @@ export function AppSidebar() {
   { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
         ...(currentUser?.role === 'Admin' ? [
           { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
+          { href: '/admin/translations', label: 'إدارة الترجمات', icon: Languages },
           { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },
         ] : [] as any),
       ] as any

@@ -17,11 +17,13 @@ import { useMemo, useState } from "react";
 import { useUsers } from "@/context/users-context";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 export default function ServiceOrdersListPage() {
   const { serviceOrders, loading } = useServiceOrders();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
   const router = useRouter();
 
   const [status, setStatus] = useState<string>("ALL");
@@ -83,7 +85,7 @@ export default function ServiceOrdersListPage() {
             <div>
               <div className="text-xs text-muted-foreground mb-1">Status</div>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger className="w-44"><SelectValue placeholder={dict.selectStatus} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All</SelectItem>
                   <SelectItem value="DRAFT">Draft</SelectItem>
@@ -97,7 +99,7 @@ export default function ServiceOrdersListPage() {
     <div>
               <div className="text-xs text-muted-foreground mb-1">Residence</div>
               <Select value={residenceId} onValueChange={setResidenceId}>
-                <SelectTrigger className="w-56"><SelectValue placeholder="Residence" /></SelectTrigger>
+                <SelectTrigger className="w-56"><SelectValue placeholder={dict.selectResidence} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All residences</SelectItem>
       {allowedResidences.map((r) => (
@@ -108,7 +110,7 @@ export default function ServiceOrdersListPage() {
             </div>
             <div className="flex-1 min-w-[220px]">
               <div className="text-xs text-muted-foreground mb-1">Search</div>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ref/destination/residence" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={dict.searchByReference} />
             </div>
           </div>
           <Table>

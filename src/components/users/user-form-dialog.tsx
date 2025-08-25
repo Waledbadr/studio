@@ -32,6 +32,7 @@ import { type User, type UserThemeSettings } from "@/context/users-context";
 import { Loader2, Palette } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { colorThemes } from "@/lib/themes";
+import { useLanguage } from "@/context/language-context";
 
 const formSchema = z.object({
   id: z.string().optional(),
@@ -60,6 +61,7 @@ interface UserFormDialogProps {
 export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }: UserFormDialogProps) {
   const { toast } = useToast();
   const { residences, loading: residencesLoading, loadResidences } = useResidences();
+  const { dict } = useLanguage();
   
   const form = useForm<UserFormData>({
     resolver: zodResolver(formSchema),
@@ -136,7 +138,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Ahmed Al-Farsi" {...field} />
+                    <Input placeholder={dict.ahmadExample} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +151,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., ahmed@email.com" {...field} />
+                    <Input placeholder={dict.emailExample} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -164,7 +166,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
+                        <SelectValue placeholder={dict.selectRole} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

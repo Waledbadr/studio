@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useInventory, type InventoryItem } from "@/context/inventory-context";
 import { useUsers } from "@/context/users-context";
+import { useLanguage } from "@/context/language-context";
 import { Loader2, Plus, X, Languages, Eye, Tag, Hash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -86,6 +87,7 @@ export function AddItemDialog({
     const [isTranslating, setIsTranslating] = useState(false);
     const { categories, items, addCategory } = useInventory();
     const { currentUser } = useUsers();
+    const { dict } = useLanguage();
     const isAdmin = currentUser?.role === 'Admin';
 
     // Focus first input on open
@@ -278,7 +280,7 @@ export function AddItemDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-lg">Add New Inventory Item</DialogTitle>
-                    <DialogDescription className="text-sm" id="add-item-dialog-desc">Enter the item name in Arabic or English and click Translate if desired. Initial stock is zero and is increased via MRV receipts.</DialogDescription>
+                    <DialogDescription className="text-sm" id="add-item-dialog-desc">{dict.enterItemNameAndTranslate}</DialogDescription>
                 </DialogHeader>
                 {/* Basic Info Section */}
                 <section className="flex flex-col gap-4">
@@ -289,7 +291,7 @@ export function AddItemDialog({
                             <Input placeholder="e.g., لمبة" value={nameAr} onChange={e => setNameAr(e.target.value)} ref={nameArRef} />
                         </div>
                         <div className="flex flex-col gap-2 mt-2">
-                            <Label>English Name</Label>
+                            <Label>{dict.englishName}</Label>
                             <Input placeholder="e.g., Light Bulb" value={nameEn} onChange={e => setNameEn(e.target.value)} />
                         </div>
                     </div>
@@ -426,7 +428,7 @@ export function AddItemDialog({
                             <p className="text-xs text-muted-foreground">Optional.</p>
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label>English Keywords</Label>
+                            <Label>{dict.englishKeywords}</Label>
                             <div className="flex flex-wrap gap-2">
                                 {keywordsEnList.map(v => (
                                     <span key={v} className="inline-flex items-center rounded border px-2 py-1 text-xs">
