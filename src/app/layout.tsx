@@ -9,6 +9,12 @@ import { UsersProvider } from '@/context/users-context';
 import { OrdersProvider } from '@/context/orders-context';
 import { MaintenanceProvider } from '@/context/maintenance-context';
 import { NotificationsProvider } from '@/context/notifications-context';
+import { ServiceOrdersProvider } from '@/context/service-orders-context';
+// LanguageProvider is moved into the client AppLayout to ensure the
+// provider and its consumers share the same client boundary and avoid
+// hydration/order-of-mount warnings. Do not import it here to prevent
+// duplicate providers.
+import { AuthGate } from '@/components/auth-gate';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -57,22 +63,30 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="font-body antialiased">
         <ThemeProvider>
+          <AuthGate>
             <ResidencesProvider>
               <UsersProvider>
                 <NotificationsProvider>
                   <InventoryProvider>
-                    <OrdersProvider>
-                      <MaintenanceProvider>
-                        <AppLayout>{children}</AppLayout>
-                      </MaintenanceProvider>
-                    </OrdersProvider>
+                    <ServiceOrdersProvider>
+                      <OrdersProvider>
+                        <MaintenanceProvider>
+                          <AppLayout>{children}</AppLayout>
+                        </MaintenanceProvider>
+                      </OrdersProvider>
+                    </ServiceOrdersProvider>
                   </InventoryProvider>
                 </NotificationsProvider>
               </UsersProvider>
             </ResidencesProvider>
+          </AuthGate>
         </ThemeProvider>
         <Toaster />
       </body>

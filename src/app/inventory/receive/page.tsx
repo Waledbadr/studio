@@ -1,4 +1,3 @@
-
 'use client'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,22 +5,56 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useInventory } from "@/context/inventory-context";
 import { useOrders, type Order } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
-import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle } from "lucide-react";
+import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus } from "lucide-react";
 import { useResidences } from "@/context/residences-context";
+import { useLanguage } from '@/context/language-context';
 
 export default function ReceiveMaterialsPage() {
-    const { orders, loading, loadOrders } = useOrders();
+    const { getMRVRequests, approveMRVRequest, getMRVs } = useInventory();
+    const { dict } = useLanguage();
+    const { orders, loadOrders } = useOrders();
     const router = useRouter();
     const { currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
     const isAdmin = currentUser?.role === 'Admin';
     const [isCompletedOpen, setIsCompletedOpen] = useState(false);
+    const [pendingMrvCount, setPendingMrvCount] = useState(0);
+    const [approvedMrvCount, setApprovedMrvCount] = useState(0);
+    const [pendingMrvRequests, setPendingMrvRequests] = useState<any[]>([]);
+    const [approvedMrvRequests, setApprovedMrvRequests] = useState<any[]>([]);
+    const [rejectedMrvCount, setRejectedMrvCount] = useState(0);
+    const [approveBusy, setApproveBusy] = useState<Record<string, boolean>>({});
+    const [mrvsList, setMrvsList] = useState<any[]>([]);
+    const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
+
+    // helper to load MRV stats (pending list, counts)
+    const loadMrvStats = async () => {
+        try {
+            const reqs = await getMRVRequests('Pending');
+            const visibleReqs = isAdmin ? reqs : reqs.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
+            setPendingMrvRequests(visibleReqs);
+            setPendingMrvCount(visibleReqs.length || 0);
+            const approved = await getMRVRequests('Approved');
+            const visibleApproved = isAdmin ? approved : approved.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
+            setApprovedMrvRequests(visibleApproved);
+            const rejected = await getMRVRequests('Rejected');
+            const visibleRejected = isAdmin ? rejected : rejected.filter(r => currentUser?.assignedResidences?.includes(r.residenceId));
+            setRejectedMrvCount(visibleRejected.length || 0);
+
+            // Load posted MRVs (completed receipts) from MRV master collection
+            const allMrvs = await getMRVs();
+            const visibleMrvs = isAdmin ? allMrvs : allMrvs.filter((m: any) => currentUser?.assignedResidences?.includes(m.residenceId));
+            setMrvsList(visibleMrvs);
+            setApprovedMrvCount(visibleMrvs.length || 0);
+        } catch {}
+    };
 
     // Load completed section state from localStorage
     useEffect(() => {
@@ -31,13 +64,17 @@ export default function ReceiveMaterialsPage() {
         }
     }, []);
     
-    // UseEffect to load orders when the component mounts
+    // UseEffect to load MRV stats when the component mounts
     useEffect(() => {
-        loadOrders();
+        if (!currentUser) return;
         if (residences.length === 0) {
             loadResidences();
         }
-    }, [loadOrders, loadResidences, residences.length]);
+        // Ensure orders are subscribed so Approved/Partially Delivered MRs appear here
+        loadOrders();
+        loadMrvStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser, loadResidences, residences.length, isAdmin]);
 
 
     // Save completed section state to localStorage
@@ -46,36 +83,14 @@ export default function ReceiveMaterialsPage() {
         localStorage.setItem('receive-completed-open', JSON.stringify(open));
     };
 
-
-    const userApprovedOrders = useMemo(() => {
-        if (!currentUser) return [];
-
-        const receivableStatuses: Order['status'][] = ['Approved', 'Partially Delivered'];
-        const approvedOrders = orders.filter(order => receivableStatuses.includes(order.status));
-        
-        if (isAdmin) {
-            return approvedOrders;
-        }
-        
-        return approvedOrders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
-    }, [orders, currentUser, isAdmin]);
-
-    // فصل الطلبات حسب الحالة
-    const allUserOrders = useMemo(() => {
-        if (!currentUser) return [];
-        
-        if (isAdmin) {
-            return orders;
-        }
-        
-        return orders.filter(order => currentUser.assignedResidences.includes(order.residenceId));
-    }, [orders, currentUser, isAdmin]);
-
-    const completedOrders = useMemo(() => {
-        return allUserOrders.filter(order => 
-            order.status === 'Delivered' || order.status === 'Cancelled'
-        );
-    }, [allUserOrders]);
+    // Derive Approved/Partially Delivered Material Requests (MR) visible to user
+    const userVisibleApprovedMRs = useMemo(() => {
+        const approvable: Order['status'][] = ['Approved', 'Partially Delivered'];
+        const list = (orders || []).filter(o => approvable.includes(o.status));
+        if (isAdmin) return list;
+        const ids = currentUser?.assignedResidences || [];
+        return list.filter(o => ids.includes(o.residenceId));
+    }, [orders, isAdmin, currentUser]);
 
 
     const renderSkeleton = () => (
@@ -91,76 +106,160 @@ export default function ReceiveMaterialsPage() {
         ))
     );
     
-    const handleSelectOrder = (orderId: string) => {
-        router.push(`/inventory/receive/${orderId}`);
-    };
+    // No MR select on MRV page
 
-    const renderOrdersTable = (ordersList: Order[], showActions: boolean = true) => (
+                // Build unified rows for Ready section (Pending MRV requests + Approved/Partially Delivered MRs)
+    const readyRows = useMemo(() => {
+        const rows: any[] = [];
+        // MRV Pending
+        for (const r of pendingMrvRequests) {
+          const busy = !!approveBusy[r.id];
+          rows.push({
+            key: `mrv-${r.id}`,
+            id: r.mrvShort || r.id,
+            type: 'MRV',
+            dateLabel: r.requestedAt?.toDate ? format(r.requestedAt.toDate(), 'PPP') : '-',
+            residence: residenceName(r.residenceId),
+            items: (r.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+            status: <Badge variant="secondary">Pending</Badge>,
+            href: `/inventory/receive/approvals/${r.id}`,
+            action: (
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/approvals/${r.id}`)}>
+                  {isAdmin ? 'Review' : 'View'}
+                </Button>
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (busy) return;
+                      setApproveBusy(prev => ({ ...prev, [r.id]: true }));
+                      try {
+                        await approveMRVRequest(r.id, currentUser!.id);
+                        await loadMrvStats();
+                      } catch {}
+                      setApproveBusy(prev => ({ ...prev, [r.id]: false }));
+                    }}
+                  >
+                    {busy ? 'Approving…' : 'Approve'}
+                  </Button>
+                )}
+              </div>
+            )
+          });
+        }
+                // MR Approved or Partially Delivered (ready to receive)
+                for (const o of userVisibleApprovedMRs) {
+                    rows.push({
+                        key: `mr-${o.id}`,
+                        id: o.id,
+                        type: 'MR',
+                        dateLabel: o.date?.toDate ? format(o.date.toDate(), 'PPP') : '-',
+                        residence: residenceName(o.residenceId),
+                        items: (o.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+                        status: (
+                            <Badge variant={o.status === 'Approved' ? 'secondary' : 'outline'}>
+                                {o.status}
+                            </Badge>
+                        ),
+                        href: `/inventory/receive/${o.id}`,
+                        action: (
+                            <div className="flex items-center justify-end gap-2">
+                                <Button size="sm" onClick={() => router.push(`/inventory/receive/${o.id}`)}>
+                                    Receive
+                                </Button>
+                            </div>
+                        )
+                    });
+                }
+        return rows;
+                        }, [pendingMrvRequests, userVisibleApprovedMRs, isAdmin, currentUser, router, residenceName, approveMRVRequest, loadMrvStats, approveBusy]);
+
+                // Build rows for Completed section from MRVs (posted receipts)
+    const completedRows = useMemo(() => {
+                const rows: any[] = [];
+                for (const mrv of mrvsList) {
+                    rows.push({
+                        key: `mrv-${mrv.id}`,
+                        id: mrv.id,
+                        type: 'MRV',
+            mrRef: mrv.orderId || null,
+                        dateLabel: mrv.date?.toDate ? format(mrv.date.toDate(), 'PPP') : '-',
+                        residence: residenceName(mrv.residenceId),
+                        items: Number(mrv.itemCount || 0),
+                        status: <Badge>Delivered</Badge>,
+                        href: `/inventory/receive/receipts/${mrv.id}`,
+                    });
+                }
+                return rows;
+                        }, [mrvsList, router, residenceName]);
+
+    const renderUnifiedTable = (rows: any[], showActions: boolean = true, showMrRef: boolean = false) => (
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Request ID</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="text-right">Action</TableHead>}
+                                            <TableHead>{dict.orderId || 'Request ID'}</TableHead>
+                                            <TableHead>{'Type'}</TableHead>
+            {showMrRef && <TableHead>{'MR Ref'}</TableHead>}
+                        <TableHead>{dict.date || 'Date'}</TableHead>
+                        <TableHead>{dict.location || 'Residence'}</TableHead>
+                        <TableHead>{dict.items || 'Items'}</TableHead>
+                        <TableHead>{dict.status || 'Status'}</TableHead>
+                        {showActions && <TableHead className="text-right">{dict.actions || 'Action'}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {loading ? renderSkeleton() : ordersList.length > 0 ? ordersList.map((order) => (
-                    <TableRow 
-                        key={order.id} 
-                        className={showActions ? "cursor-pointer" : ""} 
-                        onClick={showActions ? () => handleSelectOrder(order.id) : undefined}
-                    >
-                        <TableCell className="font-medium">{order.id}</TableCell>
-                        <TableCell>{format(order.date.toDate(), 'PPP')}</TableCell>
-                        <TableCell>{order.residence}</TableCell>
-                        <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
-                        <TableCell>
-                            <Badge variant={
-                                order.status === 'Delivered' ? 'default' 
-                                : order.status === 'Approved' ? 'secondary'
-                                : order.status === 'Partially Delivered' ? 'secondary'
-                                : order.status === 'Cancelled' ? 'destructive'
-                                : 'outline'
-                            }>
-                                {order.status}
-                            </Badge>
-                        </TableCell>
-                        {showActions && (
-                            <TableCell className="text-right">
-                                <Button variant="outline" size="sm">
-                                    Receive <ArrowRight className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        )}
-                    </TableRow>
+                {rows.length > 0 ? rows.map((row) => (
+                                        <TableRow
+                                            key={row.key}
+                                            onClick={() => { if (row.href) router.push(row.href); }}
+                                            className={row.href ? 'cursor-pointer hover:bg-muted/50' : ''}
+                                        >
+                                                <TableCell className="font-medium">{row.id}</TableCell>
+                                                <TableCell>{row.type || '-'}</TableCell>
+                        {showMrRef && (<TableCell>{row.mrRef || '-'}</TableCell>)}
+                                                <TableCell>{row.dateLabel}</TableCell>
+                                                <TableCell>{row.residence}</TableCell>
+                                                <TableCell>{row.items}</TableCell>
+                                                <TableCell>{row.status}</TableCell>
+                                                {showActions && (
+                                                    <TableCell className="text-right">{row.action}</TableCell>
+                                                )}
+                                        </TableRow>
                 )) : (
-                    <TableRow>
-                        <TableCell colSpan={showActions ? 6 : 5} className="h-48 text-center text-muted-foreground">
-                            {showActions 
-                                ? "No approved requests found waiting for delivery." 
-                                : "No completed requests found."
-                            }
-                        </TableCell>
-                    </TableRow>
+                                        <TableRow>
+                                                <TableCell colSpan={(showActions ? 7 : 6) + (showMrRef ? 1 : 0)} className="h-32 text-center text-muted-foreground">
+                                                    {dict.noRecordsFound || 'No records found.'}
+                                                </TableCell>
+                                        </TableRow>
                 )}
             </TableBody>
         </Table>
     );
 
+    const readyToReceiveCount = pendingMrvCount + userVisibleApprovedMRs.length;
+    const completedDeliveredCount = approvedMrvCount; // equals mrvsList.length
+    const totalRequestsCount = pendingMrvCount + approvedMrvRequests.length + rejectedMrvCount;
+
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Receive Materials (MRV)</h1>
-                    <p className="text-muted-foreground">Select an approved request to receive its items.</p>
-                </div>
+            <div className="flex items-center justify-between">
+               <div>
+                   <h1 className="text-2xl font-bold">{dict.receiveMrvTitle || 'Material Receive Voucher (MRV)'}</h1>
+                   <p className="text-muted-foreground">{dict.receiveMrvPageDescription || dict.ui?.currentRequest}</p>
+               </div>
                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={() => router.push('/inventory/receive/new-approval')}>
+                            {dict.newMRVApproval || dict.reviewLabel}
+                    </Button>
+                    {/* View MRV receipts history */}
+                    <Button variant="outline" onClick={() => router.push('/inventory/receive/receipts')}>
+                        <History className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Receipts History'}
+                    </Button>
+                    {/* Navigate to MR (Materials Requests) dedicated page */}
                     <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
-                        <History className="mr-2 h-4 w-4" /> View Request History
+                            {dict.materialsRequestsLabel || dict.ui?.materialsApp}
                     </Button>
                 </div>
             </div>
@@ -174,8 +273,8 @@ export default function ReceiveMaterialsPage() {
                                 <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Ready to Receive</p>
-                                <p className="text-2xl font-bold">{userApprovedOrders.length}</p>
+                                <p className="text-sm font-medium">{dict.readyToReceive || 'Ready to Receive'}</p>
+                                <p className="text-2xl font-bold">{readyToReceiveCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -187,10 +286,8 @@ export default function ReceiveMaterialsPage() {
                                 <Truck className="h-4 w-4 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Delivered</p>
-                                <p className="text-2xl font-bold">
-                                    {completedOrders.filter(o => o.status === 'Delivered').length}
-                                </p>
+                                <p className="text-sm font-medium">{dict.delivered || 'Delivered'}</p>
+                                <p className="text-2xl font-bold">{completedDeliveredCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -202,10 +299,8 @@ export default function ReceiveMaterialsPage() {
                                 <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Cancelled</p>
-                                <p className="text-2xl font-bold">
-                                    {completedOrders.filter(o => o.status === 'Cancelled').length}
-                                </p>
+                                <p className="text-sm font-medium">{dict.ui?.rejected || 'Rejected'}</p>
+                                <p className="text-2xl font-bold">{rejectedMrvCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -217,8 +312,8 @@ export default function ReceiveMaterialsPage() {
                                 <Archive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Total Requests</p>
-                                <p className="text-2xl font-bold">{allUserOrders.length}</p>
+                                <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
+                                <p className="text-2xl font-bold">{totalRequestsCount}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -228,77 +323,77 @@ export default function ReceiveMaterialsPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
-                        <CardTitle>Ready to Receive</CardTitle>
+                        <CardTitle>{dict.pendingMRVApprovals || 'Pending MRV Approvals'}</CardTitle>
                         <CardDescription>
-                            Approved requests ready for material receiving ({userApprovedOrders.length} requests)
+                            {dict.pendingMrvCardDescription || 'Requests awaiting approval or posting to stock'} ({pendingMrvCount} requests)
                         </CardDescription>
                     </div>
-                    <Button 
+                        <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCompletedToggle(!isCompletedOpen)}
                         className="flex items-center gap-2"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? 'Hide Completed' : 'Show Completed'}
+                        {isCompletedOpen ? dict.ui?.hideCompleted : dict.ui?.showCompleted}
                         <Badge variant="secondary" className="text-xs">
-                            {completedOrders.length}
+                            {mrvsList.length}
                         </Badge>
                     </Button>
                 </CardHeader>
                 <CardContent>
-                    {renderOrdersTable(userApprovedOrders)}
+                    {renderUnifiedTable(readyRows, true)}
                 </CardContent>
             </Card>
 
             {/* Completed Orders - Collapsible */}
-            {completedOrders.length > 0 && (
-                <Collapsible open={isCompletedOpen} onOpenChange={handleCompletedToggle}>
-                    <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
-                        <CollapsibleTrigger asChild>
-                            <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-muted/50">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-muted/50 rounded-lg">
-                                            <Archive className="h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-base">Completed Requests</CardTitle>
-                                            <CardDescription>
-                                                Delivered and cancelled requests • Click to {isCompletedOpen ? 'collapse' : 'expand'}
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-                                                <Truck className="h-3 w-3 mr-1" />
-                                                {completedOrders.filter(o => o.status === 'Delivered').length} Delivered
-                                            </Badge>
-                                            {completedOrders.filter(o => o.status === 'Cancelled').length > 0 && (
-                                                <Badge variant="outline" className="text-xs bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-                                                    <XCircle className="h-3 w-3 mr-1" />
-                                                    {completedOrders.filter(o => o.status === 'Cancelled').length} Cancelled
-                                                </Badge>
-                                            )}
-                                        </div>
+             {(mrvsList.length > 0) && (
+                 <Collapsible open={isCompletedOpen} onOpenChange={handleCompletedToggle}>
+                     <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
+                         <CollapsibleTrigger asChild>
+                             <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-muted/50">
+                                 <div className="flex items-center justify-between">
+                                     <div className="flex items-center gap-3">
+                                         <div className="p-2 bg-muted/50 rounded-lg">
+                                             <Archive className="h-4 w-4 text-muted-foreground" />
+                                         </div>
+                                         <div>
+                                             <CardTitle className="text-base">Completed MRV Requests</CardTitle>
+                                             <CardDescription>
+                                                 All posted MRV receipts • Click to {isCompletedOpen ? 'collapse' : 'expand'}
+                                             </CardDescription>
+                                         </div>
+                                     </div>
+                                     <div className="flex items-center gap-3">
+                                         <div className="flex items-center gap-2">
+                                             <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                                                 <Truck className="h-3 w-3 mr-1" />
+                                                 {approvedMrvCount} Delivered
+                                             </Badge>
+                                             {rejectedMrvCount > 0 && (
+                                                 <Badge variant="outline" className="text-xs bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+                                                     <XCircle className="h-3 w-3 mr-1" />
+                                                     {rejectedMrvCount} Rejected
+                                                 </Badge>
+                                             )}
+                                         </div>
                                         {isCompletedOpen ? (
-                                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                                        ) : (
-                                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                                        )}
-                                    </div>
-                                </div>
-                            </CardHeader>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                            <CardContent className="pt-4">
-                                {renderOrdersTable(completedOrders, false)}
-                            </CardContent>
-                        </CollapsibleContent>
-                    </Card>
-                </Collapsible>
-            )}
+                                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                                         ) : (
+                                             <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                         )}
+                                     </div>
+                                 </div>
+                             </CardHeader>
+                         </CollapsibleTrigger>
+                         <CollapsibleContent>
+                             <CardContent className="pt-4 space-y-8">
+                                 {renderUnifiedTable(completedRows, false, true)}
+                             </CardContent>
+                         </CollapsibleContent>
+                     </Card>
+                 </Collapsible>
+             )}
         </div>
     )
 }

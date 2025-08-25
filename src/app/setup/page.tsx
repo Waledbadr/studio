@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -16,10 +15,14 @@ import type { OrderItem } from "@/context/orders-context";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUsers } from "@/context/users-context";
 
 
 export default function SetupPage() {
     const { toast } = useToast();
+    const { currentUser } = useUsers();
+    const isAdmin = currentUser?.role === 'Admin';
+    const dangerousEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DANGEROUS_TOOLS === 'true';
     const [isLoading, setIsLoading] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
     const [isAddingRooms, setIsAddingRooms] = useState(false);
@@ -29,10 +32,13 @@ export default function SetupPage() {
     
     // Check for theme tab in URL hash
     useEffect(() => {
-        if (window.location.hash === '#themes') {
+        // If themes hash present or user is not Admin, default to themes tab
+        if (window.location.hash === '#themes' || !isAdmin) {
             setActiveTab('themes');
+        } else {
+            setActiveTab('database');
         }
-    }, []);
+    }, [isAdmin]);
     
     // In a real app, this should be an environment variable.
     const RESET_PASSWORD = "RESET123";
@@ -142,35 +148,70 @@ export default function SetupPage() {
         setIsResetting(true);
 
         try {
-            const batch = writeBatch(db);
-            const collectionsToDelete = [
-                "orders",
-                "inventoryTransactions",
-                "mivs",
-                "stockTransfers",
-                "notifications"
-            ];
+                        // Simple helper to commit in chunks to avoid 500 ops limit
+                        // db is ensured above; narrow type for TS
+                        const dbStrict = db!;
+                        let batch = writeBatch(dbStrict);
+                        let ops = 0;
+                        const commitIfNeeded = async (force = false) => {
+                            if (ops >= 400 || force) {
+                                await batch.commit();
+                                batch = writeBatch(dbStrict);
+                                ops = 0;
+                            }
+                        };
+
+                        const collectionsToDelete = [
+                                'orders',
+                                'inventoryTransactions',
+                                'mivs',
+                                'mrvs',
+                                'mrvRequests',
+                                'stockTransfers',
+                                'inventoryAudits',
+                                'auditItems',
+                                'auditAdjustments',
+                                'stockReconciliations',
+                                'reconciliationRequests',
+                                'maintenanceRequests',
+                                'serviceOrders',
+                                'notifications',
+                                'fcmTokens',
+                        ];
 
             // 1. Reset all inventory item stocks to zero
-            const inventorySnapshot = await getDocs(collection(db, "inventory"));
-            inventorySnapshot.forEach(doc => {
-                batch.update(doc.ref, { stockByResidence: {} });
-            });
+                        const inventorySnapshot = await getDocs(collection(db, 'inventory'));
+                        for (const d of inventorySnapshot.docs) {
+                            batch.update(d.ref, { stockByResidence: {}, stock: 0 });
+                            ops++; await commitIfNeeded();
+                        }
             console.log("Prepared to reset inventory stock.");
 
             // 2. Delete all documents from operational collections
-            for (const collectionName of collectionsToDelete) {
-                const snapshot = await getDocs(collection(db, collectionName));
-                snapshot.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                console.log(`Prepared to delete all documents from: ${collectionName}`);
-            }
+                                    for (const collectionName of collectionsToDelete) {
+                            const snapshot = await getDocs(collection(db, collectionName));
+                                        for (const d of snapshot.docs) {
+                                            batch.delete(d.ref);
+                                            ops++; await commitIfNeeded();
+                                        }
+                            console.log(`Prepared to delete all documents from: ${collectionName}`);
+                        }
+
+            // 3. Clear monthly counters (MR, MIV, MRV, Reconciliation)
+                        const countersSnap = await getDocs(collection(db, 'counters'));
+                        for (const d of countersSnap.docs) {
+                            const id = d.id || '';
+                            if (/^(mr|miv|mrv|con|rec|svc|trs|dep|mnt)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|rec|svc|trs|dep|mnt)-/i.test(id)) {
+                                batch.delete(d.ref);
+                                ops++; await commitIfNeeded();
+                            }
+                        }
+            console.log('Prepared to clear monthly counters including reconciliation.');
 
             // Commit all batched writes
-            await batch.commit();
+                        await commitIfNeeded(true);
 
-            toast({ title: "Success", description: "System has been reset. All operational data deleted, and inventory stock zeroed out." });
+            toast({ title: "Success", description: "System has been reset. All operational data deleted, inventory stock zeroed out, and reconciliation counters reset. Users and feedback data preserved." });
             setPassword('');
         } catch (error) {
             console.error("Error resetting system:", error);
@@ -314,13 +355,15 @@ export default function SetupPage() {
                 <p className="text-muted-foreground">Configure your system settings and manage data</p>
             </div>
             
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="database" className="flex items-center gap-2">
-                        <Database className="h-4 w-4" />
-                        Database Setup
-                    </TabsTrigger>
-                    <TabsTrigger value="themes" className="flex items-center gap-2">
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                        {isAdmin && (
+                                            <TabsTrigger value="database" className="flex items-center gap-2">
+                                                    <Database className="h-4 w-4" />
+                                                    Database Setup
+                                            </TabsTrigger>
+                                        )}
+                                        <TabsTrigger value="themes" className="flex items-center gap-2">
                         <Palette className="h-4 w-4" />
                         Theme Settings
                     </TabsTrigger>
@@ -343,101 +386,108 @@ export default function SetupPage() {
                     </Card>
                 </TabsContent>
                 
+                {isAdmin && (
                 <TabsContent value="database" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Database className="h-5 w-5" />
-                                    Initial Data Setup
-                                </CardTitle>
-                                <CardDescription>
-                                    This process checks if your database is empty and adds sample data. It creates sample inventory items and an initial **approved** purchase order. You must go to "Receive Materials" to complete the process and add stock.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button onClick={seedInitialData} disabled={isLoading} className="w-full">
-                                    {isLoading ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
-                                    ) : (
-                                        'Seed Database'
-                                    )}
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        {dangerousEnabled && (
+                          <Card>
+                              <CardHeader>
+                                  <CardTitle className="flex items-center gap-2">
+                                      <Database className="h-5 w-5" />
+                                      Initial Data Setup
+                                  </CardTitle>
+                                  <CardDescription>
+                                      This checks if your database is empty and adds sample data for development.
+                                  </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                  <Button onClick={seedInitialData} disabled={isLoading} className="w-full">
+                                      {isLoading ? (
+                                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
+                                      ) : (
+                                          'Seed Database'
+                                      )}
+                                  </Button>
+                              </CardContent>
+                          </Card>
+                        )}
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Home className="h-5 w-5" />
-                                    Add Specific Rooms
-                                </CardTitle>
-                                <CardDescription>
-                                    This will add a list of rooms to Floor 1, Building B1, in the "um alsalam" complex.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
-                                    {isAddingRooms ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
-                                    ) : (
-                                        'Add Rooms to B1'
-                                    )}
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        {dangerousEnabled && (
+                          <Card>
+                              <CardHeader>
+                                  <CardTitle className="flex items-center gap-2">
+                                      <Home className="h-5 w-5" />
+                                      Add Specific Rooms
+                                  </CardTitle>
+                                  <CardDescription>
+                                      Adds a predefined list of rooms to a specific floor/building. Intended for one-off setup.
+                                  </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                  <Button onClick={handleAddRooms} disabled={isAddingRooms} className="w-full">
+                                      {isAddingRooms ? (
+                                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Rooms...</>
+                                      ) : (
+                                          'Add Rooms to B1'
+                                      )}
+                                  </Button>
+                              </CardContent>
+                          </Card>
+                        )}
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-destructive">Reset Database</CardTitle>
-                                <CardDescription>
-                                    **Warning:** This will permanently delete all data in the database. This action cannot be undone.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" className="w-full">
-                                            Reset All Data
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This action cannot be undone. This will permanently delete all data from the database, including inventory, orders, transfers, and all other records.
-                                                <br /><br />
-                                                Please type <strong>RESET123</strong> to confirm:
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <div className="grid gap-4 py-4">
-                                            <Label htmlFor="reset-password">Confirmation Password</Label>
-                                            <Input
-                                                id="reset-password"
-                                                type="password"
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
-                                                placeholder="Type RESET123 to confirm"
-                                            />
-                                        </div>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={handleResetSystem}
-                                                disabled={isResetting || password !== RESET_PASSWORD}
-                                                className="bg-destructive hover:bg-destructive/90"
-                                            >
-                                                {isResetting ? (
-                                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
-                                                ) : (
-                                                    'Reset Database'
-                                                )}
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </CardContent>
-                        </Card>
+                        {dangerousEnabled && (
+                          <Card>
+                              <CardHeader>
+                                  <CardTitle className="text-destructive">Reset Database</CardTitle>
+                                  <CardDescription>
+                                      <strong>Warning:</strong> Permanently deletes operational data, resets inventory stock, and clears counters. Users and feedback are preserved.
+                                  </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                  <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                          <Button variant="destructive" className="w-full">
+                                              Reset All Data
+                                          </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                  This action cannot be undone. This will permanently delete operational data including orders, transfers, maintenance records, and reset inventory stock to zero. Users and feedback data will be preserved.
+                                                  <br /><br />
+                                                  Please type <strong>RESET123</strong> to confirm:
+                                              </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <div className="grid gap-4 py-4">
+                                              <Label htmlFor="reset-password">Confirmation Password</Label>
+                                              <Input
+                                                  id="reset-password"
+                                                  type="password"
+                                                  value={password}
+                                                  onChange={(e) => setPassword(e.target.value)}
+                                                  placeholder="Type RESET123 to confirm"
+                                              />
+                                          </div>
+                                          <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                  onClick={handleResetSystem}
+                                                  disabled={isResetting || password !== RESET_PASSWORD}
+                                                  className="bg-destructive hover:bg-destructive/90"
+                                              >
+                                                  {isResetting ? (
+                                                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
+                                                  ) : (
+                                                      'Reset Database'
+                                                  )}
+                                              </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                  </AlertDialog>
+                              </CardContent>
+                          </Card>
+                        )}
 
                         <Card>
                             <CardHeader>
@@ -458,6 +508,7 @@ export default function SetupPage() {
                         </Card>
                     </div>
                 </TabsContent>
+                )}
             </Tabs>
         </div>
     );

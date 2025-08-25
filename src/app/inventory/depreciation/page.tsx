@@ -6,6 +6,7 @@ import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,9 +24,9 @@ interface DepreciationForm extends Omit<DepreciationRequest, 'locationId' | 'loc
 }
 
 export default function DepreciationPage() {
-  const { items, depreciateItems, getStockForResidence, getAllInventoryTransactions } = useInventory();
-  const { residences } = useResidences();
-  const { currentUser } = useUsers();
+  const { items, depreciateItems, getStockForResidence, getAllInventoryTransactions, loading: inventoryLoading } = useInventory();
+  const { residences, loading: residencesLoading } = useResidences();
+  const { currentUser, loading: usersLoading } = useUsers();
 
   const [form, setForm] = useState<DepreciationForm>({
     itemId: '',
@@ -45,7 +46,10 @@ export default function DepreciationPage() {
   const userResidences = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'Admin') return residences;
-    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+    
+    const filtered = residences.filter(r => currentUser.assignedResidences.includes(r.id));
+    
+    return filtered;
   }, [currentUser, residences]);
 
   // Get available options based on current selections
@@ -80,14 +84,35 @@ export default function DepreciationPage() {
     return items.find(i => i.id === form.itemId);
   }, [form.itemId, items]);
 
-  // Load recent depreciation history
+  // Get available items for the selected residence (items with stock > 0)
+  const availableItems = useMemo(() => {
+    if (!form.residenceId) return [];
+    
+    return items.filter(item => {
+      const stock = getStockForResidence(item, form.residenceId);
+      return stock > 0;
+    });
+  }, [items, form.residenceId, getStockForResidence]);
+
+  // Load recent depreciation history for user's residences only
   useEffect(() => {
     const loadHistory = async () => {
+      if (!currentUser || userResidences.length === 0) {
+        setRecentDepreciations([]);
+        setIsLoadingHistory(false);
+        return;
+      }
+
       setIsLoadingHistory(true);
       try {
         const transactions = await getAllInventoryTransactions();
+        const userResidenceIds = userResidences.map(r => r.id);
+        
         const depreciationTransactions = transactions
-          .filter(t => t.type === 'DEPRECIATION')
+          .filter(t => 
+            t.type === 'DEPRECIATION' && 
+            userResidenceIds.includes(t.residenceId)
+          )
           .sort((a, b) => b.date.toDate().getTime() - a.date.toDate().getTime())
           .slice(0, 10);
         setRecentDepreciations(depreciationTransactions);
@@ -99,7 +124,7 @@ export default function DepreciationPage() {
     };
 
     loadHistory();
-  }, [getAllInventoryTransactions]);
+  }, [getAllInventoryTransactions, currentUser, userResidences]);
 
   const handleFormChange = (field: keyof DepreciationForm, value: any) => {
     setForm(prev => {
@@ -110,6 +135,7 @@ export default function DepreciationPage() {
         newForm.buildingId = '';
         newForm.floorId = '';
         newForm.roomId = '';
+        newForm.itemId = ''; // Reset item selection when residence changes
       } else if (field === 'buildingId') {
         newForm.floorId = '';
         newForm.roomId = '';
@@ -182,10 +208,15 @@ export default function DepreciationPage() {
         notes: ''
       });
 
-      // Reload history
+      // Reload history for user's residences only
       const transactions = await getAllInventoryTransactions();
+      const userResidenceIds = userResidences.map(r => r.id);
+      
       const depreciationTransactions = transactions
-        .filter(t => t.type === 'DEPRECIATION')
+        .filter(t => 
+          t.type === 'DEPRECIATION' && 
+          userResidenceIds.includes(t.residenceId)
+        )
         .sort((a, b) => b.date.toDate().getTime() - a.date.toDate().getTime())
         .slice(0, 10);
       setRecentDepreciations(depreciationTransactions);
@@ -209,11 +240,48 @@ export default function DepreciationPage() {
     'Other'
   ];
 
-  if (!userResidences.length || !items.length) {
+  if (inventoryLoading || residencesLoading || usersLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-96 w-full" />
+      <div className="space-y-6 max-w-7xl mx-auto p-6">
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg p-6 border border-red-100 dark:border-red-800">
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-6 w-96" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Skeleton className="h-96 w-full" />
+          </div>
+          <div className="lg:col-span-1">
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!userResidences.length) {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto p-6">
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg p-6 border border-red-100 dark:border-red-800">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Item Depreciation</h1>
+              <p className="text-gray-600 dark:text-gray-300 text-lg">
+                Depreciate items from inventory with detailed reasons and documentation
+              </p>
+            </div>
+            <div className="hidden md:block">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-800 rounded-full flex items-center justify-center">
+                <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="text-center py-10">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <p className="text-xl text-gray-600 dark:text-gray-400">No residences assigned to your account.</p>
+          <p className="text-gray-500 dark:text-gray-500">Please contact your administrator to assign residences.</p>
+        </div>
       </div>
     );
   }
@@ -262,42 +330,54 @@ export default function DepreciationPage() {
                       <Label htmlFor="residence" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Residence <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="residence"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        value={form.residenceId}
-                        onChange={(e) => handleFormChange('residenceId', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Residence</option>
-                        {userResidences.map(residence => (
-                          <option key={residence.id} value={residence.id}>
-                            {residence.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.residenceId} onValueChange={(v) => handleFormChange('residenceId', v)}>
+                        <SelectTrigger id="residence">
+                          <SelectValue placeholder={userResidences.length === 0 ? 'No assigned residences' : 'Select Residence'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userResidences.map((residence) => (
+                            <SelectItem key={residence.id} value={residence.id}>
+                              {residence.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="item" className="text-sm font-medium text-gray-700">
                         Item <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="item"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        value={form.itemId}
-                        onChange={(e) => handleFormChange('itemId', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Item</option>
-                        {items.map(item => (
-                          <option key={item.id} value={item.id}>
-                            {item.nameEn} ({item.nameAr})
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.itemId} onValueChange={(v) => handleFormChange('itemId', v)}>
+                        <SelectTrigger id="item" disabled={!form.residenceId || availableItems.length === 0}>
+                          <SelectValue placeholder={!form.residenceId ? 'Select Residence First' : availableItems.length === 0 ? 'No items with stock available' : 'Select Item'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableItems.map((item) => {
+                            const stock = getStockForResidence(item, form.residenceId);
+                            return (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.nameEn} ({item.nameAr}) - Stock: {stock}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
+
+                  {/* No Items Available Message */}
+                  {form.residenceId && availableItems.length === 0 && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                        <span className="font-medium text-yellow-900 dark:text-yellow-200">No items available</span>
+                      </div>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
+                        There are no items with available stock in the selected residence.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Stock Info */}
                   {selectedItem && form.residenceId && (
@@ -331,56 +411,59 @@ export default function DepreciationPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="building" className="dark:text-gray-300">Building</Label>
-                      <select
-                        id="building"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.buildingId}
-                        onChange={(e) => handleFormChange('buildingId', e.target.value)}
-                        disabled={!form.residenceId}
-                      >
-                        <option value="">All Buildings</option>
-                        {availableBuildings.map(building => (
-                          <option key={building.id} value={building.id}>
-                            {building.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.buildingId} onValueChange={(v) => handleFormChange('buildingId', v === '__all__' ? '' : v)}>
+                        <SelectTrigger id="building" disabled={!form.residenceId}>
+                          <SelectValue placeholder="All Buildings" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All Buildings</SelectItem>
+                          {availableBuildings
+                            .filter((building) => !!building?.id)
+                            .map((building) => (
+                              <SelectItem key={building.id} value={building.id}>
+                                {building.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="floor" className="dark:text-gray-300">Floor</Label>
-                      <select
-                        id="floor"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.floorId}
-                        onChange={(e) => handleFormChange('floorId', e.target.value)}
-                        disabled={!form.buildingId}
-                      >
-                        <option value="">All Floors</option>
-                        {availableFloors.map(floor => (
-                          <option key={floor.id} value={floor.id}>
-                            {floor.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.floorId} onValueChange={(v) => handleFormChange('floorId', v === '__all__' ? '' : v)}>
+                        <SelectTrigger id="floor" disabled={!form.buildingId}>
+                          <SelectValue placeholder="All Floors" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All Floors</SelectItem>
+                          {availableFloors
+                            .filter((floor) => !!floor?.id)
+                            .map((floor) => (
+                              <SelectItem key={floor.id} value={floor.id}>
+                                {floor.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="room" className="dark:text-gray-300">Room</Label>
-                      <select
-                        id="room"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700"
-                        value={form.roomId}
-                        onChange={(e) => handleFormChange('roomId', e.target.value)}
-                        disabled={!form.floorId}
-                      >
-                        <option value="">All Rooms</option>
-                        {availableRooms.map(room => (
-                          <option key={room.id} value={room.id}>
-                            {room.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.roomId} onValueChange={(v) => handleFormChange('roomId', v === '__all__' ? '' : v)}>
+                        <SelectTrigger id="room" disabled={!form.floorId}>
+                          <SelectValue placeholder="All Rooms" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All Rooms</SelectItem>
+                          {availableRooms
+                            .filter((room) => !!room?.id)
+                            .map((room) => (
+                              <SelectItem key={room.id} value={room.id}>
+                                {room.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -413,20 +496,18 @@ export default function DepreciationPage() {
                       <Label htmlFor="reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Reason <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        id="reason"
-                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                        value={form.reason}
-                        onChange={(e) => handleFormChange('reason', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Reason</option>
-                        {commonReasons.map(reason => (
-                          <option key={reason} value={reason}>
-                            {reason}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={form.reason} onValueChange={(v) => handleFormChange('reason', v)}>
+                        <SelectTrigger id="reason">
+                          <SelectValue placeholder="Select Reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {commonReasons.map((reason) => (
+                            <SelectItem key={reason} value={reason}>
+                              {reason}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -444,8 +525,8 @@ export default function DepreciationPage() {
 
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !form.itemId || !form.residenceId || !form.reason || form.quantity <= 0}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-lg font-semibold shadow-lg"
+                  disabled={isSubmitting || !form.itemId || !form.residenceId || !form.reason || form.quantity <= 0 || availableItems.length === 0}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-lg font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <>
@@ -470,7 +551,7 @@ export default function DepreciationPage() {
             <CardHeader className="bg-gray-50 dark:bg-gray-800 border-b">
               <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
                 <FileText className="mr-2 h-5 w-5 text-gray-600 dark:text-gray-400" />
-                Recent Depreciations
+                My Recent Depreciations
               </CardTitle>
             </CardHeader>
             
@@ -487,6 +568,8 @@ export default function DepreciationPage() {
                     <TableHeader className="sticky top-0 bg-gray-50 dark:bg-gray-800">
                       <TableRow>
                         <TableHead className="text-xs">Item</TableHead>
+                        <TableHead className="text-xs">Ref</TableHead>
+                        <TableHead className="text-xs">Residence</TableHead>
                         <TableHead className="text-xs">Qty</TableHead>
                         <TableHead className="text-xs">Reason</TableHead>
                         <TableHead className="text-xs">Date</TableHead>
@@ -497,6 +580,12 @@ export default function DepreciationPage() {
                         <TableRow key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                           <TableCell className="font-medium text-xs p-2">
                             {transaction.itemNameEn}
+                          </TableCell>
+                          <TableCell className="text-[11px] p-2 font-mono text-muted-foreground">
+                            {transaction.referenceDocId || '-'}
+                          </TableCell>
+                          <TableCell className="text-xs p-2 text-gray-600 dark:text-gray-400">
+                            {userResidences.find(r => r.id === transaction.residenceId)?.name || transaction.residenceId}
                           </TableCell>
                           <TableCell className="text-xs p-2">
                             {transaction.quantity}
@@ -517,7 +606,7 @@ export default function DepreciationPage() {
               ) : (
                 <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                   <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-                  <p>No depreciation history found</p>
+                  <p>No depreciation history found for your residences</p>
                 </div>
               )}
             </CardContent>

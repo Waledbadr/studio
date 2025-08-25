@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -15,11 +14,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
+import { normalizeText, includesNormalized } from '@/lib/utils';
+import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
+import * as XLSX from 'xlsx';
 
 export default function InventoryPage() {
+  const { dict } = useLanguage();
   const { items, loading, addItem, updateItem, deleteItem, loadInventory, categories, addCategory, updateCategory, getStockForResidence } = useInventory();
   const { currentUser } = useUsers();
   const { residences, loadResidences: loadResidencesContext } = useResidences();
@@ -37,11 +42,12 @@ export default function InventoryPage() {
   const { toast } = useToast();
   
   useEffect(() => {
+    if (!currentUser) return;
     loadInventory();
     if (residences.length === 0) {
       loadResidencesContext();
     }
-  }, [loadInventory, loadResidencesContext, residences.length]);
+  }, [currentUser, loadInventory, loadResidencesContext, residences.length]);
 
   const userResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -50,8 +56,13 @@ export default function InventoryPage() {
   }, [currentUser, residences, isAdmin]);
 
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
 
-   useEffect(() => {
+  // Negative stock auto-fix removed per request; values should no longer go negative.
+
+  useEffect(() => {
     if (userResidences.length > 0 && activeTab === 'all') {
       // Do nothing, keep 'all' as active
     } else if (userResidences.length > 0 && !userResidences.some(r => r.id === activeTab)) {
@@ -92,11 +103,12 @@ export default function InventoryPage() {
 
   const handleUpdateCategory = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCategory || !editingCategory.newName.trim()) {
+    const ec = editingCategory;
+    if (!ec || !ec.newName.trim()) {
         toast({ title: "Error", description: "Category name cannot be empty.", variant: "destructive" });
         return;
     }
-    updateCategory(editingCategory.oldName, editingCategory.newName);
+    updateCategory(ec.oldName, ec.newName);
     setEditingCategory(null);
     setIsEditCategoryDialogOpen(false);
   }
@@ -107,8 +119,13 @@ export default function InventoryPage() {
   }
 
   const handleRowClick = (itemId: string, residenceId?: string | undefined) => {
-    if (!residenceId) return;
-    router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
+    if (residenceId) {
+      // عرض حركة الصنف لسكن محدد
+      router.push(`/inventory/reports/item-movement?itemId=${itemId}&residenceId=${residenceId}`);
+    } else {
+      // عرض حركة الصنف على مستوى النظام كله (All Items)
+      router.push(`/inventory/reports/item-movement?itemId=${itemId}`);
+    }
   };
 
   const calculateStockForUser = (item: InventoryItem) => {
@@ -117,7 +134,7 @@ export default function InventoryPage() {
     }
     // Other users see sum of stock from their assigned residences
     return currentUser.assignedResidences.reduce((acc, residenceId) => {
-      return acc + (item.stockByResidence?.[residenceId] || 0);
+      return acc + getStockForResidence(item, residenceId);
     }, 0);
   };
 
@@ -127,6 +144,39 @@ export default function InventoryPage() {
     let filteredItems = isAllItemsTab 
         ? items 
         : items.filter(item => (getStockForResidence(item, residenceId) ?? 0) > 0);
+
+    // apply category filter
+    if (categoryFilter && categoryFilter !== 'all') {
+      filteredItems = filteredItems.filter(item => (item.category || '').toLowerCase() === categoryFilter.toLowerCase());
+    }
+
+    // apply search filter (normalized, supports per-item keywords and centralized synonyms)
+    if (search.trim()) {
+      const qN = normalizeText(search);
+    filteredItems = filteredItems.filter(item => {
+        const cand = [
+          item.nameEn,
+          item.nameAr,
+          item.category,
+          ...(item.keywordsAr || []),
+          ...(item.keywordsEn || []),
+      ...(item.variants || []),
+        ].filter(Boolean).join(' ');
+        if (includesNormalized(cand, qN)) return true;
+        for (const [canonN, aliasSet] of normalizedSynonyms.entries()) {
+          if (aliasSet.has(qN)) {
+            const itemMatchesCanon =
+              includesNormalized(item.nameAr, canonN) ||
+              includesNormalized(item.nameEn, canonN) ||
+              (item.keywordsAr || []).some(k => includesNormalized(k, canonN)) ||
+        (item.keywordsEn || []).some(k => includesNormalized(k, canonN)) ||
+        (item.variants || []).some(v => includesNormalized(v, canonN));
+            if (itemMatchesCanon) return true;
+          }
+        }
+        return false;
+      });
+    }
 
     if (isAllItemsTab) {
         // Create a shallow copy before sorting to avoid mutating the original array
@@ -148,29 +198,31 @@ export default function InventoryPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Arabic Name</TableHead>
-            <TableHead>English Name</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Unit</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="h-10 px-3">Arabic Name</TableHead>
+            <TableHead className="h-10 px-3">English Name</TableHead>
+            <TableHead className="h-10 px-3">Category</TableHead>
+            <TableHead className="h-10 px-3">Unit</TableHead>
+            <TableHead className="h-10 px-3">Stock</TableHead>
+            <TableHead className="h-10 px-3 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredItems.length > 0 ? filteredItems.map(item => (
-            <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className={!isAllItemsTab ? "cursor-pointer" : ""}>
-              <TableCell className="font-medium">{item.nameAr}</TableCell>
-              <TableCell className="font-medium">{item.nameEn}</TableCell>
-              <TableCell>{item.category}</TableCell>
-              <TableCell>{item.unit}</TableCell>
-              <TableCell>{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
-              <TableCell className="text-right">
+            <TableRow key={item.id} onClick={() => handleRowClick(item.id, isAllItemsTab ? undefined : residenceId)} className="cursor-pointer hover:bg-muted/50">
+              <TableCell className="py-2 px-3 font-medium">{item.nameAr}</TableCell>
+              <TableCell className="py-2 px-3 font-medium">{item.nameEn}</TableCell>
+              <TableCell className="py-2 px-3">{item.category}</TableCell>
+              <TableCell className="py-2 px-3">{item.unit}</TableCell>
+              <TableCell className="py-2 px-3">{isAllItemsTab ? calculateStockForUser(item) : getStockForResidence(item, residenceId)}</TableCell>
+              <TableCell className="py-2 px-3 text-right">
                 <Button variant="ghost" size="icon" className="mr-2" onClick={(e) => handleEditItemClick(e, item)}>
                     <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" onClick={(e) => handleDeleteItem(e, item.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           )) : (
@@ -183,62 +235,112 @@ export default function InventoryPage() {
     );
   };
 
+  // Export inventory items to Excel
+  const handleExportExcel = () => {
+    if (!items || items.length === 0) return;
+    const data = items.map(item => ({
+      'Arabic Name': item.nameAr,
+      'English Name': item.nameEn,
+      'Category': item.category,
+      'Unit': item.unit,
+      'Lifespan (days)': item.lifespanDays ?? '',
+      'Variants': item.variants?.join(', ') ?? '',
+      'Keywords (Ar)': item.keywordsAr?.join(', ') ?? '',
+      'Keywords (En)': item.keywordsEn?.join(', ') ?? '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory');
+    XLSX.writeFile(workbook, 'inventory.xlsx');
+  };
+
   return (
-    <div className="space-y-6">
-       <div className="flex items-center justify-between">
+    <div className="container mx-auto py-8">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Inventory Management</h1>
-          <p className="text-muted-foreground">Manage your materials and supplies for each residence.</p>
+          <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
+          <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
-                <Move className="mr-2 h-4 w-4" /> Stock Transfer
-            </Button>
-           <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+          <Button variant="outline" onClick={handleExportExcel}>
+            {dict.exportToExcel || 'Export items to Excel'}
+          </Button>
+          <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
+            <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
+          </Button>
+          {isAdmin && (
+            <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
               <DialogTrigger asChild>
-                  <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Category</Button>
+                <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
               </DialogTrigger>
               <DialogContent>
-                  <form onSubmit={handleAddCategory}>
-                      <DialogHeader>
-                          <DialogTitle>Add New Category</DialogTitle>
-                          <DialogDescription>Enter the name for the new inventory category.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                          <Label htmlFor="category-name">Category Name</Label>
-                          <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="e.g., Landscaping"/>
-                      </div>
-                      <DialogFooter>
-                          <Button type="submit">Save Category</Button>
-                      </DialogFooter>
-                  </form>
+                <form onSubmit={handleAddCategory}>
+                  <DialogHeader>
+                    <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
+                    <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
+                    <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
-          </Dialog>
+            </Dialog>
+          )}
+
           <AddItemDialog 
             isOpen={isAddItemDialogOpen} 
             onOpenChange={setIsAddItemDialogOpen} 
             onItemAdded={handleItemAdded}
             triggerButton={
               <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || 'Add Item'}
               </Button>
             }
           />
         </div>
       </div>
+
+  {/* Negative stock auto-fix banner removed */}
       
       <Card>
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="border-b p-4 flex justify-between items-center">
-                <TabsList>
-                    <TabsTrigger value="all">All Items</TabsTrigger>
+            <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
+        <TabsList>
+          <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
                     {userResidences.map((res) => (
                       <TabsTrigger key={res.id} value={res.id}>
                         {res.name}
                       </TabsTrigger>
                     ))}
                 </TabsList>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="w-full sm:w-64">
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder={dict.searchPlaceholder || 'Search / بحث'}
+                      aria-label="Search items"
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
+                        {categories.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
             </div>
             <TabsContent value="all" className="p-6 pt-4">
                 {renderItemsTable('all')}
@@ -274,12 +376,12 @@ export default function InventoryPage() {
                       <Input 
                         id="edit-category-name" 
                         value={editingCategory?.newName || ''} 
-                        onChange={(e) => editingCategory && setEditingCategory({...editingCategory, newName: e.target.value})}
+                        onChange={(e) => setEditingCategory(prev => prev ? ({...prev, newName: e.target.value}) : prev)}
                         placeholder="e.g., General Maintenance"
                       />
                   </div>
                   <DialogFooter>
-                      <Button type="submit" disabled={!editingCategory || editingCategory.oldName === editingCategory.newName}>Save Changes</Button>
+                      <Button type="submit" disabled={!editingCategory || editingCategory?.oldName === editingCategory?.newName}>Save Changes</Button>
                   </DialogFooter>
               </form>
           </DialogContent>

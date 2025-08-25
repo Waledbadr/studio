@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useTransition } from 'react';
@@ -6,14 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck, Search } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -21,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/context/language-context';
 
 
 interface IssuedItem extends InventoryItem {
@@ -38,11 +36,6 @@ interface VoucherLocation {
     roomId?: string;
     roomName?: string;
     facilityId?: string;
-    serviceId?: string;
-    serviceName?: string;
-    subFacilityId?: string;
-    subFacilityName?: string;
-    serviceLocation?: string;
     items: IssuedItem[];
 }
 
@@ -53,61 +46,18 @@ export default function IssueMaterialPage() {
     const { items: allItems, loading: inventoryLoading, getStockForResidence, issueItemsFromStock, getLastIssueDateForItemAtLocation, getMIVs } = useInventory();
     const { toast } = useToast();
     const router = useRouter();
+    const { dict } = useLanguage();
+    const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isCompletedOpen, setIsCompletedOpen] = useState(false);
-    const [recentMIVs, setRecentMIVs] = useState<any[]>([]);
-    const [loadingMIVs, setLoadingMIVs] = useState(false);
-    const [isPending, startTransition] = useTransition();
-
-    // Load completed section state from localStorage
-    useEffect(() => {
-        const savedState = localStorage.getItem('issue-completed-open');
-        if (savedState !== null) {
-            setIsCompletedOpen(JSON.parse(savedState));
-        }
-    }, []);
-
-    // Save completed section state to localStorage
-    const handleCompletedToggle = (open: boolean) => {
-        setIsCompletedOpen(open);
-        localStorage.setItem('issue-completed-open', JSON.stringify(open));
-    };
-
-    // Load recent MIVs
-    useEffect(() => {
-        const loadRecentMIVs = async () => {
-            if (!currentUser) return;
-            setLoadingMIVs(true);
-            try {
-                const allMIVs = await getMIVs();
-                // Filter by user permissions and get recent ones
-                let filteredMIVs = allMIVs;
-                if (currentUser.role !== 'Admin') {
-                    filteredMIVs = allMIVs.filter(miv => 
-                        currentUser.assignedResidences.includes(miv.residenceId)
-                    );
-                }
-                // Get last 10 MIVs
-                setRecentMIVs(filteredMIVs.slice(0, 10));
-            } catch (error) {
-                console.error('Error loading MIVs:', error);
-            } finally {
-                setLoadingMIVs(false);
-            }
-        };
-
-        loadRecentMIVs();
-    }, [currentUser, getMIVs]);
+    const [searchQuery, setSearchQuery] = useState('');
     
-    const [locationType, setLocationType] = useState<'unit' | 'facility' | 'service'>('unit');
+    const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [selectedFacilityId, setSelectedFacilityId] = useState('');
-    const [selectedServiceId, setSelectedServiceId] = useState('');
-    const [selectedSubFacilityId, setSelectedSubFacilityId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     
@@ -117,126 +67,86 @@ export default function IssueMaterialPage() {
         return residences.filter(r => currentUser.assignedResidences.includes(r.id));
     }, [currentUser, residences]);
 
-    // Filter for dropdown (exclude main-warehouse)
     const filteredResidences = useMemo(() => {
         return userResidences.filter(r => r.id !== 'main-warehouse');
     }, [userResidences]);
-
-    // Statistics
-    const activeMIVs = recentMIVs.filter(miv => miv.status === 'Pending');
-    const issuedMIVs = recentMIVs.filter(miv => miv.status === 'Issued');
-    const cancelledMIVs = recentMIVs.filter(miv => miv.status === 'Cancelled');
-    const totalMIVs = recentMIVs.length;
 
     const selectedComplex = useMemo(() => residences.find(c => c.id === selectedComplexId), [selectedComplexId, residences]);
     const selectedBuilding = useMemo(() => selectedComplex?.buildings.find(b => b.id === selectedBuildingId), [selectedBuildingId, selectedComplex]);
     const selectedFloor = useMemo(() => selectedBuilding?.floors.find(f => f.id === selectedFloorId), [selectedFloorId, selectedBuilding]);
     
-    // Collect all services from all levels
-    const allAvailableServices = useMemo(() => {
+    const availableFacilities = useMemo(() => {
         if (!selectedComplex) return [];
-        
-        const services: any[] = [];
-        
-        // Complex-level services
-        if (selectedComplex.services) {
-            services.push(...selectedComplex.services);
+        // Show only the most specific facilities available
+        if (selectedFloorId) {
+            return selectedFloor?.facilities || [];
         }
-        
-        // Building-level services
-        selectedComplex.buildings?.forEach(building => {
-            if (building.services) {
-                services.push(...building.services.map(s => ({
-                    ...s,
-                    _location: `${building.name}`,
-                    _locationId: `building-${building.id}`
-                })));
-            }
-            
-            // Floor-level services
-            building.floors?.forEach(floor => {
-                if (floor.services) {
-                    services.push(...floor.services.map(s => ({
-                        ...s,
-                        _location: `${building.name} -> ${floor.name}`,
-                        _locationId: `floor-${building.id}-${floor.id}`
-                    })));
-                }
-                
-                // Room-level services (only check selected room to keep it simple)
-                if (selectedRoomId) {
-                    const selectedRoom = floor.rooms?.find(r => r.id === selectedRoomId);
-                    if (selectedRoom?.services) {
-                        services.push(...selectedRoom.services.map(s => ({
-                            ...s,
-                            _location: `${building.name} -> ${floor.name} -> ${selectedRoom.name}`,
-                            _locationId: `room-${building.id}-${floor.id}-${selectedRoom.id}`
-                        })));
-                    }
-                }
-            });
-        });
-        
-        console.log('🔍 All available services:', services);
-        return services;
-    }, [selectedComplex, selectedRoomId]);
-    
+        if (selectedBuildingId) {
+            return selectedBuilding?.facilities || [];
+        }
+        return selectedComplex.facilities || [];
+    }, [selectedComplex, selectedBuildingId, selectedFloorId, selectedFloor, selectedBuilding]);
+
+
     const isLocationSelected = useMemo(() => {
         if (locationType === 'unit') {
-            return !!(selectedBuildingId && selectedFloorId && selectedRoomId);
-        } else if (locationType === 'facility') {
-            return !!selectedFacilityId;
-        } else if (locationType === 'service') {
-            if (!selectedServiceId) return false;
-            
-            // Find the selected service
-            const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
-            
-            // If service has sub-facilities, require one to be selected
-            if (selectedService?.subFacilities && selectedService.subFacilities.length > 0) {
-                return !!selectedSubFacilityId;
-            }
-            
-            // If service has no sub-facilities, just service selection is enough
-            return true;
+            return !!(selectedComplexId && selectedBuildingId && selectedFloorId && selectedRoomId);
         }
-        return false;
-    }, [locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId, selectedServiceId, selectedSubFacilityId, allAvailableServices]);
+        return !!(selectedComplexId && selectedFacilityId);
+    }, [locationType, selectedComplexId, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
 
     const availableInventory = useMemo(() => {
         if (!selectedComplexId) return [];
-        return allItems.filter(item => getStockForResidence(item, selectedComplexId) > 0);
-    }, [selectedComplexId, allItems, getStockForResidence]);
+        const q = searchQuery.toLowerCase();
+        return allItems
+            .filter(item => {
+                const stock = getStockForResidence(item, selectedComplexId);
+                if (stock <= 0) return false;
+                // Remaining allocatable = stock - already allocated across voucher locations
+                const allocated = voucherLocations.reduce((sum, loc) => {
+                    const found = loc.items.find(i => i.id === item.id);
+                    return sum + (found ? found.issueQuantity : 0);
+                }, 0);
+                return stock - allocated > 0;
+            })
+            .filter(item => 
+                item.nameEn.toLowerCase().includes(q) || 
+                item.nameAr.toLowerCase().includes(q)
+            );
+    }, [selectedComplexId, allItems, getStockForResidence, searchQuery, voucherLocations]);
 
 
     useEffect(() => {
         setVoucherLocations([]);
         setSelectedBuildingId('');
-        setSelectedFacilityId('');
-        setSelectedServiceId('');
-        setSelectedSubFacilityId('');
         setLocationType('unit');
     }, [selectedComplexId]);
     
     useEffect(() => {
         setSelectedFloorId('');
+        setSelectedFacilityId('');
     }, [selectedBuildingId]);
 
     useEffect(() => {
         setSelectedRoomId('');
-    }, [selectedFloorId]);
-
-    // Reset selections when location type changes
-    useEffect(() => {
-        setSelectedBuildingId('');
-        setSelectedFloorId('');
-        setSelectedRoomId('');
-        setSelectedFacilityId('');
-        setSelectedServiceId('');
-        setSelectedSubFacilityId('');
-    }, [locationType]);
+        // Also reset facility ID when floor changes
+        if(locationType === 'facility') {
+            setSelectedFacilityId('');
+        }
+    }, [selectedFloorId, locationType]);
     
-    const handleAddItemToLocation = async (itemToAdd: InventoryItem) => {
+    const getAggregateIssuedQty = (itemId: string): number => {
+        return voucherLocations.reduce((sum, loc) => {
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+    };
+
+    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can issue materials.', variant: 'destructive' });
+            return;
+        }
         startTransition(async () => {
             if (!isLocationSelected || !selectedComplex) {
                 toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
@@ -249,6 +159,13 @@ export default function IssueMaterialPage() {
                 return;
             }
 
+            // Client-side guard: prevent aggregated over-issuing across multiple locations
+            const currentAgg = getAggregateIssuedQty(itemToAdd.id);
+            if (currentAgg >= stock) {
+                toast({ title: "Stock limit reached", description: `You already allocated ${currentAgg} of ${stock} available.`, variant: "destructive" });
+                return;
+            }
+
             let locationId: string, locationName: string, isFacility: boolean;
             let newLocationDetails: Partial<VoucherLocation> = {};
 
@@ -258,8 +175,8 @@ export default function IssueMaterialPage() {
                     toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
                     return;
                 }
-                locationId = `${selectedBuildingId}-${selectedFloorId}-${selectedRoomId}`;
-                locationName = `${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
+                locationId = selectedRoom.id;
+                locationName = `${selectedComplex.name} -> ${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
                 isFacility = false;
                 newLocationDetails = {
                     buildingId: selectedBuildingId,
@@ -269,57 +186,28 @@ export default function IssueMaterialPage() {
                     roomId: selectedRoomId,
                     roomName: selectedRoom.name,
                 };
-            } else if (locationType === 'facility') {
-                const selectedFacility = selectedComplex.facilities?.find(f => f.id === selectedFacilityId);
+            } else {
+                const selectedFacility = availableFacilities.find(f => f.id === selectedFacilityId);
                  if (!selectedFacility) {
                     toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
                     return;
                 }
-                locationId = selectedFacilityId;
-                locationName = selectedFacility.name;
+                locationId = selectedFacility.id;
+                // Build a hierarchical name for facilities as well
+                // e.g., Residence -> Building -> (Floor ->) Facility
+                const parts: string[] = [selectedComplex.name];
+                if (selectedBuilding) parts.push(selectedBuilding.name);
+                if (selectedFloor) parts.push(selectedFloor.name);
+                parts.push(selectedFacility.name);
+                locationName = parts.join(' -> ');
                 isFacility = true;
-                newLocationDetails = { facilityId: selectedFacilityId, locationId: selectedFacilityId };
-            } else if (locationType === 'service') {
-                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
-                
-                if (!selectedService) {
-                    toast({ title: "Service not found", description: "An error occurred with the selected service.", variant: "destructive"});
-                    return;
-                }
-                
-                // Check if service has sub-facilities and one is selected
-                if (selectedService.subFacilities && selectedService.subFacilities.length > 0) {
-                    const selectedSubFacility = selectedService.subFacilities.find((sf: any) => sf.id === selectedSubFacilityId);
-                    
-                    if (!selectedSubFacility) {
-                        toast({ title: "Sub-facility required", description: "Please select a sub-facility for this service.", variant: "destructive"});
-                        return;
-                    }
-                    
-                    locationId = `service-${selectedServiceId}-${selectedSubFacilityId}`;
-                    locationName = `${selectedService.name} -> ${selectedSubFacility.name}${selectedSubFacility.number ? ` (${selectedSubFacility.number})` : ''}`;
-                    newLocationDetails = {
-                        serviceId: selectedServiceId,
-                        serviceName: selectedService.name,
-                        subFacilityId: selectedSubFacilityId,
-                        subFacilityName: selectedSubFacility.name,
-                        serviceLocation: selectedService._location || 'Complex Level'
-                    };
-                } else {
-                    // Service without sub-facilities
-                    locationId = `service-${selectedServiceId}`;
-                    locationName = selectedService.name + (selectedService._location ? ` (${selectedService._location})` : '');
-                    newLocationDetails = {
-                        serviceId: selectedServiceId,
-                        serviceName: selectedService.name,
-                        serviceLocation: selectedService._location || 'Complex Level'
-                    };
-                }
-                
-                isFacility = false;
-            } else {
-                toast({ title: "Invalid Location Type", description: "Please select a valid location type.", variant: "destructive"});
-                return;
+                newLocationDetails = {
+                    facilityId: selectedFacilityId,
+                    locationId: selectedFacilityId,
+                    // Include building/floor context for facilities when available
+                    ...(selectedBuilding ? { buildingId: selectedBuildingId, buildingName: selectedBuilding.name } : {}),
+                    ...(selectedFloor ? { floorId: selectedFloorId, floorName: selectedFloor.name } : {}),
+                };
             }
             
             // Lifespan check
@@ -344,20 +232,41 @@ export default function IssueMaterialPage() {
                 
                 if (existingLocationIndex > -1) {
                     const newLocations = [...prevLocations];
-                    const targetLocation = newLocations[existingLocationIndex];
+                    const targetLocation = { ...newLocations[existingLocationIndex] };
                     const existingItemIndex = targetLocation.items.findIndex(i => i.id === itemToAdd.id);
 
                     if (existingItemIndex > -1) {
                         const currentQty = targetLocation.items[existingItemIndex].issueQuantity;
-                        if(currentQty < stock) {
-                            targetLocation.items[existingItemIndex].issueQuantity += 1;
+                        // Compute residence-wide remaining stock allowance for this item
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id) - currentQty;
+                        const remaining = stock - allocatedElsewhere;
+                        if(currentQty < remaining) {
+                            // Increment quantity without reordering when item already exists
+                            const updatedItems = [...targetLocation.items];
+                            updatedItems[existingItemIndex] = {
+                                ...updatedItems[existingItemIndex],
+                                issueQuantity: Math.min(currentQty + 1, remaining),
+                            };
+                            targetLocation.items = updatedItems;
                         } else {
-                             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+                             toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
                         }
+                        // keep locations order as is when just incrementing existing item
+                        newLocations[existingLocationIndex] = targetLocation;
+                        return newLocations;
                     } else {
-                        targetLocation.items.push({ ...itemToAdd, issueQuantity: 1 });
+                        // New item: place it at the top of the item's list
+                        const allocatedElsewhere = getAggregateIssuedQty(itemToAdd.id);
+                        const canAdd = Math.max(0, stock - allocatedElsewhere);
+                        if (canAdd <= 0) {
+                            toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
+                            return prevLocations;
+                        }
+                        targetLocation.items = [ { ...itemToAdd, issueQuantity: Math.min(1, canAdd) }, ...targetLocation.items ];
+                        // Move this location to the top since a new item was added here
+                        newLocations.splice(existingLocationIndex, 1);
+                        return [ targetLocation, ...newLocations ];
                     }
-                    return newLocations;
                 } else {
                     const newLocation: VoucherLocation = {
                         ...newLocationDetails,
@@ -366,11 +275,13 @@ export default function IssueMaterialPage() {
                         isFacility,
                         items: [{ ...itemToAdd, issueQuantity: 1 }]
                     };
-                    return [...prevLocations, newLocation];
+                    // New location: place at the top
+                    return [ newLocation, ...prevLocations ];
                 }
             });
         });
     };
+
 
     const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
          const itemInfo = allItems.find(i => i.id === itemId);
@@ -384,6 +295,18 @@ export default function IssueMaterialPage() {
         } else if (quantity > stock) {
             quantity = stock;
             toast({ title: "Stock limit reached", description: `Cannot issue more than the available ${stock} units.`, variant: "destructive"});
+        }
+
+        // Additional client-side guard: cap by residence-wide remaining allowance considering other locations
+        const allocatedElsewhere = voucherLocations.reduce((sum, loc) => {
+            if (loc.locationId === locationId) return sum;
+            const found = loc.items.find(i => i.id === itemId);
+            return sum + (found ? found.issueQuantity : 0);
+        }, 0);
+        const remaining = Math.max(0, stock - allocatedElsewhere);
+        if (quantity > remaining) {
+            quantity = remaining;
+            toast({ title: "Stock limit reached", description: `Only ${remaining} left available for this item across locations.`, variant: "destructive"});
         }
         
         setVoucherLocations(prev => prev.map(loc => 
@@ -406,6 +329,10 @@ export default function IssueMaterialPage() {
     };
     
     const handleSubmitVoucher = async () => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can submit issue vouchers.', variant: 'destructive' });
+            return;
+        }
         if (!selectedComplexId || !isVoucherSubmittable) {
             toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
             return;
@@ -442,102 +369,54 @@ export default function IssueMaterialPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Material Issue Voucher (MIV)</h1>
-                    <p className="text-muted-foreground">Issue materials from a residence's storeroom to specific locations.</p>
+                    <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
+                    <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
                  <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
-                        <History className="mr-2 h-4 w-4"/> View History
+                        <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
-                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting}>
+                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Submit Voucher
+                        {dict.submitVoucher}
                     </Button>
                 </div>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Issue</CardTitle>
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{activeMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Vouchers awaiting issue</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Issued Today</CardTitle>
-                        <Truck className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{issuedMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Items distributed</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
-                        <XCircle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cancelledMIVs.length}</div>
-                        <p className="text-xs text-muted-foreground">Cancelled vouchers</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Vouchers</CardTitle>
-                        <Archive className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalMIVs}</div>
-                        <p className="text-xs text-muted-foreground">All MIVs this period</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Card>
-                 <CardHeader>
-                     <div className="flex justify-between items-center">
-                        <div>
-                            <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Add Items to a Location</CardTitle>
-                            <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                    <CardHeader>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Select Location & Items</CardTitle>
+                                <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Label className="whitespace-nowrap">Issue From:</Label>
+                                <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
+                                    <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Label className="whitespace-nowrap">Issue From Residence:</Label>
-                            <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                                <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
-                                <SelectContent>
-                                    {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        <div className="lg:col-span-1 space-y-4">
-                            <h3 className="font-semibold">Select Location Type</h3>
-                            <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility' | 'service')} className="flex gap-4" disabled={!selectedComplexId}>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="unit" id="r_unit" />
-                                    <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="facility" id="r_facility" />
-                                    <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="service" id="r_service" />
-                                    <Label htmlFor="r_service" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Services</Label>
-                                </div>
-                            </RadioGroup>
-                            
-                            {locationType === 'unit' ? (
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-sm">Location Type</h3>
+                                <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="unit" id="r_unit" />
+                                        <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="facility" id="r_facility" />
+                                        <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
+                                    </div>
+                                </RadioGroup>
+                                
                                 <div className="space-y-2 pt-2">
                                     <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
                                         <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
@@ -551,263 +430,135 @@ export default function IssueMaterialPage() {
                                             {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
-                                    <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            ) : locationType === 'facility' ? (
-                                 <div className="space-y-2 pt-2">
-                                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.facilities?.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                 </div>
-                            ) : locationType === 'service' ? (
-                                <div className="space-y-2 pt-2">
-                                    <Select value={selectedServiceId} onValueChange={setSelectedServiceId} disabled={!selectedComplexId || !allAvailableServices.length}>
-                                        <SelectTrigger><SelectValue placeholder={!allAvailableServices.length ? "No services available" : "Select Service"} /></SelectTrigger>
-                                        <SelectContent>
-                                            {allAvailableServices.length > 0 ? (
-                                                allAvailableServices.map((s: any) => (
-                                                    <SelectItem key={`${s._locationId || 'complex'}-${s.id}`} value={`${s._locationId || 'complex'}-${s.id}`}>
-                                                        {s.name} {s._location ? `(${s._location})` : ''}
-                                                    </SelectItem>
-                                                ))
-                                            ) : (
-                                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                                    No services available - Add services in Residences page
-                                                </div>
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedSubFacilityId} onValueChange={setSelectedSubFacilityId} disabled={!selectedServiceId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={(() => {
-                                                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
-                                                if (!selectedServiceId) return "Select Sub-facility (Optional)";
-                                                if (!selectedService?.subFacilities || selectedService.subFacilities.length === 0) {
-                                                    return "No sub-facilities available";
-                                                }
-                                                return "Select Sub-facility (Required)";
-                                            })()} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(() => {
-                                                const selectedService = allAvailableServices.find((s: any) => `${s._locationId || 'complex'}-${s.id}` === selectedServiceId);
-                                                return selectedService?.subFacilities?.length > 0 ? (
-                                                    selectedService.subFacilities.map((sf: any) => (
-                                                        <SelectItem key={sf.id} value={sf.id}>{sf.name} {sf.number ? `(${sf.number})` : ''}</SelectItem>
-                                                    ))
-                                                ) : (
-                                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                                        {!selectedServiceId ? "Select a service first" : "✅ This service has no sub-facilities - You can proceed to add items"}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </SelectContent>
-                                    </Select>
-                                    {/* Debug info */}
-                                    {selectedComplexId && (
-                                        <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                                            <p>Services found: {allAvailableServices.length}</p>
-                                            {allAvailableServices.length === 0 && (
-                                                <p className="text-orange-600">⚠️ No services found. Add services in Residences page first.</p>
-                                            )}
-                                            {allAvailableServices.length > 0 && (
-                                                <div className="mt-1">
-                                                    <p className="text-green-600">✅ Available:</p>
-                                                    {allAvailableServices.slice(0, 3).map((s: any, i: number) => (
-                                                        <p key={i} className="text-xs">• {s.name} {s._location ? `(${s._location})` : ''}</p>
-                                                    ))}
-                                                    {allAvailableServices.length > 3 && <p className="text-xs">...and {allAvailableServices.length - 3} more</p>}
-                                                </div>
-                                            )}
-                                        </div>
+                                    {locationType === 'unit' ? (
+                                        <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
+                                            <SelectContent>
+                                                {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
+                                            <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
+                                            <SelectContent>
+                                                {availableFacilities.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
                                     )}
                                 </div>
-                            ) : null}
-                        </div>
-                        <div className="lg:col-span-3">
-                            <h3 className="font-semibold mb-4">Available Inventory</h3>
-                             <ScrollArea className="h-[250px] border rounded-md">
-                                {selectedComplexId ? (
-                                    <div className="p-2 space-y-2">
-                                        {availableInventory.length > 0 ? availableInventory.map(item => (
-                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                                                <div>
-                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                    <p className="text-sm text-muted-foreground">{item.category} - Stock: {getStockForResidence(item, selectedComplexId)} {item.unit}</p>
-                                                </div>
-                                                <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending}>
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center text-muted-foreground p-8">No inventory with stock found for this residence.</div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        Select a residence to see available items.
-                                    </div>
-                                )}
-                            </ScrollArea>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
-                    <CardDescription>Review all items and locations before submitting the voucher.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {voucherLocations.length > 0 ? (
-                         <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
-                            {voucherLocations.map(location => (
-                                <AccordionItem key={location.locationId} value={location.locationId}>
-                                    <AccordionTrigger className="font-semibold text-lg">
-                                        {location.locationName}
-                                    </AccordionTrigger>
-                                    <AccordionContent>
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Item</TableHead>
-                                                    <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                                    <TableHead className="w-[50px] text-right"></TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {location.items.map(item => (
-                                                    <TableRow key={item.id}>
-                                                         <TableCell className="font-medium">
-                                                            <p>{item.nameAr} / {item.nameEn}</p>
-                                                            <p className="text-xs text-muted-foreground">{item.category}</p>
-                                                        </TableCell>
-                                                         <TableCell>
-                                                            <div className="flex items-center justify-center gap-2">
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
-                                                                    <Minus className="h-4 w-4" />
-                                                                </Button>
-                                                                <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
-                                                                    <Plus className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
-                                                                <Trash2 className="h-4 w-4 text-destructive"/>
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            ))}
-                        </Accordion>
-                    ) : (
-                        <div className="text-center text-muted-foreground p-8">
-                            No items added to the voucher yet.
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Recent MIVs History */}
-            <Collapsible 
-                open={isCompletedOpen} 
-                onOpenChange={handleCompletedToggle}
-            >
-                <Card>
-                    <CollapsibleTrigger asChild>
-                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Archive className="h-5 w-5 text-muted-foreground" />
-                                        Recent MIVs History
-                                    </CardTitle>
-                                    <CardDescription>
-                                        View recently created material issue vouchers ({recentMIVs.length} total)
-                                    </CardDescription>
-                                </div>
-                                <ChevronDown className={`h-4 w-4 transition-transform ${isCompletedOpen ? 'rotate-180' : ''}`} />
                             </div>
-                        </CardHeader>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                        <CardContent>
-                            {loadingMIVs ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                    <span className="ml-2 text-muted-foreground">Loading recent MIVs...</span>
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-sm">Available Inventory</h3>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        type="search"
+                                        placeholder="Search items..."
+                                        className="pl-8 w-full"
+                                        value={searchQuery}
+                                        onChange={e => setSearchQuery(e.target.value)}
+                                        disabled={!selectedComplexId}
+                                    />
                                 </div>
-                            ) : recentMIVs.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <Archive className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>No MIVs found for your assigned residences.</p>
-                                </div>
-                            ) : (
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>MIV #</TableHead>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead>Residence</TableHead>
-                                                <TableHead>Items</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Created By</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {recentMIVs.map((miv) => (
-                                                <TableRow key={miv.id}>
-                                                    <TableCell className="font-medium">
-                                                        #{miv.id.slice(-6)}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {new Date(miv.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {residences.find(r => r.id === miv.residenceId)?.name || 'Unknown'}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {miv.totalItems || 0} items
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={
-                                                            miv.status === 'Issued' ? 'default' :
-                                                            miv.status === 'Pending' ? 'secondary' :
-                                                            'destructive'
-                                                        }>
-                                                            {miv.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {miv.createdBy || 'Unknown'}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </CollapsibleContent>
+                                <ScrollArea className="h-[250px] border rounded-md">
+                                    {selectedComplexId ? (
+                                        <div className="p-2 space-y-2">
+                                            {availableInventory.length > 0 ? availableInventory.map(item => {
+                                                const stock = getStockForResidence(item, selectedComplexId);
+                                                const allocated = voucherLocations.reduce((sum, loc) => {
+                                                    const f = loc.items.find(i => i.id === item.id);
+                                                    return sum + (f ? f.issueQuantity : 0);
+                                                }, 0);
+                                                const remaining = Math.max(0, stock - allocated);
+                                                return (
+                                                    <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
+                                                        <div>
+                                                            <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
+                                                            <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
+                                                        </div>
+                                                        <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending || remaining <= 0}>
+                                                            <Plus className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="text-center text-muted-foreground p-8 text-sm">No inventory found.</div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                                            Select a residence to see items.
+                                        </div>
+                                    )}
+                                </ScrollArea>
+                            </div>
+                        </div>
+                    </CardContent>
                 </Card>
-            </Collapsible>
 
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
+                        <CardDescription>Review all items and locations before submitting.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[430px]">
+                        {voucherLocations.length > 0 ? (
+                            <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
+                                {voucherLocations.map(location => (
+                                    <AccordionItem key={location.locationId} value={location.locationId}>
+                                        <AccordionTrigger className="font-semibold text-base">
+                                            {location.locationName}
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Item</TableHead>
+                                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
+                                                        <TableHead className="w-[50px] text-right"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {location.items.map(item => (
+                                                        <TableRow key={item.id}>
+                                                            <TableCell className="font-medium">
+                                                                <p>{item.nameAr} / {item.nameEn}</p>
+                                                                <p className="text-xs text-muted-foreground">{item.category}</p>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
+                                                                        <Minus className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
+                                                                        <Plus className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        ) : (
+                            <div className="text-center text-muted-foreground p-8 h-[400px] flex items-center justify-center">
+                                No items added to the voucher yet.
+                            </div>
+                        )}
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

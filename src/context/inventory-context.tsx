@@ -1,13 +1,12 @@
-
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from "firebase/firestore";
 import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
+import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from './users-context';
 import { useResidences } from './residences-context';
 import { useNotifications } from './notifications-context';
@@ -26,6 +25,9 @@ export interface InventoryItem {
   stockByResidence?: { [residenceId: string]: number };
   lifespanDays?: number;
   variants?: string[];
+  // Optional: item-level search keywords (synonyms/aliases)
+  keywordsAr?: string[];
+  keywordsEn?: string[];
 }
 
 export interface InventoryTransaction {
@@ -35,13 +37,19 @@ export interface InventoryTransaction {
     itemNameAr: string;
     residenceId: string;
     date: Timestamp;
-    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT' | 'DEPRECIATION' | 'AUDIT' | 'SCRAP';
+    type: 'RECEIVE' | 'ISSUE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'RETURN' | 'IN' | 'OUT' | 'DEPRECIATION' | 'AUDIT';
     quantity: number;
     referenceDocId: string; // e.g., Order ID or MIV ID
     locationId?: string;
     locationName?: string;
     relatedResidenceId?: string; // For transfers
     depreciationReason?: string; // For depreciation transactions
+  // Optional legacy fields used by some reports
+  buildingId?: string;
+  floorId?: string;
+  roomId?: string;
+  movementType?: string;
+  timestamp?: number | string | Date;
 }
 
 export interface DepreciationRequest {
@@ -90,6 +98,61 @@ export interface MIVDetails {
     }
 }
 
+// MRV (Material Receipt Voucher) types
+export interface MRV {
+  id: string;
+  date: Timestamp;
+  residenceId: string;
+  itemCount: number;
+  supplierName?: string;
+  invoiceNo?: string;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  codeShort?: string | null;
+  attachmentRef?: string | null;
+  // Optional link back to an originating Material Request (order)
+  orderId?: string | null;
+}
+
+export interface MRVDetails {
+  id: string;
+  date: Timestamp;
+  residenceId: string;
+  items: {
+    itemId: string;
+    itemNameEn: string;
+    itemNameAr: string;
+    quantity: number;
+  }[];
+  supplierName?: string;
+  invoiceNo?: string;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  codeShort?: string | null;
+  orderId?: string | null;
+}
+
+// MRV Request (needs admin approval before posting)
+export interface MRVRequest {
+  id: string;
+  residenceId: string;
+  items: { id: string; nameEn: string; nameAr: string; quantity: number }[];
+  supplierName: string | null;
+  invoiceNo: string | null;
+  attachmentUrl?: string | null;
+  attachmentPath?: string | null;
+  notes?: string | null;
+  status: 'Pending' | 'Processing' | 'Approved' | 'Rejected';
+  requestedById?: string | null;
+  requestedAt: Timestamp;
+  approvedById?: string;
+  approvedAt?: Timestamp;
+  rejectedById?: string;
+  rejectedAt?: Timestamp;
+  mrvId?: string; // linked posted MRV id when approved
+  mrvShort?: string; // short code MRV-YYMSEQ
+}
+
 export interface StockTransfer {
   id: string;
   date: Timestamp;
@@ -104,6 +167,8 @@ export interface StockTransfer {
   approvedAt?: Timestamp;
   rejectedById?: string;
   rejectedAt?: Timestamp;
+  // Optional short formatted code for the transfer (TRS-YYM#)
+  codeShort?: string;
 }
 
 export type NewStockTransferPayload = Omit<StockTransfer, 'id' | 'date' | 'status'>;
@@ -156,6 +221,7 @@ export interface AuditItem {
   status: 'PENDING' | 'COUNTED' | 'VERIFIED' | 'DISCREPANCY' | 'ADJUSTED';
   notes: string;
   countedBy?: string;
+  attachmentRef?: string | null;
   countedAt?: Timestamp;
   verifiedBy?: string;
   verifiedAt?: Timestamp;
@@ -180,9 +246,38 @@ export interface AuditAdjustment {
   adjustedAt: Timestamp;
 }
 
+export interface StockReconciliation {
+  id: string; // same as referenceId
+  residenceId: string;
+  date: Timestamp;
+  itemCount: number;
+  totalIncrease: number;
+  totalDecrease: number;
+  performedById?: string;
+}
+
+// Reconciliation approval workflow
+export interface ReconciliationRequest {
+  id: string;
+  residenceId: string;
+  adjustments: { itemId: string; newStock: number; reason?: string }[];
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedById: string;
+  requestedAt: Timestamp;
+  approvedById?: string;
+  approvedAt?: Timestamp;
+  rejectedById?: string;
+  rejectedAt?: Timestamp;
+  rejectReason?: string | null;
+  referenceId?: string; // linked reconciliation id when approved
+  reservedId?: string; // pre-reserved reconciliation id/code for display while pending
+}
+
 
 interface InventoryContextType {
   items: InventoryItem[];
+  // compatibility alias expected by some pages
+  inventoryItems?: InventoryItem[];
   categories: string[];
   transfers: StockTransfer[];
   audits: InventoryAudit[];
@@ -197,9 +292,11 @@ interface InventoryContextType {
   createTransferRequest: (payload: NewStockTransferPayload, currentUser: User) => Promise<void>;
   approveTransfer: (transferId: string, approverId: string) => Promise<void>;
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
-  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => Promise<void>;
+  // For issuing, only id and quantity are required; names are optional and resolved from inventory when available
+  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
+  getAllInventoryTransactionsRaw?: () => Promise<any[]>;
   getAllIssueTransactions: () => Promise<InventoryTransaction[]>;
   getMIVs: () => Promise<MIV[]>;
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
@@ -214,6 +311,36 @@ interface InventoryContextType {
   updateAuditItem: (auditItem: AuditItem) => Promise<void>;
   submitAuditCount: (auditId: string, itemId: string, physicalStock: number, notes: string, countedBy: string) => Promise<void>;
   completeAudit: (auditId: string, adjustments: AuditAdjustment[], generalNotes: string) => Promise<void>;
+  // Simplified stock reconciliation for residences
+  reconcileStock: (
+    residenceId: string,
+    adjustments: { itemId: string; newStock: number; reason?: string }[],
+  performedById?: string,
+  overrideReferenceId?: string
+  ) => Promise<string | void>;
+  getReconciliations: (residenceId: string) => Promise<StockReconciliation[]>;
+  // New: admin/all and details helpers
+  getAllReconciliations: () => Promise<StockReconciliation[]>;
+  getReconciliationById: (id: string) => Promise<StockReconciliation | null>;
+  getReconciliationItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // Transfer helpers
+  getTransferItems: (referenceId: string) => Promise<InventoryTransaction[]>;
+  // Maintenance tools
+  fixNegativeStocks: () => Promise<{ fixedCount: number; affectedItems: string[] }>;
+  // Reconciliation approval workflow
+  getReconciliationRequests: (residenceId?: string, status?: ReconciliationRequest['status']) => Promise<ReconciliationRequest[]>;
+  createReconciliationRequest: (residenceId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string) => Promise<string>;
+  approveReconciliationRequest: (requestId: string, approverId: string) => Promise<string>;
+  rejectReconciliationRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
+  // MRV helpers
+  createMRV: (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }) => Promise<string>;
+  // meta now optionally supports orderId to link receipt to an MR
+  getMRVs: () => Promise<MRV[]>;
+  getMRVById: (mrvId: string) => Promise<MRVDetails | null>;
+  // MRV Requests (approval flow)
+  getMRVRequests: (status?: MRVRequest['status']) => Promise<MRVRequest[]>;
+  approveMRVRequest: (requestId: string, approverId: string) => Promise<string>;
+  rejectMRVRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -235,6 +362,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const isLoaded = useRef(false);
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
+  const { users, currentUser } = useUsers();
 
 
   const loadInventory = useCallback(() => {
@@ -246,18 +374,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     
+    // Defer subscribing until signed in
+    if (auth && !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
     isLoaded.current = true;
     setLoading(true);
 
-    inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
+  inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
           // Ensure totalStock is a valid number, defaulting to 0 if not.
-          const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
-              const num = Number(current);
-              return sum + (isNaN(num) ? 0 : num);
-          }, 0);
+      // Clamp any negative values when computing totals for safety/display
+      const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
+        const num = Number(current);
+        const safe = isNaN(num) ? 0 : Math.max(0, num);
+        return sum + safe;
+      }, 0);
           return {
               id: doc.id,
               ...data,
@@ -268,7 +404,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       setItems(inventoryData);
        const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
        if (categories.length === 0 && uniqueCategories.length > 0) {
-           const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+           const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
            getDoc(categoriesDocRef).then(docSnap => {
                if (!docSnap.exists()) {
                    setDoc(categoriesDocRef, { names: uniqueCategories });
@@ -313,18 +449,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   useEffect(() => {
     loadInventory();
+    const unsub = auth ? onAuthStateChanged(auth, (u) => {
+      if (u) {
+        if (!isLoaded.current) loadInventory();
+      } else {
+        // Signed out: unsubscribe and reset
+        if (inventoryUnsubscribeRef.current) { try { inventoryUnsubscribeRef.current(); } catch {} inventoryUnsubscribeRef.current = null; }
+        if (categoriesUnsubscribeRef.current) { try { categoriesUnsubscribeRef.current(); } catch {} categoriesUnsubscribeRef.current = null; }
+        if (transfersUnsubscribeRef.current) { try { transfersUnsubscribeRef.current(); } catch {} transfersUnsubscribeRef.current = null; }
+        if (auditsUnsubscribeRef.current) { try { auditsUnsubscribeRef.current(); } catch {} auditsUnsubscribeRef.current = null; }
+        isLoaded.current = false;
+        setItems([]);
+        setCategories([]);
+        setTransfers([]);
+        setAudits([]);
+        setLoading(false);
+      }
+    }) : undefined;
     return () => {
       if (inventoryUnsubscribeRef.current) inventoryUnsubscribeRef.current();
       if (categoriesUnsubscribeRef.current) categoriesUnsubscribeRef.current();
       if (transfersUnsubscribeRef.current) transfersUnsubscribeRef.current();
       if (auditsUnsubscribeRef.current) auditsUnsubscribeRef.current();
       isLoaded.current = false;
+      unsub?.();
     };
   }, [loadInventory]);
   
   const getStockForResidence = (item: InventoryItem, residenceId: string) => {
       if (!item.stockByResidence) return 0;
-      return item.stockByResidence[residenceId] || 0;
+      const v = Number(item.stockByResidence[residenceId] || 0);
+      return isNaN(v) ? 0 : Math.max(0, v);
   }
 
   const addCategory = async (newCategory: string) => {
@@ -339,7 +494,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const updatedCategories = [...categories, newCategory.trim()];
-      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
       await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
       toast({ title: "Success", description: "Category added." });
     } catch(error) {
@@ -363,14 +518,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       // 1. Update categories document
       const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
-      const categoriesDocRef = doc(db, "inventory-categories", "all-categories");
+      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
       batch.set(categoriesDocRef, { names: updatedCategories });
       
       // 2. Update all items with the old category name
-      const itemsToUpdateQuery = query(collection(db, "inventory"), where("category", "==", oldName));
+      const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
       const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
       itemsToUpdateSnapshot.forEach(itemDoc => {
-        const itemRef = doc(db, "inventory", itemDoc.id);
+        const itemRef = doc(db!, "inventory", itemDoc.id);
         batch.update(itemRef, { category: trimmedNewName });
       });
 
@@ -416,7 +571,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      const itemDocRef = doc(db, "inventory", itemToUpdate.id);
+      const itemDocRef = doc(db!, "inventory", itemToUpdate.id);
       const { stock, ...itemData } = itemToUpdate; // Exclude total stock from being written to DB
       await updateDoc(itemDocRef, { ...itemData });
       toast({ title: "Success", description: "Item updated." });
@@ -431,8 +586,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
+    // Enforce admin-only deletion in the client as a first line of defense
+    if (!currentUser || currentUser.role !== 'Admin') {
+      toast({ title: "Forbidden", description: "Only admins can delete items.", variant: "destructive" });
+      return;
+    }
     try {
-      await deleteDoc(doc(db, "inventory", id));
+      await deleteDoc(doc(db!, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
     } catch (error) {
        toast({ title: "Error", description: "Failed to delete item.", variant: "destructive" });
@@ -443,89 +603,143 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const generateNewMivId = async (): Promise<string> => {
         if (!db) throw new Error("Firebase not initialized");
         const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const prefix = `MIV-${year}-${month}-`;
+        const yy = now.getFullYear().toString().slice(-2);
+        const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+        const mmNoPad = (now.getMonth() + 1).toString();
+        const counterRef = doc(db!, 'counters', `miv-${yy}-${mm}`);
 
-        const q = query(
-            collection(db, 'mivs'),
-            where('id', '>=', prefix),
-            where('id', '<', prefix + '\uf8ff'),
-            orderBy('id', 'desc'),
-            limit(1)
-        );
+        let nextSeq = 0;
+        await runTransaction(db!, async (trx) => {
+          const snap = await trx.get(counterRef);
+          const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+          nextSeq = current + 1;
+          trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+        });
 
-        const querySnapshot = await getDocs(q);
-        
-        let lastNum = 0;
-        if (!querySnapshot.empty) {
-            const lastId = querySnapshot.docs[0].id;
-            const numPart = parseInt(lastId.substring(prefix.length), 10);
-            if (!isNaN(numPart)) {
-                lastNum = numPart;
-            }
-        }
-
-        const nextRequestNumber = (lastNum + 1).toString().padStart(3, '0');
-        return `${prefix}${nextRequestNumber}`;
+        return `MIV-${yy}${mmNoPad}${nextSeq}`; // e.g., MIV-25814
     };
 
-  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, nameEn: string, nameAr: string, issueQuantity: number}>[]) => {
-    console.log('🔍 Starting issueItemsFromStock with:', { residenceId, voucherLocations });
-    
+    // MRV ID generator: MRV-YY-MM-###
+    const generateNewMrvId = async (): Promise<string> => {
+      if (!db) throw new Error("Firebase not initialized");
+      const now = new Date();
+      const year = now.getFullYear().toString().slice(-2);
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const prefix = `MRV-${year}-${month}-`;
+
+      const qRef = query(
+        collection(db, 'mrvs'),
+        where('id', '>=', prefix),
+        where('id', '<', prefix + '\uf8ff'),
+        orderBy('id', 'desc'),
+        limit(1)
+      );
+
+      const snap = await getDocs(qRef);
+      let lastNum = 0;
+      if (!snap.empty) {
+        const lastId = snap.docs[0].id;
+        const numPart = parseInt(lastId.substring(prefix.length), 10);
+        if (!isNaN(numPart)) lastNum = numPart;
+      }
+      const next = (lastNum + 1).toString().padStart(3, '0');
+      return `${prefix}${next}`;
+    };
+
+  // Reserve reconciliation id via counters: CON-<YY><M><seq>
+  const reserveNewReconciliationId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2);
+    const mmNoPad = (now.getMonth() + 1).toString();
+    const counterRef = doc(db!, 'counters', `recon-${yy}-${mmNoPad}`);
+
+    let nextSeq = 0;
+    await runTransaction(db!, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm: mmNoPad, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    return `CON-${yy}${mmNoPad}${nextSeq}`;
+  };
+
+  // Reserve a monthly TRS code: TRS-<YY><M><seq>
+  const reserveNewTrsId = async (): Promise<string> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2);
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+    const mmNoPad = (now.getMonth() + 1).toString();
+    const counterRef = doc(db!, 'counters', `trs-${yy}-${mm}`);
+
+    let nextSeq = 0;
+    await runTransaction(db!, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    return `TRS-${yy}${mmNoPad}${nextSeq}`;
+  };
+
+  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => {
     if (!db) {
-        console.error('❌ Firebase not initialized');
         throw new Error(firebaseErrorMessage);
     }
 
     try {
         const mivId = await generateNewMivId();
-        console.log('🆔 Generated MIV ID:', mivId);
         
-        await runTransaction(db, async (transaction) => {
-            const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
-            const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
-            
-            console.log('📦 All issued items:', allIssuedItems);
-            console.log('🔍 Unique item IDs:', uniqueItemIds);
-            
-            // Step 1: Read all items first
-            const itemSnapshots = new Map<string, DocumentSnapshot>();
-            for (const id of uniqueItemIds) {
-                const itemRef = doc(db!, "inventory", id);
-                const itemSnap = await transaction.get(itemRef);
-                if (!itemSnap.exists()) {
-                    console.error(`❌ Item not found: ${id}`);
-                    throw new Error(`Item with ID ${id} not found.`);
-                }
-                itemSnapshots.set(id, itemSnap);
-                console.log(`✅ Item loaded: ${id}`, itemSnap.data());
-            }
+    await runTransaction(db, async (transaction) => {
+      const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
+      const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
 
-            // Step 2: Validate all items and prepare stock updates
-            const stockUpdates: Array<{ itemId: string, issueQuantity: number }> = [];
-            for (const item of allIssuedItems) {
-                const itemSnap = itemSnapshots.get(item.id);
-                const currentStock = itemSnap?.data()?.stockByResidence?.[residenceId] || 0;
-                console.log(`📊 Stock check for ${item.nameEn}: Available=${currentStock}, Required=${item.issueQuantity}`);
-                
-                if (currentStock < item.issueQuantity) {
-                    console.error(`❌ Insufficient stock for ${item.nameEn}: ${currentStock} < ${item.issueQuantity}`);
-                    throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentStock}, Required: ${item.issueQuantity}`);
-                }
-                stockUpdates.push({ itemId: item.id, issueQuantity: item.issueQuantity });
-            }
-            
-            console.log('✅ All stock validation passed, proceeding with updates...');
-            
-            // Step 3: Perform all writes after all reads and validations are complete
-            // Update stock for all items
-            for (const update of stockUpdates) {
-                const itemRef = doc(db!, "inventory", update.itemId);
-                const stockUpdateKey = `stockByResidence.${residenceId}`;
-                console.log(`🔄 Updating stock for ${update.itemId}: -${update.issueQuantity}`);
-                transaction.update(itemRef, { [stockUpdateKey]: increment(-update.issueQuantity) });
-            }
+      // Step 1: Read all items first
+      const itemSnapshots = new Map<string, DocumentSnapshot>();
+  for (const id of uniqueItemIds) {
+        const itemRef = doc(db!, "inventory", id);
+        const itemSnap = await transaction.get(itemRef);
+        if (!itemSnap.exists()) {
+          throw new Error(`Item with ID ${id} not found.`);
+        }
+        itemSnapshots.set(id, itemSnap);
+      }
+
+      // Step 2: Aggregate quantities per item and validate against current stock
+      const totalsByItem = new Map<string, number>();
+      for (const line of allIssuedItems) {
+        const prev = totalsByItem.get(line.id) || 0;
+        totalsByItem.set(line.id, prev + (Number(line.issueQuantity) || 0));
+      }
+
+      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+        const snap = itemSnapshots.get(itemId);
+        const data: any = snap?.data() || {};
+  const currentStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
+        if (currentStock < totalToIssue) {
+          // Get item name for better message
+          const nameEn = data.nameEn || data.name || itemId;
+          throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToIssue}`);
+        }
+      }
+
+      // Step 3: Perform stock decrements once per item (atomic and aggregated)
+      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+        const itemRef = doc(db!, "inventory", itemId);
+        const stockUpdateKey = `stockByResidence.${residenceId}`;
+        // Decrement safely via read-modify-write to avoid underflow if another adjustment snuck in
+        const snap = itemSnapshots.get(itemId);
+        const cur = Math.max(0, Number((snap?.data() as any)?.stockByResidence?.[residenceId] || 0));
+        const next = Math.max(0, cur - totalToIssue);
+        const newSbr = { ...((snap?.data() as any)?.stockByResidence || {}) };
+        newSbr[residenceId] = next;
+        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
+      }
             
             const transactionTime = Timestamp.now();
             let totalItemsCount = 0;
@@ -533,6 +747,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             
             const mivDocRef = doc(db!, 'mivs', mivId);
             
+            // Best-effort decode helper
+            const pretty = (s?: string) => {
+              if (!s) return s as any;
+              try { if (/%[0-9A-Fa-f]{2}/.test(String(s))) return decodeURIComponent(String(s)); } catch {}
+              return s;
+            };
+
             for (const location of voucherLocations) {
                 for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
@@ -540,11 +761,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
                     // Log transaction
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
-                    console.log(`📝 Creating transaction for ${issuedItem.nameEn} in ${location.locationName}`);
+                    const snap = itemSnapshots.get(issuedItem.id);
+                    const inv: any = snap?.data() || {};
                     transaction.set(transactionRef, {
                         itemId: issuedItem.id,
-                        itemNameEn: issuedItem.nameEn,
-                        itemNameAr: issuedItem.nameAr,
+                        itemNameEn: inv.nameEn || inv.name || pretty(issuedItem.nameEn) || '',
+                        itemNameAr: inv.nameAr || inv.name || pretty(issuedItem.nameAr) || '',
                         residenceId: residenceId,
                         date: transactionTime,
                         type: 'OUT',
@@ -557,12 +779,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             }
             
             // Write MIV master record
-            console.log('📄 Creating MIV master record with:', { 
-                id: mivId, 
-                residenceId, 
-                itemCount: totalItemsCount,
-                locationName: firstLocationName 
-            });
             transaction.set(mivDocRef, { 
                 id: mivId, 
                 date: transactionTime, 
@@ -572,14 +788,117 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             });
         });
 
-        console.log('✅ Transaction completed successfully');
         toast({ title: "Success", description: "Voucher submitted successfully." });
     } catch (error) {
-        console.error("❌ Transaction failed: ", error);
+        console.error("Transaction failed: ", error);
         throw error;
     }
   };
 
+  // Create MRV (manual receipt without order)
+  const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }): Promise<string> => {
+    // Note: If meta.mrvId is not provided, we reserve an MRV id using monthly counters (reserveNewMrvId)
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
+      throw new Error(firebaseErrorMessage);
+    }
+    // Client-side guard: only Admin or Supervisor can post MRVs
+    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+      toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can post MRVs.', variant: 'destructive' });
+      throw new Error('Forbidden');
+    }
+    const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
+    if (!payload.residenceId || validItems.length === 0) {
+      throw new Error('Residence and at least one item with quantity > 0 are required.');
+    }
+
+    // Use reserved MRV id if provided; otherwise reserve a new one
+    let mrvId = payload.meta?.mrvId || '';
+    let mrvShort = payload.meta?.mrvShort || '';
+    if (!mrvId) {
+      const r = await reserveNewMrvId();
+      // Use short format as the official MRV ID
+      mrvId = r.short;
+      mrvShort = r.short;
+    }
+
+    await runTransaction(db, async (transaction) => {
+      // Read all item documents first
+      const uniqueItemIds = [...new Set(validItems.map(i => i.id))];
+      const itemRefs = uniqueItemIds.map(id => doc(db!, 'inventory', id));
+      const itemSnaps = await Promise.all(itemRefs.map(r => transaction.get(r)));
+
+      // Validate items existence and build lookup
+      const existingById = new Map<string, any>();
+      for (let i = 0; i < itemSnaps.length; i++) {
+        const snap = itemSnaps[i];
+        if (!snap.exists()) {
+          throw new Error(`Item not found (ID: ${uniqueItemIds[i]})`);
+        }
+        existingById.set(snap.id, snap.data());
+      }
+
+      // Aggregate quantities per item for a single atomic update per item
+      const totalsByItem = new Map<string, number>();
+      for (const line of validItems) {
+        totalsByItem.set(line.id, (totalsByItem.get(line.id) || 0) + Number(line.quantity || 0));
+      }
+
+      const now = Timestamp.now();
+      let totalItemCount = 0;
+
+      // Update stock (stockByResidence and total stock) per item
+      for (const [itemId, totalQty] of totalsByItem.entries()) {
+        const prev = existingById.get(itemId) || {};
+        const prevSbr = { ...(prev.stockByResidence || {}) } as Record<string, number>;
+        const prevAtRes = Math.max(0, Number(prevSbr[payload.residenceId] || 0));
+        const nextAtRes = prevAtRes + totalQty;
+        const newSbr = { ...prevSbr, [payload.residenceId]: nextAtRes };
+        const newTotal = Object.values(newSbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        const itemRef = doc(db!, 'inventory', itemId);
+        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
+        totalItemCount += totalQty;
+      }
+
+      // Log transactions for each line
+      for (const line of validItems) {
+        const txRef = doc(collection(db!, 'inventoryTransactions'));
+        transaction.set(txRef, {
+          itemId: line.id,
+          itemNameEn: line.nameEn,
+          itemNameAr: line.nameAr,
+          residenceId: payload.residenceId,
+          date: now,
+          type: 'IN',
+          quantity: line.quantity,
+          referenceDocId: mrvId,
+          locationName: 'Receiving'
+        } as Omit<InventoryTransaction, 'id'>);
+      }
+
+      // Write MRV master record
+      const mrvRef = doc(db!, 'mrvs', mrvId);
+      transaction.set(mrvRef, {
+        id: mrvId,
+        date: now,
+        residenceId: payload.residenceId,
+        itemCount: totalItemCount,
+        supplierName: payload.meta?.supplierName || null,
+        invoiceNo: payload.meta?.invoiceNo || null,
+        notes: payload.meta?.notes || null,
+        attachmentUrl: payload.meta?.attachmentUrl || null,
+        attachmentPath: payload.meta?.attachmentPath || null,
+        codeShort: mrvShort || null,
+  orderId: payload.meta?.orderId || null,
+      } as any);
+    });
+
+    toast({ title: 'Success', description: 'Materials received and added to stock.' });
+    return mrvId;
+  };
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
     if (!db) {
@@ -596,7 +915,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-        transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+  transactions.sort((a, b) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
         
         return transactions;
 
@@ -619,8 +938,22 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const querySnapshot = await getDocs(q);
     const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
 
-    return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+  return transactions.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
   }
+
+  // Fetch all transfer transactions (IN/OUT) by reference code (e.g., TRS-2582)
+  const getTransferItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    const qRef = query(
+      collection(db!, 'inventoryTransactions'),
+      where('referenceDocId', '==', referenceDocId),
+      where('type', 'in', ['TRANSFER_IN', 'TRANSFER_OUT'] as any)
+    );
+    const snap = await getDocs(qRef);
+    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
+    // Sort by item name for nicer display
+    return rows.sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
+  };
 
  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
@@ -629,106 +962,296 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-        const q = query(collectionGroup(db, 'inventoryTransactions'), orderBy('date', 'desc'));
+        // Previously used collectionGroup which requires subcollections of the same name.
+        // Our transactions are stored in a top-level collection "inventoryTransactions",
+        const q = query(collection(db, "inventoryTransactions"));
         const querySnapshot = await getDocs(q);
-        
-        return querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as InventoryTransaction));
-
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
     } catch (error) {
-        console.error('Error fetching all transactions:', error);
-        toast({
-            title: "Error",
-            description: `Error fetching transactions: ${error}`,
-            variant: "destructive"
-        });
+        console.error("Error fetching all inventory transactions:", error);
+        toast({ title: "Error", description: "Failed to fetch all transactions.", variant: "destructive" });
         return [];
     }
   };
 
-  const getMIVs = async (): Promise<MIV[]> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return [];
-    }
-    const mivsCollection = collection(db, "mivs");
-    const q = query(mivsCollection, orderBy("date", "desc"));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => doc.data() as MIV);
-  };
-  
-  const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return null;
-    }
-     try {
-        const q = query(collection(db, "inventoryTransactions"), where("referenceDocId", "==", mivId));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            return null;
-        }
-
-        const transactions = querySnapshot.docs.map(doc => doc.data() as InventoryTransaction);
-        
-        const mivDetails: MIVDetails = {
-            id: mivId,
-            date: transactions[0].date,
-            residenceId: transactions[0].residenceId,
-            locations: {},
-        };
-
-        transactions.forEach(tx => {
-            const locationName = tx.locationName || "Unspecified Location";
-            if (!mivDetails.locations[locationName]) {
-                mivDetails.locations[locationName] = [];
-            }
-            mivDetails.locations[locationName].push({
-                itemId: tx.itemId,
-                itemNameEn: tx.itemNameEn,
-                itemNameAr: tx.itemNameAr,
-                quantity: tx.quantity
-            });
-        });
-        
-        return mivDetails;
-
-    } catch (error) {
-        console.error("Error fetching MIV details:", error);
-        toast({ title: "Error", description: "Failed to fetch MIV details.", variant: "destructive" });
-        return null;
-    }
-  }
-
+  // Helper: last issue date for an item at a specific location
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
     if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
       return null;
     }
     try {
-      const q = query(
-        collectionGroup(db, 'inventoryTransactions'),
+      const qRef = query(
+        collection(db, 'inventoryTransactions'),
         where('itemId', '==', itemId),
-        orderBy('date', 'desc')
+        where('locationId', '==', locationId),
+        where('type', '==', 'OUT')
       );
-      const querySnapshot = await getDocs(q);
-      const transactions = querySnapshot.docs.map(
-        (doc) => doc.data() as InventoryTransaction
-      );
-
-      // Filter for the specific location on the client side
-      const specificLocationTx = transactions.find(
-        (tx) => tx.type === 'OUT' && tx.locationId === locationId
-      );
-
-      return specificLocationTx ? specificLocationTx.date : null;
+      const snap = await getDocs(qRef);
+      if (snap.empty) return null;
+      const txs = snap.docs.map(d => d.data() as any);
+      txs.sort((a: any, b: any) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+      return txs[0]?.date || null;
     } catch (error) {
       console.error('Error fetching last issue date:', error);
+      toast({ title: 'Error', description: 'Failed to fetch last issue date.', variant: 'destructive' });
       return null;
     }
+  };
+
+  // List recent MIVs
+  const getMIVs = async (): Promise<MIV[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      const qRef = query(collection(db, 'mivs'), orderBy('date', 'desc'), limit(20));
+      const snap = await getDocs(qRef);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MIV[];
+    } catch (error) {
+      console.error('Error fetching MIVs:', error);
+      toast({ title: 'Error', description: 'Failed to fetch MIVs.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  // Get MIV details by ID
+  const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return null;
+    }
+    try {
+      const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
+      const txSnap = await getDocs(txQ);
+      if (txSnap.empty) return null;
+      const txs = txSnap.docs.map(d => d.data() as InventoryTransaction);
+
+      const locations: MIVDetails['locations'] = {};
+      for (const tx of txs) {
+        const locName = tx.locationName || 'Unknown';
+        if (!locations[locName]) locations[locName] = [];
+        locations[locName].push({
+          itemId: tx.itemId,
+          itemNameEn: tx.itemNameEn,
+          itemNameAr: tx.itemNameAr,
+          quantity: tx.quantity,
+        });
+      }
+
+      const detail: MIVDetails = {
+        id: mivId,
+        date: txs[0].date,
+        residenceId: txs[0].residenceId,
+        locations,
+      };
+      return detail;
+    } catch (e) {
+      console.error('Error fetching MIV details:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MIV details.', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  // List recent MRVs
+  const getMRVs = async (): Promise<MRV[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
+      const snap = await getDocs(qRef);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRV[];
+    } catch (error) {
+      console.error('Error fetching MRVs:', error);
+      toast({ title: 'Error', description: 'Failed to fetch MRVs.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  // Get MRV details by ID
+  const getMRVById = async (mrvId: string): Promise<MRVDetails | null> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return null;
+    }
+    try {
+      const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
+      const txSnap = await getDocs(txQ);
+      if (txSnap.empty) return null;
+      const items = txSnap.docs.map(d => d.data() as InventoryTransaction);
+      // Fetch MRV master for meta
+      const mrvRef = doc(db, 'mrvs', mrvId);
+      const mrvSnap = await getDoc(mrvRef);
+      const meta = mrvSnap.exists() ? (mrvSnap.data() as any) : {};
+
+      return {
+        id: mrvId,
+        date: items[0].date,
+        residenceId: items[0].residenceId,
+        items: items.map(tx => ({
+          itemId: tx.itemId,
+          itemNameEn: tx.itemNameEn,
+          itemNameAr: tx.itemNameAr,
+          quantity: tx.quantity
+        })),
+        supplierName: meta?.supplierName || undefined,
+        invoiceNo: meta?.invoiceNo || undefined,
+        attachmentUrl: meta?.attachmentUrl || null,
+        attachmentPath: meta?.attachmentPath || null,
+        codeShort: meta?.codeShort || null,
+  attachmentRef: meta?.attachmentRef || null,
+  orderId: meta?.orderId || null,
+      } as MRVDetails;
+    } catch (e) {
+      console.error('Error fetching MRV details:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MRV details.', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  const reserveNewMrvId = async (): Promise<{ id: string; short: string }> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2); // e.g., 25
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0'); // e.g., 08
+    const mmNoPad = (now.getMonth() + 1).toString(); // e.g., 8
+    const counterId = `mrv-${yy}-${mm}`; // counters/mrv-25-08
+    const counterRef = doc(db!, 'counters', counterId);
+
+    let nextSeq = 0;
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(counterRef);
+      const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
+      nextSeq = current + 1;
+      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    });
+    const seqPadded = nextSeq.toString().padStart(3, '0');
+    const fullId = `MRV-${yy}-${mm}-${seqPadded}`; // MRV-25-08-027
+    const shortId = `MRV-${yy}${mmNoPad}${nextSeq}`; // MRV-25827
+    return { id: fullId, short: shortId };
+  };
+
+  // MRV Requests (Admin approval flow)
+  const getMRVRequests = async (status?: MRVRequest['status']): Promise<MRVRequest[]> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return [];
+    }
+    try {
+      let qRef: any = collection(db, 'mrvRequests');
+      if (status) {
+        qRef = query(qRef, where('status', '==', status));
+      }
+      const snap = await getDocs(qRef);
+      const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRVRequest[];
+      // Sort by requestedAt desc if available
+      arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+      return arr;
+    } catch (e) {
+      console.error('Error fetching MRV requests:', e);
+      toast({ title: 'Error', description: 'Failed to fetch MRV requests.', variant: 'destructive' });
+      return [];
+    }
+  };
+
+  const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    const reqRef = doc(db!, 'mrvRequests', requestId);
+
+    // Step 1: Atomically move Pending -> Processing to prevent double approvals
+    await runTransaction(db, async (trx) => {
+      const snap = await trx.get(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as MRVRequest;
+      if (data.status === 'Approved' && data.mrvId) {
+        // Already approved earlier: short-circuit
+        throw Object.assign(new Error('ALREADY_APPROVED'), { code: 'ALREADY_APPROVED', mrvId: data.mrvId });
+      }
+      if (data.status !== 'Pending') {
+        throw new Error('Request already processed');
+      }
+      // Mark as Processing to lock it
+      trx.update(reqRef, { status: 'Processing', processingAt: Timestamp.now(), processingById: approverId } as any);
+    });
+
+    // Step 2: Read the fresh data and proceed to create MRV
+    const freshSnap = await getDoc(reqRef);
+    const reqData = freshSnap.data() as MRVRequest;
+
+    // Use pre-reserved short code if exists to keep unified numbering; otherwise reserve now
+    const reservedShort = reqData.mrvShort && String(reqData.mrvShort).startsWith('MRV-') ? reqData.mrvShort : null;
+    const reserved = reservedShort ? { id: reservedShort, short: reservedShort } : await reserveNewMrvId();
+    // Create posted MRV and update request status
+    const mrvId = await createMRV({
+      residenceId: reqData.residenceId,
+      items: reqData.items.map(i => ({ id: i.id, nameEn: i.nameEn, nameAr: i.nameAr, quantity: i.quantity })),
+      meta: { supplierName: reqData.supplierName || undefined, invoiceNo: reqData.invoiceNo || undefined, notes: reqData.notes || undefined, attachmentUrl: reqData.attachmentUrl || null, attachmentPath: reqData.attachmentPath || null, mrvId: reserved.short, mrvShort: reserved.short }
+    });
+
+    await updateDoc(reqRef, {
+      status: 'Approved',
+      approvedById: approverId,
+      approvedAt: Timestamp.now(),
+      mrvId,
+  mrvShort: reserved.short
+    });
+
+    // Notify requester and all Admins
+    try {
+      const requesterId = reqData.requestedById || null;
+      if (requesterId) {
+        await addNotification?.({
+          userId: requesterId,
+          title: 'MRV Approved',
+          message: `Your MRV request has been approved and posted (${mrvId}).`,
+          type: 'generic',
+          href: `/inventory/receive/receipts/${mrvId}`,
+          referenceId: mrvId,
+        } as any);
+      }
+      const admins = (users || []).filter(u => u.role === 'Admin');
+      for (const admin of admins) {
+        await addNotification?.({
+          userId: admin.id,
+          title: 'MRV Posted',
+          message: `MRV ${mrvId} has been posted to stock.`,
+          type: 'generic',
+          href: `/inventory/receive/receipts/${mrvId}`,
+          referenceId: mrvId,
+        } as any);
+      }
+    } catch {}
+
+    toast({ title: 'Approved', description: `MRV request approved and posted (${mrvId}).` });
+    return mrvId;
+  };
+
+  const rejectMRVRequest = async (requestId: string, rejecterId: string, reason?: string) => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    const reqRef = doc(db!, 'mrvRequests', requestId);
+    const snap = await getDoc(reqRef);
+    if (!snap.exists()) throw new Error('Request not found');
+    const data = snap.data() as MRVRequest;
+    if (data.status !== 'Pending') throw new Error('Request already processed');
+    await updateDoc(reqRef, { status: 'Rejected', rejectedById: rejecterId, rejectedAt: Timestamp.now(), rejectReason: reason || null });
+    // Notify requester
+    try {
+      const requesterId = data.requestedById || null;
+      if (requesterId) {
+        await addNotification?.({
+          userId: requesterId,
+          title: 'MRV Rejected',
+          message: `Your MRV request (${data.mrvShort || requestId}) was rejected${reason ? `: ${reason}` : ''}.`,
+          type: 'generic',
+          href: `/inventory/receive`,
+          referenceId: data.mrvShort || requestId,
+        } as any);
+      }
+    } catch {}
+    toast({ title: 'Rejected', description: 'MRV request has been rejected.' });
   };
 
     const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
@@ -743,9 +1266,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const isInternalTransfer = currentUser.assignedResidences.includes(fromResidenceId) &&
                                    currentUser.assignedResidences.includes(toResidenceId);
 
-        if (isInternalTransfer) {
+  if (isInternalTransfer) {
             // Direct transfer, no approval needed
             try {
+    // Reserve a TRS code for this completed transfer
+    const trsId = await reserveNewTrsId();
                 await runTransaction(db, async (transaction) => {
                     // Step 1: Read all items first
                     const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
@@ -762,26 +1287,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             throw new Error(`Item ${item.nameEn} not found.`);
                         }
                         
-                        const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                        const data = itemDoc.data();
+                        const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
+                        const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
                         if (currentFromStock < item.quantity) {
                             throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         }
-
-                        // Prepare update object
-                        const updateData: any = {
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity)
-                        };
                         
-                        // Handle 'to' residence stock
-                        if (!itemDoc.data().stockByResidence?.[toResidenceId]) {
-                            updateData[`stockByResidence.${toResidenceId}`] = item.quantity;
-                        } else {
-                            updateData[`stockByResidence.${toResidenceId}`] = increment(item.quantity);
-                        }
+                        // Prepare read-modify-write updates with clamping
+                        const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+                        newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
+                        newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
+                        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+                          const n = Number(v);
+                          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+                        }, 0);
                         
                         updates.push({
                             ref: itemRefs[i],
-                            updates: updateData
+                            updates: { stockByResidence: newSbr, stock: newTotal }
                         });
                     }
                     
@@ -807,7 +1331,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_OUT',
                             quantity: item.quantity,
-                            referenceDocId: `internal-${Date.now()}`,
+              referenceDocId: trsId,
                             relatedResidenceId: toResidenceId,
                             locationName: `Internal transfer to residence (${toResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
@@ -822,7 +1346,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_IN',
                             quantity: item.quantity,
-                            referenceDocId: `internal-${Date.now()}`,
+              referenceDocId: trsId,
                             relatedResidenceId: fromResidenceId,
                             locationName: `Internal transfer from residence (${fromResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
@@ -836,7 +1360,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         status: 'Completed',
                         approvedById: currentUser.id,
-                        approvedAt: transactionTime
+            approvedAt: transactionTime,
+            // store the TRS short code for reference/display
+            // @ts-ignore - optional property added below on the interface
+            codeShort: trsId
                     };
                     transaction.set(transferDocRef, newTransfer);
                 });
@@ -883,9 +1410,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const approveTransfer = async (transferId: string, approverId: string) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
-        const transferRef = doc(db, 'stockTransfers', transferId);
+        const transferRef = doc(db!, 'stockTransfers', transferId);
         
         try {
+            // Reserve TRS code for this approved transfer
+            const trsId = await reserveNewTrsId();
             await runTransaction(db, async (transaction) => {
                 // Step 1: Read all data first
                 const transferDoc = await transaction.get(transferRef);
@@ -923,18 +1452,24 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         throw new Error(`Item ${item.nameEn} not found.`);
                     }
                     
-                    const currentFromStock = itemDoc.data().stockByResidence?.[fromResidenceId] || 0;
+                    const data = itemDoc.data();
+                    const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
+                    const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
                     if (currentFromStock < item.quantity) {
                         throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                     }
                     
-                    // Prepare updates for later
+                    // Prepare updates for later using read-modify-write with clamping
+                    const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+                    newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
+                    newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
+                    const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+                      const n = Number(v);
+                      return sum + (isNaN(n) ? 0 : Math.max(0, n));
+                    }, 0);
                     updates.push({
                         ref: itemRefs[i],
-                        updates: {
-                            [`stockByResidence.${fromResidenceId}`]: increment(-item.quantity),
-                            [`stockByResidence.${toResidenceId}`]: increment(item.quantity)
-                        }
+                        updates: { stockByResidence: newSbr, stock: newTotal }
                     });
                 }
 
@@ -960,7 +1495,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_OUT',
                         quantity: item.quantity,
-                        referenceDocId: transferId,
+            referenceDocId: trsId,
                         relatedResidenceId: toResidenceId,
                         locationName: `Transfer to residence`
                     } as Omit<InventoryTransaction, 'id'>);
@@ -975,7 +1510,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_IN',
                         quantity: item.quantity,
-                        referenceDocId: transferId,
+            referenceDocId: trsId,
                         relatedResidenceId: fromResidenceId,
                         locationName: `Transfer from residence`
                     } as Omit<InventoryTransaction, 'id'>);
@@ -984,7 +1519,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 transaction.update(transferRef, {
                     status: 'Completed',
                     approvedById: approverId,
-                    approvedAt: Timestamp.now()
+          approvedAt: Timestamp.now(),
+          // store TRS short code for reference/display on the transfer
+          // @ts-ignore - optional property added below on the interface
+          codeShort: trsId
                 });
             });
             toast({ title: "Success", description: "Transfer approved and stock updated." });
@@ -997,7 +1535,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     
     const rejectTransfer = async (transferId: string, rejecterId: string) => {
          if (!db) throw new Error(firebaseErrorMessage);
-         const transferRef = doc(db, 'stockTransfers', transferId);
+         const transferRef = doc(db!, 'stockTransfers', transferId);
          await updateDoc(transferRef, {
              status: 'Rejected',
              rejectedById: rejecterId,
@@ -1006,11 +1544,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
          toast({ title: "Success", description: "Transfer request has been rejected." });
     };
 
-    const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
+  const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (transaction) => {
                 // Get the item to verify it exists and get its names
                 const itemRef = doc(db!, "inventory", depreciationRequest.itemId);
                 const itemSnap = await transaction.get(itemRef);
@@ -1022,15 +1560,40 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const itemData = itemSnap.data() as InventoryItem;
                 
                 // Check if there's enough stock
-                const currentStock = itemData.stockByResidence?.[depreciationRequest.residenceId] || 0;
+        const currentStock = Math.max(0, Number(itemData.stockByResidence?.[depreciationRequest.residenceId] || 0));
                 if (currentStock < depreciationRequest.quantity) {
                     throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
                 }
                 
-                // Update stock for the residence
-                const stockUpdateKey = `stockByResidence.${depreciationRequest.residenceId}`;
-                transaction.update(itemRef, { [stockUpdateKey]: increment(-depreciationRequest.quantity) });
-                
+        // Prepare counter read BEFORE any writes (Firestore rule)
+        const now = new Date();
+        const yy = now.getFullYear().toString().slice(-2);
+        const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+        const mmNoPad = (now.getMonth() + 1).toString();
+        const depCounterId = `dep-${yy}-${mm}`;
+        const depCounterRef = doc(db!, 'counters', depCounterId);
+        const depSnap = await transaction.get(depCounterRef);
+        const depCurrent = (depSnap.exists() ? (depSnap.data() as any).seq : 0) || 0;
+        const depNextSeq = depCurrent + 1;
+        const depCodeShort = `DEP-${yy}${mmNoPad}${depNextSeq}`;
+
+        // Now perform writes
+        // Update stock for the residence
+    const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
+    newStockByResidence[depreciationRequest.residenceId] = Math.max(0, currentStock - depreciationRequest.quantity);
+        // Calculate new total stock
+        const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
+      const num = Number(stock);
+      return sum + (isNaN(num) ? 0 : Math.max(0, num));
+        }, 0);
+        // Update item document
+        transaction.update(itemRef, {
+          stock: newTotalStock,
+          stockByResidence: newStockByResidence
+        });
+        // Update counter (write after all reads)
+        transaction.set(depCounterRef, { seq: depNextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+
                 // Create depreciation transaction
                 const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
                 const transactionData: Omit<InventoryTransaction, 'id'> = {
@@ -1041,7 +1604,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     date: Timestamp.now(),
                     type: 'DEPRECIATION',
                     quantity: depreciationRequest.quantity,
-                    referenceDocId: `DEP-${Date.now()}`,
+          referenceDocId: depCodeShort,
                     locationId: depreciationRequest.locationId,
                     locationName: depreciationRequest.locationName,
                     depreciationReason: depreciationRequest.reason
@@ -1118,7 +1681,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
         
         try {
-            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const auditRef = doc(db!, 'inventoryAudits', auditId);
             const auditSnap = await getDoc(auditRef);
             
             if (!auditSnap.exists()) {
@@ -1137,7 +1700,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            const auditRef = doc(db, 'inventoryAudits', auditId);
+            const auditRef = doc(db!, 'inventoryAudits', auditId);
             const updateData: any = { status };
             
             if (status === 'IN_PROGRESS') {
@@ -1167,7 +1730,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             return querySnapshot.docs.map(doc => doc.data() as AuditItem);
         } catch (error) {
             console.error('Error fetching audit items:', error);
-            toast({ title: "Error", description: "Failed to fetch audit items.", variant: "destructive" });
+            toast({ title: "Error", description: "Could not fetch audit items.", variant: "destructive" });
             return [];
         }
     };
@@ -1176,7 +1739,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            const itemRef = doc(db, 'auditItems', auditItem.id);
+            const itemRef = doc(db!, 'auditItems', auditItem.id);
             await updateDoc(itemRef, { ...auditItem });
         } catch (error) {
             console.error('Error updating audit item:', error);
@@ -1238,79 +1801,503 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         
         try {
             await runTransaction(db, async (transaction) => {
-                // Update audit status
+                const now = Timestamp.now();
+
+                // 1) Read all required docs first (no writes yet)
                 const auditRef = doc(db!, 'inventoryAudits', auditId);
-                transaction.update(auditRef, {
+                const itemRefs = adjustments.map((a) => doc(db!, 'inventory', a.itemId));
+                const itemSnaps = await Promise.all(itemRefs.map((r) => transaction.get(r)));
+
+                // 2) Prepare all writes after reads
+                type PlannedWrite = {
+                  type: 'itemUpdate' | 'txSet' | 'adjSet' | 'auditUpdate';
+                  ref: any;
+                  data?: any;
+                  updates?: any;
+                };
+                const writes: PlannedWrite[] = [];
+
+                // Update audit status at the end
+                writes.push({
+                  type: 'auditUpdate',
+                  ref: auditRef,
+                  updates: {
                     status: 'COMPLETED',
-                    endDate: Timestamp.now(),
-                    'summary.adjustmentsMade': adjustments.length
+                    endDate: now,
+                    'summary.adjustmentsMade': adjustments.length,
+                  },
                 });
-                
-                // Apply stock adjustments
-                for (const adjustment of adjustments) {
-                    const itemRef = doc(db!, 'inventory', adjustment.itemId);
-                    const itemSnap = await transaction.get(itemRef);
-                    
-                    if (itemSnap.exists()) {
-                        const itemData = itemSnap.data() as InventoryItem;
-                        
-                        // Update stock by residence
-                        const stockUpdateKey = `stockByResidence.${adjustment.locationId}`;
-                        transaction.update(itemRef, {
-                             [stockUpdateKey]: increment(adjustment.difference)
-                        });
-                        
-                        // Create adjustment transaction
-                        const adjustmentTransactionRef = doc(collection(db!, "inventoryTransactions"));
-                        const transactionData: Omit<InventoryTransaction, 'id'> = {
-                            itemId: adjustment.itemId,
-                            itemNameEn: itemData.nameEn,
-                            itemNameAr: itemData.nameAr,
-                            residenceId: adjustment.locationId, // Assuming locationId is residenceId here
-                            date: Timestamp.now(),
-                            type: 'AUDIT',
-                            quantity: Math.abs(adjustment.difference),
-                            referenceDocId: auditId,
-                            locationId: adjustment.locationId,
-                            locationName: adjustment.locationName
-                        };
-                        
-                        transaction.set(adjustmentTransactionRef, transactionData);
-                    }
+
+                for (let i = 0; i < adjustments.length; i++) {
+                  const adjustment = adjustments[i];
+                  const itemRef = itemRefs[i];
+                  const itemSnap = itemSnaps[i];
+                  if (!itemSnap.exists()) continue;
+
+                  const itemData = itemSnap.data() as InventoryItem;
+                  const currentResidenceStock = Math.max(0, Number(itemData.stockByResidence?.[adjustment.locationId] || 0));
+                  const newResidenceStock = Math.max(0, Number(adjustment.newStock));
+
+                  // Compute new stockByResidence and total
+                  const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
+                  newStockByResidence[adjustment.locationId] = newResidenceStock;
+                  const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
+                    const num = Number(stock);
+                    return sum + (isNaN(num) ? 0 : Math.max(0, num));
+                  }, 0);
+
+                  // Queue item update
+                  writes.push({ type: 'itemUpdate', ref: itemRef, updates: { stock: newTotalStock, stockByResidence: newStockByResidence } });
+
+                  // Queue adjustment transaction
+                  const adjustmentTransactionRef = doc(collection(db!, 'inventoryTransactions'));
+                  const diffAbs = Math.abs(newResidenceStock - currentResidenceStock);
+                  const txData: Omit<InventoryTransaction, 'id'> & { adjustmentDirection?: 'INCREASE' | 'DECREASE' } = {
+                    itemId: adjustment.itemId,
+                    itemNameEn: (itemData as any).nameEn,
+                    itemNameAr: (itemData as any).nameAr,
+                    residenceId: adjustment.locationId,
+                    date: now,
+                    type: 'ADJUSTMENT',
+                    quantity: diffAbs,
+                    referenceDocId: auditId,
+                    locationId: adjustment.locationId,
+                    locationName: adjustment.locationName,
+                  };
+                  if (diffAbs > 0) {
+                    txData.adjustmentDirection = newResidenceStock >= currentResidenceStock ? 'INCREASE' : 'DECREASE';
+                  }
+                  writes.push({ type: 'txSet', ref: adjustmentTransactionRef, data: txData });
+
+                  // Queue audit adjustment record storage
+                  const adjustmentRef = doc(collection(db!, 'auditAdjustments'));
+                  writes.push({ type: 'adjSet', ref: adjustmentRef, data: { ...adjustment, id: adjustmentRef.id, adjustedAt: now } });
                 }
-                
-                // Store adjustments
-                for (const adjustment of adjustments) {
-                    const adjustmentRef = doc(collection(db!, 'auditAdjustments'));
-                    transaction.set(adjustmentRef, {
-                        ...adjustment,
-                        id: adjustmentRef.id,
-                        adjustedAt: Timestamp.now()
-                    });
+
+                // 3) Execute all queued writes
+                for (const w of writes) {
+                  if (w.type === 'itemUpdate') {
+                    transaction.update(w.ref, w.updates);
+                  } else if (w.type === 'txSet') {
+                    transaction.set(w.ref, w.data);
+                  } else if (w.type === 'adjSet') {
+                    transaction.set(w.ref, w.data);
+                  } else if (w.type === 'auditUpdate') {
+                    transaction.update(w.ref, w.updates);
+                  }
                 }
             });
             
             toast({ 
-                title: "Success", 
+                title: 'Success', 
                 description: `Audit completed successfully. ${adjustments.length} adjustments applied.` 
             });
         } catch (error) {
             console.error('Error completing audit:', error);
-            toast({ title: "Error", description: "Failed to complete audit.", variant: "destructive" });
+            toast({ title: 'Error', description: 'Failed to complete audit.', variant: 'destructive' });
             throw error;
         }
     };
 
+    // Simplified stock reconciliation: update per-residence stock directly and log adjustments in inventoryTransactions
+    const reconcileStock = async (
+      residenceId: string,
+      adjustments: { itemId: string; newStock: number; reason?: string }[],
+      performedById?: string,
+      overrideReferenceId?: string
+    ): Promise<string | void> => {
+      if (!db) {
+        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        return;
+      }
+      if (!residenceId) {
+        toast({ title: 'Error', description: 'Residence is required.', variant: 'destructive' });
+        return;
+      }
+      const filtered = adjustments
+        .map((a) => ({ ...a, newStock: Math.max(0, Number(a.newStock) || 0) }))
+        .filter((a) => !!a.itemId);
+      if (filtered.length === 0) return;
+
+  const referenceId = overrideReferenceId || await reserveNewReconciliationId();
+      try {
+        let totalIncrease = 0;
+        let totalDecrease = 0;
+        let itemCount = 0;
+
+        await runTransaction(db, async (transaction) => {
+          const now = Timestamp.now();
+
+          // 1) Read all required documents first (no writes yet)
+          const itemRefs = filtered.map((adj) => doc(db!, 'inventory', adj.itemId));
+          const itemSnaps = await Promise.all(itemRefs.map((r) => transaction.get(r)));
+
+          // 2) Compute all updates and prepare write payloads
+          type PlannedWrite = {
+            itemRef: any;
+            itemUpdate: Record<string, any>;
+            txRef: any;
+            txData: Omit<InventoryTransaction, 'id'> & { adjustmentReason?: string; adjustmentDirection?: 'INCREASE' | 'DECREASE' };
+          };
+          const plannedWrites: PlannedWrite[] = [];
+
+          for (let i = 0; i < filtered.length; i++) {
+            const adj = filtered[i];
+            const itemRef = itemRefs[i];
+            const itemSnap = itemSnaps[i];
+            if (!itemSnap.exists()) continue;
+
+            const itemData = itemSnap.data() as InventoryItem;
+            const current = Number(itemData.stockByResidence?.[residenceId] || 0);
+            const next = Math.max(0, Number(adj.newStock) || 0);
+            const diff = next - current;
+            if (diff === 0) continue;
+
+            // Track summary
+            itemCount += 1;
+            if (diff > 0) totalIncrease += diff; else totalDecrease += Math.abs(diff);
+
+            // Prepare item update
+            const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
+            newStockByResidence[residenceId] = next;
+            const newTotal = Object.values(newStockByResidence).reduce((sum: number, v: any) => {
+              const n = Number(v);
+              return sum + (isNaN(n) ? 0 : n);
+            }, 0);
+            const itemUpdate = {
+              stockByResidence: newStockByResidence,
+              stock: newTotal,
+            };
+
+            // Prepare transaction log
+            const txRef = doc(collection(db!, 'inventoryTransactions'));
+            const txData: any = {
+              itemId: adj.itemId,
+              itemNameEn: (itemData as any).nameEn,
+              itemNameAr: (itemData as any).nameAr,
+              residenceId,
+              date: now,
+              type: 'ADJUSTMENT',
+              quantity: Math.abs(diff),
+              referenceDocId: referenceId,
+              locationName: 'Stock reconciliation',
+              adjustmentDirection: diff > 0 ? 'INCREASE' : 'DECREASE',
+            };
+            if (adj.reason && adj.reason.trim() !== '') {
+              txData.adjustmentReason = adj.reason.trim();
+            }
+
+            plannedWrites.push({ itemRef, itemUpdate, txRef, txData });
+          }
+
+          // 3) Perform writes after all reads are complete
+          for (const w of plannedWrites) {
+            transaction.update(w.itemRef, w.itemUpdate);
+            transaction.set(w.txRef, w.txData);
+          }
+
+          // Write master reconciliation record last
+          const reconRef = doc(db!, 'stockReconciliations', referenceId);
+          const reconData: any = {
+            id: referenceId,
+            residenceId,
+            date: now,
+            itemCount,
+            totalIncrease,
+            totalDecrease,
+          };
+          if (performedById && performedById.trim() !== '') {
+            reconData.performedById = performedById.trim();
+          }
+          transaction.set(reconRef, reconData as StockReconciliation);
+        });
+        toast({ title: 'Success', description: 'Stock reconciliation applied and logged to item movements.' });
+        return referenceId;
+      } catch (e) {
+        console.error('Failed to reconcile stock:', e);
+        toast({ title: 'Error', description: 'Failed to apply reconciliation.', variant: 'destructive' });
+        throw e;
+      }
+    };
+
+    // Reconciliation query helpers
+    const getReconciliations = async (residenceId: string): Promise<StockReconciliation[]> => {
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+      }
+      try {
+        const qRef = query(
+          collection(db, 'stockReconciliations'),
+          where('residenceId', '==', residenceId)
+        );
+        const snap = await getDocs(qRef);
+        const recs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
+        // Sort client-side by date desc to avoid composite indexes
+
+        recs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+        return recs;
+      } catch (error) {
+        console.error('Error fetching reconciliations:', error);
+        toast({ title: 'Error', description: 'Failed to fetch reconciliations.', variant: 'destructive' });
+        return [];
+      }
+    };
+
+    // Maintenance: scan and fix any negative stock values at the residence level
+    const fixNegativeStocks = async (): Promise<{ fixedCount: number; affectedItems: string[] }> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      // Read all inventory docs
+      const snap = await getDocs(collection(db!, 'inventory'));
+      if (snap.empty) return { fixedCount: 0, affectedItems: [] };
+      let fixedCount = 0;
+      const affected: string[] = [];
+      // We'll run in batches of transactions for safety and to log corrections
+      const now = Timestamp.now();
+      for (const d of snap.docs) {
+        const item = d.data() as any;
+        const sbr = { ...(item.stockByResidence || {}) } as Record<string, number>;
+        const original = { ...sbr };
+        let changed = false;
+        for (const key of Object.keys(sbr)) {
+          const val = Number(sbr[key] ?? 0);
+          if (!isNaN(val) && val < 0) {
+            sbr[key] = 0; // clamp to zero
+            changed = true;
+          }
+        }
+        if (!changed) continue;
+        // Recompute total
+        const newTotal = Object.values(sbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+
+        await runTransaction(db!, async (trx) => {
+          const itemRef = doc(db!, 'inventory', d.id);
+          const fresh = await trx.get(itemRef);
+          if (!fresh.exists()) return;
+          // Update stockByResidence and stock
+          trx.update(itemRef, { stockByResidence: sbr, stock: newTotal });
+          // For every negative that was clamped, log an ADJUSTMENT with reason
+          for (const rid of Object.keys(original)) {
+            const before = Number(original[rid] ?? 0);
+            const after = Number(sbr[rid] ?? 0);
+            if (before < 0 && after === 0) {
+              const diff = Math.abs(before); // amount removed to reach 0
+              const txRef = doc(collection(db!, 'inventoryTransactions'));
+              trx.set(txRef, {
+                itemId: d.id,
+                itemNameEn: item.nameEn || item.name || d.id,
+                itemNameAr: item.nameAr || '',
+                residenceId: rid,
+                date: now,
+                type: 'ADJUSTMENT',
+                quantity: diff,
+                referenceDocId: 'AUTO-FIX-NEGATIVE',
+                locationName: 'System auto-fix',
+                adjustmentReason: 'Clamped negative stock to zero',
+                adjustmentDirection: 'INCREASE',
+              } as any);
+            }
+          }
+        });
+        fixedCount++;
+        affected.push(d.id);
+      }
+      if (fixedCount > 0) {
+        toast({ title: 'Inventory corrected', description: `Fixed ${fixedCount} item(s) with negative stock values.` });
+      }
+      return { fixedCount, affectedItems: affected };
+    };
+
+    const getAllReconciliations = async (): Promise<StockReconciliation[]> => {
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+      }
+      try {
+        const snap = await getDocs(collection(db, 'stockReconciliations'));
+        const recs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
+        recs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+        return recs;
+      } catch (error) {
+        console.error('Error fetching all reconciliations:', error);
+        toast({ title: 'Error', description: 'Failed to fetch all reconciliations.', variant: 'destructive' });
+        return [];
+      }
+    };
+
+   
+
+   
+
+    const getReconciliationById = async (id: string): Promise<StockReconciliation | null> => {
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return null;
+      }
+      try {
+        const ref = doc(db, 'stockReconciliations', id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return null;
+        return { id: snap.id, ...(snap.data() as any) } as StockReconciliation;
+      } catch (error) {
+        console.error('Error fetching reconciliation by id:', error);
+        toast({ title: 'Error', description: 'Failed to fetch reconciliation.', variant: 'destructive' });
+        return null;
+      }
+    };
+
+    const getReconciliationItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return [];
+      }
+      try {
+        const qRef = query(
+          collection(db, 'inventoryTransactions'),
+          where('referenceDocId', '==', referenceDocId)
+               );
+        const snap = await getDocs(qRef);
+        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
+        // Sort by date desc for display
+        items.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+        return items;
+      } catch (error) {
+        console.error('Error fetching reconciliation items:', error);
+        toast({ title: 'Error', description: 'Failed to fetch reconciliation items.', variant: 'destructive' });
+        return [];
+      }
+    };
+
+    // Reconciliation approval workflow implementations
+  const getReconciliationRequests = async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
+      if (!db) {
+        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        return [];
+      }
+      try {
+        let qRef: any = collection(db, 'reconciliationRequests');
+        const clauses: any[] = [];
+        if (resId) clauses.push(where('residenceId', '==', resId));
+        if (status) clauses.push(where('status', '==', status));
+        if (clauses.length > 0) {
+          qRef = query(qRef, ...clauses);
+        }
+        const snap = await getDocs(qRef);
+        const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ReconciliationRequest[];
+        arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+        return arr;
+      } catch (e) {
+        console.error('Error fetching reconciliation requests:', e);
+        toast({ title: 'Error', description: 'Failed to fetch reconciliation requests.', variant: 'destructive' });
+        return [];
+      }
+    };
+
+    const createReconciliationRequest = async (resId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string): Promise<string> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      if (!resId || !adjustments || adjustments.length === 0) throw new Error('Residence and at least one adjustment are required');
+      // Reserve a reconciliation code for display
+      const reservedId = await reserveNewReconciliationId();
+      const reqRef = doc(collection(db, 'reconciliationRequests'));
+      const payload: ReconciliationRequest = {
+        id: reqRef.id,
+        residenceId: resId,
+        adjustments,
+        status: 'Pending',
+        requestedById,
+        requestedAt: Timestamp.now(),
+        reservedId,
+      } as ReconciliationRequest;
+      await setDoc(reqRef, payload);
+      toast({ title: 'Submitted', description: 'Reconciliation request submitted for admin approval.' });
+      // Notify all admins
+      try {
+        const admins = (users || []).filter(u => u.role === 'Admin');
+        for (const admin of admins) {
+          await addNotification?.({
+            userId: admin.id,
+            title: 'Reconciliation Request',
+            message: `New reconciliation request for residence ${resId}.`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: reqRef.id,
+          } as any);
+        }
+      } catch {}
+      return reqRef.id;
+    };
+
+    const approveReconciliationRequest = async (requestId: string, approverId: string): Promise<string> => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      const reqRef = doc(db, 'reconciliationRequests', requestId);
+      const snap = await getDoc(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as ReconciliationRequest;
+      if (data.status !== 'Pending') throw new Error('Request already processed');
+      // Apply reconciliation using reserved id if present
+      const refId = await reconcileStock(data.residenceId, data.adjustments, approverId, data.reservedId) as string | void;
+      const finalRef = typeof refId === 'string' ? refId : undefined;
+      await updateDoc(reqRef, {
+        status: 'Approved',
+        approvedById: approverId,
+        approvedAt: Timestamp.now(),
+        referenceId: finalRef || null,
+      });
+      toast({ title: 'Approved', description: 'Reconciliation request approved and applied.' });
+      // Notify requester
+      try {
+        if (data.requestedById) {
+          await addNotification?.({
+            userId: data.requestedById,
+            title: 'Reconciliation Approved',
+            message: `Your reconciliation was approved (${finalRef || data.reservedId || ''}).`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: finalRef || requestId,
+          } as any);
+        }
+      } catch {}
+      return finalRef || '';
+    };
+
+    const rejectReconciliationRequest = async (requestId: string, rejecterId: string, reason?: string) => {
+      if (!db) throw new Error(firebaseErrorMessage);
+      const reqRef = doc(db, 'reconciliationRequests', requestId);
+      const snap = await getDoc(reqRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const data = snap.data() as ReconciliationRequest;
+      if (data.status !== 'Pending') throw new Error('Request already processed');
+      await updateDoc(reqRef, { status: 'Rejected', rejectedById: rejecterId, rejectedAt: Timestamp.now(), rejectReason: reason || null });
+      toast({ title: 'Rejected', description: 'Reconciliation request has been rejected.' });
+      // Notify requester
+      try {
+        if (data.requestedById) {
+          await addNotification?.({
+            userId: data.requestedById,
+            title: 'Reconciliation Rejected',
+            message: `Your reconciliation was rejected${reason ? `: ${reason}` : ''}.`,
+            type: 'generic',
+            href: '/inventory/inventory-audit',
+            referenceId: requestId,
+          } as any);
+        }
+      } catch {}
+    };
 
   return (
     <InventoryContext.Provider value={{ 
       items, 
+  inventoryItems: items,
       categories, 
       transfers, 
       audits, 
       loading, 
       addItem, 
       updateItem, 
+ 
       deleteItem, 
       loadInventory, 
       addCategory, 
@@ -1319,6 +2306,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       issueItemsFromStock, 
       getInventoryTransactions, 
       getAllInventoryTransactions, 
+      getAllInventoryTransactionsRaw: async () => {
+        // provide raw typed-any transactions if callers expect different shape
+        const rows = await getAllInventoryTransactions();
+        return rows as any;
+      },
       getMIVs, 
       getMIVById, 
       getLastIssueDateForItemAtLocation, 
@@ -1327,6 +2319,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       approveTransfer, 
       rejectTransfer, 
       depreciateItems,
+  fixNegativeStocks,
       createAudit,
       getAudits,
       getAuditById,
@@ -1334,12 +2327,30 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getAuditItems,
       updateAuditItem,
       submitAuditCount,
-      completeAudit
+      completeAudit,
+      reconcileStock,
+      getReconciliations,
+      getAllReconciliations,
+      getReconciliationById,
+      getReconciliationItems,
+  getTransferItems,
+  getReconciliationRequests,
+  createReconciliationRequest,
+  approveReconciliationRequest,
+  rejectReconciliationRequest,
+      // expose MRV helpers
+      createMRV,
+      getMRVs,
+      getMRVById,
+      // MRV requests
+      getMRVRequests,
+      approveMRVRequest,
+      rejectMRVRequest,
     }}>
       {children}
     </InventoryContext.Provider>
   );
-};
+}
 
 export const useInventory = () => {
   const context = useContext(InventoryContext);
