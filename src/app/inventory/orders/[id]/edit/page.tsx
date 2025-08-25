@@ -26,23 +26,43 @@ import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { useLanguage } from '@/context/language-context';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { QuantityStepper } from '@/components/ui/quantity-stepper';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Clock } from 'lucide-react';
 
 // Top-level AddItemButton component to avoid remounting when parent re-renders
 function AddItemButton({
     item,
     handleAddItemToOrder,
     variantSelectionsRef,
+    disabled,
 }: {
     item: InventoryItem;
     handleAddItemToOrder: (item: InventoryItem, variant?: string, qty?: number) => void;
     variantSelectionsRef: React.MutableRefObject<Record<string, Record<string, boolean>>>;
+    disabled?: boolean;
 }) {
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [, setTick] = useState(0);
 
-    if (!item.variants || item.variants.length === 0) {
+    // Build options from VARIANTS ONLY (keywords are for search only)
+    const optionList = useMemo(() => {
+        const set = new Set<string>();
+        const push = (v?: string) => {
+            const s = (v || '').trim();
+            if (s) set.add(s);
+        };
+        (item.variants || []).forEach(push);
+        const arr = Array.from(set);
+        // Sort using Arabic-aware collation
+        const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+        arr.sort((a, b) => collator.compare(a, b));
+        return arr;
+    }, [item.variants]);
+
+    if (!optionList || optionList.length === 0) {
         return (
-            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)}>
+            <Button size="icon" variant="outline" onClick={() => handleAddItemToOrder(item)} disabled={disabled}>
                 <Plus className="h-4 w-4" />
             </Button>
         );
@@ -51,44 +71,59 @@ function AddItemButton({
     return (
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
-                <Button size="icon" variant="outline">
+                <Button size="icon" variant="outline" disabled={disabled}>
                     <ChevronDown className="h-4 w-4" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-72">
-                <div className="space-y-2">
-                    {item.variants.map((variant) => (
-                        <div key={variant} className="flex items-center justify-between gap-2">
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    className="form-checkbox h-4 w-4"
-                                    checked={Boolean((variantSelectionsRef.current[item.id] || {})[variant])}
-                                    onChange={(e) => {
-                                        const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
-                                        if (e.target.checked) map[variant] = true;
-                                        else delete map[variant];
-                                        variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
-                                        setTick(t => t + 1);
-                                    }}
-                                />
-                                <span className="truncate">{variant}</span>
-                            </label>
-                        </div>
-                    ))}
+            {/* Match glass dropdown styling used by Select in stock-movement */}
+            <PopoverContent className="w-[300px] p-0">
+                {/* Scrollable options list */}
+                <ScrollArea className="h-80 max-h-[60vh]">
+                    <div className="p-1">
+                        {optionList.map((variant) => {
+                            const selected = Boolean((variantSelectionsRef.current[item.id] || {})[variant]);
+                            return (
+                                <div
+                                    key={variant}
+                                    className="relative flex w-full select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                        <Checkbox
+                                            checked={selected}
+                                            onCheckedChange={(v) => {
+                                                const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
+                                                if (Boolean(v)) map[variant] = true; else delete map[variant];
+                                                variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
+                                                setTick((t) => t + 1);
+                                            }}
+                                        />
+                                    </span>
+                                    <span className="truncate">{variant}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </ScrollArea>
 
-                    <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>
-                            Clear
-                        </Button>
-                        <Button size="sm" onClick={() => {
+                {/* Sticky action bar */}
+                <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t p-2 bg-white/60 dark:bg-black/20 backdrop-blur">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick((t) => t + 1);
+                        }}
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={() => {
                             const map = variantSelectionsRef.current[item.id] || {};
                             const entries = Object.entries(map);
                             if (entries.length === 0) {
-                                const firstVariant = item.variants?.[0];
-                                handleAddItemToOrder(item, firstVariant ?? undefined, 1);
-                                variantSelectionsRef.current[item.id] = {};
-                                setTick(t => t + 1);
+                                handleAddItemToOrder(item, optionList?.[0]);
                                 setPopoverOpen(true);
                                 return;
                             }
@@ -97,7 +132,7 @@ function AddItemButton({
                                 const [variant] = entries[0];
                                 handleAddItemToOrder(item, variant, 1);
                                 variantSelectionsRef.current[item.id] = {};
-                                setTick(t => t + 1);
+                                setTick((t) => t + 1);
                                 setPopoverOpen(true);
                                 return;
                             }
@@ -107,13 +142,13 @@ function AddItemButton({
                             const totalQty = entries.length;
                             handleAddItemToOrder(item, combinedLabel, totalQty);
 
-                            variantSelectionsRef.current[item.id] = {};
-                            setTick(t => t + 1);
                             setPopoverOpen(true);
-                        }}>
-                            Add selected
-                        </Button>
-                    </div>
+                            variantSelectionsRef.current[item.id] = {};
+                            setTick((t) => t + 1);
+                        }}
+                    >
+                        Add selected
+                    </Button>
                 </div>
             </PopoverContent>
         </Popover>
@@ -138,8 +173,14 @@ export default function EditOrderPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isAddDialogVisible, setAddDialogVisible] = useState(false);
+    const [recentItems, setRecentItems] = useState<InventoryItem[]>([]);
     const router = useRouter();
     const { id } = useParams();
+
+    // Map of quantity input refs keyed by order item id
+    const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    // Track which item should receive focus on its quantity input
+    const [focusItemId, setFocusItemId] = useState<string | null>(null);
 
     // Local saving state for the Save button
     const [isSaving, setIsSaving] = useState(false);
@@ -208,6 +249,45 @@ export default function EditOrderPage() {
     useEffect(() => {
         loadInventory();
     }, [loadInventory]);
+
+    // Load recent items from localStorage
+    useEffect(() => {
+        if (!currentUser?.id) return;
+        try {
+            const stored = localStorage.getItem(`estatecare_recent_items_${currentUser.id}`);
+            if (stored) {
+                const itemIds = JSON.parse(stored) as string[];
+                const recent = itemIds
+                    .map(id => allItems.find(i => i.id === id))
+                    .filter((i): i is InventoryItem => i !== undefined)
+                    .slice(0, 5);
+                setRecentItems(recent);
+            }
+        } catch (error) {
+            console.error('Error loading recent items:', error);
+        }
+    }, [allItems, currentUser?.id]);
+
+    // Helper to add item to recent items
+    const addToRecentItems = useCallback((item: InventoryItem) => {
+        if (!currentUser?.id) return;
+        try {
+            const key = `estatecare_recent_items_${currentUser.id}`;
+            const stored = localStorage.getItem(key);
+            const existing = stored ? JSON.parse(stored) as string[] : [];
+            const filtered = existing.filter(id => id !== item.id);
+            const updated = [item.id, ...filtered].slice(0, 10);
+            localStorage.setItem(key, JSON.stringify(updated));
+            
+            const recent = updated
+                .map(id => allItems.find(i => i.id === id))
+                .filter((i): i is InventoryItem => i !== undefined)
+                .slice(0, 5);
+            setRecentItems(recent);
+        } catch (error) {
+            console.error('Error saving recent item:', error);
+        }
+    }, [allItems, currentUser?.id]);
     
     // Seed initial data promptly via a one-time fetch, then keep in sync via onSnapshot
     useEffect(() => {
@@ -329,7 +409,13 @@ export default function EditOrderPage() {
                 return [newOrderItem, ...currentOrderItems];
             }
         });
-    }, []);
+
+        // After adding, focus the quantity input for that item
+        setFocusItemId(orderItemId);
+
+        // Add to recent items
+        addToRecentItems(itemToAdd);
+    }, [addToRecentItems]);
     
     const handleRemoveItem = (id: string) => {
         isDraftDirtyRef.current = true;
@@ -422,6 +508,7 @@ export default function EditOrderPage() {
 
     const handleNewItemAdded = (newItemWithId: InventoryItem) => {
         handleAddItemToOrder(newItemWithId);
+        addToRecentItems(newItemWithId);
         setSearchQuery('');
     };
 
@@ -443,6 +530,8 @@ export default function EditOrderPage() {
             // close dialog and clear selection
             setEditDialogOpen(false);
             setItemToEdit(null);
+            // Optionally update recent items list if present
+            addToRecentItems(updated);
         } catch (e) {
             console.error('Failed to update item from edit order page', e);
         }
@@ -457,6 +546,21 @@ export default function EditOrderPage() {
 
     // Derive a display name for residence using id if the name string is empty
     const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
+
+    // When orderItems change and we have a target to focus, focus and select its quantity input
+    useEffect(() => {
+        if (!focusItemId) return;
+        const el = qtyRefs.current[focusItemId];
+        if (el) {
+            try {
+                // Ensure it's visible then focus
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            } catch {}
+            el.focus();
+            el.select();
+            setFocusItemId(null);
+        }
+    }, [orderItems, focusItemId]);
 
     // Helper: split name into base and detail using " - " like details/new-order pages
     const splitNameDetail = (name?: string): { base: string; detail: string } => {
@@ -517,8 +621,11 @@ export default function EditOrderPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">{dict.ui.editMaterialRequest}</h1>
-                    <p className="text-muted-foreground">{dict.orderId || 'Request ID'}: #{id as string}</p>
+                    <h1 className="text-2xl font-bold">{dict.ui?.editMaterialRequest || 'Edit Material Request'}</h1>
+                    <p className="text-muted-foreground">{dict.orderId || 'Order ID'}: #{id as string}</p>
+                    {residenceDisplayName && (
+                         <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{residenceDisplayName}</span></p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Last autosave indicator */}
@@ -526,18 +633,18 @@ export default function EditOrderPage() {
                         <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
                     )}
                     <Button variant="outline" onClick={() => router.back()}>
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
+                        <ArrowLeft className="mr-2 h-4 w-4" /> {dict.ui?.cancel || 'Cancel'}
                     </Button>
                     {hasDraft && (
                         <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); clearDraft(); }}>
-                            {dict.ui.discardDraft}
+                            {dict.ui?.discardDraft || 'Discard Draft'}
                         </Button>
                     )}
                     <Button onClick={handleUpdateOrder} disabled={!canEdit || orderItems.length === 0 || isSaving}>
                         {isSaving ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.ui?.loading || 'Saving...'}</>
                         ) : (
-                            `${dict.ui.saveChanges} (${totalOrderQuantity} items)`
+                            `${dict.ui?.saveChanges || 'Save Changes'} (${totalOrderQuantity} ${dict.items || 'items'})`
                         )}
                     </Button>
                 </div>
@@ -546,14 +653,14 @@ export default function EditOrderPage() {
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card>
                     <CardHeader>
-                        <CardTitle>{dict.ui.availableInventory}</CardTitle>
-                        <CardDescription>Click the '+' to add an item to your request.</CardDescription>
+                        <CardTitle>{dict.ui?.availableInventory || 'Available Inventory'}</CardTitle>
+                        <CardDescription>{dict.ui?.addGeneralNotesPlaceholder || `Click the '+' to add an item to your request.`}</CardDescription>
                          <div className="flex gap-2">
                             <div className="relative flex-grow">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input 
                                     type="search"
-                                    placeholder="Search items..."
+                                    placeholder={dict.searchItemsPlaceholder || 'Search items...'}
                                     className="pl-8 w-full"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -564,7 +671,7 @@ export default function EditOrderPage() {
                                     <SelectValue placeholder="Filter by category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Categories</SelectItem>
+                                    <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
                                     {categories.map((cat) => (
                                         <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
                                     ))}
@@ -573,7 +680,7 @@ export default function EditOrderPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-[450px]">
+                         <ScrollArea className="h-[450px]">
                             {inventoryLoading ? (
                                 <div className="space-y-4">
                                     <Skeleton className="h-12 w-full" />
@@ -581,43 +688,85 @@ export default function EditOrderPage() {
                                     <Skeleton className="h-12 w-full" />
                                 </div>
                             ) : (
-                                <div className="space-y-2">
-                                    {filteredItems.length > 0 ? filteredItems.map(item => (
-                                        <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
-                                            <div>
-                                                <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
-                                                {(() => {
-                                                    const stock = getStockForResidence(item);
-                                                    return (
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {item.category} - {" "}
-                                                            <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>
-                                                                Stock: {stock}
-                                                            </span>{" "}
-                                                            {item.unit}
-                                                        </p>
-                                                    );
-                                                })()}
+                                <div className="space-y-4">
+                                    {/* Recent Items Section */}
+                                    {recentItems.length > 0 && !searchQuery && selectedCategory === 'all' && (
+                                        <div className="border-b pb-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                                <h3 className="text-sm font-medium text-muted-foreground">
+                                                    {dict.recentItemsTitle || 'Recently Used Items • الأصناف المستخدمة حديثاً'}
+                                                </h3>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} />
+                                            <div className="space-y-2">
+                                                {recentItems.map(item => (
+                                                    <div key={`recent-${item.id}`} className="flex items-center justify-between p-2 rounded-md border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+                                                        <div>
+                                                            <p className="font-medium text-blue-900 dark:text-blue-100">{item.nameAr} / {item.nameEn}</p>
+                                                            {(() => {
+                                                                const stock = getStockForResidence(item);
+                                                                return (
+                                                                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                                                                        {item.category} - {" "}
+                                                                        <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-700 dark:text-emerald-400 font-semibold" : undefined}>
+                                                                            Stock: {stock}
+                                                                        </span>{" "}
+                                                                        {item.unit}
+                                                                    </p>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} disabled={!canEdit} />
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
-                                    )) : (
-                                         searchQuery || selectedCategory !== 'all' ? (
-                                            <div className="text-center text-muted-foreground py-10">
-                                                <p className="mb-4">No items found matching your criteria.</p>
-                                                {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
-                                                    <PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"
-                                                </Button>}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
-                                        )
                                     )}
+                                    
+                                    {/* All Items Section */}
+                                    <div className="space-y-2">
+                                        {filteredItems.length > 0 ? filteredItems.map(item => (
+                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
+                                                <div>
+                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                                    {(() => {
+                                                        const stock = getStockForResidence(item);
+                                                        return (
+                                                            <p className="text-sm text-muted-foreground">
+                                                                {item.category} - {" "}
+                                                                <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>
+                                                                    Stock: {stock}
+                                                                </span>{" "}
+                                                                {item.unit}
+                                                            </p>
+                                                        );
+                                                    })()}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <AddItemButton item={item} handleAddItemToOrder={handleAddItemToOrder} variantSelectionsRef={variantSelectionsRef} disabled={!canEdit} />
+                                                </div>
+                                            </div>
+                                        )) : (
+                                             searchQuery || selectedCategory !== 'all' ? (
+                                                <div className="text-center text-muted-foreground py-10">
+                                                    <p className="mb-4">{dict.noRecordsFound || 'No items found matching your criteria.'}</p>
+                                                     {searchQuery && <Button onClick={() => setAddDialogVisible(true)}>
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || `Add "${searchQuery}"`}
+                                                    </Button>}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
+                                            )
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </ScrollArea>
@@ -628,7 +777,7 @@ export default function EditOrderPage() {
                     <CardHeader>
                         <div className="flex justify-between items-center">
                             <div>
-                                <CardTitle>{dict.ui.currentRequest}</CardTitle>
+                                <CardTitle>{dict.ui?.currentRequest || 'Current Request'}</CardTitle>
                                 <CardDescription>Review and adjust the items in your request.</CardDescription>
                             </div>
                             <div className="text-right">
@@ -641,7 +790,7 @@ export default function EditOrderPage() {
                     <CardContent>
                         <ScrollArea className="h-[450px]">
                             {orderItems.length === 0 ? (
-                                <div className="h-60 flex items-center justify-center text-muted-foreground">Your request is empty.</div>
+                                <div className="h-60 flex items-center justify-center text-muted-foreground">{dict.ui?.currentRequestEmpty || 'Your request is empty.'}</div>
                             ) : (
                                 <div className="space-y-4">
                                     {Object.entries(groupedOrderItems).map(([category, items]) => (
@@ -654,7 +803,7 @@ export default function EditOrderPage() {
                                                     const detail = ar.detail || en.detail || '';
                                                     const stock = handleGetStockForOrderItem(item);
                                                     return (
-                                                        <div key={item.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                        <div key={item.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] items-start sm:items-center gap-3">
                                                             <div className="min-w-0">
                                                                 <div className="font-medium truncate">{en.base || item.nameEn} | {ar.base || item.nameAr}</div>
                                                                 <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -664,21 +813,14 @@ export default function EditOrderPage() {
                                                                     {detail && <span className="italic">• {detail}</span>}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center justify-center gap-2">
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity - 1)}>
-                                                                    <Minus className="h-4 w-4" />
-                                                                </Button>
-                                                                <Input
-                                                                    type="number"
+                                                            <div className="flex items-center justify-center sm:justify-start">
+                                                                <QuantityStepper
                                                                     value={item.quantity}
-                                                                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))}
-                                                                    className="w-16 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    onValueChange={(n) => handleQuantityChange(item.id, n)}
+                                                                    ref={(el) => { qtyRefs.current[item.id] = el; }}
                                                                 />
-                                                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantity + 1)}>
-                                                                    <Plus className="h-4 w-4" />
-                                                                </Button>
                                                             </div>
-                                                            <div className="flex items-center justify-end gap-1">
+                                                            <div className="flex items-center justify-end gap-1 sm:justify-end">
                                                                 <Popover>
                                                                     <PopoverTrigger asChild>
                                                                         <Button variant="ghost" size="icon">
@@ -713,10 +855,10 @@ export default function EditOrderPage() {
                             )}
                         </ScrollArea>
                         <div className="mt-6 space-y-2">
-                            <Label htmlFor="general-notes">{dict.ui.generalNotes}</Label>
+                            <Label htmlFor="general-notes">{dict.ui?.generalNotes || 'General Notes'}</Label>
                             <Textarea
                                 id="general-notes"
-                                placeholder={dict.ui.addGeneralNotesPlaceholder}
+                                placeholder={dict.ui?.addGeneralNotesPlaceholder || 'Add any general notes for the entire request...'}
                                 value={generalNotes}
                                 onChange={handleGeneralNotesChange}
                             />
