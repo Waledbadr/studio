@@ -93,7 +93,7 @@ export function AppSidebar() {
       items: [
         { href: '/', label: dict.sidebar?.dashboard || dict.mainPage || 'Dashboard', icon: Home },
   // Moved Service Orders directly under Dashboard
-  { href: '/inventory/service-orders', label: 'Service Orders', icon: GitBranch },
+  { href: '/inventory/service-orders', label: dict.sidebar?.serviceOrders || 'Service Orders', icon: GitBranch },
   // Single Maintenance entry (always internal)
   { href: '/maintenance', label: dict.sidebar?.maintenance || 'Maintenance', icon: Wrench },
       ]
@@ -136,7 +136,7 @@ export function AppSidebar() {
   { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
         ...(currentUser?.role === 'Admin' ? [
           { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
-          { href: '/admin/translations', label: 'إدارة الترجمات', icon: Languages },
+          { href: '/admin/translations', label: dict.sidebar?.translations || 'Translations Management', icon: Languages },
           { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },
         ] : [] as any),
       ] as any
