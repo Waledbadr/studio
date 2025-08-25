@@ -148,12 +148,6 @@ export default function SetupPage() {
         setIsResetting(true);
 
         try {
-                        // Admin emails to keep
-                        const keepEmails = [
-                            'm.alabdali@sacodeco.net',
-                            'abdalim2@gmail.com',
-                        ].map(e => e.trim().toLowerCase());
-
                         // Simple helper to commit in chunks to avoid 500 ops limit
                         // db is ensured above; narrow type for TS
                         const dbStrict = db!;
@@ -178,12 +172,11 @@ export default function SetupPage() {
                                 'auditItems',
                                 'auditAdjustments',
                                 'stockReconciliations',
-                            'reconciliationRequests',
+                                'reconciliationRequests',
                                 'maintenanceRequests',
                                 'serviceOrders',
                                 'notifications',
                                 'fcmTokens',
-                            'feedback',
                         ];
 
             // 1. Reset all inventory item stocks to zero
@@ -198,14 +191,6 @@ export default function SetupPage() {
                                     for (const collectionName of collectionsToDelete) {
                             const snapshot = await getDocs(collection(db, collectionName));
                                         for (const d of snapshot.docs) {
-                                            // Special case: feedback has subcollection 'updates'
-                                            if (collectionName === 'feedback') {
-                                                const updatesSnap = await getDocs(collection(db, `feedback/${d.id}/updates`));
-                                                for (const u of updatesSnap.docs) {
-                                                    batch.delete(u.ref);
-                                                    ops++; await commitIfNeeded();
-                                                }
-                                            }
                                             batch.delete(d.ref);
                                             ops++; await commitIfNeeded();
                                         }
@@ -216,59 +201,17 @@ export default function SetupPage() {
                         const countersSnap = await getDocs(collection(db, 'counters'));
                         for (const d of countersSnap.docs) {
                             const id = d.id || '';
-                            if (/^(mr|miv|mrv|con|svc|trs|dep|mnt)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|svc|trs|dep|mnt)-/i.test(id)) {
+                            if (/^(mr|miv|mrv|con|rec|svc|trs|dep|mnt)-\d{2}-\d{2}$/i.test(id) || /^(mr|miv|mrv|con|rec|svc|trs|dep|mnt)-/i.test(id)) {
                                 batch.delete(d.ref);
                                 ops++; await commitIfNeeded();
                             }
                         }
-            console.log('Prepared to clear monthly counters.');
-
-                        // 4. Delete users except keepEmails
-                        const usersSnap = await getDocs(collection(db, 'users'));
-                        let kept = 0, removed = 0;
-                        for (const d of usersSnap.docs) {
-                            const data: any = d.data() || {};
-                            const email = String(data.email || '').trim().toLowerCase();
-                            if (keepEmails.includes(email)) {
-                                kept++;
-                                continue;
-                            }
-                            batch.delete(d.ref);
-                            removed++; ops++; await commitIfNeeded();
-                        }
-                        console.log(`Prepared users deletion. kept=${kept}, removed=${removed}`);
-
-                                                // 5. Clean unique_users_emails entirely (collection no longer used)
-                                                try {
-                                                    const emailsSnap = await getDocs(collection(db, 'unique_users_emails'));
-                                                    for (const d of emailsSnap.docs) {
-                                                        batch.delete(d.ref);
-                                                        ops++; await commitIfNeeded();
-                                                    }
-                                                    console.log('Prepared to remove unique_users_emails.');
-                                                } catch {}
+            console.log('Prepared to clear monthly counters including reconciliation.');
 
             // Commit all batched writes
                         await commitIfNeeded(true);
 
-                        // Optional: delete Firebase Auth users (server-side) except keepEmails
-                        try {
-                            const res = await fetch('/api/setup/reset-auth', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ keepEmails, password: RESET_PASSWORD })
-                            });
-                            if (res.ok) {
-                                const info = await res.json();
-                                console.log('Auth reset:', info);
-                            } else {
-                                console.warn('Auth reset skipped or failed:', await res.text());
-                            }
-                        } catch (e) {
-                            console.warn('Auth reset request failed:', e);
-                        }
-
-            toast({ title: "Success", description: "System has been reset. All operational data deleted, and inventory stock zeroed out." });
+            toast({ title: "Success", description: "System has been reset. All operational data deleted, inventory stock zeroed out, and reconciliation counters reset. Users and feedback data preserved." });
             setPassword('');
         } catch (error) {
             console.error("Error resetting system:", error);
@@ -497,7 +440,7 @@ export default function SetupPage() {
                               <CardHeader>
                                   <CardTitle className="text-destructive">Reset Database</CardTitle>
                                   <CardDescription>
-                                      <strong>Warning:</strong> Permanently deletes all data. Use only in development or with explicit enable flag.
+                                      <strong>Warning:</strong> Permanently deletes operational data, resets inventory stock, and clears counters. Users and feedback are preserved.
                                   </CardDescription>
                               </CardHeader>
                               <CardContent>
@@ -511,7 +454,7 @@ export default function SetupPage() {
                                           <AlertDialogHeader>
                                               <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                               <AlertDialogDescription>
-                                                  This action cannot be undone. This will permanently delete all data from the database, including inventory, orders, transfers, and all other records.
+                                                  This action cannot be undone. This will permanently delete operational data including orders, transfers, maintenance records, and reset inventory stock to zero. Users and feedback data will be preserved.
                                                   <br /><br />
                                                   Please type <strong>RESET123</strong> to confirm:
                                               </AlertDialogDescription>
