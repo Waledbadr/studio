@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
-import { useUsers } from '@/context/users-context';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query, where, updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useUsers } from '@/context/users-context-simple';
+// Firebase disabled during Cloudflare migration
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Item {
@@ -46,14 +45,8 @@ export default function AdminFeedbackPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (!db) return;
-      let qRef: any = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
-      // Filters will be applied after fetch for simplicity; Firestore supports where but with indexes
-      const snap = await getDocs(qRef);
-      const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setItems(all);
-    } catch (e) {
-      console.error(e);
+      // Stub: Replace with Cloudflare D1-based feedback list
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -103,44 +96,9 @@ export default function AdminFeedbackPage() {
   const updateItem = async (id: string, status?: string, priority?: Item['priority']) => {
     setLoading(true);
     try {
-      if (!db) return;
-      const ref = doc(db, 'feedback', id);
-      const patch: any = {};
-      if (status) {
-        patch.status = status;
-        patch.updatedAt = serverTimestamp();
-        if (status === 'resolved') patch.resolvedAt = serverTimestamp();
-        if (status === 'in_progress') patch.startedAt = serverTimestamp();
-      }
-      if (priority) patch.priority = priority;
-      if (Object.keys(patch).length) await updateDoc(ref, patch);
-
-      if (comment) {
-        await addDoc(collection(ref, 'updates'), {
-          developerComment: comment,
-          updatedBy: currentUser?.id || 'system',
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      // Also create an in-app notification for the owner
-      const target = items.find(x => x.id === id);
-      if (target?.userId) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: target.userId,
-          title: 'Feedback status updated',
-          message: `Status changed to: ${status || 'updated'}`,
-          type: 'feedback_update',
-          href: '/feedback',
-          referenceId: id,
-          isRead: false,
-          createdAt: serverTimestamp(),
-        });
-      }
+      // Stub: Replace with Cloudflare D1 update + KV notification
       setComment('');
       await load();
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useResidences } from '@/context/residences-context';
+import { useResidences } from '@/context/residences-context-simple';
 
 export type Location = { lat: number; lng: number } | null;
 

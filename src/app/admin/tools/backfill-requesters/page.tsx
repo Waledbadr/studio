@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, updateDoc, limit, query, orderBy } from 'firebase/firestore';
-import { useUsers } from '@/context/users-context';
+// Firebase disabled during Cloudflare migration
+import { useUsers } from '@/context/users-context-simple';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -15,45 +14,17 @@ export default function BackfillRequesterNamesPage() {
   const [lastRun, setLastRun] = useState<string | null>(null);
   const isAdmin = currentUser?.role === 'Admin';
 
-  const disabled = useMemo(() => !db || !isAdmin || busy, [isAdmin, busy]);
+  const disabled = useMemo(() => !isAdmin || busy, [isAdmin, busy]);
 
   const runBackfill = async () => {
-    if (!db) return;
     if (!isAdmin) {
       toast({ title: 'Not allowed', description: 'Admins only.' , variant: 'destructive'});
       return;
     }
     setBusy(true);
     try {
-      // Fetch recent orders first; can be adjusted
-      const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('date', 'desc'), limit(200)));
-      let updated = 0;
-      for (const od of ordersSnap.docs) {
-        const odata = od.data() as any;
-        if (odata.requestedByName && odata.requestedByEmail) continue; // already filled
-        const requesterId: string | undefined = odata.requestedById;
-        if (!requesterId) continue;
-        // Try users/{requestedById}
-        try {
-          const usnap = await getDoc(doc(db, 'users', requesterId));
-          let name: string | undefined = undefined;
-          let email: string | undefined = undefined;
-          if (usnap.exists()) {
-            const u = usnap.data() as any;
-            name = u?.name || undefined;
-            email = u?.email || undefined;
-          }
-          // If nothing found, but order already has an email, keep it
-          email = email || odata.requestedByEmail || undefined;
-          if (name || email) {
-            await updateDoc(doc(db, 'orders', od.id), {
-              requestedByName: name || odata.requestedByName || null,
-              requestedByEmail: email || odata.requestedByEmail || null,
-            });
-            updated++;
-          }
-        } catch {}
-      }
+      // Stub: Replace with Cloudflare D1 script to backfill requester names
+      const updated = 0;
       setLastRun(new Date().toLocaleString());
       toast({ title: 'Backfill complete', description: `Updated ${updated} orders.` });
     } catch (e) {

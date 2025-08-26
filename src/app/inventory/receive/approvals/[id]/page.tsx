@@ -3,9 +3,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useInventory } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
-import { useUsers } from '@/context/users-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
+import { useUsers } from '@/context/users-context-simple';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -14,15 +14,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 
 export default function MRVApprovalDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const { approveMRVRequest, rejectMRVRequest } = useInventory();
+  const { approveMRVRequest, rejectMRVRequest, getMRVRequestById, updateMRVRequest } = useInventory();
   const { residences, loadResidences } = useResidences();
   const { currentUser } = useUsers();
 
@@ -43,18 +41,16 @@ export default function MRVApprovalDetailPage() {
   }, [loadResidences, residences.length]);
 
   useEffect(() => {
-    if (!id || !db) return;
+    if (!id) return;
     (async () => {
       setLoading(true);
       try {
-        const ref = doc(collection(db, 'mrvRequests'), id);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) {
+        const d = await getMRVRequestById(id);
+        if (!d) {
           toast({ title: 'Not found', description: 'Request was not found.', variant: 'destructive' });
           router.push('/inventory/receive/approvals');
           return;
         }
-        const d = { id: snap.id, ...(snap.data() as any) };
         setData(d);
         setSupplierName(d.supplierName || '');
         setInvoiceNo(d.invoiceNo || '');
@@ -66,7 +62,7 @@ export default function MRVApprovalDetailPage() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, getMRVRequestById, router, toast]);
 
   const residenceName = (rid?: string) => residences.find(r => r.id === rid)?.name || rid || '-';
 
@@ -92,7 +88,7 @@ export default function MRVApprovalDetailPage() {
   };
 
   const handleSave = async () => {
-    if (!db || !data) return;
+    if (!data) return;
     if (!supplierName.trim() || !invoiceNo.trim()) {
       toast({ title: 'Error', description: 'Supplier and Invoice No. are required.', variant: 'destructive' });
       return;
@@ -106,14 +102,13 @@ export default function MRVApprovalDetailPage() {
     try {
       let upload: { url: string; path: string } | null = null;
       if (file) upload = await handleReplaceAttachment();
-      const ref = doc(collection(db, 'mrvRequests'), data.id);
-      await updateDoc(ref, {
+      await updateMRVRequest(data.id, {
         supplierName: supplierName.trim(),
         invoiceNo: invoiceNo.trim(),
         notes: notes || null,
         items: selectedLines,
         ...(upload ? { attachmentUrl: upload.url, attachmentPath: upload.path } : {}),
-        updatedAt: Timestamp.now()
+        updatedAt: new Date()
       });
       toast({ title: 'Saved', description: 'Changes saved.' });
     } catch (e: any) {
@@ -131,17 +126,7 @@ export default function MRVApprovalDetailPage() {
       const mrvId = await approveMRVRequest(data.id, currentUser.id);
       toast({ title: 'Approved', description: `Created MRV ${mrvId}.` });
       router.push(`/inventory/receive/receipts/${mrvId}`);
-    } catch (e: any) {
-      // If already approved in another click/session, route to its receipt
-      if (db && e && (e.code === 'ALREADY_APPROVED' || String(e.message).includes('already processed'))) {
-        try {
-          const ref = doc(collection(db, 'mrvRequests'), data.id);
-          const snap = await getDoc(ref);
-          const mrvId = (snap.data() as any)?.mrvId;
-          if (mrvId) router.push(`/inventory/receive/receipts/${mrvId}`);
-        } catch {}
-      }
-    } finally {
+  } finally {
       setIsApproving(false);
     }
   };

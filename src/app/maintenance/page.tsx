@@ -22,10 +22,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEffect, useState, useMemo } from "react";
 import { useLanguage } from '@/context/language-context';
-import { useMaintenance, type MaintenanceRequest, type MaintenanceStatus } from "@/context/maintenance-context";
+import { useMaintenance, type MaintenanceRequest, type MaintenanceStatus } from "@/context/maintenance-context-simple";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useUsers } from "@/context/users-context";
+import { useUsers } from "@/context/users-context-simple";
 
 export default function MaintenancePage() {
     const { requests, loading, loadRequests, updateRequestStatus } = useMaintenance();

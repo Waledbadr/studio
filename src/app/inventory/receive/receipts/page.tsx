@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useInventory } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
 import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

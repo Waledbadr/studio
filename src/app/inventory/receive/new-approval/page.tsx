@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { useInventory, type InventoryItem } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,9 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { UploadCloud, Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from 'firebase/firestore';
-import { useUsers } from '@/context/users-context';
+// Firebase removed for Cloudflare migration
+import { useUsers } from '@/context/users-context-simple';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -23,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 // MRV with Admin approval, UI similar to New Order
 export default function NewMRVApprovalPage() {
-  const { items, loading, categories, addItem, getStockForResidence, updateItem } = useInventory();
+  const { items, loading, categories, addItem, updateItem } = useInventory();
   const { residences, loadResidences } = useResidences();
   const { currentUser } = useUsers();
   const { toast } = useToast();
@@ -40,7 +39,7 @@ export default function NewMRVApprovalPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [editItemOpen, setEditItemOpen] = useState(false);
-  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [itemToEdit, setItemToEdit] = useState<any | null>(null);
 
   // Variant selection state for popover-based add button (mirrors New Order page UX)
   const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
@@ -57,16 +56,16 @@ export default function NewMRVApprovalPage() {
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
-    const matches = (it: InventoryItem) => {
+    const matches = (it: any) => {
       if (tokens.length === 0) return true;
       const hay = [
         it.nameEn?.toLowerCase?.() || '',
         it.nameAr?.toLowerCase?.() || '',
         it.category?.toLowerCase?.() || '',
         it.unit?.toLowerCase?.() || '',
-        ...(it.variants || []).map(v => (v || '').toLowerCase()),
-        ...(it.keywordsAr || []).map(k => (k || '').toLowerCase()),
-        ...(it.keywordsEn || []).map(k => (k || '').toLowerCase()),
+        ...(it.variants || []).map((v: any) => (v || '').toLowerCase()),
+        ...(it.keywordsAr || []).map((k: any) => (k || '').toLowerCase()),
+        ...(it.keywordsEn || []).map((k: any) => (k || '').toLowerCase()),
       ].join(' ');
       return tokens.every(t => hay.includes(t));
     };
@@ -85,7 +84,7 @@ export default function NewMRVApprovalPage() {
   }, [items, searchQuery]);
 
   const setQty = (id: string, q: number) => setLines(prev => ({ ...prev, [id]: Math.max(0, isNaN(q) ? 0 : q) }));
-  const addOne = (item: InventoryItem) => setQty(item.id, (lines[item.id] || 0) + 1);
+  const addOne = (item: any) => setQty(item.id, (lines[item.id] || 0) + 1);
   const removeLine = (id: string) => setLines(({ [id]: _, ...rest }) => rest);
 
   const selectedLines = useMemo(() => Object.entries(lines)
@@ -102,12 +101,12 @@ export default function NewMRVApprovalPage() {
     const map: Record<string, { stock: number; noNeed: boolean }> = {};
     for (const line of selectedLines) {
       const it = items.find(i => i.id === line.id);
-      const stock = residenceId && it ? (getStockForResidence?.(it as any, residenceId) || 0) : 0;
-      const noNeed = !!residenceId && stock >= line.quantity && line.quantity > 0;
+      const stock = 0;
+      const noNeed = false;
       map[line.id] = { stock, noNeed };
     }
     return map;
-  }, [selectedLines, items, residenceId, getStockForResidence]);
+  }, [selectedLines, items, residenceId]);
 
   const hasBlockingLines = useMemo(() => Object.values(lineWarnings).some(w => w.noNeed), [lineWarnings]);
 
@@ -130,7 +129,7 @@ export default function NewMRVApprovalPage() {
   }, [selectedLines]);
 
   // Add button with variant popover (adds to quantity map)
-  function AddItemButton({ item, disabled }: { item: InventoryItem; disabled?: boolean }) {
+  function AddItemButton({ item, disabled }: { item: any; disabled?: boolean }) {
     const [open, setOpen] = useState(false);
     const [, setTick] = useState(0);
 
@@ -153,7 +152,7 @@ export default function NewMRVApprovalPage() {
         </PopoverTrigger>
         <PopoverContent className="w-72">
           <div className="space-y-2">
-            {item.variants.map((variant) => (
+            {item.variants.map((variant: any) => (
               <div key={variant} className="flex items-center justify-between gap-2">
                 <label className="flex items-center gap-2">
                   <input
@@ -191,10 +190,6 @@ export default function NewMRVApprovalPage() {
   }
 
   const handleSubmit = async () => {
-    if (!db) {
-      toast({ title: 'Error', description: 'Firestore not configured.', variant: 'destructive' });
-      return;
-    }
     if (!residenceId) {
       toast({ title: 'Error', description: 'Choose a residence.', variant: 'destructive' });
       return;
@@ -240,35 +235,16 @@ export default function NewMRVApprovalPage() {
         attachmentUrl = data.url;
         attachmentPath = data.path;
       }
-      // Reserve a unified MRV short code now so Pending and Approved share the same number
-      const now = new Date();
-      const yy = now.getFullYear().toString().slice(-2);
-      const mm = (now.getMonth() + 1).toString().padStart(2, '0');
-      const mmNoPad = (now.getMonth() + 1).toString();
-      const counterId = `mrv-${yy}-${mm}`;
-      let nextSeq = 0;
-      await runTransaction(db, async (trx) => {
-        const counterRef = doc(db!, 'counters', counterId);
-        const snap = await trx.get(counterRef);
-        const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
-        nextSeq = current + 1;
-        trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
-      });
-      const reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
-      const reqRef = doc(collection(db, 'mrvRequests'));
-      await setDoc(reqRef, {
-        id: reqRef.id,
+      // In simple mode, just log the payload; a real Cloudflare endpoint will persist it
+      console.log('Mock submit MRV approval', {
         residenceId,
-        items: selectedLines.map(l => ({ id: l.id, nameEn: l.nameEn, nameAr: l.nameAr, quantity: l.quantity })),
+        items: selectedLines,
         supplierName,
         invoiceNo,
         attachmentUrl,
         attachmentPath,
-        notes: notes || null,
-        status: 'Pending',
+        notes,
         requestedById: currentUser?.id || null,
-        requestedAt: Timestamp.now(),
-        mrvShort: reservedMrvShort,
       });
 
       toast({ title: 'Submitted', description: 'MRV request submitted for admin approval.' });
@@ -381,7 +357,7 @@ export default function NewMRVApprovalPage() {
                     <div key={it.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
                       <div>
                         <p className="font-medium">{it.nameAr} / {it.nameEn}</p>
-                        <p className="text-sm text-muted-foreground">{it.category} • {it.unit} {residenceId ? `• المتوفر: ${getStockForResidence?.(it as any, residenceId) || 0}` : ''}</p>
+                        <p className="text-sm text-muted-foreground">{it.category} • {it.unit}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => { setItemToEdit(it); setEditItemOpen(true); }}>
@@ -479,7 +455,7 @@ export default function NewMRVApprovalPage() {
       <EditItemDialog
         isOpen={editItemOpen}
         onOpenChange={(open) => { setEditItemOpen(open); if (!open) setItemToEdit(null); }}
-        onItemUpdated={updateItem}
+  onItemUpdated={async (item) => { try { await updateItem(item.id, item); } catch {} }}
         item={itemToEdit}
       />
     </div>

@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Settings } from "lucide-react";
-import { useResidences, type Service, type SubFacility, type ServiceLocation } from '@/context/residences-context';
+import { useResidences } from '@/context/residences-context-simple';
 import { useToast } from "@/hooks/use-toast";
 
 interface ServiceManagementDialogProps {

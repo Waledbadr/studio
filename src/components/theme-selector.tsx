@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTheme } from '@/components/theme-provider';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { colorThemes, type ColorTheme } from '@/lib/themes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useOrders, type Order } from '@/context/orders-context';
+import { useOrders, type Order } from '@/context/orders-context-simple';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,14 +10,12 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Pencil, CheckCircle2, XCircle, PackageCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { useUsers } from '@/context/users-context';
-import type { OrderItem } from '@/context/orders-context';
-import { useInventory } from '@/context/inventory-context';
+import { useUsers } from '@/context/users-context-simple';
+import type { OrderItem } from '@/context/orders-context-simple';
+import { useInventory } from '@/context/inventory-context-simple';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { useResidences } from '@/context/residences-context';
-// Subscribe to Firestore document for real-time updates
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs } from 'firebase/firestore';
+import { useResidences } from '@/context/residences-context-simple';
+// Firebase removed during Cloudflare migration
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -36,52 +34,12 @@ export default function OrderDetailPage() {
     const requestedByName = order?.requestedByName || requestedBy?.name || requestedByNameLocal || order?.requestedByEmail || '...';
     const approvedByName = order?.approvedByName || approvedBy?.name || '...';
 
-    // Resolve requester name if missing by fetching users/{requestedById} or by email
-    useEffect(() => {
-        const run = async () => {
-            if (!db) return;
-            const missing = !(order?.requestedByName) && !requestedBy?.name;
-            if (!order?.requestedById || !missing) return;
-            try {
-                // Try direct doc by ID
-                const uref = doc(db, 'users', order.requestedById);
-                const usnap = await getDoc(uref);
-                if (usnap.exists()) {
-                    const nm = (usnap.data() as any)?.name || '';
-                    if (nm) { setRequestedByNameLocal(nm); return; }
-                }
-                // Fallback: query by email when available on order
-                const em = (order as any)?.requestedByEmail;
-                if (em) {
-                    const q = fbQuery(collection(db, 'users'), where('email', '==', em));
-                    const qs = await getDocs(q);
-                    const nm = qs.docs.map(d => (d.data() as any)?.name).find(Boolean);
-                    if (nm) { setRequestedByNameLocal(nm as string); return; }
-                }
-            } catch {}
-        };
-        run();
-        // We intentionally do not depend on requestedByNameLocal to avoid loops
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db, order?.requestedById, order?.requestedByName, requestedBy?.name, (order as any)?.requestedByEmail]);
+    // Firebase lookups disabled in Cloudflare migration
+    useEffect(() => { /* no-op */ }, [order?.requestedById, order?.requestedByName, requestedBy?.name, (order as any)?.requestedByEmail]);
 
-    // Real-time subscription to keep page in sync without hard refresh
+    // Disabled realtime Firestore subscription; use placeholder state
     useEffect(() => {
-        if (!db || typeof id !== 'string') return;
-        setLoading(true);
-        const ref = doc(db, 'orders', id);
-        const unsub = onSnapshot(ref, (snap) => {
-            if (snap.exists()) {
-                setOrder({ id: snap.id, ...(snap.data() as any) } as Order);
-            } else {
-                setOrder(null);
-            }
-            setLoading(false);
-        }, (err) => {
-            console.error('Error listening to order doc:', err);
-            setLoading(false);
-        });
-        return () => unsub();
+        setLoading(false);
     }, [id]);
 
     const handlePrint = () => {

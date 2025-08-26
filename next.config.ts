@@ -7,9 +7,9 @@ const isCloudflare = process.env.CLOUDFLARE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // إعدادات Cloudflare Pages
-  output: isCloudflare ? 'export' : undefined,
-  trailingSlash: isCloudflare ? true : false,
+  // إعدادات Cloudflare Pages - تعطيل export mode للتطوير المحلي
+  // output: isCloudflare ? 'export' : undefined,
+  // trailingSlash: isCloudflare ? true : false,
   
   typescript: {
     ignoreBuildErrors: true,
@@ -39,12 +39,14 @@ const nextConfig: NextConfig = {
     ],
   },
   
-  // تحسينات Cloudflare
+  // تحسينات Cloudflare - معطلة للتطوير المحلي
+  /*
   ...(isCloudflare && {
     experimental: {
       runtime: 'edge',
     },
   }),
+  */
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
     const baseHeaders = [

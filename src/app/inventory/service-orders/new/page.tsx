@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useServiceOrders } from "@/context/service-orders-context";
-import { useResidences } from "@/context/residences-context";
-import { useInventory } from "@/context/inventory-context";
-import { useUsers } from "@/context/users-context";
+import { useServiceOrders } from "@/context/service-orders-context-simple";
+import { useResidences } from "@/context/residences-context-simple";
+import { useInventory } from "@/context/inventory-context-simple";
+import { useUsers } from "@/context/users-context-simple";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

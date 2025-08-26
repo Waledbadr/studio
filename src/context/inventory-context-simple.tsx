@@ -50,6 +50,13 @@ interface SimpleInventoryContextType {
   updateAuditItem: (auditItem: any) => Promise<void>;
   submitAuditCount: (auditId: string, itemId: string, physicalStock: number, notes: string, countedBy: string) => Promise<void>;
   completeAudit: (auditId: string, adjustments: any[], generalNotes: string) => Promise<void>;
+  // MRV (Material Receive Voucher) stubs
+  getMRVRequests: (status?: string) => Promise<any[]>;
+  approveMRVRequest: (requestId: string, approverUserId: string) => Promise<string>;
+  rejectMRVRequest: (requestId: string, approverUserId: string) => Promise<void>;
+  getMRVs: () => Promise<any[]>;
+  getMRVRequestById: (id: string) => Promise<any | null>;
+  updateMRVRequest: (id: string, updates: any) => Promise<void>;
 }
 
 const InventoryContext = createContext<SimpleInventoryContextType | undefined>(undefined);
@@ -113,6 +120,76 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     console.log('Mock: Completing audit', { auditId, adjustments, generalNotes });
   };
 
+  // --- MRV stubs ---
+  const getMRVRequests = async (status?: string) => {
+    console.log('Mock: getMRVRequests', status);
+    // Return a small deterministic sample depending on status for UI smoke tests
+    const base = [
+      {
+        id: 'mrvreq-1',
+        mrvShort: 'R-001',
+        residenceId: 'res-1',
+        requestedAt: { toDate: () => new Date(Date.now() - 86400000) },
+        status: 'Pending',
+        items: [{ id: 'item-1', nameAr: 'كرسي مكتب', nameEn: 'Office Chair', quantity: 2 }],
+      },
+      {
+        id: 'mrvreq-2',
+        mrvShort: 'R-002',
+        residenceId: 'res-1',
+        requestedAt: { toDate: () => new Date(Date.now() - 43200000) },
+        status: 'Approved',
+        items: [{ id: 'item-1', nameAr: 'كرسي مكتب', nameEn: 'Office Chair', quantity: 1 }],
+      },
+    ];
+    return status ? base.filter((r) => r.status === status) : base;
+  };
+
+  const approveMRVRequest = async (requestId: string, approverUserId: string) => {
+    console.log('Mock: approveMRVRequest', { requestId, approverUserId });
+    // Return a mock MRV id
+    return `mrv-${requestId}`;
+  };
+
+  const rejectMRVRequest = async (requestId: string, approverUserId: string) => {
+    console.log('Mock: rejectMRVRequest', { requestId, approverUserId });
+  };
+
+  const getMRVs = async () => {
+    console.log('Mock: getMRVs');
+    return [
+      {
+        id: 'mrv-mrvreq-2',
+        orderId: 'MR-123',
+        date: { toDate: () => new Date(Date.now() - 21600000) },
+        residenceId: 'res-1',
+        itemCount: 3,
+      },
+    ];
+  };
+
+  const getMRVRequestById = async (id: string) => {
+    console.log('Mock: getMRVRequestById', id);
+    if (!id) return null;
+    return {
+      id,
+      mrvShort: id.slice(-4).toUpperCase(),
+      residenceId: 'res-1',
+      supplierName: 'Default Supplier',
+      invoiceNo: 'INV-0001',
+      notes: '',
+      requestedAt: { toDate: () => new Date() },
+      status: 'Pending',
+      items: [
+        { id: 'item-1', nameAr: 'كرسي مكتب', nameEn: 'Office Chair', quantity: 1 },
+      ],
+    };
+  };
+
+  const updateMRVRequest = async (id: string, updates: any) => {
+    console.log('Mock: updateMRVRequest', { id, updates });
+  };
+
   return (
     <InventoryContext.Provider value={{
       items,
@@ -132,6 +209,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       updateAuditItem,
       submitAuditCount,
       completeAudit
+  ,
+  // MRV
+  getMRVRequests,
+  approveMRVRequest,
+  rejectMRVRequest,
+  getMRVs,
+  getMRVRequestById,
+  updateMRVRequest
     }}>
       {children}
     </InventoryContext.Provider>

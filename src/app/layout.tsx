@@ -3,18 +3,18 @@ import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
-import { ResidencesProvider } from '@/context/residences-context';
-import { InventoryProvider } from '@/context/inventory-context';
-import { UsersProvider } from '@/context/users-context';
-import { OrdersProvider } from '@/context/orders-context';
-import { MaintenanceProvider } from '@/context/maintenance-context';
-import { NotificationsProvider } from '@/context/notifications-context';
-import { ServiceOrdersProvider } from '@/context/service-orders-context';
+// Use simple providers to avoid Firebase during Cloudflare migration
+import { ResidencesProvider } from '@/context/residences-context-simple';
+import { InventoryProvider } from '@/context/inventory-context-simple';
+import { UsersProvider } from '@/context/users-context-simple';
+import { OrdersProvider } from '@/context/orders-context-simple';
+import { MaintenanceProvider } from '@/context/maintenance-context-simple';
+import { NotificationsProvider } from '@/context/notifications-context-simple';
+import { ServiceOrdersProvider } from '@/context/service-orders-context-simple';
 // LanguageProvider is moved into the client AppLayout to ensure the
 // provider and its consumers share the same client boundary and avoid
 // hydration/order-of-mount warnings. Do not import it here to prevent
 // duplicate providers.
-import { AuthGate } from '@/components/auth-gate';
 
 export const metadata: Metadata = {
   title: 'EstateCare',
@@ -70,23 +70,21 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ThemeProvider>
-          <AuthGate>
-            <ResidencesProvider>
-              <UsersProvider>
-                <NotificationsProvider>
-                  <InventoryProvider>
-                    <ServiceOrdersProvider>
-                      <OrdersProvider>
-                        <MaintenanceProvider>
-                          <AppLayout>{children}</AppLayout>
-                        </MaintenanceProvider>
-                      </OrdersProvider>
-                    </ServiceOrdersProvider>
-                  </InventoryProvider>
-                </NotificationsProvider>
-              </UsersProvider>
-            </ResidencesProvider>
-          </AuthGate>
+          <ResidencesProvider>
+            <UsersProvider>
+              <NotificationsProvider>
+                <InventoryProvider>
+                  <ServiceOrdersProvider>
+                    <OrdersProvider>
+                      <MaintenanceProvider>
+                        <AppLayout>{children}</AppLayout>
+                      </MaintenanceProvider>
+                    </OrdersProvider>
+                  </ServiceOrdersProvider>
+                </InventoryProvider>
+              </NotificationsProvider>
+            </UsersProvider>
+          </ResidencesProvider>
         </ThemeProvider>
         <Toaster />
       </body>

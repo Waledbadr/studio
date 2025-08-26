@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useInventory } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
-import { useUsers } from '@/context/users-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
+import { useUsers } from '@/context/users-context-simple';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -15,7 +15,16 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Trash2, Package, Clock, FileText } from 'lucide-react';
 import { format } from 'date-fns';
-import type { DepreciationRequest } from '@/context/inventory-context';
+// Local type to avoid importing Firebase-backed context
+interface DepreciationRequest {
+  itemId: string;
+  residenceId: string;
+  locationId: string;
+  locationName: string;
+  quantity: number;
+  reason: string;
+  notes?: string;
+}
 
 interface DepreciationForm extends Omit<DepreciationRequest, 'locationId' | 'locationName'> {
   buildingId: string;

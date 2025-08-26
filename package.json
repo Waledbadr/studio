@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:base": "next dev --turbopack -p 9002",
+    "dev:base": "next dev --turbopack -p 3000",
     "dev": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
-    "dev:local": "wrangler pages dev -- npm run dev:base",
+    "dev:local": "wrangler pages dev --proxy 3000 -- npm run dev:base",
     "dev:cloudflare": "npm run build:cloudflare && wrangler pages dev out",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",

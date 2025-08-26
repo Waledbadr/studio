@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Residence as AcResidence } from '@/context/accommodation-context';
-import { useResidences } from '@/context/residences-context';
+import { useResidences } from '@/context/residences-context-simple';
 import { useLanguage } from '@/context/language-context';
 
 export default function ResidenceDetailPage({ params }: { params: { id: string } }) {

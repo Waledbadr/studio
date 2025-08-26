@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
-import { useUsers } from '@/context/users-context';
+import { useOrders, type Order, type OrderItem } from '@/context/orders-context-simple';
+import { useUsers } from '@/context/users-context-simple';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useInventory } from '@/context/inventory-context';
+import { useInventory } from '@/context/inventory-context-simple';
 import { useResidences } from '@/context/residences-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

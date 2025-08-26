@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { AccommodationProvider, useAccommodation } from '@/context/accommodation-context';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { useLanguage } from '@/context/language-context';
 
 function TreeNode({ children }: { children: React.ReactNode }) {
