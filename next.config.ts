@@ -3,9 +3,14 @@ import type {NextConfig} from 'next';
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();
+const isCloudflare = process.env.CLOUDFLARE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // إعدادات Cloudflare Pages
+  output: isCloudflare ? 'export' : undefined,
+  trailingSlash: isCloudflare ? true : false,
+  
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -14,7 +19,9 @@ const nextConfig: NextConfig = {
   },
   // Disable source maps in production to avoid fetch errors
   productionBrowserSourceMaps: false,
+  
   images: {
+    unoptimized: isCloudflare ? true : false,
     remotePatterns: [
       {
         protocol: 'https',
@@ -22,8 +29,22 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // إضافة نمط للملفات المرفوعة في R2
+      {
+        protocol: 'https',
+        hostname: '*.r2.cloudflarestorage.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
+  
+  // تحسينات Cloudflare
+  ...(isCloudflare && {
+    experimental: {
+      runtime: 'edge',
+    },
+  }),
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
     const baseHeaders = [
