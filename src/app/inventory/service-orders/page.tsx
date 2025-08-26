@@ -6,15 +6,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
-import { useServiceOrders } from "@/context/service-orders-context";
+import { useServiceOrders } from "@/context/service-orders-context-simple";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { useResidences } from "@/context/residences-context";
+import { useResidences } from "@/context/residences-context-simple";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
-import { useUsers } from "@/context/users-context";
+import { useUsers } from "@/context/users-context-simple";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 

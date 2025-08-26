@@ -1,21 +1,21 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useInventory } from '@/context/inventory-context';
+import { useInventory } from '@/context/inventory-context-simple';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { useResidences } from '@/context/residences-context';
+import { useResidences } from '@/context/residences-context-simple';
 import { Printer } from 'lucide-react';
-import { db } from '@/lib/firebase';
+// Firebase removed for Cloudflare migration
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
 export default function MRVDetailsPage() {
-  const { getMRVById, items: inventoryItems } = useInventory();
+  const { getMRVs, items: inventoryItems } = useInventory();
   const { residences, loadResidences } = useResidences();
   const params = useParams();
   const router = useRouter();
@@ -33,16 +33,17 @@ export default function MRVDetailsPage() {
   useEffect(() => {
     if (residences.length === 0) loadResidences();
     if (!mrvId) return;
-    (async () => {
+  (async () => {
       setLoading(true);
       try {
-        const d = await getMRVById(mrvId);
-        setData(d);
+    const list = await getMRVs();
+    const d = list.find((x: any) => x.id === mrvId) || null;
+    setData(d);
       } finally {
         setLoading(false);
       }
     })();
-  }, [mrvId, getMRVById, residences.length, loadResidences]);
+  }, [mrvId, getMRVs, residences.length, loadResidences]);
 
   const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
 
@@ -103,15 +104,10 @@ export default function MRVDetailsPage() {
                     const err = await res.json().catch(() => ({}));
                     throw new Error(err.error || `Upload failed (${res.status})`);
                   } else {
-                    // Use server response to update UI immediately; if server couldn't write to Firestore, refetch
+                    // Use server response to update UI immediately
                     const body = await res.json().catch(() => ({}));
                     if (body?.url) {
                       setData((prev: any) => ({ ...(prev || {}), attachmentUrl: body.url, attachmentPath: body.path || null, attachmentRef: body.attachmentRef || null }));
-                      if (!body?.wroteToFirestore) {
-                        const snap = await (await import('firebase/firestore')).getDoc((await import('firebase/firestore')).doc(db!, 'mrvs', mrvId));
-                        const meta = snap.exists() ? (snap.data() as any) : {};
-                        setData((prev: any) => ({ ...(prev || {}), ...meta }));
-                      }
                     }
                   }
                   setFile(null);

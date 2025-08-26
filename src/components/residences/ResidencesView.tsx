@@ -29,9 +29,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label";
 import { useLanguage } from '@/context/language-context';
-import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room, type Facility } from '@/context/residences-context';
+import { useResidences, type Complex, type Building as BuildingType, type Floor, type Room, type Facility } from '@/context/residences-context-simple';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { AddMultipleRoomsDialog } from '@/components/residences';

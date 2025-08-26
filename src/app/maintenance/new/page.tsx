@@ -22,11 +22,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast";
-import { useResidences } from "@/context/residences-context";
+import { useResidences } from "@/context/residences-context-simple";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMaintenance } from "@/context/maintenance-context";
+import { useMaintenance } from "@/context/maintenance-context-simple";
 import { Loader2 } from "lucide-react";
-import { useUsers } from "@/context/users-context";
+import { useUsers } from "@/context/users-context-simple";
 
 
 const formSchema = z.object({

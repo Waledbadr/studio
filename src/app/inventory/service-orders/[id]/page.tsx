@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useServiceOrders, type ServiceOrder } from "@/context/service-orders-context";
+import { useServiceOrders, type ServiceOrder } from "@/context/service-orders-context-simple";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { useUsers } from "@/context/users-context";
+import { useUsers } from "@/context/users-context-simple";
 
 export default function ServiceOrderDetailsPage() {
   const params = useParams();
@@ -91,7 +91,7 @@ export default function ServiceOrderDetailsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.items.map((ln) => {
+              {(order.items || []).map((ln: any) => {
                 const out = (ln.qtySent || 0) - (ln.qtyReturned || 0) - (ln.qtyScrapped || 0);
                 const delta = deltas[ln.itemId] || { addReturned: 0, addScrapped: 0 };
                 const disabled = order.status === "COMPLETED" || out <= 0;

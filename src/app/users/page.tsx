@@ -8,8 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { useUsers, type User } from '@/context/users-context';
-import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
 import { UserFormDialog } from '@/components/users/user-form-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';

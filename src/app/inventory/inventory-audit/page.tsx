@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useInventory, type ReconciliationRequest } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
-import { useUsers } from '@/context/users-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
+import { useUsers } from '@/context/users-context-simple';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

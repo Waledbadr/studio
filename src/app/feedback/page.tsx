@@ -5,11 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { formatDistanceToNow } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+// Firebase disabled during Cloudflare migration
 
 interface Item {
   id: string;
@@ -29,21 +28,7 @@ export default function MyFeedbackPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (!db || !currentUser?.id) { setItems([]); return; }
-      const q = query(
-        collection(db, 'feedback'),
-        where('userId', '==', currentUser.id)
-      );
-      const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      list.sort((a: any, b: any) => {
-        const da = a.createdAt ? (typeof a.createdAt === 'object' ? a.createdAt.toDate?.() || new Date(0) : new Date(a.createdAt)) : new Date(0);
-        const dbb = b.createdAt ? (typeof b.createdAt === 'object' ? b.createdAt.toDate?.() || new Date(0) : new Date(b.createdAt)) : new Date(0);
-        return +dbb - +da;
-      });
-      setItems(list as any);
-    } catch (e) {
-      console.error('Failed to load feedback', e);
+      // Stub: Replace with Cloudflare D1-backed fetch
       setItems([]);
     } finally {
       setLoading(false);

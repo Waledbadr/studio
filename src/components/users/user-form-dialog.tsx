@@ -27,8 +27,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { useResidences } from "@/context/residences-context";
-import { type User, type UserThemeSettings } from "@/context/users-context";
+import { useResidences } from "@/context/residences-context-simple";
+import type { } from "@/context/users-context-simple"; // types come from simple context
+type UserThemeSettings = { colorTheme: string; mode: 'light' | 'dark' | 'system' };
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'Supervisor' | 'Technician';
+  assignedResidences?: string[];
+  themeSettings?: UserThemeSettings;
+};
+import { useUsers } from "@/context/users-context-simple";
 import { Loader2, Palette } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { colorThemes } from "@/lib/themes";

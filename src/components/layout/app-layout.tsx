@@ -4,15 +4,15 @@ import type { PropsWithChildren } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './sidebar';
 import { AppHeader } from './header';
-import RequireAuth from '@/components/auth/require-auth';
+import { AuthGate } from '@/components/auth-gate';
 import { usePathname } from 'next/navigation';
-import dynamic from 'next/dynamic';
+// import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { enablePushIfGranted } from '@/lib/messaging';
 import { LanguageProvider, useLanguage } from '@/context/language-context';
 
-const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
+// const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 function AppLayoutInner({ children }: PropsWithChildren) {
   const { currentUser } = useUsers();
@@ -33,7 +33,7 @@ function AppLayoutInner({ children }: PropsWithChildren) {
   }
 
   return (
-    <RequireAuth>
+  <AuthGate>
       <SidebarProvider defaultOpen>
         <Sidebar side={locale === 'ar' ? 'right' : 'left'} className="no-print">
           <AppSidebar />
@@ -45,7 +45,7 @@ function AppLayoutInner({ children }: PropsWithChildren) {
            </main>
         </SidebarInset>
       </SidebarProvider>
-    </RequireAuth>
+  </AuthGate>
   );
 }
 

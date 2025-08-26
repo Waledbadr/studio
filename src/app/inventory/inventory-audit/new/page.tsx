@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useInventory } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';

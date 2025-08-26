@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useInventory } from '@/context/inventory-context';
-import { useUsers } from '@/context/users-context';
-import { useResidences } from '@/context/residences-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useUsers } from '@/context/users-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';

@@ -7,18 +7,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useNotifications } from '@/context/notifications-context';
+import { useNotifications } from '@/context/notifications-context-simple';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
-import dynamic from 'next/dynamic';
-
-const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
+// Firebase auth and FeedbackWidget removed in Cloudflare build
+// import { auth } from '@/lib/firebase';
+// import { signOut } from 'firebase/auth';
+// import dynamic from 'next/dynamic';
+// const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { currentUser } = useUsers();
@@ -60,13 +60,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const handleLogout = async () => {
-    if (!auth) { router.push('/login'); return; }
     try {
-      await signOut(auth);
-      router.replace('/login');
-    } catch (e) {
-      console.error(e);
-    }
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {}
+    router.replace('/login');
   };
 
   const { locale, toggleLanguage } = useLanguage();
@@ -109,9 +106,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
       </button>
 
-      <div className="flex-1" />
-  {/* Feedback trigger in header */}
-  <FeedbackWidget />
+  <div className="flex-1" />
+  {/* FeedbackWidget disabled until Cloudflare feedback API is wired */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">

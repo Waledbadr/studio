@@ -16,7 +16,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLanguage } from '@/context/language-context';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 import { useState, useEffect } from 'react';
 import { useSidebar } from '@/components/ui/sidebar';
 

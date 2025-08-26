@@ -2,44 +2,28 @@
  * API للمصادقة - تسجيل الخروج
  */
 
-import { AuthService } from '@/lib/auth';
-import { CloudflareEnv } from '@/lib/cloudflare-db';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
-
-export async function POST(request: Request, { env }: { env: CloudflareEnv }) {
+export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
+    // إنشاء response لحذف session cookie
+    const response = NextResponse.json({
+      message: 'تم تسجيل الخروج بنجاح'
+    });
 
-    if (!token) {
-      return Response.json(
-        { error: 'لم يتم توفير رمز المصادقة' },
-        { status: 401 }
-      );
-    }
+    // حذف auth-token cookie
+    response.cookies.set('auth-token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 0, // انتهاء فوري
+      path: '/'
+    });
 
-    // إنشاء خدمة المصادقة
-    const authService = new AuthService(env);
-    
-    // تسجيل الخروج
-    const success = await authService.logout(token);
-    
-    if (success) {
-      return Response.json({
-        success: true,
-        message: 'تم تسجيل الخروج بنجاح'
-      });
-    } else {
-      return Response.json(
-        { error: 'فشل في تسجيل الخروج' },
-        { status: 500 }
-      );
-    }
-    
+    return response;
   } catch (error) {
     console.error('خطأ في API تسجيل الخروج:', error);
-    return Response.json(
+    return NextResponse.json(
       { error: 'حدث خطأ داخلي في الخادم' },
       { status: 500 }
     );

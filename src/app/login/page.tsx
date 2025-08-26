@@ -1,4 +1,6 @@
-import LoginForm from "@/components/auth/login-form";
+import LoginForm from "@/components/auth/login-form-cloudflare";
+
+// Touch: ensure page rebuilds to fix route module emission
 
 export default function LoginPage() {
   return (

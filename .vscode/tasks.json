@@ -27,6 +27,20 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Run dev server (3001)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:base",
+				"--",
+				"-p",
+				"3001"
+			],
+			"isBackground": true,
+			"group": "build"
 		}
 	]
 }

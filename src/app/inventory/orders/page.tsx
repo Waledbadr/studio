@@ -7,15 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
-import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
+import { useOrders, type Order, type OrderStatus } from "@/context/orders-context-simple";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { useUsers } from "@/context/users-context";
-import { useResidences } from "@/context/residences-context";
+import { useUsers } from "@/context/users-context-simple";
+import { useResidences } from "@/context/residences-context-simple";
 import { useLanguage } from '@/context/language-context';
 
 

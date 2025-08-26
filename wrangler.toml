@@ -1,5 +1,6 @@
 name = "estatecare-cloudflare"
 compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
 
 # متغيرات البيئة العامة
@@ -33,10 +34,6 @@ vars = { NODE_ENV = "production" }
 [env.preview]
 vars = { NODE_ENV = "development" }
 
-# إعدادات Pages Functions
-[build]
-command = "npm run build:cloudflare"
+# إعدادات Pages Functions - إزالة build section لأنها ستتم معالجتها تلقائياً
 
-# التوافق مع Node.js APIs
-[compatibility_flags]
-nodejs_compat = true
+# التوافق مع Node.js APIs تم نقله للأعلى

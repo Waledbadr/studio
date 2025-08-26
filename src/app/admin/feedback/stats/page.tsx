@@ -3,9 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis } from 'recharts';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { useUsers } from '@/context/users-context';
+// Firebase disabled during Cloudflare migration
+import { useUsers } from '@/context/users-context-simple';
 
 interface Item {
   id: string;
@@ -28,11 +27,7 @@ export default function FeedbackStatsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (!db) return;
-      const snap = await getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc')));
-      setItems(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
-    } catch (e) {
-      console.error(e);
+      setItems([]);
     } finally {
       setLoading(false);
     }

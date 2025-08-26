@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { useInventory, type MIV } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-simple";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { format } from 'date-fns';

@@ -5,15 +5,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useInventory } from "@/context/inventory-context";
-import { useOrders, type Order } from "@/context/orders-context";
+import { useInventory } from "@/context/inventory-context-simple";
+import { useOrders } from "@/context/orders-context-simple";
 import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
-import { useUsers } from "@/context/users-context";
+import { useUsers } from "@/context/users-context-simple";
 import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus } from "lucide-react";
-import { useResidences } from "@/context/residences-context";
+import { useResidences } from "@/context/residences-context-simple";
 import { useLanguage } from '@/context/language-context';
 
 export default function ReceiveMaterialsPage() {
@@ -70,8 +70,8 @@ export default function ReceiveMaterialsPage() {
         if (residences.length === 0) {
             loadResidences();
         }
-        // Ensure orders are subscribed so Approved/Partially Delivered MRs appear here
-        loadOrders();
+    // Ensure orders are subscribed so Approved/Partially Delivered MRs appear here
+    try { (loadOrders as any)?.(); } catch {}
         loadMrvStats();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser, loadResidences, residences.length, isAdmin]);
@@ -85,8 +85,8 @@ export default function ReceiveMaterialsPage() {
 
     // Derive Approved/Partially Delivered Material Requests (MR) visible to user
     const userVisibleApprovedMRs = useMemo(() => {
-        const approvable: Order['status'][] = ['Approved', 'Partially Delivered'];
-        const list = (orders || []).filter(o => approvable.includes(o.status));
+        const approvable: Array<'Approved' | 'Partially Delivered'> = ['Approved', 'Partially Delivered'];
+        const list = (orders as any[] || []).filter(o => approvable.includes(o.status));
         if (isAdmin) return list;
         const ids = currentUser?.assignedResidences || [];
         return list.filter(o => ids.includes(o.residenceId));

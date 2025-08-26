@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Label } from "@/components/ui/label";
-import { useInventory, type InventoryItem } from '@/context/inventory-context';
-import { useResidences } from '@/context/residences-context';
-import { useUsers } from '@/context/users-context';
+import { useInventory } from '@/context/inventory-context-simple';
+import { useResidences } from '@/context/residences-context-simple';
+import { useUsers } from '@/context/users-context-simple';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Minus, Trash2, ArrowLeftRight, Loader2, Search } from 'lucide-react';
 import { normalizeText, includesNormalized } from '@/lib/utils';

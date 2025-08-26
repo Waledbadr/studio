@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
+import { useOrders, type Order, type OrderItem } from '@/context/orders-context-simple';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Loader2, LayoutGrid, List } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { useUsers } from '@/context/users-context';
+import { useUsers } from '@/context/users-context-simple';
 
 interface AggregatedItem {
     id: string;

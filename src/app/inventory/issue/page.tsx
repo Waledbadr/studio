@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
+import { useInventory } from '@/context/inventory-context-simple';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck, Search } from 'lucide-react';

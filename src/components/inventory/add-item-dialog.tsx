@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useInventory, type InventoryItem } from "@/context/inventory-context";
-import { useUsers } from "@/context/users-context";
+import { useInventory } from "@/context/inventory-context-simple";
+import { useUsers } from "@/context/users-context-simple";
 import { Loader2, Plus, X, Languages, Eye, Tag, Hash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
