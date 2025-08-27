@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useOrders, type Order, type OrderItem } from '@/context/orders-context';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Loader2, LayoutGrid, List } from 'lucide-react';
@@ -62,16 +62,23 @@ const CATEGORY_TRANSLATIONS: { [key: string]: string } = {
 
 export default function ConsolidatedReportPage() {
     const router = useRouter();
-    const { orders, loading, loadOrders } = useOrders();
+    const searchParams = useSearchParams();
+    const { orders, loading, loadOrders, updateOrderStatus } = useOrders();
     const { currentUser } = useUsers();
+    const [showIndividualOrders, setShowIndividualOrders] = useState(false);
+    const [isApproving, setIsApproving] = useState(false);
+    
+    // Get view mode from URL params, default to 'grid'
+    const initialViewMode = searchParams?.get('view') === 'list' ? 'list' : 'grid';
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(initialViewMode);
     
     useEffect(() => {
         loadOrders();
     }, [loadOrders]);
 
-    const { groupedItems, residenceNames, totalItems, totalCategories } = useMemo(() => {
+    const { groupedItems, residenceNames, totalItems, totalCategories, pendingOrders } = useMemo(() => {
         if (loading || !currentUser || currentUser.role !== 'Admin') {
-            return { groupedItems: {}, residenceNames: [], totalItems: 0, totalCategories: 0 };
+            return { groupedItems: {}, residenceNames: [], totalItems: 0, totalCategories: 0, pendingOrders: [] };
         }
 
         const pendingOrders = orders.filter(o => o.status === 'Pending');
@@ -82,26 +89,32 @@ export default function ConsolidatedReportPage() {
             if (order?.residence) uniqueResidenceNames.add(order.residence);
             order.items?.forEach(item => {
                 if (!item) return;
-                const selectedVariant = item.id && item.id.includes('-') ? item.id.split('-').slice(1).join('-') : undefined;
-                const cleanNameAr = (item.nameAr || '').includes(' - ') ? item.nameAr.split(' - ')[0] : (item.nameAr || '');
-                const cleanNameEn = (item.nameEn || '').includes(' - ') ? item.nameEn.split(' - ')[0] : (item.nameEn || '');
-                const note = item.notes?.trim();
-                // دمج الـ note في المفتاح لضمان عدم دمج أصناف ذات ملاحظات مختلفة
-                const keyBase = item.id || `${cleanNameEn}-${cleanNameAr}`;
-                const key = note ? `${keyBase}__note:${note}` : keyBase;
+                
+                // تنظيف الأسماء وإزالة التفاصيل بطريقة مباشرة
+                const cleanNameAr = (item.nameAr || '').includes(' - ') ? 
+                    item.nameAr.split(' - ')[0] : (item.nameAr || '');
+                const cleanNameEn = (item.nameEn || '').includes(' - ') ? 
+                    item.nameEn.split(' - ')[0] : (item.nameEn || '');
+                const category = (item.category || 'Uncategorized').trim();
+                
+                // مفتاح بسيط للدمج: اسم + فئة فقط
+                const key = `${cleanNameAr}-${cleanNameEn}-${category}`.toLowerCase();
+
                 const existing = itemMap.get(key);
                 if (existing) {
+                    // دمج الكميات
                     existing.totalQuantity += item.quantity || 0;
                 } else {
+                    // إنشاء صنف جديد
                     itemMap.set(key, {
                         id: key,
-                        nameAr: cleanNameAr || cleanNameEn || 'صنف بدون اسم',
-                        nameEn: cleanNameEn || cleanNameAr || 'Unnamed Item',
-                        category: (item.category || 'Uncategorized') || 'Uncategorized',
+                        nameAr: cleanNameAr || 'صنف بدون اسم',
+                        nameEn: cleanNameEn || 'Unnamed Item',
+                        category: category,
                         unit: item.unit || '',
                         totalQuantity: item.quantity || 0,
-                        selectedVariant,
-                        note
+                        selectedVariant: undefined,
+                        note: undefined
                     });
                 }
             });
@@ -128,7 +141,8 @@ export default function ConsolidatedReportPage() {
             groupedItems: sortedGrouped, 
             residenceNames: Array.from(uniqueResidenceNames),
             totalItems: sortedItems.length,
-            totalCategories: Object.keys(grouped).length
+            totalCategories: Object.keys(grouped).length,
+            pendingOrders: pendingOrders
         };
         
     }, [orders, loading, currentUser]);
@@ -138,27 +152,20 @@ export default function ConsolidatedReportPage() {
         const entries = Object.entries(groupedItems || {});
         const categoriesData = entries.map(([category, items]) => ({
             category,
-            items,
-            itemCount: items.length
+            items: items as AggregatedItem[],
+            itemCount: (items as AggregatedItem[]).length
         }));
         
         if (categoriesData.length === 0) {
-            return { layoutConfig: [], gridColumns: 3, gridRows: 2, totalItems: 0, averageItems: 0 } as const;
+            return { layoutConfig: [], gridColumns: 3, gridRows: 1, totalItems: 0, averageItems: 0 } as const;
         }
         
+        // Sort by item count (largest first) for better space utilization
         categoriesData.sort((a, b) => b.itemCount - a.itemCount);
         
-        let gridColumns = 3;
-        let gridRows = Math.ceil(categoriesData.length / 3);
-        if (categoriesData.length <= 2) {
-            gridColumns = 2;
-        } else if (categoriesData.length <= 4) {
-            gridColumns = 2; gridRows = 2;
-        } else if (categoriesData.length <= 6) {
-            gridColumns = 3; gridRows = 2;
-        } else if (categoriesData.length <= 9) {
-            gridColumns = 3; gridRows = 3;
-        } else { gridColumns = 4; gridRows = Math.ceil(categoriesData.length / 4); }
+        // Always use 3 columns for optimal space utilization
+        const gridColumns = 3;
+        const gridRows = Math.ceil(categoriesData.length / 3);
         
         const totalItemCount = categoriesData.reduce((sum, cat) => sum + cat.itemCount, 0);
         const averageItems = totalItemCount / categoriesData.length || 0;
@@ -197,6 +204,74 @@ export default function ConsolidatedReportPage() {
     const handlePrint = () => {
         window.print();
     }
+
+    const handleBulkApproval = async () => {
+        if (!currentUser || !pendingOrders.length) return;
+        
+        const confirmMessage = `هل أنت متأكد من الموافقة على جميع الطلبات المعلقة؟\n\nسيتم الموافقة على ${pendingOrders.length} طلب.\n\nAre you sure you want to approve all pending orders?\n\n${pendingOrders.length} orders will be approved.`;
+        
+        if (!window.confirm(confirmMessage)) return;
+
+        setIsApproving(true);
+        try {
+            // Approve orders one by one to maintain audit trail
+            for (const order of pendingOrders) {
+                await updateOrderStatus(order.id, 'Approved', currentUser.id);
+            }
+            
+            // Redirect to orders page after successful bulk approval
+            router.push('/inventory/orders');
+        } catch (error) {
+            console.error('Error in bulk approval:', error);
+            // Individual errors are handled by updateOrderStatus
+        } finally {
+            setIsApproving(false);
+        }
+    }
+
+    // Format order ID helper
+    const formatOrderId = (id: string) => {
+        if (!id) return id;
+        if (id.startsWith('MR-')) return id;
+        const m = id.match(/^(\d{2})-(\d{2})-(\d{3})$/);
+        if (m) return `MR-${m[1]}${m[2]}-${m[3]}`;
+        return id;
+    };
+
+    // Split name detail helper for individual orders
+    const splitNameDetail = (name?: string): { base: string; detail: string } => {
+        const raw = (name || '').trim();
+        if (!raw) return { base: '', detail: '' };
+        
+        // Split by common separators: " - ", " | ", " / "
+        let parts: string[] = [];
+        if (raw.includes(' - ')) {
+            parts = raw.split(' - ');
+        } else if (raw.includes(' | ')) {
+            parts = raw.split(' | ');
+        } else if (raw.includes(' / ')) {
+            parts = raw.split(' / ');
+        } else {
+            return { base: raw, detail: '' };
+        }
+        
+        if (parts.length <= 1) return { base: raw, detail: '' };
+        return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
+    };
+
+    // Handle view mode change
+    const handleViewModeChange = () => {
+        const newMode = viewMode === 'grid' ? 'list' : 'grid';
+        setViewMode(newMode);
+        // Update URL without page reload
+        const url = new URL(window.location.href);
+        if (newMode === 'list') {
+            url.searchParams.set('view', 'list');
+        } else {
+            url.searchParams.delete('view');
+        }
+        window.history.pushState({}, '', url.toString());
+    };
     
     if (loading) {
         return (
@@ -234,7 +309,7 @@ export default function ConsolidatedReportPage() {
                 __html: `
                 @page {
                     size: A4;
-                    margin: 3mm;
+                    margin: 5mm;
                 }
                 
                 @media print {
@@ -243,7 +318,7 @@ export default function ConsolidatedReportPage() {
                     }
                     
                     body { 
-                        font-size: 8px !important;
+                        font-size: 10px !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         -webkit-print-color-adjust: exact !important;
@@ -257,63 +332,69 @@ export default function ConsolidatedReportPage() {
                     
                     .bg-white {
                         margin: 0 !important;
-                        padding: 6px !important;
+                        padding: 8px !important;
                         border: none !important;
                         border-radius: 0 !important;
                         box-shadow: none !important;
                     }
 
-                    /* Use multi-column layout on print to better utilize vertical whitespace */
+                    /* Simplified grid layout for printing */
                     .elegant-grid {
-                        display: block !important;
-                        column-count: 2;
-                        column-gap: 8px !important;
-                        column-fill: balance;
+                        display: grid !important;
+                        grid-template-columns: repeat(3, 1fr) !important;
+                        gap: 6px !important;
                         margin: 0 !important;
                     }
 
-                    /* Allow cards to break across pages/columns and avoid clipping */
+                    /* Ensure cards fit properly in 3-column layout */
                     .report-card {
-                        display: inline-block;
-                        width: 100%;
-                        break-inside: auto !important;
-                        page-break-inside: auto !important;
+                        display: block !important;
+                        width: 100% !important;
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
                         overflow: visible !important;
                         box-shadow: none !important;
-                        border-radius: 6px !important;
+                        border-radius: 4px !important;
+                        margin-bottom: 8px !important;
                     }
 
-                    /* Keep header with the first row, but allow long cards to split */
+                    /* Keep header with the card */
                     .report-card-header {
                         break-after: avoid !important;
                         position: static !important;
                         box-shadow: none !important;
+                        padding: 4px 6px !important;
+                        font-size: 9px !important;
+                        min-height: 32px !important;
                     }
 
                     /* Ensure full item list prints */
                     .report-card-body {
                         max-height: none !important;
                         overflow: visible !important;
-                        padding: 4px 6px !important;
+                        padding: 4px !important;
                     }
 
-                    /* Avoid breaking inside a single row visually */
+                    /* Avoid breaking inside a single row */
                     .row-item {
                         break-inside: avoid !important;
                         page-break-inside: avoid !important;
+                        padding: 3px 4px !important;
+                        margin-bottom: 2px !important;
+                        font-size: 8px !important;
                     }
                     
-                    /* تصغير أحجام الخطوط للطباعة */
+                    /* Typography adjustments for print */
                     div[style*="fontSize: '20px'"] {
-                        font-size: 11px !important;
+                        font-size: 12px !important;
                     }
                     
                     div[style*="fontSize: '16px'"] {
-                        font-size: 9px !important;
+                        font-size: 10px !important;
                     }
                     
                     div[style*="fontSize: '14px'"] {
-                        font-size: 8px !important;
+                        font-size: 9px !important;
                     }
                     
                     div[style*="fontSize: '13px'"] {
@@ -321,85 +402,41 @@ export default function ConsolidatedReportPage() {
                     }
                     
                     div[style*="fontSize: '12px'"] {
-                        font-size: 7px !important;
+                        font-size: 8px !important;
                     }
                     
                     div[style*="fontSize: '11px'"] {
-                        font-size: 6px !important;
+                        font-size: 7px !important;
                     }
                     
-                    div[style*="fontSize: '10px'"] {
-                        font-size: 6px !important;
-                    }
-                    
-                    div[style*="fontSize: '9px'"] {
-                        font-size: 5px !important;
-                    }
-                    
-                    div[style*="fontSize: '8px'"] {
-                        font-size: 5px !important;
-                    }
-                    
-                    /* تصغير المسافات */
+                    /* Spacing adjustments */
                     div[style*="marginBottom: '20px'"] {
                         margin-bottom: 8px !important;
                     }
                     
-                    div[style*="margin: '15px 0'"] {
-                        margin: 6px 0 !important;
-                    }
-                    
                     div[style*="padding: '15px 20px'"] {
-                        padding: 4px 8px !important;
+                        padding: 6px 10px !important;
                     }
                     
-                    div[style*="padding: '8px 12px'"] {
-                        padding: 3px 5px !important;
-                    }
-                    
-                    div[style*="padding: '6px 10px'"] {
-                        padding: 2px 4px !important;
-                    }
-                    
-                    div[style*="gap: '12px'"] {
-                        gap: 3px !important;
-                    }
-                    
-                    div[style*="gap: '8px'"] {
-                        gap: 2px !important;
-                    }
-                    
-                    div[style*="gap: '30px'"] {
-                        gap: 8px !important;
-                    }
-                    
-                    /* إزالة جميع القيود على الارتفاع لضمان عرض جميع الأصناف - إبقاء دعم selector القديم احتياطياً */
-                    div[style*="maxHeight"] {
-                        max-height: none !important;
-                        overflow: visible !important;
-                    }
-                    div[style*="overflowY: 'auto'"] {
-                        overflow: visible !important;
-                        max-height: none !important;
-                    }
-                    .elegant-grid > div {
-                        height: auto !important;
-                        max-height: none !important;
-                        overflow: visible !important;
-                    }
-                    
-                    /* تحسين العناوين جنباً إلى جنب للطباعة */
-                    div[style*="gap: '8px'"] {
-                        gap: 4px !important;
-                    }
                     div[style*="padding: '8px 12px'"] {
                         padding: 4px 6px !important;
                     }
                     
-                    div[style*="minHeight: '40px'"] {
-                        min-height: 24px !important;
+                    div[style*="gap: '12px'"] {
+                        gap: 4px !important;
                     }
                     
+                    div[style*="gap: '30px'"] {
+                        gap: 10px !important;
+                    }
+                    
+                    /* Remove height restrictions */
+                    div[style*="maxHeight"] {
+                        max-height: none !important;
+                        overflow: visible !important;
+                    }
+                    
+                    /* Header adjustments */
                     div[style*="marginBottom: '1px'"] {
                         margin-bottom: 0px !important;
                     }
@@ -408,72 +445,13 @@ export default function ConsolidatedReportPage() {
                         padding: 2px 4px !important;
                     }
                     
-                    div[style*="borderRadius: '12px'"] {
-                        border-radius: 6px !important;
-                    }
-                    
-                    div[style*="padding: '6px'"] {
-                        padding: 3px !important;
-                    }
-                    
-                    div[style*="padding: '6px 10px'"] {
-                        padding: 3px 5px !important;
-                    }
-                    
-                    div[style*="marginBottom: '3px'"] {
-                        margin-bottom: 1px !important;
-                    }
-                    
-                    div[style*="borderRadius: '4px'"] {
-                        border-radius: 2px !important;
-                    }
-                    
-                    div[style*="marginBottom: '1px'"] {
-                        margin-bottom: 0px !important;
-                    }
-                    
-                    /* تقليل حجم النص المحدث للطباعة */
-                    div[style*="fontSize: '11px'"] {
-                        font-size: 6px !important;
-                    }
-                    
-                    div[style*="fontSize: '9px'"] {
-                        font-size: 5px !important;
-                    }
-                    
-                    div[style*="fontSize: '13px'"] {
-                        font-size: 7px !important;
-                    }
-                    
-                    div[style*="fontSize: '8px'"] {
-                        font-size: 4px !important;
-                    }
-                    
-                    /* تحسين ارتفاع الصفوف */
-                    div[style*="minHeight: '28px'"] {
-                        min-height: 18px !important;
-                    }
-                    
-                    /* تحسين المسافات الداخلية للعناصر */
+                    /* Footer and signatures */
                     div[style*="marginTop: '25px'"] {
                         margin-top: 15px !important;
-                    }
-                    
-                    div[style*="paddingTop: '15px'"] {
                         padding-top: 8px !important;
+                        border-top: 1px solid #000 !important;
                     }
                     
-                    /* الحفاظ على حجم خط التوقيعات قابل للقراءة */
-                    div[style*="fontSize: '11px'"][style*="fontWeight: 'bold'"] {
-                        font-size: 8px !important;
-                        font-weight: bold !important;
-                    }
-                    
-                    div[style*="fontSize: '9px'"][style*="color: '#6c757d'"] {
-                        font-size: 7px !important;
-                    }
-                    
-                    /* ضمان ظهور أقسام التوقيعات */
                     div[style*="gridTemplateColumns: 'repeat(3, 1fr)'"] {
                         display: grid !important;
                         grid-template-columns: repeat(3, 1fr) !important;
@@ -485,62 +463,129 @@ export default function ConsolidatedReportPage() {
                         width: 80px !important;
                     }
                     
-                    /* منع إخفاء التوقيعات في الطباعة */
-                    div[style*="textAlign: 'center'"][style*="border: '1px solid #dee2e6'"] {
-                        display: block !important;
-                        visibility: visible !important;
-                        page-break-inside: avoid !important;
-                        margin-bottom: 0 !important;
+                    div[style*="fontSize: '11px'"][style*="fontWeight: 'bold'"] {
+                        font-size: 8px !important;
+                        font-weight: bold !important;
                     }
                     
-                    /* ضمان ظهور footer والتوقيعات */
-                    div[style*="marginTop: '25px'"][style*="borderTop: '2px solid #000'"] {
-                        display: block !important;
-                        visibility: visible !important;
-                        page-break-inside: avoid !important;
-                        margin-top: 10px !important;
-                        padding-top: 5px !important;
-                        border-top: 1px solid #000 !important;
+                    div[style*="fontSize: '9px'"][style*="color: '#6c757d'"] {
+                        font-size: 7px !important;
                     }
                     
-                    /* التأكد من ظهور grid التوقيعات */
-                    div[style*="display: 'grid'"][style*="gridTemplateColumns: 'repeat(3, 1fr)'"] {
-                        display: grid !important;
-                        grid-template-columns: repeat(3, 1fr) !important;
-                        gap: 10px !important;
-                        margin-top: 5px !important;
-                    }
-                    
-                    /* ضمان وضوح نص التوقيعات */
+                    /* Signature text */
                     div[style*="طلب من"], 
                     div[style*="موافق من"], 
                     div[style*="تم الاستلام"],
                     div[style*="Requested By"],
                     div[style*="Approved By"],
                     div[style*="Received By"] {
-                        font-size: 7px !important;
+                        font-size: 8px !important;
                         font-weight: bold !important;
                         color: #000 !important;
                     }
                     
-                    /* التأكد من ظهور خطوط التوقيع */
                     div[style*="width: '100px'"][style*="borderTop: '2px solid #000'"] {
                         border-top: 1px solid #000 !important;
                         width: 60px !important;
                         margin: 5px auto !important;
                     }
+                    }
+
+                    /* List View (Table) Print Styles */
+                    .print-compact-table {
+                        border-collapse: collapse !important;
+                        width: 100% !important;
+                    }
                     
-                    /* ضمان ظهور حقول Name, Position, Date */
-                    div[style*="Name: _______________"],
-                    div[style*="Position: ___________"],
-                    div[style*="Date: _____________"] {
-                        font-size: 6px !important;
-                        color: #333 !important;
-                        margin-bottom: 2px !important;
+                    .print-compact-table thead th {
+                        font-weight: 800 !important;
+                        font-size: 10px !important;
+                        padding: 4px 6px !important;
+                        background: ##dadada !important;
+                        border-bottom: 1px solid #9ca3af !important;
+                        color: #000 !important;
+                        white-space: nowrap !important;
+                    }
+                    
+                    .print-compact-table tbody td {
+                        font-size: 12px !important;
+                        padding: 3px 6px !important;
+                        border-top: 1px solid #d1d5db !important;
+                        vertical-align: middle !important;
+                        color: #000 !important;
+                    }
+                    
+                    .print-compact-table tbody td:first-child {
+                        font-weight: 700 !important;
+                        color: #000 !important;
+                    }
+                    
+                    .print-compact-table .category-row td {
+                        padding-top: 3px !important;
+                        padding-bottom: 3px !important;
+                        background: #f3f4f6 !important;
+                        color: #000 !important;
+                        font-weight: 800 !important;
+                        font-size: 11px !important;
+                        border-top: 1px solid #9ca3af !important;
+                        border-bottom: 1px solid #9ca3af !important;
+                    }
+
+                    /* Individual Orders Print Styles */
+                    .individual-order-page {
+                        break-before: page !important;
+                        page-break-before: always !important;
+                    }
+                    
+                    .order-header {
+                        break-after: avoid !important;
+                        page-break-after: avoid !important;
+                    }
+                    
+                    .residence-header {
+                        break-after: avoid !important;
+                        page-break-after: avoid !important;
+                        margin-bottom: 15px !important;
+                    }
+
+                    /* Notes bidi handling for individual orders */
+                    .notes-cell { 
+                        direction: rtl !important; 
+                        text-align: left !important; 
+                        unicode-bidi: isolate !important; 
+                    }
+                    
+                    .notes-cell .bidi-notes { 
+                        direction: rtl !important; 
+                        unicode-bidi: plaintext !important; 
+                    }
+                    
+                    .print-notes {
+                        max-width: 220px !important;
+                        overflow: hidden !important;
+                        text-overflow: ellipsis !important;
+                        white-space: nowrap !important;
+                        color: #111 !important;
+                        direction: rtl !important;
+                        text-align: left !important;
+                        unicode-bidi: isolate !important;
+                    }
+
+                    /* iPhone-style toggle switch animations */
+                    .toggle-switch {
+                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    }
+                    
+                    .toggle-switch:hover {
+                        transform: scale(1.05) !important;
+                    }
+                    
+                    .toggle-switch:active {
+                        transform: scale(0.95) !important;
                     }
                 }
                 
-                /* استجابة أنيقة للشاشات المختلفة */
+                /* Web view responsive adjustments */
                 @media screen and (max-width: 1200px) {
                     .elegant-grid {
                         grid-template-columns: repeat(3, 1fr) !important;
@@ -564,14 +609,6 @@ export default function ConsolidatedReportPage() {
                         padding: 12px !important;
                         font-size: 12px !important;
                     }
-                    
-                    div[style*="gridColumn"] {
-                        grid-column: span 1 !important;
-                    }
-                    
-                    div[style*="gridRow"] {
-                        grid-row: span 1 !important;
-                    }
                 }
                 `
             }} />
@@ -583,18 +620,91 @@ export default function ConsolidatedReportPage() {
                         Back to Requests
                     </Button>
                     <div className="flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => router.push('/inventory/orders/consolidated-report-mr')}
-                            title="عرض التقرير العادي (MR-style)"
-                        >
-                            <List className="mr-2 h-4 w-4" />
-                            التقرير العادي
-                        </Button>
-                        <Button onClick={handlePrint} title="طباعة التقرير الشبكي">
+                        {pendingOrders.length > 0 && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowIndividualOrders(!showIndividualOrders)}
+                                    title="إضافة/إزالة الطلبات الفردية مع التقرير المجمع"
+                                >
+                                    <LayoutGrid className="mr-2 h-4 w-4" />
+                                    {showIndividualOrders ? 'إخفاء الطلبات الفردية' : 'إظهار الطلبات الفردية'}
+                                </Button>
+                                <Button
+                                    variant="default"
+                                    onClick={handleBulkApproval}
+                                    disabled={isApproving}
+                                    title="الموافقة على جميع الطلبات المعلقة دفعة واحدة"
+                                >
+                                    {isApproving ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> جاري الموافقة...</>
+                                    ) : (
+                                        <>موافقة جماعية ({pendingOrders.length})</>
+                                    )}
+                                </Button>
+                            </>
+                        )}
+                        
+                        {/* iPhone-style Toggle Switch */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            <span style={{
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                color: viewMode === 'grid' ? '#007bff' : '#6c757d'
+                            }}>شبكي</span>
+                            
+                            <div 
+                                onClick={handleViewModeChange}
+                                className="toggle-switch"
+                                style={{
+                                    width: '48px',
+                                    height: '24px',
+                                    backgroundColor: viewMode === 'list' ? '#007bff' : '#e9ecef',
+                                    borderRadius: '12px',
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease',
+                                    border: '2px solid transparent',
+                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
+                                }}
+                                title="التبديل بين العرض الشبكي والعرض العادي"
+                            >
+                                <div style={{
+                                    width: '18px',
+                                    height: '18px',
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '50%',
+                                    position: 'absolute',
+                                    top: '1px',
+                                    left: viewMode === 'list' ? '27px' : '1px',
+                                    transition: 'all 0.3s ease',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    {viewMode === 'grid' ? (
+                                        <LayoutGrid style={{ width: '10px', height: '10px', color: '#007bff' }} />
+                                    ) : (
+                                        <List style={{ width: '10px', height: '10px', color: '#007bff' }} />
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <span style={{
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                color: viewMode === 'list' ? '#007bff' : '#6c757d'
+                            }}>عادي</span>
+                        </div>
+                        
+                        <Button onClick={handlePrint} title={`طباعة التقرير ${viewMode === 'grid' ? 'الشبكي' : 'العادي'}`}>
                             <Printer className="mr-2 h-4 w-4" />
-                            طباعة الشبكي
+                            طباعة
                         </Button>
                     </div>
                 </div>
@@ -614,197 +724,118 @@ export default function ConsolidatedReportPage() {
                             justifyContent: 'space-between',
                             alignItems: 'flex-start',
                             marginBottom: '20px',
-                            padding: '15px 20px',
+                            padding: '12px 16px',
                             border: '2px solid #000',
                             borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'
+                            background: '#f8f9fa'
                         }}
                     >
-                        <div style={{ flex: 1 }}>
-                            <div style={{
-                                fontSize: '20px',
-                                fontWeight: 'bold',
-                                color: '#000',
-                                marginBottom: '4px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px'
-                            }}>
-                                Consolidated Pending Requests
-                            </div>
-                            <div style={{
-                                fontSize: '16px',
-                                fontWeight: 'bold',
-                                color: '#333',
-                                marginBottom: '8px'
-                            }}>
-                                الطلبات المجمعة المعلقة
-                            </div>
-                        </div>
                         <div style={{
-                            textAlign: 'right',
-                            borderLeft: '2px solid #007bff',
-                            paddingLeft: '15px'
+                            display: 'flex',
+                            flexDirection: 'column',
+                            width: '100%'
                         }}>
-                            <div style={{
-                                fontSize: '14px',
-                                fontWeight: 'bold',
-                                color: '#007bff',
-                                backgroundColor: '#fff3cd',
-                                padding: '6px 12px',
-                                borderRadius: '6px',
-                                border: '2px solid #ffeeba',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                            }}>
-                                Report Date: {format(new Date(), 'MMMM do, yyyy')}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Locations Section */}
-                    {residenceNames.length > 0 && (
-                        <div style={{
-                            marginBottom: '20px',
-                            textAlign: 'center'
-                        }}>
-                            <div style={{
-                                fontSize: '13px',
-                                fontWeight: 'bold',
-                                marginBottom: '8px',
-                                color: '#495057'
-                            }}>
-                                المواقع المطلوبة • Requested Locations
-                            </div>
                             <div style={{
                                 display: 'flex',
-                                justifyContent: 'center',
-                                gap: '10px',
-                                flexWrap: 'wrap'
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '15px'
                             }}>
-                                {residenceNames.map((name) => (
-                                    <span key={name} style={{
-                                        background: 'linear-gradient(135deg, #007bff, #0056b3)',
-                                        color: 'white',
-                                        padding: '6px 14px',
-                                        borderRadius: '15px',
-                                        fontSize: '11px',
-                                        fontWeight: '600',
-                                        boxShadow: '0 2px 4px rgba(0,123,255,0.3)',
-                                        border: '1px solid #0056b3'
+                                <div style={{ flex: 1 }}>
+                                    <div style={{
+                                        fontSize: '18px',
+                                        fontWeight: 'bold',
+                                        color: '#000',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px',
+                                        whiteSpace: 'nowrap'
                                     }}>
-                                        {name}
-                                    </span>
-                                ))}
+                                        Consolidated Pending Requests
+                                    </div>
+                                </div>
+                                <div style={{
+                                    textAlign: 'right'
+                                }}>
+                                    {/* Date - Made bigger */}
+                                    <div style={{
+                                        fontSize: '16px',
+                                        fontWeight: 'bold',
+                                        color: '#007bff',
+                                        backgroundColor: '#fff3cd',
+                                        padding: '6px 12px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ffeeba',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {format(new Date(), 'MMM do, yyyy')}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Summary Stats - Simplified */}
-                    <div style={{
-                        margin: '15px 0',
-                        padding: '8px 12px',
-                        background: 'linear-gradient(135deg, #e3f2fd, #bbdefb)',
-                        border: '1px solid #2196f3',
-                        borderRadius: '6px'
-                    }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            color: '#1976d2',
-                            marginBottom: '6px'
-                        }}>ملخص الطلب • Request Summary</div>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-                            gap: '6px'
-                        }}>
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '4px',
-                                backgroundColor: 'white',
-                                borderRadius: '4px',
-                                border: '1px solid #e0e0e0'
-                            }}>
+                            
+                            {/* Locations and Order IDs with frames - Full width */}
+                            {residenceNames.length > 0 && (
                                 <div style={{
-                                    fontSize: '8px',
-                                    color: '#666',
-                                    marginBottom: '2px'
-                                }}>Total Categories</div>
-                                <div style={{
-                                    fontSize: '10px',
-                                    fontWeight: 'bold',
-                                    color: '#1976d2'
-                                }}>{totalCategories}</div>
-                            </div>
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '4px',
-                                backgroundColor: 'white',
-                                borderRadius: '4px',
-                                border: '1px solid #e0e0e0'
-                            }}>
-                                <div style={{
-                                    fontSize: '8px',
-                                    color: '#666',
-                                    marginBottom: '2px'
-                                }}>Total Items</div>
-                                <div style={{
-                                    fontSize: '10px',
-                                    fontWeight: 'bold',
-                                    color: '#1976d2'
-                                }}>{totalItems}</div>
-                            </div>
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '4px',
-                                backgroundColor: 'white',
-                                borderRadius: '4px',
-                                border: '1px solid #e0e0e0'
-                            }}>
-                                <div style={{
-                                    fontSize: '8px',
-                                    color: '#666',
-                                    marginBottom: '2px'
-                                }}>Locations</div>
-                                <div style={{
-                                    fontSize: '10px',
-                                    fontWeight: 'bold',
-                                    color: '#1976d2'
-                                }}>{residenceNames.length}</div>
-                            </div>
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '4px',
-                                backgroundColor: 'white',
-                                borderRadius: '4px',
-                                border: '1px solid #e0e0e0'
-                            }}>
-                                <div style={{
-                                    fontSize: '8px',
-                                    color: '#666',
-                                    marginBottom: '2px'
-                                }}>Status</div>
-                                <div style={{
-                                    fontSize: '10px',
-                                    fontWeight: 'bold',
-                                    color: '#1976d2'
-                                }}>Pending</div>
-                            </div>
+                                    display: 'flex',
+                                    gap: '8px',
+                                    flexWrap: 'wrap',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    width: '100%'
+                                }}>
+                                    {residenceNames.map((name) => {
+                                        const residenceOrders = pendingOrders.filter(order => order.residence === name);
+                                        return (
+                                            <div key={name} style={{
+                                                background: '#f8f9fa',
+                                                border: '1px solid #dee2e6',
+                                                borderRadius: '4px',
+                                                padding: '4px 6px',
+                                                textAlign: 'center',
+                                                minWidth: '70px',
+                                                maxWidth: '120px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'center'
+                                            }}>
+                                                <div style={{
+                                                    fontSize: '10px',
+                                                    fontWeight: 'bold',
+                                                    color: '#1976d2',
+                                                    lineHeight: '1.2',
+                                                    marginBottom: '2px'
+                                                }}>
+                                                    {name}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '8px',
+                                                    color: '#000',
+                                                    lineHeight: '1.1'
+                                                }}>
+                                                    {residenceOrders.map(order => formatOrderId(order.id)).join(', ')}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Main Content - Elegant Design */}
+                    {/* Main Content - Conditional Display */}
                     <div style={{ padding: '0' }}>
                         {layoutData.layoutConfig.length > 0 ? (
-                            <div 
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: `repeat(${layoutData.gridColumns}, 1fr)`,
-                                    gap: '16px',
-                                    marginBottom: '20px',
-                                    gridAutoRows: 'minmax(200px, auto)'
-                                }}
-                                className="elegant-grid"
-                            >
+                            viewMode === 'grid' ? (
+                                /* Grid View (Original Elegant Design) */
+                                <div 
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `repeat(${layoutData.gridColumns}, 1fr)`,
+                                        gap: '16px',
+                                        marginBottom: '20px',
+                                        gridAutoRows: 'minmax(200px, auto)'
+                                    }}
+                                    className="elegant-grid"
+                                >
                                 {layoutData.layoutConfig.map((cardConfig) => (
                                     <div 
                                         key={cardConfig.category} 
@@ -822,9 +853,10 @@ export default function ConsolidatedReportPage() {
                                     >
                                         {/* Card Header - Bilingual & Elegant */}
                                         <div className="report-card-header" style={{
-                                            background: 'linear-gradient(135deg, #495057 0%, #343a40 100%)', // لون موحد رمادي أنيق
-                                            color: 'white',
-                                            padding: '8px 12px', // زيادة قليلة للمساحة للنصين
+                                            background: '#f8f9fa',
+                                            borderBottom: '2px solid #dee2e6',
+                                            color: '#495057',
+                                            padding: '10px 15px',
                                             fontSize: '11px',
                                             fontWeight: '600',
                                             textAlign: 'center',
@@ -842,17 +874,17 @@ export default function ConsolidatedReportPage() {
                                                 gap: '8px'
                                             }}>
                                                 <div style={{
-                                                    fontSize: '11px',
+                                                    fontSize: '13px',
                                                     fontWeight: '600',
-                                                    color: 'white',
+                                                    color: '#4a5568',
                                                     direction: 'ltr'
                                                 }}>
                                                     {cardConfig.category}
                                                 </div>
                                                 <div style={{
-                                                    fontSize: '11px',
+                                                    fontSize: '12px',
                                                     fontWeight: '600',
-                                                    color: 'white',
+                                                    color: '#4a5568',
                                                     direction: 'rtl'
                                                 }}>
                                                     {getCategoryNameAr(cardConfig.category)}
@@ -883,14 +915,14 @@ export default function ConsolidatedReportPage() {
                                                       '250px',
                                             overflowY: 'auto'
                                         }}>
-                                            {cardConfig.items.map((item: any, index: number) => {
+                                            {(cardConfig.items as AggregatedItem[]).map((item: AggregatedItem, index: number) => {
                                                 return (
                                                     <div key={item.id} className="row-item" style={{
                                                         display: 'flex',
                                                         justifyContent: 'space-between',
                                                         alignItems: 'center',
                                                         padding: '6px 10px',
-                                                        marginBottom: index === cardConfig.items.length - 1 ? '0' : '3px',
+                                                        marginBottom: index === (cardConfig.items as AggregatedItem[]).length - 1 ? '0' : '3px',
                                                         backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white',
                                                         borderRadius: '4px',
                                                         border: '1px solid #f1f3f4'
@@ -906,65 +938,28 @@ export default function ConsolidatedReportPage() {
                                                             {/* اسم الصنف - يحتفظ بعرضه الأصلي */}
                                                             <div style={{ flex: 1, marginRight: '8px' }}>
                                                                 <div style={{
-                                                                    fontSize: '11px',
+                                                                    fontSize: '12px',
                                                                     fontWeight: '600',
                                                                     color: '#2c3e50',
-                                                                    lineHeight: '1.2',
-                                                                    marginBottom: '1px'
+                                                                    lineHeight: '1.3',
+                                                                    marginBottom: '2px'
                                                                 }}>
-                                                                    {item.nameAr}
+                                                                    {(() => {
+                                                                        const ar = splitNameDetail(item.nameAr);
+                                                                        return ar.base || item.nameAr;
+                                                                    })()}
                                                                 </div>
                                                                 <div style={{
-                                                                    fontSize: '9px',
+                                                                    fontSize: '12px',
                                                                     color: '#7f8c8d',
-                                                                    lineHeight: '1.1'
+                                                                    lineHeight: '1.2'
                                                                 }}>
-                                                                    {item.nameEn}
+                                                                    {(() => {
+                                                                        const en = splitNameDetail(item.nameEn);
+                                                                        return en.base || item.nameEn;
+                                                                    })()}
                                                                 </div>
                                                             </div>
-                                                            
-                                                            {/* التفاصيل على اليمين من اسم الصنف */}
-                                                            {item.selectedVariant && (
-                                                                <div style={{
-                                                                    flex: 0,
-                                                                    minWidth: 'auto'
-                                                                }}>
-                                                                    <div style={{
-                                                                        fontSize: '9px',
-                                                                        fontWeight: '500',
-                                                                        color: '#8e44ad',
-                                                                        backgroundColor: '#f8f9ff',
-                                                                        padding: '2px 5px',
-                                                                        borderRadius: '3px',
-                                                                        border: '1px solid #e8e1ff',
-                                                                        whiteSpace: 'nowrap'
-                                                                    }}>
-                                                                        {item.selectedVariant}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {item.note && (
-                                                                <div style={{
-                                                                    flex: 0,
-                                                                    minWidth: 'auto'
-                                                                }}>
-                                                                    <div style={{
-                                                                        fontSize: '9px',
-                                                                        fontWeight: '500',
-                                                                        color: '#0d6efd',
-                                                                        backgroundColor: '#eef6ff',
-                                                                        padding: '2px 5px',
-                                                                        borderRadius: '3px',
-                                                                        border: '1px solid #b6daff',
-                                                                        whiteSpace: 'nowrap',
-                                                                        maxWidth: '120px',
-                                                                        overflow: 'hidden',
-                                                                        textOverflow: 'ellipsis'
-                                                                    }} title={item.note}>
-                                                                        {item.note}
-                                                                    </div>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                         
                                                         {/* الكمية والوحدة على اليمين */}
@@ -975,14 +970,14 @@ export default function ConsolidatedReportPage() {
                                                             minWidth: '45px'
                                                         }}>
                                                             <div style={{
-                                                                fontSize: '13px',
+                                                                fontSize: '12px',
                                                                 fontWeight: 'bold',
                                                                 color: '#2980b9'
                                                             }}>
                                                                 {item.totalQuantity}
                                                             </div>
                                                             <div style={{
-                                                                fontSize: '8px',
+                                                                fontSize: '12px',
                                                                 color: '#95a5a6',
                                                                 textAlign: 'center'
                                                             }}>
@@ -996,6 +991,158 @@ export default function ConsolidatedReportPage() {
                                     </div>
                                 ))}
                             </div>
+                            ) : (
+                                /* List View (Table Format like MR page) */
+                                <div style={{ 
+                                    marginBottom: '25px',
+                                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    <table style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '14px',
+                                        backgroundColor: '#ffffff'
+                                    }} className="print-compact-table">
+                                        <thead>
+                                            <tr style={{ 
+                                                background: '#f8f9fa',
+                                                color: '#212529',
+                                                borderBottom: '2px solid #dee2e6'
+                                            }}>
+                                                <th style={{
+                                                    fontWeight: '600',
+                                                    fontSize: '14px',
+                                                    padding: '16px 20px',
+                                                    textAlign: 'left',
+                                                    width: '55%',
+                                                    letterSpacing: '0.5px',
+                                                    textTransform: 'uppercase'
+                                                }}>Item</th>
+                                                <th style={{
+                                                    fontWeight: '600',
+                                                    fontSize: '14px',
+                                                    padding: '16px 20px',
+                                                    textAlign: 'center',
+                                                    width: '20%',
+                                                    letterSpacing: '0.5px',
+                                                    textTransform: 'uppercase'
+                                                }}>Unit</th>
+                                                <th style={{
+                                                    fontWeight: '600',
+                                                    fontSize: '14px',
+                                                    padding: '16px 20px',
+                                                    textAlign: 'center',
+                                                    width: '25%',
+                                                    letterSpacing: '0.5px',
+                                                    textTransform: 'uppercase'
+                                                }}>Total Qty</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {layoutData.layoutConfig.map((cardConfig) => (
+                                                <React.Fragment key={cardConfig.category}>
+                                                    <tr style={{
+                                                        background: '#f8f9fa',
+                                                        borderLeft: '4px solid #667eea'
+                                                    }}>
+                                                        <td colSpan={3} style={{
+                                                            padding: '14px 20px',
+                                                            color: '#495057',
+                                                            fontWeight: '700',
+                                                            textTransform: 'capitalize',
+                                                            fontSize: '13px',
+                                                            borderBottom: '2px solid #dee2e6',
+                                                            position: 'relative'
+                                                        }}>
+                                                            <div style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '8px'
+                                                            }}>
+                                                                <span style={{ fontSize: '14px', fontWeight: '700' }}>
+                                                                    {getCategoryNameAr(cardConfig.category)} • {cardConfig.category}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    {(cardConfig.items as AggregatedItem[]).map((item: AggregatedItem) => (
+                                                        <tr key={item.id} style={{
+                                                            transition: 'all 0.2s ease'
+                                                        }}>
+                                                            <td style={{
+                                                                padding: '12px 20px',
+                                                                borderBottom: '1px solid #f1f5f9',
+                                                                fontWeight: '500',
+                                                                fontSize: '12px',
+                                                                color: '#2d3748',
+                                                                lineHeight: '1.5'
+                                                            }}>
+                                                                <div style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '8px'
+                                                                }}>
+                                                                    <div>
+                                                                        {(() => {
+                                                                            const ar = splitNameDetail(item.nameAr);
+                                                                            const en = splitNameDetail(item.nameEn);
+                                                                            return `${en.base || item.nameEn} | ${ar.base || item.nameAr}`;
+                                                                        })()}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td style={{
+                                                                padding: '12px 20px',
+                                                                borderBottom: '1px solid #f1f5f9',
+                                                                textAlign: 'center',
+                                                                fontSize: '12px',
+                                                                color: '#4a5568',
+                                                                fontWeight: '500'
+                                                            }}>
+                                                                <span style={{
+                                                                    backgroundColor: '#e2e8f0',
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '11px',
+                                                                    fontWeight: '600',
+                                                                    color: '#2d3748'
+                                                                }}>
+                                                                    {item.unit}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{
+                                                                padding: '12px 20px',
+                                                                borderBottom: '1px solid #f1f5f9',
+                                                                textAlign: 'center',
+                                                                fontWeight: 'bold',
+                                                                fontSize: '12px'
+                                                            }}>
+                                                                <div style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    backgroundColor: '#f8f9fa',
+                                                                    color: '#212529',
+                                                                    padding: '6px 12px',
+                                                                    border: '1px solid #dee2e6',
+                                                                    borderRadius: '4px',
+                                                                    fontWeight: '700',
+                                                                    minWidth: '50px'
+                                                                }}>
+                                                                    {item.totalQuantity}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </React.Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )
                         ) : (
                             <div style={{ 
                                 textAlign: 'center', 
@@ -1004,7 +1151,6 @@ export default function ConsolidatedReportPage() {
                                 fontSize: '16px',
                                 fontWeight: '500'
                             }}>
-                                <div style={{ marginBottom: '8px', fontSize: '18px' }}>📋</div>
                                 No pending material requests found.
                             </div>
                         )}
@@ -1033,7 +1179,7 @@ export default function ConsolidatedReportPage() {
                                     fontWeight: 'bold',
                                     marginBottom: '20px',
                                     color: '#495057'
-                                }}>طلب من • Requested By</div>
+                                }}>Requested By</div>
                                 <div style={{
                                     borderTop: '2px solid #000',
                                     width: '100px',
@@ -1043,9 +1189,6 @@ export default function ConsolidatedReportPage() {
                                     fontSize: '9px',
                                     color: '#6c757d'
                                 }}>
-                                    <div style={{ marginBottom: '4px' }}>Name: _______________</div>
-                                    <div style={{ marginBottom: '4px' }}>Position: ___________</div>
-                                    <div style={{ marginBottom: '4px' }}>Date: _____________</div>
                                 </div>
                             </div>
                             <div style={{
@@ -1060,7 +1203,7 @@ export default function ConsolidatedReportPage() {
                                     fontWeight: 'bold',
                                     marginBottom: '20px',
                                     color: '#495057'
-                                }}>موافق من • Approved By</div>
+                                }}>Approved By</div>
                                 <div style={{
                                     borderTop: '2px solid #000',
                                     width: '100px',
@@ -1070,9 +1213,6 @@ export default function ConsolidatedReportPage() {
                                     fontSize: '9px',
                                     color: '#6c757d'
                                 }}>
-                                    <div style={{ marginBottom: '4px' }}>Name: _______________</div>
-                                    <div style={{ marginBottom: '4px' }}>Position: ___________</div>
-                                    <div style={{ marginBottom: '4px' }}>Date: _____________</div>
                                 </div>
                             </div>
                             <div style={{
@@ -1087,7 +1227,7 @@ export default function ConsolidatedReportPage() {
                                     fontWeight: 'bold',
                                     marginBottom: '20px',
                                     color: '#495057'
-                                }}>تم الاستلام • Received By</div>
+                                }}>Received By</div>
                                 <div style={{
                                     borderTop: '2px solid #000',
                                     width: '100px',
@@ -1097,14 +1237,314 @@ export default function ConsolidatedReportPage() {
                                     fontSize: '9px',
                                     color: '#6c757d'
                                 }}>
-                                    <div style={{ marginBottom: '4px' }}>Name: _______________</div>
-                                    <div style={{ marginBottom: '4px' }}>Position: ___________</div>
-                                    <div style={{ marginBottom: '4px' }}>Date: _____________</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                {/* Individual Orders Section - Each residence on separate page */}
+                {showIndividualOrders && pendingOrders.length > 0 && (
+                    <div style={{ pageBreakBefore: 'always' }}>
+                        {/* Group orders by residence */}
+                        {residenceNames.map((residenceName, residenceIndex) => {
+                            const residenceOrders = pendingOrders.filter(order => order.residence === residenceName);
+                            
+                            if (residenceOrders.length === 0) return null;
+
+                            return (
+                                <div key={residenceName} style={{
+                                    pageBreakBefore: residenceIndex > 0 ? 'always' : 'auto',
+                                    marginBottom: '40px'
+                                }}>
+                                    {/* Residence Header */}
+                                    <div style={{
+                                        fontSize: '18px',
+                                        fontWeight: 'bold',
+                                        textAlign: 'center',
+                                        marginBottom: '20px',
+                                        padding: '15px',
+                                        backgroundColor: '#f8f9fa',
+                                        border: '2px solid #dee2e6',
+                                        borderRadius: '8px'
+                                    }}>
+                                        Material Requests for {residenceName}
+                                        <br />
+                                        <span style={{ fontSize: '14px', color: '#666' }}>
+                                            طلبات المواد لسكن {residenceName}
+                                        </span>
+                                    </div>
+
+                                    {/* Individual Orders for this Residence */}
+                                    {residenceOrders.map((order, orderIndex) => {
+                                        // Group items by category for each order
+                                        const groupedOrderItems = order.items.reduce((acc, item) => {
+                                            const category = item.category || 'Uncategorized';
+                                            if (!acc[category]) acc[category] = [];
+                                            acc[category].push(item);
+                                            return acc;
+                                        }, {} as Record<string, typeof order.items>);
+
+                                        return (
+                                            <div key={order.id} style={{
+                                                marginBottom: '30px',
+                                                pageBreakInside: 'avoid',
+                                                border: '1px solid #dee2e6',
+                                                borderRadius: '8px',
+                                                backgroundColor: 'white'
+                                            }}>
+                                                {/* Order Header - Same as individual order format */}
+                                                <div style={{
+                                                    borderBottom: '2px solid #000',
+                                                    padding: '15px 20px'
+                                                }}>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'flex-start'
+                                                    }}>
+                                                        <div>
+                                                            <div style={{
+                                                                fontSize: '22px',
+                                                                fontWeight: '800',
+                                                                marginBottom: '2px',
+                                                                color: '#000'
+                                                            }}>
+                                                                Materials Request
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '16px',
+                                                                fontWeight: '700',
+                                                                color: '#1f2937'
+                                                            }}>
+                                                                ID: #{formatOrderId(order.id)}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <div style={{
+                                                                fontSize: '22px',
+                                                                fontWeight: '800',
+                                                                marginBottom: '4px'
+                                                            }}>
+                                                                {order.residence}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '14px',
+                                                                color: '#1f2937'
+                                                            }}>
+                                                                {format(order.date.toDate(), 'PPP')}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Order Content - Same table format as individual order */}
+                                                <div style={{ padding: '20px' }}>
+                                                    <table style={{
+                                                        width: '100%',
+                                                        borderCollapse: 'collapse'
+                                                    }} className="print-compact-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style={{
+                                                                    fontWeight: '700',
+                                                                    fontSize: '10px',
+                                                                    padding: '4px 6px',
+                                                                    background: '#f2f3f5',
+                                                                    borderBottom: '1px solid #e2e8f0',
+                                                                    color: '#111',
+                                                                    textAlign: 'left'
+                                                                }}>Item Name</th>
+                                                                <th style={{
+                                                                    fontWeight: '700',
+                                                                    fontSize: '10px',
+                                                                    padding: '4px 6px',
+                                                                    background: '#f2f3f5',
+                                                                    borderBottom: '1px solid #e2e8f0',
+                                                                    color: '#111',
+                                                                    textAlign: 'left',
+                                                                    width: '220px'
+                                                                }}>Notes</th>
+                                                                <th style={{
+                                                                    fontWeight: '700',
+                                                                    fontSize: '10px',
+                                                                    padding: '4px 6px',
+                                                                    background: '#f2f3f5',
+                                                                    borderBottom: '1px solid #e2e8f0',
+                                                                    color: '#111',
+                                                                    textAlign: 'center'
+                                                                }}>Unit</th>
+                                                                <th style={{
+                                                                    fontWeight: '700',
+                                                                    fontSize: '10px',
+                                                                    padding: '4px 6px',
+                                                                    background: '#f2f3f5',
+                                                                    borderBottom: '1px solid #e2e8f0',
+                                                                    color: '#111',
+                                                                    textAlign: 'right'
+                                                                }}>Qty</th>
+                                                                <th style={{
+                                                                    fontWeight: '700',
+                                                                    fontSize: '10px',
+                                                                    padding: '4px 6px',
+                                                                    background: '#f2f3f5',
+                                                                    borderBottom: '1px solid #e2e8f0',
+                                                                    color: '#111',
+                                                                    textAlign: 'center'
+                                                                }}>Stock</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {Object.entries(groupedOrderItems).map(([category, items]) => (
+                                                                <React.Fragment key={category}>
+                                                                    <tr>
+                                                                        <td colSpan={5} style={{
+                                                                            fontWeight: '700',
+                                                                            color: '#0f766e',
+                                                                            backgroundColor: '#fafafa',
+                                                                            padding: '4px 6px',
+                                                                            borderTop: '1px solid #e2e8f0',
+                                                                            borderBottom: '1px solid #e2e8f0',
+                                                                            textTransform: 'capitalize'
+                                                                        }}>
+                                                                            {category}
+                                                                        </td>
+                                                                    </tr>
+                                                                    {items.map((item) => {
+                                                                        const ar = splitNameDetail(item.nameAr);
+                                                                        const en = splitNameDetail(item.nameEn);
+                                                                        const detail = ar.detail || en.detail || '';
+                                                                        const notes = (() => {
+                                                                            const baseNotes = (item.notes || '').trim();
+                                                                            if (detail && baseNotes) return `${baseNotes}  ${detail}`;
+                                                                            if (detail) return detail;
+                                                                            return baseNotes || '-';
+                                                                        })();
+                                                                        
+                                                                        return (
+                                                                            <tr key={item.id}>
+                                                                                <td style={{
+                                                                                    fontSize: '10px',
+                                                                                    padding: '3px 6px',
+                                                                                    borderTop: '1px solid #f1f5f9',
+                                                                                    fontWeight: '500'
+                                                                                }}>
+                                                                                    {en.base || item.nameEn} | {ar.base || item.nameAr}
+                                                                                </td>
+                                                                                <td style={{
+                                                                                    fontSize: '10px',
+                                                                                    padding: '3px 6px',
+                                                                                    borderTop: '1px solid #f1f5f9',
+                                                                                    direction: 'rtl',
+                                                                                    textAlign: 'left',
+                                                                                    maxWidth: '220px',
+                                                                                    overflow: 'hidden',
+                                                                                    textOverflow: 'ellipsis',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }} className="notes-cell print-notes">
+                                                                                    <span className="bidi-notes">{notes}</span>
+                                                                                </td>
+                                                                                <td style={{
+                                                                                    fontSize: '10px',
+                                                                                    padding: '3px 6px',
+                                                                                    borderTop: '1px solid #f1f5f9',
+                                                                                    textAlign: 'center'
+                                                                                }}>
+                                                                                    {item.unit}
+                                                                                </td>
+                                                                                <td style={{
+                                                                                    fontSize: '10px',
+                                                                                    padding: '3px 6px',
+                                                                                    borderTop: '1px solid #f1f5f9',
+                                                                                    textAlign: 'right',
+                                                                                    fontWeight: 'bold'
+                                                                                }}>
+                                                                                    {item.quantity}
+                                                                                </td>
+                                                                                <td style={{
+                                                                                    fontSize: '10px',
+                                                                                    padding: '3px 6px',
+                                                                                    borderTop: '1px solid #f1f5f9',
+                                                                                    textAlign: 'center'
+                                                                                }}>
+                                                                                    -
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </React.Fragment>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+
+                                                    {/* Order Total */}
+                                                    <div style={{
+                                                        marginTop: '6px',
+                                                        paddingTop: '4px',
+                                                        borderTop: '1px solid #e5e7eb',
+                                                        textAlign: 'right',
+                                                        fontWeight: 'bold',
+                                                        fontSize: '11px',
+                                                        paddingRight: '4px'
+                                                    }}>
+                                                        Total Items: {order.items.length}
+                                                    </div>
+                                                </div>
+
+                                                {/* Order Signatures - Same as individual order */}
+                                                <div style={{
+                                                    marginTop: '8px',
+                                                    paddingTop: '4px',
+                                                    borderTop: '1px solid #e5e7eb',
+                                                    padding: '10px 20px'
+                                                }}>
+                                                    <div style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(2, 1fr)',
+                                                        gap: '8px'
+                                                    }}>
+                                                        <div style={{
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            <div style={{
+                                                                fontSize: '10px',
+                                                                color: '#6c757d',
+                                                                marginBottom: '20px'
+                                                            }}>
+                                                                Requested By:
+                                                            </div>
+                                                            <div style={{
+                                                                borderTop: '2px solid #000',
+                                                                width: '120px',
+                                                                margin: '0 auto 10px auto'
+                                                            }}></div>
+                                                        </div>
+                                                        <div style={{
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            <div style={{
+                                                                fontSize: '10px',
+                                                                color: '#6c757d',
+                                                                marginBottom: '20px'
+                                                            }}>
+                                                                Approved By:
+                                                            </div>
+                                                            <div style={{
+                                                                borderTop: '2px solid #000',
+                                                                width: '120px',
+                                                                margin: '0 auto 10px auto'
+                                                            }}></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </>
     )

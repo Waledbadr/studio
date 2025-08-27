@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer } from 'lucide-react';
+import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer, LayoutGrid, List } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
@@ -124,7 +124,7 @@ export default function PurchaseOrdersPage() {
                         <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
-                        <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.length}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                             <Badge variant={
                                 order.status === 'Delivered' ? 'default' 
@@ -224,11 +224,18 @@ export default function PurchaseOrdersPage() {
                 </div>
                  <div className="flex items-center gap-2">
                     {isAdmin && (
-                        <Button asChild variant="secondary">
-                             <Link href="/inventory/orders/consolidated-report">
-                                <Printer className="mr-2 h-4 w-4" /> {dict.consolidatedPrinting || 'Consolidated Printing'}
-                            </Link>
-                        </Button>
+                        <>
+                            <Button asChild variant="secondary">
+                                <Link href="/inventory/orders/consolidated-report">
+                                    <LayoutGrid className="mr-2 h-4 w-4" /> {dict.consolidatedPrinting || 'Consolidated Printing'}
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href="/inventory/orders/consolidated-report?view=list">
+                                    <List className="mr-2 h-4 w-4" /> تقرير مجمع
+                                </Link>
+                            </Button>
+                        </>
                     )}
                     <Button asChild>
                         <Link href="/inventory/new-order">
