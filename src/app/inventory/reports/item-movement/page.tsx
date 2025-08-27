@@ -52,7 +52,7 @@ function ItemMovementContent() {
       setTransactionsLoading(true);
       if (residenceId) {
         // Single residence
-        getInventoryTransactions(itemId, residenceId).then((data) => {
+        getInventoryTransactions && getInventoryTransactions(itemId, residenceId).then((data) => {
           const sortedData = data.sort(
             (a, b) => a.date.toMillis() - b.date.toMillis()
           );
@@ -63,7 +63,7 @@ function ItemMovementContent() {
         // All residences
         Promise.all(
           residences.map((residence) =>
-            getInventoryTransactions(itemId, residence.id)
+            getInventoryTransactions && getInventoryTransactions(itemId, residence.id)
           )
         ).then((results) => {
           const allTransactions = results.flat();

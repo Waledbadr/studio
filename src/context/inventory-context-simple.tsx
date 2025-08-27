@@ -65,7 +65,7 @@ interface SimpleInventoryContextType {
   getMRVs: () => Promise<any[]>;
   // Missing methods for reports and audit
   getAllInventoryTransactions?: () => Promise<any[]>;
-  getInventoryTransactions?: (itemId: string) => Promise<any[]>;
+  getInventoryTransactions?: (itemId: string, residenceId?: string) => Promise<any[]>;
   getMRVById?: (mrvId: string) => Promise<any>;
   getMIVById?: (mivId: string) => Promise<any>;
   getReconciliationItems?: (auditId: string) => Promise<any[]>;
@@ -270,7 +270,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   // Missing methods implementations
   const getAllInventoryTransactions = async () => [];
-  const getInventoryTransactions = async (itemId: string) => [];
+  const getInventoryTransactions = async (itemId: string, residenceId?: string) => [];
   const getMRVById = async (mrvId: string) => null;
   const getMIVById = async (mivId: string) => null;
   const getReconciliationItems = async (auditId: string) => [];

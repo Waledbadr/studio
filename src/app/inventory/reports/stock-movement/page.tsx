@@ -70,7 +70,7 @@ export default function StockMovementReportPage() {
   useEffect(() => {
     const fetchAllData = async () => {
       setIsFetchingInitial(true);
-      const transactions = await getAllInventoryTransactions();
+      const transactions = getAllInventoryTransactions ? await getAllInventoryTransactions() : [];
       setAllTransactions(transactions);
       setIsFetchingInitial(false);
     };
@@ -302,17 +302,17 @@ export default function StockMovementReportPage() {
     try {
       setDetailLoading(true);
       if (tx.type === 'IN' && tx.referenceDocId) {
-        const d = await getMRVById(tx.referenceDocId);
+        const d = getMRVById ? await getMRVById(tx.referenceDocId) : null;
         setDocDetails(d);
       } else if (tx.type === 'OUT' && tx.referenceDocId && String(tx.referenceDocId).startsWith('MIV-')) {
-        const d = await getMIVById(tx.referenceDocId);
+        const d = getMIVById ? await getMIVById(tx.referenceDocId) : null;
         setDocDetails(d);
       } else if (tx.type === 'ADJUSTMENT' && tx.referenceDocId) {
-        const items = await getReconciliationItems(tx.referenceDocId);
+        const items = getReconciliationItems ? await getReconciliationItems(tx.referenceDocId) : [];
         setReconItems(items || []);
       } else if ((tx.type === 'TRANSFER_IN' || tx.type === 'TRANSFER_OUT') && tx.referenceDocId) {
         try {
-          const rows = await getTransferItems(tx.referenceDocId);
+          const rows = getTransferItems ? await getTransferItems(tx.referenceDocId) : [];
           setTransferItems(rows || []);
         } catch {}
       }

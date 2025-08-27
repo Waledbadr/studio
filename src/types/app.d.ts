@@ -42,8 +42,12 @@ declare type ReconciliationRequest = {
   createdAt: Date;
   updatedAt: Date;
   requestedBy: string;
+  requestedById: string;
   approvedBy?: string;
   notes?: string;
+  residenceId: string;
+  reservedId?: string;
+  adjustments?: any[];
 };
 
 // Fallback Cloudflare env types in case workers-types are unavailable during typecheck.
