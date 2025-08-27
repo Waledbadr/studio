@@ -23,6 +23,7 @@ interface ServiceOrdersContextType {
   getServiceOrderById: (id: string) => Promise<ServiceOrder | null>;
   getServiceOrderByCode: (code: string) => Promise<ServiceOrder | null>;
   receiveServiceOrder: (id: string, data: any) => Promise<void>;
+  createAndDispatchServiceOrder?: (payload: any) => Promise<string>;
 }
 
 const ServiceOrdersContext = createContext<ServiceOrdersContextType | undefined>(undefined);
@@ -55,6 +56,11 @@ export const ServiceOrdersProvider = ({ children }: { children: ReactNode }) => 
     console.log('Mock: receiveServiceOrder', id, data, userId);
   };
 
+  const createAndDispatchServiceOrder = async (payload: any) => {
+    const id = await addOrder({ title: payload?.title || 'Service Order', status: 'DISPATCHED' } as any);
+    return id;
+  };
+
   return (
     <ServiceOrdersContext.Provider value={{ 
       orders, 
@@ -64,7 +70,8 @@ export const ServiceOrdersProvider = ({ children }: { children: ReactNode }) => 
       updateOrder,
       getServiceOrderById,
       getServiceOrderByCode,
-      receiveServiceOrder
+      receiveServiceOrder,
+      createAndDispatchServiceOrder
     }}>
       {children}
     </ServiceOrdersContext.Provider>

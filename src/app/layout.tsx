@@ -57,6 +57,20 @@ export default function RootLayout({
             `,
           }}
         />
+        {/* Inline favicon to avoid 404 when root app/ overrides src/app assets */}
+        <link
+          rel="icon"
+          href={
+            "data:image/svg+xml," +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+                '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient></defs>' +
+                '<rect rx="12" width="64" height="64" fill="url(#g)"/>' +
+                '<path d="M18 42h28v-4H34V18h-4v20H18z" fill="#fff"/>' +
+              '</svg>'
+            )
+          }
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

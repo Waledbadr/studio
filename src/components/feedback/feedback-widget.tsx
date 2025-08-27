@@ -157,10 +157,10 @@ export default function FeedbackWidget({ className }: Props) {
           <LifeBuoy className="h-4 w-4 mr-2" /> Feedback
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg" data-feedback-dialog>
+      <DialogContent className="sm:max-w-lg" data-feedback-dialog aria-describedby="feedback-dialog-desc">
         <DialogHeader>
           <DialogTitle>Send Feedback</DialogTitle>
-          <DialogDescription>Report a problem or send an idea to improve the app.</DialogDescription>
+          <DialogDescription id="feedback-dialog-desc">Report a problem or send an idea to improve the app.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-2">
           <div className="grid gap-1">

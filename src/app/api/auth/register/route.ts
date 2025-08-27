@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LocalAuthService } from '@/lib/auth-local';
+import { LocalCloudflareAuthService } from '@/lib/auth-cloudflare-local';
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password } = await request.json();
+    const body = await request.json();
+    const { name, email, password } = body as { name: string; email: string; password: string };
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -12,6 +14,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // If a Cloudflare API base is configured, proxy the request to persist in D1
+    const CF_API_BASE = process.env.CF_API_BASE;
+    if (CF_API_BASE) {
+      try {
+        const resp = await fetch(`${CF_API_BASE.replace(/\/$/, '')}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password }),
+        });
+        const text = await resp.text();
+        let data: any;
+        try { data = JSON.parse(text); } catch { data = { message: text }; }
+        return NextResponse.json(data, { status: resp.status });
+      } catch (cfError) {
+        console.log('CF_API_BASE configured but unreachable, falling back to local Cloudflare auth');
+        
+        // Try local Cloudflare auth if CF server is not available
+        const authService = new LocalCloudflareAuthService();
+        // Note: LocalCloudflareAuthService may not have register method, fall through to local auth
+      }
+    }
+
+    // Fallback: local in-memory registration (non-persistent)
     const authService = new LocalAuthService();
     const result = await authService.register({
       name,

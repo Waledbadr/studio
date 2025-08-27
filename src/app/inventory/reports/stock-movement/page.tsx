@@ -856,9 +856,10 @@ export default function StockMovementReportPage() {
 
       {/* Details dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-          <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-3xl" aria-describedby="stock-movement-details-dialog-desc">
           <DialogHeader>
             <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
+            <p id="stock-movement-details-dialog-desc" className="sr-only">View detailed information about the selected stock movement transaction.</p>
           </DialogHeader>
           {selectedTx ? (
             <div className="text-sm text-muted-foreground space-y-1 mb-3">

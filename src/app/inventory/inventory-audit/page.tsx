@@ -604,16 +604,18 @@ export default function StockReconciliationPage() {
 
       {/* Details dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl" aria-describedby="audit-details-dialog-desc">
           <DialogHeader>
             <DialogTitle>Reconciliation details</DialogTitle>
             {selectedRec ? (
               <DialogDescription asChild>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600" id="audit-details-dialog-desc">
                   Reference: <span className="font-mono">{selectedRec.id}</span> · Residence: {residenceNameById.get(String(selectedRec.residenceId)) || selectedRec.residenceId}
                 </div>
               </DialogDescription>
-            ) : null}
+            ) : (
+              <p id="audit-details-dialog-desc" className="sr-only">View detailed reconciliation information for the selected audit.</p>
+            )}
           </DialogHeader>
           {detailLoading ? (
             <Skeleton className="h-24 w-full" />
@@ -655,18 +657,20 @@ export default function StockReconciliationPage() {
 
       {/* Pending request details dialog */}
       <Dialog open={reqDetailOpen} onOpenChange={setReqDetailOpen}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl" aria-describedby="audit-request-details-dialog-desc">
           <DialogHeader>
             <DialogTitle>Review reconciliation request</DialogTitle>
             {selectedReq ? (
               <DialogDescription asChild>
-                <div className="text-sm text-gray-600 space-y-1">
+                <div className="text-sm text-gray-600 space-y-1" id="audit-request-details-dialog-desc">
                   <div>Code: <span className="font-mono">{selectedReq.reservedId || selectedReq.id}</span></div>
                   <div>Residence: {residenceNameById.get(String(selectedReq.residenceId)) || selectedReq.residenceId}</div>
                   <div>Requested by: {userName(selectedReq.requestedById)}</div>
                 </div>
               </DialogDescription>
-            ) : null}
+            ) : (
+              <p id="audit-request-details-dialog-desc" className="sr-only">Review and approve or reject the selected reconciliation request.</p>
+            )}
           </DialogHeader>
           {(!selectedReq || reqDetailItems.length === 0) ? (
             <div className="text-sm text-gray-600">No items.</div>

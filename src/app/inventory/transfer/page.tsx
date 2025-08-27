@@ -63,12 +63,12 @@ export default function TransferHistoryPage() {
     }
 
     const handleApprove = (transferId: string) => {
-        if (!currentUser) return;
+        if (!currentUser || !currentUser.id || !approveTransfer) return;
         approveTransfer(transferId, currentUser.id);
     }
 
     const handleReject = (transferId: string) => {
-        if (!currentUser) return;
+        if (!currentUser || !currentUser.id || !rejectTransfer) return;
         rejectTransfer(transferId, currentUser.id);
     }
 
@@ -166,9 +166,10 @@ export default function TransferHistoryPage() {
 
             {/* Details dialog */}
             <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-                <DialogContent className="sm:max-w-3xl">
+                <DialogContent className="sm:max-w-3xl" aria-describedby="transfer-details-dialog-desc">
                     <DialogHeader>
                         <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
+                        <p id="transfer-details-dialog-desc" className="sr-only">View detailed information about the selected transfer movement including items and quantities.</p>
                     </DialogHeader>
                     {selected ? (
                         <div className="text-sm text-muted-foreground space-y-1 mb-3">

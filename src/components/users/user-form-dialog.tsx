@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,10 +129,10 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby="user-form-dialog-desc">
         <DialogHeader>
           <DialogTitle>{user ? "Edit User" : "Add New User"}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="user-form-dialog-desc">
             {user ? "Update the user's details and preferences." : "Fill in the details for the new user."}
           </DialogDescription>
         </DialogHeader>

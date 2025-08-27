@@ -120,7 +120,7 @@ export default function MaintenancePage() {
                             <TableCell>
                                 <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
                             </TableCell>
-                            <TableCell>{format(request.date.toDate(), 'PPP')}</TableCell>
+                            <TableCell>{request.date ? format(request.date.toDate(), 'PPP') : '-'}</TableCell>
                             <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

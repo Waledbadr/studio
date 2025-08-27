@@ -190,7 +190,7 @@ export default function StockMovementReportPage() {
   };
 
   const getLocationString = (transaction: any) => {
-    const parts = [];
+    const parts: string[] = [];
     if (transaction.residenceName) parts.push(transaction.residenceName);
     if (transaction.buildingName) parts.push(transaction.buildingName);
     if (transaction.floorName) parts.push(transaction.floorName);

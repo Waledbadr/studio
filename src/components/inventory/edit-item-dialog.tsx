@@ -173,13 +173,13 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: source }),
 			});
-			const translationResult = await res.json();
+			const translationResult: any = await res.json();
 			if (!res.ok) {
 				const msg = translationResult?.error || `Translation API failed: ${res.status}`;
 				toast({ title: 'Translation Error', description: msg, variant: 'destructive' });
 			} else {
-				setNameAr(translationResult.arabicName || nameAr);
-				setNameEn(translationResult.englishName || nameEn);
+				setNameAr(translationResult?.arabicName || nameAr);
+				setNameEn(translationResult?.englishName || nameEn);
 			}
 		} catch (e: any) {
 			toast({ title: 'Translation Error', description: e?.message || 'تعذر تنفيذ الترجمة.', variant: 'destructive' });
@@ -238,9 +238,9 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 						body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
 					});
 					if (res.ok) {
-						const t = await res.json();
-						finalNameAr = finalNameAr || t.arabicName || '';
-						finalNameEn = finalNameEn || t.englishName || '';
+						const t: any = await res.json();
+						finalNameAr = finalNameAr || t?.arabicName || '';
+						finalNameEn = finalNameEn || t?.englishName || '';
 					}
 				}
 
@@ -287,7 +287,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 	};
 
 	const dialogContent = (
-		<DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col">
+		<DialogContent className="max-w-3xl w-full max-h-[80vh] pr-8 pt-6 flex flex-col" aria-describedby="edit-item-dialog-desc">
 			<form id="edit-item-form" onSubmit={handleUpdateItem} className="flex-1 flex flex-col gap-6 overflow-y-auto px-0 pr-4 pb-16 custom-scrollbar" ref={formRef}>
 				<DialogHeader>
 					<DialogTitle className="text-lg">Edit Inventory Item</DialogTitle>

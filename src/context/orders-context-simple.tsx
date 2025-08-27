@@ -2,22 +2,32 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type OrderStatus = 'Pending' | 'Approved' | 'Partially Delivered' | 'Delivered' | 'Rejected';
-export interface OrderItem { id: string; nameAr?: string; nameEn?: string; category?: string; unit?: string; quantity: number; }
+export type OrderStatus = 'Pending' | 'Approved' | 'Partially Delivered' | 'Delivered' | 'Rejected' | 'Cancelled';
+export interface OrderItem { 
+  id: string; 
+  nameAr?: string; 
+  nameEn?: string; 
+  category?: string; 
+  unit?: string; 
+  quantity: number;
+  notes?: string;
+}
 export interface Order {
   id: string;
   residenceId: string;
+  residence?: string; // For backward compatibility
   status: OrderStatus;
   date?: { toDate?: () => Date } | Date;
   items: OrderItem[];
   itemsReceived?: Array<{ id: string; quantityReceived: number }>;
+  notes?: string;
 }
 
 interface SimpleOrdersContextType {
   orders: Order[];
   loading: boolean;
   addOrder: (order: any) => Promise<void>;
-  updateOrderStatus: (orderId: string, status: string) => Promise<void>;
+  updateOrderStatus: (orderId: string, status: OrderStatus, userId?: string) => Promise<void>;
   updateOrder: (orderId: string, updates: any) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<void>;
   receiveOrderItems?: (orderId: string, items: Array<{ id: string; quantityReceived: number }>, forceComplete?: boolean) => Promise<{ mrvId?: string }>;
@@ -34,8 +44,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     console.log('Mock: Adding order', order);
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
-    console.log('Mock: Updating order status', orderId, status);
+  const updateOrderStatus = async (orderId: string, status: OrderStatus, userId?: string) => {
+    console.log('Mock: Updating order status', orderId, status, userId);
   };
 
   const updateOrder = async (orderId: string, updates: any) => {

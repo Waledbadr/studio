@@ -408,11 +408,12 @@ export default function StockMatrixReportPage() {
 
       {/* Details Dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" aria-describedby="stock-matrix-details-dialog-desc">
           <DialogHeader>
             <DialogTitle>
               {dict.itemLabel}: {locale === 'ar' ? (detailsItem?.nameAr || detailsItem?.nameEn) : (detailsItem?.nameEn || detailsItem?.nameAr)}
             </DialogTitle>
+            <p id="stock-matrix-details-dialog-desc" className="sr-only">View item stock distribution across all residences.</p>
           </DialogHeader>
           <div className="overflow-x-auto">
             <Table>
@@ -448,11 +449,12 @@ export default function StockMatrixReportPage() {
 
       {/* Transactions Dialog */}
       <Dialog open={txOpen} onOpenChange={setTxOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl" aria-describedby="stock-matrix-transactions-dialog-desc">
           <DialogHeader>
             <DialogTitle>
               {(dict.movementDetailsTitle || 'Movements') as string}: {txItem ? `${txItem?.nameEn || ''}${txItem?.nameEn && txItem?.nameAr ? ' | ' : ''}${txItem?.nameAr || ''}` : ''}
             </DialogTitle>
+            <p id="stock-matrix-transactions-dialog-desc" className="sr-only">View all stock movements and transactions for this item.</p>
           </DialogHeader>
           <div className="overflow-x-auto">
             {txLoading ? (

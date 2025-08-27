@@ -2,13 +2,27 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-const mockUsers = [
+export interface User {
+  id?: string;
+  name: string;
+  nameEn?: string;
+  email: string;
+  role: string;
+  assignedResidences: string[];
+  themeSettings?: {
+    colorTheme: string;
+    mode: string;
+  };
+}
+
+const mockUsers: User[] = [
   {
     id: 'user-1',
     name: 'أحمد محمد',
     nameEn: 'Ahmed Mohamed',
     email: 'ahmed@example.com',
     role: 'Admin',
+    assignedResidences: ['res-1'],
     themeSettings: {
       colorTheme: 'blue',
       mode: 'dark'
@@ -17,15 +31,16 @@ const mockUsers = [
 ];
 
 interface SimpleUsersContextType {
-  users: any[];
-  currentUser: any;
+  users: User[];
+  currentUser: User;
   loading: boolean;
   loadUsers: () => void;
-  switchUser: (user: any) => void;
-  addUser: (user: any) => Promise<void>;
-  updateUser: (userId: string, updates: any) => Promise<void>;
+  switchUser: (user: User) => void;
+  addUser: (user: User) => Promise<void>;
+  updateUser: (userId: string, updates: Partial<User>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
-  getUserById: (id: string) => any;
+  saveUser: (user: User) => Promise<void>;
+  getUserById: (id: string) => User | null;
 }
 
 const UsersContext = createContext<SimpleUsersContextType | undefined>(undefined);
@@ -60,6 +75,15 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     return users.find(user => user.id === id) || null;
   };
 
+  const saveUser = async (user: any) => {
+    console.log('Mock: Saving user', user);
+    if (user.id) {
+      await updateUser(user.id, user);
+    } else {
+      await addUser(user);
+    }
+  };
+
   return (
     <UsersContext.Provider value={{
       users,
@@ -70,6 +94,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       addUser,
       updateUser,
       deleteUser,
+      saveUser,
       getUserById
     }}>
       {children}

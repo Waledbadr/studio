@@ -41,6 +41,14 @@ interface SimpleInventoryContextType {
   addItem: (item: any) => Promise<void>;
   updateItem: (itemId: string, updates: any) => Promise<void>;
   deleteItem: (itemId: string) => Promise<void>;
+  loadInventory: () => Promise<void>;
+  addCategory: (name: string) => Promise<void>;
+  updateCategory: (oldName: string, newName: string) => Promise<void>;
+  getStockForResidence: (item: any, residenceId: string) => number;
+  // Transfers
+  createTransferRequest?: (payload: any, currentUser?: any) => Promise<void>;
+  approveTransfer?: (transferId: string, approverId: string) => Promise<void>;
+  rejectTransfer?: (transferId: string, rejecterId: string) => Promise<void>;
   transferStock: (payload: any) => Promise<void>;
   createAudit: (auditData: any) => Promise<string>;
   getAudits: () => Promise<any[]>;
@@ -55,6 +63,20 @@ interface SimpleInventoryContextType {
   approveMRVRequest: (requestId: string, approverUserId: string) => Promise<string>;
   rejectMRVRequest: (requestId: string, approverUserId: string) => Promise<void>;
   getMRVs: () => Promise<any[]>;
+  // Missing methods for reports and audit
+  getAllInventoryTransactions?: () => Promise<any[]>;
+  getInventoryTransactions?: (itemId: string) => Promise<any[]>;
+  getMRVById?: (mrvId: string) => Promise<any>;
+  getMIVById?: (mivId: string) => Promise<any>;
+  getReconciliationItems?: (auditId: string) => Promise<any[]>;
+  getTransferItems?: (transferId: string) => Promise<any[]>;
+  reconcileStock?: (payload: any) => Promise<void>;
+  getReconciliations?: () => Promise<any[]>;
+  getAllReconciliations?: () => Promise<any[]>;
+  createReconciliationRequest?: (payload: any) => Promise<void>;
+  getReconciliationRequests?: () => Promise<any[]>;
+  approveReconciliationRequest?: (requestId: string, approverId: string) => Promise<void>;
+  rejectReconciliationRequest?: (requestId: string, rejecterId: string) => Promise<void>;
   getMRVRequestById: (id: string) => Promise<any | null>;
   updateMRVRequest: (id: string, updates: any) => Promise<void>;
 }
@@ -72,6 +94,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     console.log('Mock: Adding item', item);
   };
 
+  const loadInventory = async () => {
+    // In mock, just ensure state is set; in real impl, fetch from API
+    setLoading(true);
+    try {
+      // Only update state if it's actually different to prevent unnecessary re-renders
+      setItems(prev => {
+        if (prev.length !== mockItems.length) return [...mockItems];
+        // Check if content is different
+        const isDifferent = prev.some((item, i) => item.id !== mockItems[i]?.id);
+        return isDifferent ? [...mockItems] : prev;
+      });
+      setCategories(prev => {
+        if (prev.length !== mockCategories.length) return [...mockCategories];
+        // Check if content is different
+        const isDifferent = prev.some((cat, i) => cat !== mockCategories[i]);
+        return isDifferent ? [...mockCategories] : prev;
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateItem = async (itemId: string, updates: any) => {
     console.log('Mock: Updating item', itemId, updates);
   };
@@ -82,6 +126,40 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const transferStock = async (payload: any) => {
     console.log('Mock: Transferring stock', payload);
+  };
+
+  // no-op transfer workflow for simple mode
+  const createTransferRequest = async () => { console.log('Mock: createTransferRequest'); };
+  const approveTransfer = async () => { console.log('Mock: approveTransfer'); };
+  const rejectTransfer = async () => { console.log('Mock: rejectTransfer'); };
+
+  const addCategory = async (name: string) => {
+    if (!name) return;
+    setCategories((prev) => {
+      if (prev.includes(name)) return prev; // No change needed
+      return [...prev, name];
+    });
+  };
+
+  const updateCategory = async (oldName: string, newName: string) => {
+    if (!oldName || !newName || oldName === newName) return;
+    setCategories((prev) => {
+      const updated = prev.map((c) => (c === oldName ? newName : c));
+      // Only return new array if something actually changed
+      return updated.some((c, i) => c !== prev[i]) ? updated : prev;
+    });
+    setItems((prev) => {
+      const updated = prev.map((it) => (it.category === oldName ? { ...it, category: newName } : it));
+      // Only return new array if something actually changed
+      return updated.some((item, i) => item.category !== prev[i]?.category) ? updated : prev;
+    });
+  };
+
+  const getStockForResidence = (item: any, residenceId: string) => {
+    if (!item) return 0;
+    if (residenceId === 'all') return item.totalStock ?? 0;
+    const map = item.stockByResidence || {};
+    return map[residenceId] ?? 0;
   };
 
   const createAudit = async (auditData: any) => {
@@ -190,6 +268,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     console.log('Mock: updateMRVRequest', { id, updates });
   };
 
+  // Missing methods implementations
+  const getAllInventoryTransactions = async () => [];
+  const getInventoryTransactions = async (itemId: string) => [];
+  const getMRVById = async (mrvId: string) => null;
+  const getMIVById = async (mivId: string) => null;
+  const getReconciliationItems = async (auditId: string) => [];
+  const getTransferItems = async (transferId: string) => [];
+  const reconcileStock = async (payload: any) => { console.log('Mock: reconcileStock', payload); };
+  const getReconciliations = async () => [];
+  const getAllReconciliations = async () => [];
+  const createReconciliationRequest = async (payload: any) => { console.log('Mock: createReconciliationRequest', payload); };
+  const getReconciliationRequests = async () => [];
+  const approveReconciliationRequest = async (requestId: string, approverId: string) => { console.log('Mock: approveReconciliationRequest', requestId, approverId); };
+  const rejectReconciliationRequest = async (requestId: string, rejecterId: string) => { console.log('Mock: rejectReconciliationRequest', requestId, rejecterId); };
+
   return (
     <InventoryContext.Provider value={{
       items,
@@ -200,6 +293,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       addItem,
       updateItem,
       deleteItem,
+      loadInventory,
+      addCategory,
+      updateCategory,
+      getStockForResidence,
+      createTransferRequest,
+      approveTransfer,
+      rejectTransfer,
       transferStock,
       createAudit,
       getAudits,
@@ -216,7 +316,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   rejectMRVRequest,
   getMRVs,
   getMRVRequestById,
-  updateMRVRequest
+  updateMRVRequest,
+  // Missing methods
+  getAllInventoryTransactions,
+  getInventoryTransactions,
+  getMRVById,
+  getMIVById,
+  getReconciliationItems,
+  getTransferItems,
+  reconcileStock,
+  getReconciliations,
+  getAllReconciliations,
+  createReconciliationRequest,
+  getReconciliationRequests,
+  approveReconciliationRequest,
+  rejectReconciliationRequest
     }}>
       {children}
     </InventoryContext.Provider>

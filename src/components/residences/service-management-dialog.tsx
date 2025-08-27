@@ -19,6 +19,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Settings } from "lucide-react";
 import { useResidences } from '@/context/residences-context-simple';
+
+// Type imports
+type Service = {
+  id: string;
+  name: string;
+  category: 'Essential' | 'Amenity' | 'Utility' | string;
+  status: 'Active' | 'Inactive' | 'Maintenance' | string;
+  notes?: string;
+  addedDate?: string;
+  subFacilities: SubFacility[];
+};
+
+type SubFacility = {
+  id: string;
+  name: string;
+  status: 'Active' | 'Inactive' | 'Maintenance' | string;
+  number?: string;
+  notes?: string;
+};
+
+type ServiceLocation = {
+  complexId: string;
+  buildingId?: string;
+  floorId?: string;
+  roomId?: string;
+  facilityId?: string;
+};
 import { useToast } from "@/hooks/use-toast";
 
 interface ServiceManagementDialogProps {
@@ -54,7 +81,6 @@ export function ServiceManagementDialog({
   // Service form state
   const [serviceForm, setServiceForm] = useState({
     name: '',
-    type: '',
     category: 'Essential' as 'Essential' | 'Amenity' | 'Utility',
     status: 'Active' as 'Active' | 'Inactive' | 'Maintenance',
     notes: ''
@@ -73,7 +99,6 @@ export function ServiceManagementDialog({
   const resetForms = () => {
     setServiceForm({
       name: '',
-      type: '',
       category: 'Essential',
       status: 'Active',
       notes: ''
@@ -123,14 +148,13 @@ export function ServiceManagementDialog({
   };
 
   const handleSubmitService = async () => {
-    if (!serviceForm.name.trim() || !serviceForm.type.trim()) {
-      toast({ title: "Error", description: "Service name and type are required.", variant: "destructive" });
+    if (!serviceForm.name.trim()) {
+      toast({ title: "Error", description: "Service name is required.", variant: "destructive" });
       return;
     }
 
     const service: Omit<Service, 'id' | 'addedDate'> = {
       name: serviceForm.name.trim(),
-      type: serviceForm.type.trim(),
       category: serviceForm.category,
       status: serviceForm.status,
       subFacilities: subFacilities.map(sf => ({ ...sf, id: `temp-${Math.random()}` }))
@@ -145,22 +169,22 @@ export function ServiceManagementDialog({
     try {
       switch (levelType) {
         case 'building':
-          if (location.buildingId) {
+          if (location.buildingId && addServiceToBuilding) {
             await addServiceToBuilding(location.complexId, location.buildingId, service);
           }
           break;
         case 'floor':
-          if (location.buildingId && location.floorId) {
+          if (location.buildingId && location.floorId && addServiceToFloor) {
             await addServiceToFloor(location.complexId, location.buildingId, location.floorId, service);
           }
           break;
         case 'room':
-          if (location.buildingId && location.floorId && location.roomId) {
+          if (location.buildingId && location.floorId && location.roomId && addServiceToRoom) {
             await addServiceToRoom(location.complexId, location.buildingId, location.floorId, location.roomId, service);
           }
           break;
         case 'facility':
-          if (location.facilityId) {
+          if (location.facilityId && addServiceToFacility) {
             await addServiceToFacility(location.complexId, location.facilityId, service);
           }
           break;
@@ -211,12 +235,12 @@ export function ServiceManagementDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby="service-management-dialog-desc">
         <DialogHeader>
           <DialogTitle>
             Manage Services - {locationName}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="service-management-dialog-desc">
             Add and manage services for this {levelType}. Services can include bathrooms, kitchens, utilities, and amenities.
           </DialogDescription>
         </DialogHeader>
@@ -265,10 +289,10 @@ export function ServiceManagementDialog({
                       />
                     </div>
                     <div>
-                      <Label htmlFor="service-type">Service Type *</Label>
+                      <Label htmlFor="service-category">Service Category *</Label>
                       <Select 
-                        onValueChange={(value) => setServiceForm(prev => ({ ...prev, type: value }))}
-                        value={serviceForm.type}
+                        onValueChange={(value) => setServiceForm(prev => ({ ...prev, category: value as any }))}
+                        value={serviceForm.category}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select service type" />

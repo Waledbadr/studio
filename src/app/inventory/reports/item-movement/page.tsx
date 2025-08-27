@@ -331,9 +331,10 @@ function ItemMovementContent() {
       </Card>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-          <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-3xl" aria-describedby="item-movement-details-dialog-desc">
           <DialogHeader>
             <DialogTitle>{dict.movementDetailsTitle}</DialogTitle>
+            <p id="item-movement-details-dialog-desc" className="sr-only">View detailed information about the selected item movement transaction.</p>
           </DialogHeader>
           {selectedTx ? (
             <div className="text-sm text-muted-foreground space-y-1 mb-3">

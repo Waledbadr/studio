@@ -5,8 +5,9 @@
   "scripts": {
     "dev:base": "next dev --turbopack -p 3000",
     "dev": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
-    "dev:local": "wrangler pages dev --proxy 3000 -- npm run dev:base",
+    "dev:local": "wrangler pages dev --proxy 3000",
     "dev:cloudflare": "npm run build:cloudflare && wrangler pages dev out",
+    "dev:full": "concurrently -k -n cloudflare,next \"wrangler pages dev out\" \"npm run dev:base\"",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -34,7 +35,12 @@
     "cloudflare:setup:local": "npm run d1:execute:local",
     "migrate:firebase": "bash scripts/migrate-firebase.sh",
     "deploy": "npm run build:cloudflare && npm run wrangler:deploy",
-    "deploy:full": "bash scripts/deploy.sh"
+    "deploy:full": "bash scripts/deploy.sh",
+    "firebase:setup": "node scripts/setup-firebase.js",
+    "firebase:check": "node scripts/check-firestore.js",
+    "migrate:firestore-to-d1": "node scripts/complete-migration.js",
+    "migrate:firestore-only": "node scripts/run-migration.js",
+    "migrate:apply-to-d1": "node scripts/apply-migration.js"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
@@ -63,17 +69,17 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@simplewebauthn/browser": "^9.0.1",
     "@simplewebauthn/server": "^9.0.1",
-    "@cloudflare/workers-types": "^4.0.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.6.0",
+    "firebase-admin": "^13.4.0",
     "genkit": "^1.14.1",
     "html2canvas": "^1.4.1",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.475.0",
     "next": "15.3.3",
     "patch-package": "^8.0.0",
@@ -88,6 +94,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250826.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20",

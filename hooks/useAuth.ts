@@ -2,7 +2,7 @@
  * Hook مخصص لإدارة المصادقة
  */
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 
 export interface User {
   id: string;
@@ -75,15 +75,17 @@ export function useAuthProvider() {
         throw new Error(errorData.error || 'فشل في تسجيل الدخول');
       }
 
-      const result = await response.json();
-      const authData: AuthToken = result.data;
+  const result = await response.json();
+  const authData: Partial<AuthToken> & { user?: any } = result.data ?? { token: result.token, user: result.user };
+  if (!authData?.user) throw new Error('استجابة غير متوقعة من الخادم');
 
-      setUser(authData.user);
-      setToken(authData.token);
-      
-      // حفظ التوكن في localStorage
-      localStorage.setItem('auth_token', authData.token);
-      localStorage.setItem('user_data', JSON.stringify(authData.user));
+  setUser(authData.user);
+  // token may be missing when server uses HttpOnly cookie; handle gracefully
+  const tok = authData.token ?? null;
+  setToken(tok);
+  // Persist only when available
+  if (tok) localStorage.setItem('auth_token', tok); else localStorage.removeItem('auth_token');
+  localStorage.setItem('user_data', JSON.stringify(authData.user));
 
       return true;
     } catch (err) {
@@ -99,13 +101,10 @@ export function useAuthProvider() {
   const logout = useCallback(async () => {
     try {
       if (token) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      } else {
+        // still attempt cookie-based logout
+        await fetch('/api/auth/logout', { method: 'POST' });
       }
     } catch (err) {
       console.error('خطأ في تسجيل الخروج:', err);
@@ -124,25 +123,27 @@ export function useAuthProvider() {
       setLoading(true);
       setError(null);
 
-      const storedToken = localStorage.getItem('auth_token');
-      const storedUser = localStorage.getItem('user_data');
+  const storedToken = localStorage.getItem('auth_token');
+  const storedUser = localStorage.getItem('user_data');
 
       if (!storedToken || !storedUser) {
         setLoading(false);
         return;
       }
 
-      // التحقق من صحة التوكن مع الخادم
-      const response = await fetch('/api/auth/verify', {
-        headers: {
-          'Authorization': `Bearer ${storedToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // Verify session with server; prefer cookie-based /api/auth/me (works on Next and Cloudflare)
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (storedToken) headers['Authorization'] = `Bearer ${storedToken}`;
+      const response = await fetch('/api/auth/me', { headers });
 
       if (response.ok) {
         const result = await response.json();
-        setUser(result.data.user);
+        const usr = result?.data?.user ?? result?.user;
+        if (usr) {
+          setUser(usr);
+        } else {
+          throw new Error('Invalid auth verify response');
+        }
         setToken(storedToken);
       } else {
         // التوكن غير صالح، مسح البيانات
@@ -250,8 +251,11 @@ export function useRequirePermission(requiredRole: string, redirectTo: string = 
 // مكون AuthProvider
 export function AuthProvider({ children }: { children: ReactNode }) {
   const auth = useAuthProvider();
-  
-  return AuthContext.Provider({ value: auth, children });
+  // File is .ts (not .tsx), avoid JSX by using createElement
+  return React.createElement(
+    AuthContext.Provider as any,
+    { value: auth, children }
+  );
 }
 
 // Hook للتحقق من حالة تسجيل الدخول مع إعادة المحاولة

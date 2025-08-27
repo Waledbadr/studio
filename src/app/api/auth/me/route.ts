@@ -13,6 +13,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // If Cloudflare Functions are configured, verify via CF (D1 sessions)
+    const CF_API_BASE = process.env.CF_API_BASE;
+    if (CF_API_BASE) {
+      const resp = await fetch(`${CF_API_BASE.replace(/\/$/, '')}/api/auth/me`, {
+        headers: { Cookie: `session=${encodeURIComponent(sessionToken)}` }
+      });
+      const text = await resp.text();
+      let data: any; try { data = JSON.parse(text); } catch { data = { message: text }; }
+      return NextResponse.json(data, { status: resp.status });
+    }
+
     const authService = new LocalAuthService();
     const user = await authService.verifyToken(sessionToken);
 

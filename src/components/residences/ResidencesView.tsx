@@ -230,10 +230,10 @@ const AddFacilityDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open: boolean) => onOpenChange(open)}>
-      <DialogContent>
+      <DialogContent aria-describedby="add-facility-dialog-desc">
         <DialogHeader>
           <DialogTitle>Add New Facility</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="add-facility-dialog-desc">
             Add a new facility to the selected level. Use quantity for numbered items (e.g., Bathroom #3 becomes Bathroom 1, 2, 3).
           </DialogDescription>
         </DialogHeader>
@@ -348,13 +348,17 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
       return;
     }
     if (dragging.buildingId === target.buildingId) {
-      await moveRoom(target.complexId, target.buildingId, dragging.fromFloorId, target.floorId, dragging.roomId);
+      if (moveRoom) {
+        await moveRoom(target.complexId, target.buildingId, dragging.fromFloorId, target.floorId, dragging.roomId);
+      }
     } else {
-      await moveRoomAnywhere(
-        { complexId: target.complexId, buildingId: dragging.buildingId, floorId: dragging.fromFloorId },
-        { complexId: target.complexId, buildingId: target.buildingId, floorId: target.floorId },
-        dragging.roomId
-      );
+      if (moveRoomAnywhere) {
+        await moveRoomAnywhere(
+          { complexId: target.complexId, buildingId: dragging.buildingId, floorId: dragging.fromFloorId },
+          { complexId: target.complexId, buildingId: target.buildingId, floorId: target.floorId },
+          dragging.roomId
+        );
+      }
     }
     setDragging(null);
   }, [dragging, moveRoom, moveRoomAnywhere, toast]);
@@ -377,12 +381,14 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
       setDraggingFacility(null);
       return;
     }
-    await moveFacility(
-      target.complexId,
-      draggingFacility.from,
-      { level: target.level, buildingId: target.buildingId, floorId: target.floorId },
-      draggingFacility.facilityId
-    );
+    if (moveFacility) {
+      await moveFacility(
+        target.complexId,
+        draggingFacility.from,
+        { level: target.level, buildingId: target.buildingId, floorId: target.floorId },
+        draggingFacility.facilityId
+      );
+    }
     setDraggingFacility(null);
   };
 
@@ -528,11 +534,13 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
       toast({ title: 'Error', description: 'Please fill all fields.', variant: 'destructive' });
       return;
     }
-    updateComplex(editingComplex.id, {
-        name: editingComplex.name,
-        city: editingComplex.city,
-        managerId: editingComplex.managerId,
-    });
+    if (updateComplex) {
+      updateComplex(editingComplex.id, {
+          name: editingComplex.name,
+          city: editingComplex.city,
+          managerId: editingComplex.managerId,
+      });
+    }
     closeDialog('editComplex');
     setEditingComplex(null);
   };
@@ -570,7 +578,9 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   };
 
   const handleDeleteFacility = (complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string) => {
-      deleteFacility(complexId, facilityId, level, buildingId, floorId);
+      if (deleteFacility) {
+        deleteFacility(complexId, facilityId, level, buildingId, floorId);
+      }
   };
 
   const getManagerName = (managerId: string) => {
@@ -615,11 +625,11 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
         <PlusCircle className="mr-2 h-4 w-4" /> {dict.addComplex}
         </Button>
       </DialogTrigger>
-            <DialogContent>
+            <DialogContent aria-describedby="add-complex-dialog-desc">
                 <form onSubmit={handleAddComplex}>
                 <DialogHeader>
                     <DialogTitle>Add New Complex</DialogTitle>
-                    <DialogDescription>Enter the details for the new residential complex.</DialogDescription>
+                    <DialogDescription id="add-complex-dialog-desc">Enter the details for the new residential complex.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -637,8 +647,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 <SelectValue placeholder="Select a manager" />
                             </SelectTrigger>
                             <SelectContent>
-                                {users.map((user) => (
-                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                                {users.filter(user => user.id).map((user) => (
+                                    <SelectItem key={user.id} value={user.id!}>{user.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -736,7 +746,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle>{complex.name}</CardTitle>
-                      <CardDescription>Manager: {getManagerName(complex.managerId)}</CardDescription>
+                      <CardDescription>Manager: {complex.managerId ? getManagerName(complex.managerId) : 'No manager assigned'}</CardDescription>
                     </div>
                      {isAdmin && (
                         <div className="flex gap-2">
@@ -756,7 +766,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => setResidenceDisabled(complex.id, true)}>Disable</AlertDialogAction>
+                                  <AlertDialogAction onClick={() => setResidenceDisabled && setResidenceDisabled(complex.id, true)}>Disable</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -817,7 +827,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   </AlertDialogHeader>
                                                   <AlertDialogFooter>
                                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                  <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
+                                                  <AlertDialogAction onClick={() => deleteBuilding && deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
                                                   </AlertDialogFooter>
                                               </AlertDialogContent>
                                           </AlertDialog>
@@ -845,7 +855,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                           const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
                                           const val = prompt('Rename facility', current?.name || '');
                                           if (val && val.trim() && val.trim() !== current?.name) {
-                                            updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
+                                            updateFacilityName && updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
                                           }
                                         } : undefined}
                                       />
@@ -865,7 +875,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
                                                       const val = prompt('Rename floor', floor.name);
                                                       if (val && val.trim() && val.trim() !== floor.name) {
-                                                        updateFloorName(complex.id, building.id, floor.id, val.trim());
+                                                        updateFloorName && updateFloorName(complex.id, building.id, floor.id, val.trim());
                                                       }
                                                     }}>Rename</Button>
                                                   )}
@@ -889,7 +899,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                               </AlertDialogHeader>
                                                               <AlertDialogFooter>
                                                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                              <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                                              <AlertDialogAction onClick={() => deleteFloor && deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
                                                               </AlertDialogFooter>
                                                           </AlertDialogContent>
                                                       </AlertDialog>
@@ -909,7 +919,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                       key={room.id}
                                                       room={room}
                                                       canEdit={!!isAdmin}
-                                                      onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
+                                                      onDelete={() => deleteRoom && deleteRoom(complex.id, building.id, floor.id, room.id)}
                                                     showCapacity={showCapacity}
                                                     onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
                                                     onDragEnd={isMove ? handleDragEnd : undefined}
@@ -918,7 +928,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     onRename={isEdit ? () => {
                                                       const val = prompt('Rename room', room.name);
                                                       if (val && val.trim() && val.trim() !== room.name) {
-                                                        updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
+                                                        updateRoomName && updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
                                                       }
                                                     } : undefined}
                                                     />
@@ -948,7 +958,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                       const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
                                                       const val = prompt('Rename facility', current?.name || '');
                                                       if (val && val.trim() && val.trim() !== current?.name) {
-                                                        updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
+                                                        updateFacilityName && updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
                                                       }
                                                     } : undefined}
                                                   />
@@ -985,7 +995,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                               const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
                               const val = prompt('Rename facility', current?.name || '');
                               if (val && val.trim() && val.trim() !== current?.name) {
-                                updateFacilityName(complex.id, 'complex', facilityId, val.trim());
+                                updateFacilityName && updateFacilityName(complex.id, 'complex', facilityId, val.trim());
                               }
                             } : undefined}
                           />
@@ -1012,7 +1022,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                     <div className="text-sm text-muted-foreground">{dis.city}</div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setResidenceDisabled(dis.id, false)}>Enable</Button>
+                    <Button variant="outline" size="sm" onClick={() => setResidenceDisabled && setResidenceDisabled(dis.id, false)}>Enable</Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
@@ -1038,11 +1048,11 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
       {/* Add Building Dialog */}
       <Dialog open={dialogStates.addBuilding} onOpenChange={(open) => open ? openDialog('addBuilding') : closeDialog('addBuilding')}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-building-dialog-desc">
           <form onSubmit={handleAddBuilding}>
             <DialogHeader>
               <DialogTitle>Add New Building</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-building-dialog-desc">
                 Enter the name for the new building. It will be added to the selected complex.
               </DialogDescription>
             </DialogHeader>
@@ -1061,11 +1071,11 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
       
       {/* Add Floor Dialog */}
       <Dialog open={dialogStates.addFloor} onOpenChange={(open) => open ? openDialog('addFloor') : closeDialog('addFloor')}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-floor-dialog-desc">
           <form onSubmit={handleAddFloor}>
             <DialogHeader>
               <DialogTitle>Add New Floor</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-floor-dialog-desc">
                 Enter the name for the new floor.
               </DialogDescription>
             </DialogHeader>
@@ -1084,11 +1094,11 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
       {/* Add Room Dialog */}
       <Dialog open={dialogStates.addRoom} onOpenChange={(open) => open ? openDialog('addRoom') : closeDialog('addRoom')}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-room-dialog-desc">
           <form onSubmit={handleAddRoom}>
             <DialogHeader>
               <DialogTitle>Add New Room</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-room-dialog-desc">
                 Enter the name for the new room.
               </DialogDescription>
             </DialogHeader>
@@ -1124,16 +1134,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
           if (!open) closeDialog('addMultipleRooms');
         }}
         floorInfo={contextIds && contextIds.complexId && contextIds.buildingId && contextIds.floorId ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId! } : null}
-        onAddRooms={addMultipleRooms}
+        onAddRooms={addMultipleRooms || (() => Promise.resolve())}
       />
       
       {/* Edit Complex Dialog */}
       <Dialog open={dialogStates.editComplex} onOpenChange={(open) => open ? openDialog('editComplex') : closeDialog('editComplex')}>
-          <DialogContent>
+          <DialogContent aria-describedby="edit-complex-dialog-desc">
               <form onSubmit={handleUpdateComplex}>
                   <DialogHeader>
                       <DialogTitle>Edit Complex</DialogTitle>
-                      <DialogDescription>Update the details for the residential complex.</DialogDescription>
+                      <DialogDescription id="edit-complex-dialog-desc">Update the details for the residential complex.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
@@ -1164,8 +1174,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                   <SelectValue placeholder="Select a manager" />
                               </SelectTrigger>
                               <SelectContent>
-                                  {users.map((user) => (
-                                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                                  {users.filter(user => user.id).map((user) => (
+                                      <SelectItem key={user.id} value={user.id!}>{user.name}</SelectItem>
                                   ))}
                               </SelectContent>
                           </Select>
@@ -1185,7 +1195,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
             isOpen={dialogStates.addFacility}
             onOpenChange={(open) => open ? openDialog('addFacility') : closeDialog('addFacility')}
             context={contextIds}
-            onAdd={addFacility}
+            onAdd={addFacility || (() => {})}
         />
       )}
     </div>

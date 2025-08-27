@@ -1,5 +1,5 @@
 name = "estatecare-cloudflare"
-compatibility_date = "2024-01-15"
+compatibility_date = "2024-08-26"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
 
@@ -8,11 +8,16 @@ pages_build_output_dir = "out"
 NODE_ENV = "production"
 NEXT_PUBLIC_APP_URL = "https://estatecare-cloudflare.pages.dev"
 
+# إعدادات محلية لحل مشكلة process
+[env.development]
+compatibility_flags = ["nodejs_compat"]
+vars = { NODE_ENV = "development" }
+
 # قاعدة بيانات D1
 [[d1_databases]]
 binding = "DB"
 database_name = "estatecare-db"
-database_id = "your-d1-database-id"  # سيتم استبداله بالـ ID الفعلي
+database_id = "681c7e8d-1085-4bb0-b192-ac455138d6e8"
 
 # KV Storage للتخزين السريع والـ caching
 [[kv_namespaces]]

@@ -144,19 +144,19 @@ export function AddMultipleRoomsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby="add-multiple-rooms-dialog-desc">
         <DialogHeader>
           <DialogTitle>Add Multiple Rooms</DialogTitle>
-          <DialogDescription>
-            Paste or type a list of room names. Separate them with commas, spaces, or new lines.
-            You can optionally include an area or dimensions after a pipe '|' per item:
-            <br />
-            <strong>Examples:</strong>
-            <ul className="list-disc ml-6">
-              <li>Room 101|20  — area = 20 m²</li>
-              <li>Room 102|5x4 — length=5 m, width=4 m (area = 20 m²)</li>
-            </ul>
-          </DialogDescription>
+            <DialogDescription id="add-multiple-rooms-dialog-desc">
+              Paste or type a list of room names. Separate them with commas, spaces, or new lines.
+              You can optionally include an area or dimensions after a pipe '|' per item:
+              <br />
+              <strong>Examples:</strong>
+              <ul className="list-disc ml-6">
+                <li>Room 101|20  — area = 20 m²</li>
+                <li>Room 102|5x4 — length=5 m, width=4 m (area = 20 m²)</li>
+              </ul>
+            </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <Label htmlFor="room-list" className="sr-only">Room List</Label>

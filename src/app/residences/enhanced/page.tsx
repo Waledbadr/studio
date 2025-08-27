@@ -468,11 +468,11 @@ export default function EnhancedResidencesPage() {
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Complex
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent aria-describedby="add-complex-dialog-desc">
               <form onSubmit={handleAddComplex}>
                 <DialogHeader>
                   <DialogTitle>Add New Complex</DialogTitle>
-                  <DialogDescription>Enter the details for the new residential complex.</DialogDescription>
+                  <DialogDescription id="add-complex-dialog-desc">Enter the details for the new residential complex.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
@@ -811,11 +811,11 @@ export default function EnhancedResidencesPage() {
       {/* Existing dialogs... */}
       {/* Add Building Dialog */}
       <Dialog open={dialogStates.isAddBuildingDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddBuildingDialogOpen: open }))}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-building-dialog-desc">
           <form onSubmit={handleAddBuilding}>
             <DialogHeader>
               <DialogTitle>Add New Building</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-building-dialog-desc">
                 Enter the name for the new building. It will be added to the selected complex.
               </DialogDescription>
             </DialogHeader>
@@ -834,11 +834,11 @@ export default function EnhancedResidencesPage() {
 
       {/* Add Facility Dialog */}
       <Dialog open={dialogStates.isAddFacilityDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: open }))}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-facility-dialog-desc">
           <form onSubmit={handleAddFacility}>
             <DialogHeader>
               <DialogTitle>Add New Facility</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-facility-dialog-desc">
                 Add a general facility like a main store, office, or mosque to the complex.
               </DialogDescription>
             </DialogHeader>
@@ -861,11 +861,11 @@ export default function EnhancedResidencesPage() {
 
       {/* Add Floor Dialog */}
       <Dialog open={dialogStates.isAddFloorDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddFloorDialogOpen: open }))}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-floor-dialog-desc">
           <form onSubmit={handleAddFloor}>
             <DialogHeader>
               <DialogTitle>Add New Floor</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-floor-dialog-desc">
                 Enter the name for the new floor.
               </DialogDescription>
             </DialogHeader>
@@ -884,11 +884,11 @@ export default function EnhancedResidencesPage() {
 
       {/* Add Room Dialog */}
       <Dialog open={dialogStates.isAddRoomDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddRoomDialogOpen: open }))}>
-        <DialogContent>
+        <DialogContent aria-describedby="add-room-dialog-desc">
           <form onSubmit={handleAddRoom}>
             <DialogHeader>
               <DialogTitle>Add New Room</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="add-room-dialog-desc">
                 Enter the name for the new room.
               </DialogDescription>
             </DialogHeader>
@@ -915,11 +915,11 @@ export default function EnhancedResidencesPage() {
 
       {/* Edit Complex Dialog */}
       <Dialog open={dialogStates.isEditComplexDialogOpen} onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isEditComplexDialogOpen: open }))}>
-        <DialogContent>
+        <DialogContent aria-describedby="edit-complex-dialog-desc">
           <form onSubmit={handleUpdateComplex}>
             <DialogHeader>
               <DialogTitle>Edit Complex</DialogTitle>
-              <DialogDescription>Update the details for the residential complex.</DialogDescription>
+              <DialogDescription id="edit-complex-dialog-desc">Update the details for the residential complex.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, memo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,6 +22,61 @@ import { useLanguage } from '@/context/language-context';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import * as XLSX from 'xlsx';
+
+// Simple Error Boundary component to catch Select-related errors
+class SelectErrorBoundary extends React.Component<{children: React.ReactNode; fallback?: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('Select component error caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || <div className="w-48 text-sm text-muted-foreground">Category filter unavailable</div>;
+    }
+
+    return this.props.children;
+  }
+}
+
+// Memoized CategoryFilter component to prevent ref composition issues
+const CategoryFilter = memo(({ 
+  value, 
+  onValueChange, 
+  categories, 
+  dict 
+}: { 
+  value: string; 
+  onValueChange: (value: string) => void; 
+  categories: string[];
+  dict: any;
+}) => {
+  return (
+    <div className="w-48">
+      <Select key="category-filter" value={value} onValueChange={onValueChange}>
+        <SelectTrigger>
+          <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
+          {categories.map((c) => (
+            <SelectItem key={c} value={c}>{c}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+});
+
+CategoryFilter.displayName = 'CategoryFilter';
 
 export default function InventoryPage() {
   const { dict } = useLanguage();
@@ -59,6 +114,18 @@ export default function InventoryPage() {
   const [search, setSearch] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
+  
+  // Memoize categories to prevent unnecessary re-renders
+  const memoizedCategories = useMemo(() => categories, [categories]);
+
+  // Use useCallback for stable references
+  const handleCategoryFilterChange = useCallback((value: string) => {
+    setCategoryFilter(value);
+  }, []);
+  
+  const handleActiveTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+  }, []);
 
   // Negative stock auto-fix removed per request; values should no longer go negative.
 
@@ -87,7 +154,7 @@ export default function InventoryPage() {
   }
 
   const handleItemUpdated = (item: InventoryItem) => {
-    return updateItem(item);
+    return updateItem(item.id, item);
   }
 
   const handleAddCategory = (e: React.FormEvent) => {
@@ -273,11 +340,11 @@ export default function InventoryPage() {
               <DialogTrigger asChild>
                 <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent aria-describedby="add-category-dialog-desc">
                 <form onSubmit={handleAddCategory}>
                   <DialogHeader>
                     <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
-                    <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
+                    <DialogDescription id="add-category-dialog-desc">{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
@@ -308,7 +375,7 @@ export default function InventoryPage() {
       
       <Card>
         <CardContent className="p-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={handleActiveTabChange}>
             <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
         <TabsList>
           <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
@@ -327,19 +394,14 @@ export default function InventoryPage() {
                       aria-label="Search items"
                     />
                   </div>
-                  <div className="w-48">
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
-                        {categories.map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <SelectErrorBoundary>
+                    <CategoryFilter 
+                      value={categoryFilter}
+                      onValueChange={handleCategoryFilterChange}
+                      categories={memoizedCategories}
+                      dict={dict}
+                    />
+                  </SelectErrorBoundary>
                 </div>
             </div>
             <TabsContent value="all" className="p-6 pt-4">
@@ -363,11 +425,11 @@ export default function InventoryPage() {
 
       {/* Edit Category Dialog */}
       <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
-          <DialogContent>
+          <DialogContent aria-describedby="edit-category-dialog-desc">
               <form onSubmit={handleUpdateCategory}>
                   <DialogHeader>
                       <DialogTitle>Edit Category Name</DialogTitle>
-                      <DialogDescription>
+                      <DialogDescription id="edit-category-dialog-desc">
                           Renaming a category will update it for all associated items.
                       </DialogDescription>
                   </DialogHeader>
