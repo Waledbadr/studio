@@ -140,7 +140,7 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as User[];
+  return results as unknown as User[];
   }
 
   async getUserById(id: string): Promise<User | null> {
@@ -204,7 +204,38 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as Residence[];
+  return results as unknown as Residence[];
+  }
+
+  // Minimal residences projection using a view if available (fallback to base table)
+  async getResidencesMin(limit: number = 50, offset: number = 0, q?: string): Promise<Array<{ id: string; name: string; city: string; status?: string; created_at?: string; updated_at?: string }>> {
+    // Try querying the view first
+    try {
+      const bindings: any[] = [];
+      let sql = `SELECT id, name, city, status, created_at, updated_at FROM view_residences_min`;
+      if (q && q.trim()) {
+        sql += ` WHERE name LIKE ?`;
+        bindings.push(`%${q}%`);
+      }
+      sql += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      bindings.push(limit, offset);
+      const { results } = await this.env.DB.prepare(sql).bind(...bindings).all();
+  if (results) return results as any[];
+    } catch (_) {
+      // View might not exist; fall back to base table
+    }
+
+    // Fallback: derive minimal fields from residences table
+    const bindings2: any[] = [];
+    let sql2 = `SELECT id, COALESCE(building_name, address) AS name, 'Unknown' AS city, status, created_at, updated_at FROM residences`;
+    if (q && q.trim()) {
+      sql2 += ` WHERE (address LIKE ? OR building_name LIKE ?)`;
+      bindings2.push(`%${q}%`, `%${q}%`);
+    }
+    sql2 += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+    bindings2.push(limit, offset);
+    const { results: results2 } = await this.env.DB.prepare(sql2).bind(...bindings2).all();
+    return (results2 as any[]) || [];
   }
 
   async getResidenceById(id: string): Promise<Residence | null> {
@@ -218,7 +249,7 @@ export class CloudflareDB {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM residences WHERE status = ? ORDER BY created_at DESC"
     ).bind(status).all();
-    return results as Residence[];
+  return results as unknown as Residence[];
   }
 
   async createResidence(residenceData: Omit<Residence, 'created_at' | 'updated_at'>): Promise<void> {
@@ -278,7 +309,7 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as InventoryItem[];
+  return results as unknown as InventoryItem[];
   }
 
   async getInventoryById(id: string): Promise<InventoryItem | null> {
@@ -292,7 +323,7 @@ export class CloudflareDB {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM inventory WHERE category = ? AND is_active = true ORDER BY name"
     ).bind(category).all();
-    return results as InventoryItem[];
+  return results as unknown as InventoryItem[];
   }
 
   async getLowStockItems(): Promise<InventoryItem[]> {
@@ -301,7 +332,7 @@ export class CloudflareDB {
        WHERE quantity <= minimum_stock AND is_active = true 
        ORDER BY quantity ASC`
     ).all();
-    return results as InventoryItem[];
+  return results as unknown as InventoryItem[];
   }
 
   async createInventoryItem(itemData: Omit<InventoryItem, 'created_at' | 'updated_at' | 'total_value'>): Promise<void> {
@@ -368,7 +399,7 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as Order[];
+  return results as unknown as Order[];
   }
 
   async getOrderById(id: string): Promise<Order | null> {
@@ -382,7 +413,7 @@ export class CloudflareDB {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC"
     ).bind(status).all();
-    return results as Order[];
+  return results as unknown as Order[];
   }
 
   async createOrder(orderData: Omit<Order, 'created_at' | 'updated_at' | 'final_amount'>): Promise<void> {
@@ -443,7 +474,7 @@ export class CloudflareDB {
        ORDER BY mr.created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as MaintenanceRequest[];
+  return results as unknown as MaintenanceRequest[];
   }
 
   async getMaintenanceRequestById(id: string): Promise<MaintenanceRequest | null> {
@@ -464,7 +495,7 @@ export class CloudflareDB {
        WHERE mr.status = ? 
        ORDER BY mr.created_at DESC`
     ).bind(status).all();
-    return results as MaintenanceRequest[];
+  return results as unknown as MaintenanceRequest[];
   }
 
   async createMaintenanceRequest(requestData: Omit<MaintenanceRequest, 'created_at' | 'updated_at'>): Promise<void> {
@@ -533,7 +564,7 @@ export class CloudflareDB {
     sql += ` ORDER BY name`;
 
     const { results } = await this.env.DB.prepare(sql).bind(...bindings).all();
-    return results as InventoryItem[];
+  return results as unknown as InventoryItem[];
   }
 
   async getStatistics(): Promise<any> {
@@ -556,21 +587,21 @@ export class CloudflareDB {
     ]);
 
     return {
-      users: totalUsers?.count || 0,
+      users: Number((totalUsers as any)?.count ?? 0),
       residences: {
-        total: totalResidences?.count || 0,
-        occupied: occupiedResidences?.count || 0,
-        vacant: (totalResidences?.count || 0) - (occupiedResidences?.count || 0)
+        total: Number((totalResidences as any)?.count ?? 0),
+        occupied: Number((occupiedResidences as any)?.count ?? 0),
+        vacant: Number((totalResidences as any)?.count ?? 0) - Number((occupiedResidences as any)?.count ?? 0)
       },
       inventory: {
-        total: totalInventoryItems?.count || 0,
-        lowStock: lowStockItems?.count || 0
+        total: Number((totalInventoryItems as any)?.count ?? 0),
+        lowStock: Number((lowStockItems as any)?.count ?? 0)
       },
       orders: {
-        pending: pendingOrders?.count || 0
+        pending: Number((pendingOrders as any)?.count ?? 0)
       },
       maintenance: {
-        pending: pendingMaintenance?.count || 0
+        pending: Number((pendingMaintenance as any)?.count ?? 0)
       }
     };
   }

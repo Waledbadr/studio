@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Protect app routes by redirecting unauthenticated users to /login on the edge when possible.
-// Note: Firebase Auth session is client-side. For full SSR/edge protection use cookies-based auth.
+// تم تعطيل جميع أكواد Firebase لهذا الفرع (Cloudflare)
+// استخدم حماية الجلسات عبر Cloudflare أو كوكيز فقط
 export function middleware(req: NextRequest) {
   // Skip all RSC/Flight and prefetch requests to avoid interfering with Next's client navigation
   const isRSC = req.headers.get('rsc') !== null
@@ -39,7 +39,7 @@ export function middleware(req: NextRequest) {
   if (publicPaths.some((p) => req.nextUrl.pathname.startsWith(p))) {
     return NextResponse.next();
   }
-  // We cannot check Firebase client auth here; rely on client guard.
+    // تم تعطيل جميع أكواد Firebase لهذا الفرع (Cloudflare)
   return NextResponse.next();
 }
 

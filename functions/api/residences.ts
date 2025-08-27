@@ -1,17 +1,20 @@
-// GET /api/residences - list residences from D1
-import { json } from './auth/_utils';
+// Cloudflare Pages Function: /api/residences
+// Returns minimal residence records from view_residences_min (if available) with fallback to residences table
+import { CloudflareDB, type CloudflareEnv } from "../../lib/cloudflare-db";
 
-export const onRequestGet = async (context: any) => {
+export const onRequestGet: PagesFunction<CloudflareEnv> = async (ctx) => {
   try {
-    const { results } = await context.env.DB.prepare(
-      `SELECT id, address, building_name, floor_number, property_type, status, created_at, updated_at
-       FROM residences
-       ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`
-    ).bind(200, 0).all();
-    return json({ residences: results || [] });
-  } catch (err) {
-    console.error('CF residences list error:', err);
-    return json({ error: 'Failed to list residences' }, { status: 500 });
+    const url = new URL(ctx.request.url);
+    const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+    const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+    const q = (url.searchParams.get("q") || "").trim();
+
+    const db = new CloudflareDB(ctx.env);
+    const items = await db.getResidencesMin(limit, offset, q || undefined);
+    return Response.json(items, { status: 200 });
+  } catch (err: any) {
+    console.error("/api/residences GET failed", err);
+    return new Response("Failed to fetch residences", { status: 500 });
   }
 };
+ 

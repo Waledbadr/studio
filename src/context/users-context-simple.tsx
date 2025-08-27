@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
 export interface User {
   id?: string;
@@ -15,20 +15,7 @@ export interface User {
   };
 }
 
-const mockUsers: User[] = [
-  {
-    id: 'user-1',
-    name: 'أحمد محمد',
-    nameEn: 'Ahmed Mohamed',
-    email: 'ahmed@example.com',
-    role: 'Admin',
-    assignedResidences: ['res-1'],
-    themeSettings: {
-      colorTheme: 'blue',
-      mode: 'dark'
-    }
-  }
-];
+const mockUsers: User[] = [];
 
 interface SimpleUsersContextType {
   users: User[];
@@ -46,29 +33,97 @@ interface SimpleUsersContextType {
 const UsersContext = createContext<SimpleUsersContextType | undefined>(undefined);
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
-  const [users, setUsers] = useState(mockUsers);
-  const [currentUser, setCurrentUser] = useState(mockUsers[0]);
+  const defaultCurrentUser: User = {
+    id: 'temp-current',
+    name: 'Current User',
+    email: 'current@example.com',
+    role: 'Admin',
+    assignedResidences: [],
+    themeSettings: { colorTheme: 'blue', mode: 'system' }
+  };
+  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [currentUser, setCurrentUser] = useState<User>(defaultCurrentUser);
   const [loading, setLoading] = useState(false);
 
-  const loadUsers = () => {
-    console.log('Mock: Loading users');
+  // Helpers to map role between UI (Admin/Supervisor/Technician) and DB (admin/manager/maintenance)
+  const toUiRole = (role: string): 'Admin' | 'Supervisor' | 'Technician' => {
+    const r = String(role || '').toLowerCase();
+    if (r === 'admin') return 'Admin';
+    if (r === 'manager') return 'Supervisor';
+    if (r === 'maintenance' || r === 'technician' || r === 'tech') return 'Technician';
+    return 'Technician';
+  };
+  const toDbRole = (role: string): 'admin' | 'manager' | 'maintenance' | 'user' => {
+    const r = String(role || '').toLowerCase();
+    if (r === 'admin') return 'admin';
+    if (r === 'supervisor' || r === 'manager') return 'manager';
+    if (r === 'technician' || r === 'tech' || r === 'maintenance') return 'maintenance';
+    return 'user';
   };
 
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/users', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load users');
+      const data: any[] = await res.json();
+      const normalized = (Array.isArray(data) ? data : []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: toUiRole(u.role),
+        assignedResidences: Array.isArray(u.assigned_residences) ? u.assigned_residences : [],
+        themeSettings: u.theme_settings || { colorTheme: 'blue', mode: 'system' },
+      } as User));
+      setUsers(normalized);
+      if (normalized[0]) setCurrentUser(normalized[0]);
+    } catch (e) {
+      console.error('Failed to load users', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
   const switchUser = (user: any) => {
-    console.log('Mock: Switching user', user);
     setCurrentUser(user);
   };
 
   const addUser = async (user: any) => {
-    console.log('Mock: Adding user', user);
+    // POST /api/users
+    const payload = {
+      name: user.name,
+      email: user.email,
+      role: toDbRole(user.role),
+      phone: user.phone ?? undefined,
+      avatar_url: user.avatar_url ?? undefined,
+      is_active: user.is_active !== false,
+      // assignedResidences/themeSettings are UI-only for now
+    };
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to add user');
+    await loadUsers();
   };
 
   const updateUser = async (userId: string, updates: any) => {
-    console.log('Mock: Updating user', userId, updates);
+    const payload: any = { ...updates };
+    if (typeof updates.role !== 'undefined') payload.role = toDbRole(updates.role);
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update user');
+    await loadUsers();
   };
 
   const deleteUser = async (userId: string) => {
-    console.log('Mock: Deleting user', userId);
+    const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete user');
+    await loadUsers();
   };
 
   const getUserById = (id: string) => {
@@ -76,7 +131,6 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const saveUser = async (user: any) => {
-    console.log('Mock: Saving user', user);
     if (user.id) {
       await updateUser(user.id, user);
     } else {
