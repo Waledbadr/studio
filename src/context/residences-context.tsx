@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -220,7 +220,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     
-    if (!db) {
+  if (!db) {
         // Use localStorage when Firebase is not available
         try {
             const newComplex: Complex = {
@@ -236,6 +236,21 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             const updatedResidences = [...residences, newComplex];
             setResidences(updatedResidences);
             saveToLocalStorage(updatedResidences);
+            // Also update local users assignedResidences for the manager
+            try {
+              const storedUsers = localStorage.getItem('estatecare_users');
+              if (storedUsers) {
+                const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;
+                const updatedUsers = usersData.map(u => {
+                  if (u.id !== managerId) return u;
+                  const assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];
+                  return { ...u, assignedResidences: Array.from(new Set([...assigned, newComplex.id])) };
+                });
+                localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+              }
+            } catch (e) {
+              console.warn('Local users sync failed (addComplex):', e);
+            }
             toast({ title: "Success", description: "New residential complex added (locally)." });
         } catch (error) {
             console.error("Error saving to localStorage:", error);
@@ -246,6 +261,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     
     const docRef = doc(collection(db, "residences"));
     await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [], disabled: false });
+    // Sync user's assignedResidences with this new residence
+    try {
+      if (managerId) {
+        const userRef = doc(db, 'users', managerId);
+        // Use set with merge to create if missing
+        await setDoc(userRef, { assignedResidences: arrayUnion(docRef.id) } as any, { merge: true });
+      }
+    } catch (e) {
+      console.warn('User sync failed (addComplex):', e);
+    }
     toast({ title: "Success", description: "New residential complex added." });
   };
 
@@ -859,16 +884,69 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const updateComplex = async (id: string, payload: UpdateComplexPayload) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
+      // Local mode: update residences and sync local users manager linkage
+      try {
+        const prev = residences.find(r => r.id === id);
+        const updatedList = residences.map(r => r.id === id ? { ...r, ...payload } : r);
+        setResidences(updatedList);
+        saveToLocalStorage(updatedList);
+        // Sync users: remove from old manager, add to new manager
+        try {
+          const storedUsers = localStorage.getItem('estatecare_users');
+          if (storedUsers) {
+            const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;
+            const updatedUsers = usersData.map(u => {
+              let assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];
+              // Remove from previous manager
+              if (prev && prev.managerId && u.id === prev.managerId && prev.managerId !== payload.managerId) {
+                assigned = assigned.filter(rid => rid !== id);
+              }
+              // Add to new manager
+              if (payload.managerId && u.id === payload.managerId) {
+                assigned = Array.from(new Set([...assigned, id]));
+              }
+              return { ...u, assignedResidences: assigned };
+            });
+            localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+          }
+        } catch (e) {
+          console.warn('Local users sync failed (updateComplex):', e);
+        }
+        toast({ title: "Success", description: "Complex details updated (locally)." });
+      } catch (e) {
+        console.error('updateComplex local error:', e);
+        toast({ title: 'Error', description: 'Failed to update complex locally.', variant: 'destructive' });
+      }
+      return;
     }
     try {
-        const complexDocRef = doc(db, "residences", id);
-        await updateDoc(complexDocRef, payload);
-        toast({ title: "Success", description: "Complex details updated." });
+      const complexDocRef = doc(db, "residences", id);
+      // Fetch previous to compare managerId
+      const prevSnap = await getDoc(complexDocRef);
+      const prevData = prevSnap.exists() ? (prevSnap.data() as Complex) : undefined;
+      await updateDoc(complexDocRef, payload);
+      // Sync user documents if manager changed
+      const prevManagerId = prevData?.managerId;
+      const newManagerId = payload.managerId;
+      if (prevManagerId && prevManagerId !== newManagerId) {
+        try {
+          await updateDoc(doc(db, 'users', prevManagerId), { assignedResidences: arrayRemove(id) } as any);
+        } catch (e) {
+          console.warn('Failed to remove residence from previous manager:', e);
+        }
+      }
+      if (newManagerId && newManagerId !== prevManagerId) {
+        try {
+          // Use set with merge to handle missing user doc
+          await setDoc(doc(db, 'users', newManagerId), { assignedResidences: arrayUnion(id) } as any, { merge: true });
+        } catch (e) {
+          console.warn('Failed to add residence to new manager:', e);
+        }
+      }
+      toast({ title: "Success", description: "Complex details updated." });
     } catch (error) {
-        console.error("Error updating complex:", error);
-        toast({ title: "Error", description: "Failed to update complex.", variant: "destructive" });
+      console.error("Error updating complex:", error);
+      toast({ title: "Error", description: "Failed to update complex.", variant: "destructive" });
     }
   };
 

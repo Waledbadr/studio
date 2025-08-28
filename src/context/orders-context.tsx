@@ -15,6 +15,11 @@ import type { DocumentReference } from 'firebase/firestore';
 export interface OrderItem extends InventoryItem {
   quantity: number;
   notes?: string;
+  // New: optional target location metadata for planned installation
+  targetLocationId?: string;
+  targetLocationName?: string;
+  // Optional: if this line is intended to override lifespan policy (for audit)
+  overrideReason?: string | null;
 }
 
 export interface ReceivedOrderItem {

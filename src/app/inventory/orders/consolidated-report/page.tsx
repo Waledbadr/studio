@@ -509,7 +509,8 @@ export default function ConsolidatedReportPage() {
                     
                     .print-compact-table tbody td {
                         font-size: 12px !important;
-                        padding: 3px 6px !important;
+                        padding: 2px 6px !important; /* tighter rows */
+                        line-height: 1.2 !important;  /* reduce vertical height */
                         border-top: 1px solid #d1d5db !important;
                         vertical-align: middle !important;
                         color: #000 !important;
@@ -521,8 +522,8 @@ export default function ConsolidatedReportPage() {
                     }
                     
                     .print-compact-table .category-row td {
-                        padding-top: 3px !important;
-                        padding-bottom: 3px !important;
+                        padding-top: 2px !important;
+                        padding-bottom: 2px !important; /* tighter category row */
                         background: #f3f4f6 !important;
                         color: #000 !important;
                         font-weight: 800 !important;
@@ -1044,12 +1045,12 @@ export default function ConsolidatedReportPage() {
                                         <tbody>
                                             {layoutData.layoutConfig.map((cardConfig) => (
                                                 <React.Fragment key={cardConfig.category}>
-                                                    <tr style={{
+                                                    <tr className="category-row" style={{
                                                         background: '#f8f9fa',
                                                         borderLeft: '4px solid #667eea'
                                                     }}>
                                                         <td colSpan={3} style={{
-                                                            padding: '14px 20px',
+                                                            padding: '8px 14px',
                                                             color: '#495057',
                                                             fontWeight: '700',
                                                             textTransform: 'capitalize',
@@ -1073,12 +1074,12 @@ export default function ConsolidatedReportPage() {
                                                             transition: 'all 0.2s ease'
                                                         }}>
                                                             <td style={{
-                                                                padding: '12px 20px',
+                                                                padding: '8px 16px',
                                                                 borderBottom: '1px solid #f1f5f9',
                                                                 fontWeight: '500',
                                                                 fontSize: '12px',
                                                                 color: '#2d3748',
-                                                                lineHeight: '1.5'
+                                                                lineHeight: '1.35'
                                                             }}>
                                                                 <div style={{
                                                                     display: 'flex',
@@ -1095,7 +1096,7 @@ export default function ConsolidatedReportPage() {
                                                                 </div>
                                                             </td>
                                                             <td style={{
-                                                                padding: '12px 20px',
+                                                                padding: '8px 16px',
                                                                 borderBottom: '1px solid #f1f5f9',
                                                                 textAlign: 'center',
                                                                 fontSize: '12px',
@@ -1104,7 +1105,7 @@ export default function ConsolidatedReportPage() {
                                                             }}>
                                                                 <span style={{
                                                                     backgroundColor: '#e2e8f0',
-                                                                    padding: '4px 8px',
+                                                                    padding: '3px 6px',
                                                                     borderRadius: '6px',
                                                                     fontSize: '11px',
                                                                     fontWeight: '600',
@@ -1114,7 +1115,7 @@ export default function ConsolidatedReportPage() {
                                                                 </span>
                                                             </td>
                                                             <td style={{
-                                                                padding: '12px 20px',
+                                                                padding: '8px 16px',
                                                                 borderBottom: '1px solid #f1f5f9',
                                                                 textAlign: 'center',
                                                                 fontWeight: 'bold',
@@ -1126,11 +1127,11 @@ export default function ConsolidatedReportPage() {
                                                                     justifyContent: 'center',
                                                                     backgroundColor: '#f8f9fa',
                                                                     color: '#212529',
-                                                                    padding: '6px 12px',
+                                                                    padding: '4px 8px',
                                                                     border: '1px solid #dee2e6',
                                                                     borderRadius: '4px',
                                                                     fontWeight: '700',
-                                                                    minWidth: '50px'
+                                                                    minWidth: '44px'
                                                                 }}>
                                                                     {item.totalQuantity}
                                                                 </div>
