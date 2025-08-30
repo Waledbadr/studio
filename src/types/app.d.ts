@@ -1,9 +1,72 @@
 // Global app-level ambient types to satisfy typecheck in simple/local mode.
 
 declare type InventoryItem = import('@/context/inventory-context').InventoryItem;
-declare type InventoryTransaction = import('@/context/inventory-context').InventoryTransaction;
+declare interface IssuedItem {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  category: string;
+  issueQuantity: number;
+  // Include other common inventory item properties
+  unit?: string;
+  quantity?: number;
+  stock?: number;
+}
 
-declare type StockTransfer = import('@/context/inventory-context').StockTransfer;
+declare interface MIVDetails {
+  id: string;
+  items: any[];
+  status: string;
+  createdAt: string;
+  residenceId: string;
+  locations: any;
+  date: Date;
+}
+
+declare interface MIV {
+  id: string;
+  items: any[];
+  status: string;
+  createdAt: string;
+  residenceId: string;
+  date: Date;
+  locationName: string;
+  itemCount: number;
+}
+
+declare interface InventoryTransaction {
+  id: string;
+  itemId: string;
+  residenceId: string;
+  locationId?: string;
+  type: string;
+  quantity: number;
+  date: Date;
+  referenceDocId?: string;
+  notes?: string;
+  locationName?: string;
+  relatedResidenceId?: string;
+}
+
+declare interface StockTransfer {
+  id: string;
+  date: Date | { toDate?: () => Date };
+  fromResidenceId: string;
+  fromResidenceName: string;
+  toResidenceId: string;
+  toResidenceName: string;
+  requestedById: string;
+  requestedBy?: string;
+  approvedBy?: string;
+  approvedById?: string;
+  transferNumber?: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+  items: { id: string; nameEn: string; nameAr: string; quantity: number; }[];
+  notes?: string;
+  approvedAt?: Date | { toDate?: () => Date };
+  rejectedById?: string;
+  rejectedAt?: Date | { toDate?: () => Date };
+}
 
 declare type User = import('@/context/users-context').User;
 

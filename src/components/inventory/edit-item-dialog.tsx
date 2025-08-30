@@ -232,15 +232,23 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 				let finalNameAr = nameAr.trim();
 				let finalNameEn = nameEn.trim();
 				if (!finalNameAr || !finalNameEn) {
-					const res = await fetch('/api/translate-item', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
-					});
-					if (res.ok) {
+					try {
+						const res = await fetch('/api/translate-item', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
+						});
 						const t: any = await res.json();
-						finalNameAr = finalNameAr || t?.arabicName || '';
-						finalNameEn = finalNameEn || t?.englishName || '';
+						if (res.ok) {
+							finalNameAr = finalNameAr || t?.arabicName || '';
+							finalNameEn = finalNameEn || t?.englishName || '';
+						} else {
+							if (!finalNameAr && finalNameEn) finalNameAr = finalNameEn;
+							if (!finalNameEn && finalNameAr) finalNameEn = finalNameAr;
+						}
+					} catch {
+						if (!finalNameAr && finalNameEn) finalNameAr = finalNameEn;
+						if (!finalNameEn && finalNameAr) finalNameEn = finalNameAr;
 					}
 				}
 

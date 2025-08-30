@@ -136,7 +136,7 @@ export default function ReceiveMaterialsPage() {
                       if (busy) return;
                       setApproveBusy(prev => ({ ...prev, [r.id]: true }));
                       try {
-                        await approveMRVRequest(r.id, currentUser!.id);
+                        await approveMRVRequest(r.id, currentUser!.id!);
                         await loadMrvStats();
                       } catch {}
                       setApproveBusy(prev => ({ ...prev, [r.id]: false }));

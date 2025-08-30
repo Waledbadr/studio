@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 interface Props {
@@ -12,14 +12,7 @@ export function AuthGate({ children }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  console.log('AuthGate: Rendering - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
-
-  useEffect(() => {
-    console.log('AuthGate: useEffect triggered, calling checkAuth');
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       console.log('AuthGate: Starting auth check...');
       const response = await fetch('/api/auth/me', {
@@ -43,7 +36,16 @@ export function AuthGate({ children }: Props) {
       setIsLoading(false);
       console.log('AuthGate: Auth check completed');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    console.log('AuthGate: useEffect triggered, calling checkAuth');
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    console.log('AuthGate: Auth state changed - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+  }, [isLoading, isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated === false) {

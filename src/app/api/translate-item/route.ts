@@ -7,7 +7,8 @@ import '@/ai/genkit'; // ensure env checks/logs run
 
 export async function POST(req: NextRequest) {
   try {
-    const { name } = await req.json();
+    const body = await req.json() as { name: string };
+    const { name } = body;
     if (!name || typeof name !== 'string') {
       return Response.json({ error: 'Invalid payload: name is required' }, { status: 400 });
     }

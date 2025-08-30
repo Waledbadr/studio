@@ -1,7 +1,7 @@
 
 // Inventory context for Cloudflare D1
 'use client';
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
 import { getAllInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } from '../lib/d1-db';
 
 interface InventoryContextType {
@@ -18,6 +18,48 @@ interface InventoryContextType {
   updateCategory: (oldName: string, newName: string) => Promise<void>;
   // Stock helpers (fallbacks for D1 shape)
   getStockForResidence: (item: any, residenceId: string) => number;
+  // Transfer methods
+  transfers: any[];
+  createTransferRequest: (transferData: any) => Promise<void>;
+  approveTransfer: (id: string, userId: string) => Promise<void>;
+  rejectTransfer: (id: string, userId: string) => Promise<void>;
+  // Transaction methods
+  getAllInventoryTransactions: (filters?: any) => Promise<any[]>;
+  // MRV/MIV methods
+  getMRVById: (id: string) => Promise<any>;
+  getMIVById: (id: string) => Promise<any>;
+  getMRVs: () => Promise<any[]>;
+  getMRVRequests: (status?: string) => Promise<any[]>;
+  approveMRVRequest: (id: string, userId: string) => Promise<void>;
+  rejectMRVRequest: (id: string, userId: string) => Promise<void>;
+  getMRVRequestById: (id: string) => Promise<any>;
+  updateMRVRequest: (id: string, updates: any) => Promise<void>;
+  createMRV: (mrvData: any) => Promise<void>;
+  // Reconciliation methods
+  getReconciliations: () => Promise<any[]>;
+  getReconciliationById: (id: string) => Promise<any>;
+  getReconciliationItems: (reconciliationId: string) => Promise<any[]>;
+  getReconciliationRequests: () => Promise<any[]>;
+  createReconciliationRequest: (data: any) => Promise<void>;
+  approveReconciliationRequest: (id: string, userId: string) => Promise<void>;
+  rejectReconciliationRequest: (id: string, userId: string) => Promise<void>;
+  reconcileStock: (reconciliationData: any) => Promise<void>;
+  // Additional reconciliation methods
+  getAllReconciliations: () => Promise<any[]>;
+  // Deprecation methods
+  depreciateItems: (depreciationRequest: any) => Promise<void>;
+  // Alias for getAllInventoryTransactions
+  getInventoryTransactions: (itemId?: string, residenceId?: string) => Promise<any[]>;
+  // Transfer items
+  getTransferItems: (transferId: string) => Promise<any[]>;
+  // Issue transactions
+  getAllIssueTransactions: (filters?: any) => Promise<any[]>;
+  // Issue methods
+  issueItemsFromStock: (residenceId: string, voucherLocations: any[]) => Promise<void>;
+  getLastIssueDateForItemAtLocation: (itemId: string, locationId: string) => Promise<any>;
+  getMIVs: () => Promise<any[]>;
+  // Alias for items (used by some components)
+  inventoryItems: any[];
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -26,17 +68,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
 
-  const loadInventory = async () => {
+  const loadInventory = useCallback(async () => {
     setLoading(true);
     try {
       const itemsFromDb = await getAllInventoryItems();
       // Normalize minimal fields for UI compatibility
       const normalized = (itemsFromDb || []).map((it: any) => ({
         ...it,
-        // derive UI-friendly fields if missing
+        // Backfill UI-friendly fields
         stock: it.stock ?? it.quantity ?? 0,
         unit: it.unit ?? it.unit_of_measure ?? '',
+        nameAr: it.nameAr ?? it.name_ar ?? undefined,
+        nameEn: it.nameEn ?? it.name_en ?? undefined,
+        lifespanDays: it.lifespanDays ?? it.lifespan_days ?? undefined,
+        variants: Array.isArray(it.variants) ? it.variants : (it.variants ? it.variants : undefined),
+        keywordsAr: Array.isArray(it.keywordsAr) ? it.keywordsAr : (it.keywords_ar ? it.keywords_ar : undefined),
+        keywordsEn: Array.isArray(it.keywordsEn) ? it.keywordsEn : (it.keywords_en ? it.keywords_en : undefined),
+        imageUrl: it.imageUrl ?? it.image_url ?? undefined,
       }));
       setItems(normalized);
       // Derive categories from items
@@ -53,12 +103,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const addItem = async (item: any) => {
+  const addItem = useCallback(async (item: any) => {
     // Map UI item shape to D1 API shape
     const payload = {
       name: item.name ?? item.nameEn ?? item.nameAr ?? '',
+      nameAr: item.nameAr ?? undefined,
+      nameEn: item.nameEn ?? undefined,
       description: item.description ?? undefined,
       category: item.category ?? '',
       subcategory: item.subcategory ?? undefined,
@@ -76,35 +128,39 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       location: item.location ?? undefined,
       condition_status: (item.condition_status ?? 'new'),
       image_url: item.image_url ?? item.imageUrl ?? undefined,
+      lifespan_days: item.lifespanDays ?? undefined,
+      variants: item.variants ?? undefined,
+      keywords_ar: item.keywordsAr ?? undefined,
+      keywords_en: item.keywordsEn ?? undefined,
       notes: item.notes ?? undefined,
       is_active: item.is_active !== false,
     };
     await addInventoryItem(payload);
     await loadInventory();
-  };
+  }, [loadInventory]);
 
-  const updateItem = async (id: string, updates: any) => {
+  const updateItem = useCallback(async (id: string, updates: any) => {
     // Map partial UI updates to D1 fields
     const payload: any = { ...updates };
     if ('stock' in updates && !('quantity' in updates)) payload.quantity = updates.stock;
     if ('unit' in updates && !('unit_of_measure' in updates)) payload.unit_of_measure = updates.unit;
     await updateInventoryItem(id, payload);
     await loadInventory();
-  };
+  }, [loadInventory]);
 
-  const deleteItem = async (id: string) => {
+  const deleteItem = useCallback(async (id: string) => {
     await deleteInventoryItem(id);
     await loadInventory();
-  };
+  }, [loadInventory]);
 
   // Categories: naive local management (no separate table in D1)
-  const addCategory = async (name: string) => {
+  const addCategory = useCallback(async (name: string) => {
     const n = (name || '').trim();
     if (!n) return;
     setCategories(prev => (prev.includes(n) ? prev : [...prev, n].sort((a, b) => a.localeCompare(b))));
-  };
+  }, []);
 
-  const updateCategory = async (oldName: string, newName: string) => {
+  const updateCategory = useCallback(async (oldName: string, newName: string) => {
     const o = (oldName || '').trim();
     const n = (newName || '').trim();
     if (!o || !n || o === n) return;
@@ -128,7 +184,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [items, loadInventory]);
 
   // Stock helper: fallback to per-residence if available else 0
   const getStockForResidence = useCallback((item: any, residenceId: string) => {
@@ -141,8 +197,242 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return 0;
   }, []);
 
+  // Transfer methods
+  const loadTransfers = useCallback(async () => {
+    try {
+      const response = await fetch('/api/transfers');
+      if (response.ok) {
+        const transfersData = await response.json();
+        setTransfers(Array.isArray(transfersData) ? transfersData : []);
+      }
+    } catch (e) {
+      console.error('Failed to load transfers', e);
+    }
+  }, []);
+
+  const createTransferRequest = useCallback(async (transferData: any) => {
+    const response = await fetch('/api/transfers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transferData)
+    });
+    if (!response.ok) {
+      throw new Error('Failed to create transfer request');
+    }
+    await loadTransfers();
+  }, [loadTransfers]);
+
+  const approveTransfer = useCallback(async (id: string, userId: string) => {
+    const response = await fetch(`/api/transfers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved', approvedBy: userId })
+    });
+    if (!response.ok) {
+      throw new Error('Failed to approve transfer');
+    }
+    await loadTransfers();
+  }, [loadTransfers]);
+
+  const rejectTransfer = useCallback(async (id: string, userId: string) => {
+    const response = await fetch(`/api/transfers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+    if (!response.ok) {
+      throw new Error('Failed to reject transfer');
+    }
+    await loadTransfers();
+  }, [loadTransfers]);
+
+  // Transaction methods
+  const getAllInventoryTransactions = async (itemId?: string, residenceId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (itemId) {
+      queryParams.set('itemId', itemId);
+    }
+    if (residenceId) {
+      queryParams.set('residenceId', residenceId);
+    }
+    const response = await fetch(`/api/transactions?${queryParams}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch transactions');
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  };
+
+  // MRV/MIV methods (mock implementations)
+  const getMRVById = async (id: string) => {
+    return {
+      id,
+      items: [],
+      status: 'completed',
+      createdAt: new Date().toISOString()
+    };
+  };
+
+  const getMIVById = async (id: string) => {
+    return {
+      id,
+      items: [],
+      status: 'completed',
+      createdAt: new Date().toISOString()
+    };
+  };
+
+  const getMRVs = async () => {
+    return [];
+  };
+
+  const getMRVRequests = async () => {
+    return [];
+  };
+
+  const approveMRVRequest = async (id: string, userId: string) => {
+    console.log('Approving MRV request', id, userId);
+  };
+
+  const rejectMRVRequest = async (id: string, userId: string) => {
+    console.log('Rejecting MRV request', id, userId);
+  };
+
+  const getMRVRequestById = async (id: string) => {
+    return {
+      id,
+      status: 'pending',
+      items: [],
+      createdAt: new Date().toISOString()
+    };
+  };
+
+  const updateMRVRequest = async (id: string, updates: any) => {
+    console.log('Updating MRV request', id, updates);
+  };
+
+  const createMRV = async (mrvData: any) => {
+    console.log('Creating MRV', mrvData);
+  };
+
+  // Reconciliation methods (mock implementations)
+  const getAllReconciliations = async () => {
+    return [];
+  };
+
+  const getReconciliationById = async (id: string) => {
+    return {
+      id,
+      items: [],
+      status: 'completed',
+      createdAt: new Date().toISOString()
+    };
+  };
+
+  const getReconciliationItems = async (reconciliationId: string) => {
+    return [];
+  };
+
+  // Transfer items
+  const getTransferItems = async (transferId: string) => {
+    return [];
+  };
+
+  // Issue transactions
+  const getAllIssueTransactions = async (filters?: any) => {
+    return [];
+  };
+
+  // Reconciliation methods (mock implementations)
+  const getReconciliations = async () => {
+    return [];
+  };
+
+  const getReconciliationRequests = async () => {
+    return [];
+  };
+
+  const createReconciliationRequest = async (data: any) => {
+    console.log('Creating reconciliation request', data);
+  };
+
+  const approveReconciliationRequest = async (id: string, userId: string) => {
+    console.log('Approving reconciliation request', id, userId);
+  };
+
+  const rejectReconciliationRequest = async (id: string, userId: string) => {
+    console.log('Rejecting reconciliation request', id, userId);
+  };
+
+  const reconcileStock = async (reconciliationData: any) => {
+    console.log('Reconciling stock', reconciliationData);
+  };
+
+  // Deprecation methods
+  const depreciateItems = async (depreciationRequest: any) => {
+    console.log('Depreciating items', depreciationRequest);
+  };
+
+  // Alias for getAllInventoryTransactions
+  const getInventoryTransactions = getAllInventoryTransactions;
+
+  // Issue methods
+  const issueItemsFromStock = async (residenceId: string, voucherLocations: any[]) => {
+    console.log('Issuing items from stock', residenceId, voucherLocations);
+  };
+
+  const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string) => {
+    return null;
+  };
+
+  const getMIVs = async () => {
+    return [];
+  };
+
   return (
-  <InventoryContext.Provider value={{ items, loading, addItem, loadInventory, updateItem, deleteItem, categories, addCategory, updateCategory, getStockForResidence }}>
+  <InventoryContext.Provider value={{
+    items,
+    loading,
+    addItem,
+    loadInventory,
+    updateItem,
+    deleteItem,
+    categories,
+    addCategory,
+    updateCategory,
+    getStockForResidence,
+    transfers,
+    createTransferRequest,
+    approveTransfer,
+    rejectTransfer,
+    getAllInventoryTransactions,
+    getMRVById,
+    getMIVById,
+    getMRVs,
+    getMRVRequests,
+    approveMRVRequest,
+    rejectMRVRequest,
+    getMRVRequestById,
+    updateMRVRequest,
+    createMRV,
+    getReconciliations,
+    getReconciliationById,
+    getReconciliationItems,
+    getReconciliationRequests,
+    createReconciliationRequest,
+    approveReconciliationRequest,
+    rejectReconciliationRequest,
+    reconcileStock,
+    getAllReconciliations,
+    depreciateItems,
+    getInventoryTransactions,
+    getTransferItems,
+    getAllIssueTransactions,
+    issueItemsFromStock,
+    getLastIssueDateForItemAtLocation,
+    getMIVs,
+    inventoryItems: items
+  }}>
       {children}
     </InventoryContext.Provider>
   );

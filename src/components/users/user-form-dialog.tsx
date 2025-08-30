@@ -1,5 +1,7 @@
 'use client';
 
+import { useUsers } from "@/context/users-context-simple";
+import type { User } from "@/context/users-context-simple";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -27,20 +29,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useResidences } from "@/context/residences-context-simple";
-import type { } from "@/context/users-context-simple"; // types come from simple context
-type UserThemeSettings = { colorTheme: string; mode: 'light' | 'dark' | 'system' };
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Admin' | 'Supervisor' | 'Technician';
-  assignedResidences?: string[];
-  themeSettings?: UserThemeSettings;
-};
-import { useUsers } from "@/context/users-context-simple";
 import { Loader2, Palette } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { colorThemes } from "@/lib/themes";
+
+type UserThemeSettings = { colorTheme: string; mode: 'light' | 'dark' | 'system' };
 
 const formSchema = z.object({
   id: z.string().optional(),
@@ -98,9 +91,12 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: user.role as "Admin" | "Supervisor" | "Technician",
           assignedResidences: user.assignedResidences || [],
-          themeSettings: user.themeSettings || { colorTheme: 'blue', mode: 'system' },
+          themeSettings: user.themeSettings ? {
+            colorTheme: user.themeSettings.colorTheme,
+            mode: user.themeSettings.mode as 'light' | 'dark' | 'system'
+          } : { colorTheme: 'blue', mode: 'system' },
         });
       } else {
         form.reset({

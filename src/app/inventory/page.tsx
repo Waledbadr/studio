@@ -96,13 +96,16 @@ export default function InventoryPage() {
   const [editingCategory, setEditingCategory] = useState<{ oldName: string; newName: string } | null>(null);
   const { toast } = useToast();
   
+  const didInitRef = React.useRef(false);
   useEffect(() => {
+    if (didInitRef.current) return;
     if (!currentUser) return;
+    didInitRef.current = true;
     loadInventory();
     if (residences.length === 0) {
       loadResidencesContext();
     }
-  }, [currentUser, loadInventory, loadResidencesContext, residences.length]);
+  }, [currentUser]);
 
   const userResidences = useMemo(() => {
     if (!currentUser) return [];
@@ -149,8 +152,22 @@ export default function InventoryPage() {
     setIsEditItemDialogOpen(true);
   }
 
-  const handleItemAdded = (newItem: Omit<InventoryItem, 'id' | 'stock'>) => {
-    return addItem(newItem);
+  const handleItemAdded = async (newItem: Omit<InventoryItem, 'id' | 'stock'>): Promise<InventoryItem | void> => {
+    try {
+      await addItem(newItem);
+      // Reload inventory to get the updated data
+      await loadInventory();
+      // Return a mock item with the data that was added (since addItem doesn't return the created item)
+      return {
+        ...newItem,
+        id: 'temp-id', // This will be replaced when inventory reloads
+        stock: 0,
+        stockByResidence: {}
+      } as InventoryItem;
+    } catch (error) {
+      console.error('Failed to add item:', error);
+      throw error;
+    }
   }
 
   const handleItemUpdated = (item: InventoryItem) => {

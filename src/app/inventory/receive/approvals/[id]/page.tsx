@@ -81,7 +81,7 @@ export default function MRVApprovalDetailPage() {
     fd.append('file', file);
     const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err: { error?: string } = await res.json().catch(() => ({})) as { error?: string };
       throw new Error(err.error || 'Upload failed');
     }
     return res.json();
@@ -123,7 +123,7 @@ export default function MRVApprovalDetailPage() {
     setIsApproving(true);
     try {
       await handleSave();
-      const mrvId = await approveMRVRequest(data.id, currentUser.id);
+      const mrvId = await approveMRVRequest(data.id, currentUser.id!);
       toast({ title: 'Approved', description: `Created MRV ${mrvId}.` });
       router.push(`/inventory/receive/receipts/${mrvId}`);
   } finally {
@@ -134,7 +134,7 @@ export default function MRVApprovalDetailPage() {
   const handleReject = async () => {
     if (!data || !currentUser) return;
     try {
-      await rejectMRVRequest(data.id, currentUser.id);
+      await rejectMRVRequest(data.id, currentUser.id!);
       toast({ title: 'Rejected', description: 'Request rejected.' });
       router.push('/inventory/receive/approvals');
     } catch (e: any) {}

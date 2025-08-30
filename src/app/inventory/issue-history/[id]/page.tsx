@@ -97,7 +97,7 @@ export default function MIVDetailPage() {
     }
 
     // Flatten and compute totals for printing
-    const entries = Object.entries(miv.locations);
+    const entries = Object.entries(miv.locations as Record<string, Array<{ itemNameEn: string; itemNameAr: string; quantity: number; itemId?: string }>>);
     const totalIssued = entries.reduce((sum, [, items]) => sum + items.reduce((s, it) => s + (Number(it.quantity) || 0), 0), 0);
 
     return (
@@ -190,7 +190,7 @@ export default function MIVDetailPage() {
                         </div>
                         <div className="text-right">
                             <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{residenceName}</p>
-                            <p className="text-sm text-muted-foreground print-subtle">Date: {format(miv.date.toDate(), 'PPP p')}</p>
+                            <p className="text-sm text-muted-foreground print-subtle">Date: {miv.date ? (typeof miv.date === 'object' && 'toDate' in miv.date ? format((miv.date as any).toDate(), 'PPP p') : format(miv.date as Date, 'PPP p')) : 'No date'}</p>
                         </div>
                     </div>
                 </CardHeader>
@@ -210,7 +210,7 @@ export default function MIVDetailPage() {
                                             {locName}
                                         </TableCell>
                                     </TableRow>
-                                    {items.map((it, i) => (
+                                    {(items as Array<{ itemNameEn: string; itemNameAr: string; quantity: number; itemId?: string }>).map((it, i) => (
                                         <TableRow key={`${locName}-${locIndex}-${it.itemId || 'row'}-${i}`}>
                                             <TableCell className="font-medium">{it.itemNameEn} | {it.itemNameAr}</TableCell>
                                             <TableCell className="text-right font-medium">{it.quantity}</TableCell>

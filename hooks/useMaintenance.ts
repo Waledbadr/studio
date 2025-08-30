@@ -81,7 +81,7 @@ export function useMaintenance(options: UseMaintenanceOptions = {}) {
         throw new Error('فشل في جلب بيانات طلبات الصيانة');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data?: MaintenanceRequest[] };
       setRequests(result.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
@@ -105,17 +105,16 @@ export function useMaintenance(options: UseMaintenanceOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في إنشاء طلب الصيانة');
       }
 
-      const result = await response.json();
-      await fetchRequests(); // إعادة تحميل البيانات
+      const result = await response.json() as { data?: { id: string; request_number: string } };
       
       return {
         success: true,
-        requestId: result.data.id,
-        requestNumber: result.data.request_number
+        requestId: result.data?.id,
+        requestNumber: result.data?.request_number
       };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ في إنشاء طلب الصيانة');
@@ -138,7 +137,7 @@ export function useMaintenance(options: UseMaintenanceOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في تحديث طلب الصيانة');
       }
 
@@ -189,8 +188,13 @@ export function useMaintenance(options: UseMaintenanceOptions = {}) {
 
   // إضافة إدخال في سجل العمل
   const addWorkLogEntry = useCallback(async (requestId: string, workEntry: string): Promise<boolean> => {
-    return updateRequest(requestId, { work_entry: workEntry });
-  }, [updateRequest]);
+    // Get current work log and append new entry
+    const currentRequest = requests.find(r => r.id === requestId);
+    const currentWorkLog = currentRequest?.work_log ? JSON.parse(currentRequest.work_log) : [];
+    const updatedWorkLog = [...currentWorkLog, { entry: workEntry, timestamp: new Date().toISOString() }];
+    
+    return updateRequest(requestId, { work_log: JSON.stringify(updatedWorkLog) });
+  }, [updateRequest, requests]);
 
   // تقييم الطلب من المستأجر
   const rateRequest = useCallback(async (requestId: string, rating: number, feedback?: string): Promise<boolean> => {
@@ -273,9 +277,9 @@ export function useMaintenance(options: UseMaintenanceOptions = {}) {
   const getOverdueRequests = useCallback(() => {
     const now = new Date();
     return requests.filter(request => {
-      if (!request.estimated_completion || request.status === 'completed') return false;
+      if (!request.estimated_completion) return false;
       const estimatedDate = new Date(request.estimated_completion);
-      return estimatedDate < now && request.status !== 'completed';
+      return estimatedDate < now && (request.status === 'pending' || request.status === 'assigned' || request.status === 'in_progress' || request.status === 'on_hold');
     });
   }, [requests]);
 
@@ -362,8 +366,8 @@ export function useMaintenanceRequest(requestId: string | null) {
         throw new Error('فشل في جلب بيانات طلب الصيانة');
       }
 
-      const result = await response.json();
-      setRequest(result.data);
+      const result = await response.json() as { data?: MaintenanceRequest };
+      setRequest(result.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
       console.error('خطأ في جلب طلب الصيانة:', err);

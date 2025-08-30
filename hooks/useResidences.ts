@@ -81,7 +81,7 @@ export function useResidences(options: UseResidencesOptions = {}) {
         throw new Error('فشل في جلب بيانات العقارات');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data?: Residence[] };
       setResidences(result.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
@@ -105,7 +105,7 @@ export function useResidences(options: UseResidencesOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في إضافة العقار');
       }
 
@@ -132,7 +132,7 @@ export function useResidences(options: UseResidencesOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في تحديث العقار');
       }
 
@@ -301,8 +301,8 @@ export function useResidence(residenceId: string | null) {
         throw new Error('فشل في جلب بيانات العقار');
       }
 
-      const result = await response.json();
-      setResidence(result.data);
+      const result = await response.json() as { data?: Residence };
+      setResidence(result.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
       console.error('خطأ في جلب العقار:', err);

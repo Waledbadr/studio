@@ -9,6 +9,7 @@ import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useUsers } from '@/context/users-context-simple';
+import type { User } from '@/context/users-context-simple';
 import { useResidences } from '@/context/residences-context-simple';
 import { UserFormDialog } from '@/components/users/user-form-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -141,7 +142,7 @@ export default function UsersPage() {
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>Delete</AlertDialogAction>
+                                                            <AlertDialogAction onClick={() => handleDeleteUser(user.id!)}>Delete</AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>

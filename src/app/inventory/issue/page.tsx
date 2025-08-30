@@ -36,7 +36,7 @@ interface VoucherLocation {
     roomId?: string;
     roomName?: string;
     facilityId?: string;
-    items: IssuedItem[];
+    items: (InventoryItem & { issueQuantity: number })[];
 }
 
 

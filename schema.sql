@@ -161,6 +161,27 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- جدول معاملات المخزون (للتقارير)
+CREATE TABLE IF NOT EXISTS inventory_transactions (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    item_name_en TEXT NOT NULL,
+    item_name_ar TEXT,
+    residence_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    type TEXT NOT NULL, -- IN, OUT, TRANSFER_IN, TRANSFER_OUT, ADJUSTMENT, RETURN, DEPRECIATION, AUDIT, SCRAP
+    quantity INTEGER NOT NULL,
+    reference_doc_id TEXT, -- ID of related document (MRV, MIV, etc.)
+    related_residence_id TEXT, -- for transfers
+    location_name TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES inventory(id),
+    FOREIGN KEY (residence_id) REFERENCES residences(id),
+    FOREIGN KEY (related_residence_id) REFERENCES residences(id)
+);
+
 -- جدول الإشعارات
 CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,

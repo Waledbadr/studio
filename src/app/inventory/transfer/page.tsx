@@ -125,7 +125,7 @@ export default function TransferHistoryPage() {
                                     <TableCell>{getResidenceName(transfer.fromResidenceId)}</TableCell>
                                     <TableCell>{getResidenceName(transfer.toResidenceId)}</TableCell>
                                     <TableCell>{transfer.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
-                    <TableCell className="font-mono">{formatTrsId(transfer.codeShort)}</TableCell>
+                    <TableCell className="font-mono">{formatTrsId(transfer.id)}</TableCell>
                                     <TableCell>
                                         <Badge variant={
                                             transfer.status === 'Completed' ? 'default' 
@@ -177,10 +177,10 @@ export default function TransferHistoryPage() {
                                 {dict.typeLabel}: <span className="font-medium text-foreground">TRANSFER</span>
                             </div>
                             <div>
-                                {dict.date}: {format(selected.date.toDate(), 'PPP p')}
+                                {dict.date}: {selected.date ? (typeof selected.date === 'object' && 'toDate' in selected.date ? format((selected.date as any).toDate(), 'PPP p') : format(selected.date as Date, 'PPP p')) : 'No date'}
                             </div>
                             <div>
-                                {dict.referenceLabel}: <span className="font-mono">{formatTrsId(selected.codeShort)}</span>
+                                {dict.referenceLabel}: <span className="font-mono">{formatTrsId(selected.id)}</span>
                             </div>
                             <div>{dict.residenceLabel}: {getResidenceName(selected.toResidenceId)}</div>
                             <div>{dict.location}: {`${dict.transferFromPrefix} ${getResidenceName(selected.fromResidenceId)}`}</div>

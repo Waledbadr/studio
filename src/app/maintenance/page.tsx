@@ -42,7 +42,7 @@ export default function MaintenancePage() {
     
     const userRequests = useMemo(() => {
         if (!currentUser || isAdmin) return requests;
-        return requests.filter(r => currentUser.assignedResidences.includes(r.complexId));
+        return requests.filter(r => r.complexId && currentUser.assignedResidences.includes(r.complexId));
     }, [requests, currentUser, isAdmin]);
     
     const filteredRequests = (status: MaintenanceStatus | 'all') => {

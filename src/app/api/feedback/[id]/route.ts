@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
-import { generateMonthlySequentialTicketId } from '@/lib/feedback';
-import { db as _db } from '@/lib/firebase';
+// TODO: Implement D1-based feedback system
+// import { db } from '@/lib/firebase';
+// import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+// import { generateMonthlySequentialTicketId } from '@/lib/feedback';
+// import { db as _db } from '@/lib/firebase';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'Feedback system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based feedback update
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const id = params.id;
     const body = await req.json();
-  const { status, developerComment, updatedBy, priority, ticketId, autoRenumber } = body || {};
+    const { status, developerComment, updatedBy, priority, ticketId, autoRenumber } = body || {};
 
     const ref = doc(db, 'feedback', id);
     const snap = await getDoc(ref);
@@ -68,7 +72,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       });
     }
 
-  return NextResponse.json({ ok: true, ticketId: newTicketId });
+    return NextResponse.json({ ok: true, ticketId: newTicketId });
+    */
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }

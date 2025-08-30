@@ -6,8 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, writeBatch, query, where, Timestamp } from 'firebase/firestore';
 
 interface TransferAuditResult {
     transferId: string;
@@ -31,52 +29,53 @@ export default function TransferAuditPage() {
     const { toast } = useToast();
 
     const scanTransfers = async () => {
-        if (!db) {
-            toast({ title: 'Error', description: 'Firebase not configured', variant: 'destructive' });
-            return;
-        }
-
         setIsScanning(true);
         try {
             // Get all completed transfers
-            const transfersRef = collection(db, 'stockTransfers');
-            const transfersQuery = query(transfersRef, where('status', '==', 'Completed'));
-            const transfersSnapshot = await getDocs(transfersQuery);
+            const transfersResponse = await fetch('/api/transfers?status=completed');
+            if (!transfersResponse.ok) {
+                throw new Error('Failed to fetch transfers');
+            }
+            const transfers = await transfersResponse.json() as any[];
 
             const results: TransferAuditResult[] = [];
 
-            for (const transferDoc of transfersSnapshot.docs) {
-                const transferData = transferDoc.data();
-                const transferId = transferDoc.id;
-                
+            for (const transfer of transfers) {
+                const transferId = transfer.id;
+
                 // Check inventory transactions for this transfer
-                const transactionsRef = collection(db, 'inventoryTransactions');
-                const transactionsQuery = query(transactionsRef, where('referenceDocId', '==', transferId));
-                const transactionsSnapshot = await getDocs(transactionsQuery);
-                
-                const transactions = transactionsSnapshot.docs.map(doc => doc.data());
+                const transactionsResponse = await fetch(`/api/transactions?referenceDocId=${transferId}`);
+                if (!transactionsResponse.ok) {
+                    throw new Error('Failed to fetch transactions');
+                }
+                const transactions = await transactionsResponse.json() as any[];
 
                 const auditResult: TransferAuditResult = {
                     transferId,
-                    status: transferData.status,
-                    date: transferData.date?.toDate?.()?.toLocaleDateString() || 'Unknown',
-                    fromResidence: transferData.fromResidenceId || 'Unknown',
-                    toResidence: transferData.toResidenceId || 'Unknown',
+                    status: transfer.status,
+                    date: new Date(transfer.date).toLocaleDateString(),
+                    fromResidence: transfer.fromResidenceId || 'Unknown',
+                    toResidence: transfer.toResidenceId || 'Unknown',
                     items: []
                 };
 
+                // Parse items from JSON string if needed
+                const items = typeof transfer.items === 'string'
+                    ? JSON.parse(transfer.items)
+                    : transfer.items;
+
                 // Check each item in the transfer
-                for (const item of transferData.items || []) {
-                    const transferOutRecord = transactions.find(t => 
-                        t.itemId === item.id && 
-                        t.type === 'TRANSFER_OUT' && 
-                        t.residenceId === transferData.fromResidenceId
+                for (const item of items || []) {
+                    const transferOutRecord = transactions.find((t: any) =>
+                        t.itemId === item.id &&
+                        t.type === 'TRANSFER_OUT' &&
+                        t.residenceId === transfer.fromResidenceId
                     );
-                    
-                    const transferInRecord = transactions.find(t => 
-                        t.itemId === item.id && 
-                        t.type === 'TRANSFER_IN' && 
-                        t.residenceId === transferData.toResidenceId
+
+                    const transferInRecord = transactions.find((t: any) =>
+                        t.itemId === item.id &&
+                        t.type === 'TRANSFER_IN' &&
+                        t.residenceId === transfer.toResidenceId
                     );
 
                     auditResult.items.push({
@@ -92,9 +91,9 @@ export default function TransferAuditPage() {
             }
 
             setAuditResults(results);
-            toast({ 
-                title: 'Scan Complete', 
-                description: `Found ${results.length} completed transfers. Review missing transaction records.` 
+            toast({
+                title: 'Scan Complete',
+                description: `Found ${results.length} completed transfers. Review missing transaction records.`
             });
         } catch (error) {
             console.error('Error scanning transfers:', error);
@@ -105,77 +104,96 @@ export default function TransferAuditPage() {
     };
 
     const fixMissingTransactions = async () => {
-        if (!db) {
-            toast({ title: 'Error', description: 'Firebase not configured', variant: 'destructive' });
-            return;
-        }
-
         setIsFixing(true);
         try {
-            const batch = writeBatch(db);
             let fixedCount = 0;
 
             for (const transfer of auditResults) {
-                const transferRef = doc(db, 'stockTransfers', transfer.transferId);
-                const transferDoc = await getDoc(transferRef);
-                
-                if (!transferDoc.exists()) continue;
-                
-                const transferData = transferDoc.data();
-                const transferTime = transferData.approvedAt || transferData.date || Timestamp.now();
+                // Get transfer details
+                const transferResponse = await fetch(`/api/transfers/${transfer.transferId}`);
+                if (!transferResponse.ok) {
+                    throw new Error('Failed to fetch transfer details');
+                }
+                const transferData = await transferResponse.json() as any;
+
+                const approvedAt = transferData.approvedAt || transferData.date || new Date().toISOString();
+
+                // Parse items from JSON string if needed
+                const items = typeof transferData.items === 'string'
+                    ? JSON.parse(transferData.items)
+                    : transferData.items;
 
                 for (const item of transfer.items) {
                     // Add missing TRANSFER_OUT record
                     if (!item.hasTransferOutRecord) {
-                        const transferOutRef = doc(collection(db, "inventoryTransactions"));
-                        batch.set(transferOutRef, {
+                        const transferOutData = {
                             itemId: item.id,
                             itemNameEn: item.nameEn,
                             itemNameAr: item.nameEn, // Fallback if Arabic name not available
                             residenceId: transfer.fromResidence,
-                            date: transferTime,
+                            date: approvedAt,
                             type: 'TRANSFER_OUT',
                             quantity: item.quantity,
                             referenceDocId: transfer.transferId,
                             relatedResidenceId: transfer.toResidence,
                             locationName: `Transfer to residence (${transfer.toResidence})`
+                        };
+
+                        const response = await fetch('/api/transactions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(transferOutData)
                         });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to create transfer out transaction');
+                        }
+
                         fixedCount++;
                     }
 
                     // Add missing TRANSFER_IN record
                     if (!item.hasTransferInRecord) {
-                        const transferInRef = doc(collection(db, "inventoryTransactions"));
-                        batch.set(transferInRef, {
+                        const transferInData = {
                             itemId: item.id,
                             itemNameEn: item.nameEn,
                             itemNameAr: item.nameEn, // Fallback if Arabic name not available
                             residenceId: transfer.toResidence,
-                            date: transferTime,
+                            date: approvedAt,
                             type: 'TRANSFER_IN',
                             quantity: item.quantity,
                             referenceDocId: transfer.transferId,
                             relatedResidenceId: transfer.fromResidence,
                             locationName: `Transfer from residence (${transfer.fromResidence})`
+                        };
+
+                        const response = await fetch('/api/transactions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(transferInData)
                         });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to create transfer in transaction');
+                        }
+
                         fixedCount++;
                     }
                 }
             }
 
             if (fixedCount > 0) {
-                await batch.commit();
-                toast({ 
-                    title: 'Fix Complete', 
-                    description: `Added ${fixedCount} missing transaction records.` 
+                toast({
+                    title: 'Fix Complete',
+                    description: `Added ${fixedCount} missing transaction records.`
                 });
-                
+
                 // Re-scan to verify fixes
                 await scanTransfers();
             } else {
-                toast({ 
-                    title: 'No Issues Found', 
-                    description: 'All transfer transactions are properly recorded.' 
+                toast({
+                    title: 'No Issues Found',
+                    description: 'All transfer transactions are properly recorded.'
                 });
             }
         } catch (error) {

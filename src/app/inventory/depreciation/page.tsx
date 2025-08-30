@@ -157,7 +157,7 @@ export default function DepreciationPage() {
   };
 
   const getLocationString = () => {
-    const parts = [];
+    const parts: string[] = [];
     const residence = userResidences.find(r => r.id === form.residenceId);
     const building = availableBuildings.find(b => b.id === form.buildingId);
     const floor = availableFloors.find(f => f.id === form.floorId);

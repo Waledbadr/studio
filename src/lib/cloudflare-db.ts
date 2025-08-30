@@ -24,6 +24,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   last_login?: string;
+  assignedResidences?: string[];
 }
 
 export interface Residence {
@@ -53,6 +54,13 @@ export interface Residence {
 export interface InventoryItem {
   id: string;
   name: string;
+  nameEn?: string;
+  nameAr?: string;
+  // persisted fields
+  lifespan_days?: number;
+  variants?: string;
+  keywords_ar?: string;
+  keywords_en?: string;
   description?: string;
   category: string;
   subcategory?: string;
@@ -100,6 +108,12 @@ export interface Order {
   notes?: string;
   created_at: string;
   updated_at: string;
+  // Request tracking properties for inventory orders
+  requestedById?: string;
+  requestedByName?: string;
+  requestedByEmail?: string;
+  approvedById?: string;
+  approvedByName?: string;
 }
 
 export interface MaintenanceRequest {
@@ -206,7 +220,7 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as Residence[];
+    return results as unknown as Residence[];
   }
 
   async getResidenceById(id: string): Promise<Residence | null> {
@@ -220,7 +234,7 @@ export class CloudflareDB {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM residences WHERE status = ? ORDER BY created_at DESC"
     ).bind(status).all();
-    return results as Residence[];
+    return results as unknown as Residence[];
   }
 
   async createResidence(residenceData: Omit<Residence, 'created_at' | 'updated_at'>): Promise<void> {
@@ -280,21 +294,49 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as InventoryItem[];
+    const rows = results as unknown as any[];
+    return rows.map(r => ({
+      ...r,
+      nameAr: r.name_ar ?? r.nameAr,
+      nameEn: r.name_en ?? r.nameEn,
+      lifespanDays: r.lifespan_days ?? r.lifespanDays,
+      variants: r.variants ? JSON.parse(r.variants) : undefined,
+      keywordsAr: r.keywords_ar ? JSON.parse(r.keywords_ar) : undefined,
+      keywordsEn: r.keywords_en ? JSON.parse(r.keywords_en) : undefined,
+    })) as unknown as InventoryItem[];
   }
 
   async getInventoryById(id: string): Promise<InventoryItem | null> {
     const result = await this.env.DB.prepare(
       "SELECT * FROM inventory WHERE id = ? AND is_active = true"
     ).bind(id).first();
-    return result as InventoryItem | null;
+    if (!result) return null;
+    const r: any = result;
+    return {
+      ...r,
+      nameAr: r.name_ar ?? r.nameAr,
+      nameEn: r.name_en ?? r.nameEn,
+      lifespanDays: r.lifespan_days ?? r.lifespanDays,
+      variants: r.variants ? JSON.parse(r.variants) : undefined,
+      keywordsAr: r.keywords_ar ? JSON.parse(r.keywords_ar) : undefined,
+      keywordsEn: r.keywords_en ? JSON.parse(r.keywords_en) : undefined,
+    } as InventoryItem;
   }
 
   async getInventoryByCategory(category: string): Promise<InventoryItem[]> {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM inventory WHERE category = ? AND is_active = true ORDER BY name"
     ).bind(category).all();
-    return results as InventoryItem[];
+    const rows = results as unknown as any[];
+    return rows.map(r => ({
+      ...r,
+      nameAr: r.name_ar ?? r.nameAr,
+      nameEn: r.name_en ?? r.nameEn,
+      lifespanDays: r.lifespan_days ?? r.lifespanDays,
+      variants: r.variants ? JSON.parse(r.variants) : undefined,
+      keywordsAr: r.keywords_ar ? JSON.parse(r.keywords_ar) : undefined,
+      keywordsEn: r.keywords_en ? JSON.parse(r.keywords_en) : undefined,
+    })) as unknown as InventoryItem[];
   }
 
   async getLowStockItems(): Promise<InventoryItem[]> {
@@ -303,20 +345,22 @@ export class CloudflareDB {
        WHERE quantity <= minimum_stock AND is_active = true 
        ORDER BY quantity ASC`
     ).all();
-    return results as InventoryItem[];
+    return results as unknown as InventoryItem[];
   }
 
   async createInventoryItem(itemData: Omit<InventoryItem, 'created_at' | 'updated_at' | 'total_value'>): Promise<void> {
     await this.env.DB.prepare(
       `INSERT INTO inventory (
-        id, name, description, category, subcategory, sku, barcode, quantity,
+        id, name, name_ar, name_en, description, category, subcategory, sku, barcode, quantity,
         unit_of_measure, unit_price, minimum_stock, maximum_stock, supplier_name,
         supplier_contact, purchase_date, expiry_date, location, condition_status,
-        image_url, notes, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        image_url, notes, is_active, lifespan_days, variants, keywords_ar, keywords_en
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       itemData.id,
       itemData.name,
+      (itemData as any).nameAr ?? null,
+      (itemData as any).nameEn ?? null,
       itemData.description || null,
       itemData.category,
       itemData.subcategory || null,
@@ -335,19 +379,37 @@ export class CloudflareDB {
       itemData.condition_status,
       itemData.image_url || null,
       itemData.notes || null,
-      itemData.is_active
+      itemData.is_active,
+      (itemData as any).lifespanDays ?? null,
+      (itemData as any).variants ? JSON.stringify((itemData as any).variants) : null,
+      (itemData as any).keywordsAr ? JSON.stringify((itemData as any).keywordsAr) : null,
+      (itemData as any).keywordsEn ? JSON.stringify((itemData as any).keywordsEn) : null
     ).run();
   }
 
   async updateInventoryItem(id: string, itemData: Partial<InventoryItem>): Promise<void> {
     const setClause = Object.keys(itemData)
       .filter(key => key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'total_value')
-      .map(key => `${key} = ?`)
+      .map(key => {
+        if (key === 'nameAr') return 'name_ar = ?';
+        if (key === 'nameEn') return 'name_en = ?';
+        if (key === 'lifespanDays') return 'lifespan_days = ?';
+        if (key === 'keywordsAr') return 'keywords_ar = ?';
+        if (key === 'keywordsEn') return 'keywords_en = ?';
+        if (key === 'variants') return 'variants = ?';
+        return `${key} = ?`;
+      })
       .join(', ');
     
     const values = Object.keys(itemData)
       .filter(key => key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'total_value')
-      .map(key => itemData[key as keyof InventoryItem]);
+      .map(key => {
+        const v = (itemData as any)[key];
+        if (key === 'variants' || key === 'keywordsAr' || key === 'keywordsEn') {
+          return v ? JSON.stringify(v) : null;
+        }
+        return v;
+      });
 
     await this.env.DB.prepare(
       `UPDATE inventory SET ${setClause} WHERE id = ?`
@@ -370,21 +432,21 @@ export class CloudflareDB {
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as Order[];
+    return results as unknown as Order[];
   }
 
   async getOrderById(id: string): Promise<Order | null> {
     const result = await this.env.DB.prepare(
       "SELECT * FROM orders WHERE id = ?"
     ).bind(id).first();
-    return result as Order | null;
+    return result as unknown as Order | null;
   }
 
   async getOrdersByStatus(status: string): Promise<Order[]> {
     const { results } = await this.env.DB.prepare(
       "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC"
     ).bind(status).all();
-    return results as Order[];
+    return results as unknown as Order[];
   }
 
   async createOrder(orderData: Omit<Order, 'created_at' | 'updated_at' | 'final_amount'>): Promise<void> {
@@ -445,7 +507,7 @@ export class CloudflareDB {
        ORDER BY mr.created_at DESC 
        LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    return results as MaintenanceRequest[];
+    return results as unknown as MaintenanceRequest[];
   }
 
   async getMaintenanceRequestById(id: string): Promise<MaintenanceRequest | null> {
@@ -455,7 +517,7 @@ export class CloudflareDB {
        LEFT JOIN residences r ON mr.residence_id = r.id 
        WHERE mr.id = ?`
     ).bind(id).first();
-    return result as MaintenanceRequest | null;
+    return result as unknown as MaintenanceRequest | null;
   }
 
   async getMaintenanceRequestsByStatus(status: string): Promise<MaintenanceRequest[]> {
@@ -466,7 +528,7 @@ export class CloudflareDB {
        WHERE mr.status = ? 
        ORDER BY mr.created_at DESC`
     ).bind(status).all();
-    return results as MaintenanceRequest[];
+    return results as unknown as MaintenanceRequest[];
   }
 
   async createMaintenanceRequest(requestData: Omit<MaintenanceRequest, 'created_at' | 'updated_at'>): Promise<void> {
@@ -535,7 +597,7 @@ export class CloudflareDB {
     sql += ` ORDER BY name`;
 
     const { results } = await this.env.DB.prepare(sql).bind(...bindings).all();
-    return results as InventoryItem[];
+    return results as unknown as InventoryItem[];
   }
 
   async getStatistics(): Promise<any> {
@@ -562,7 +624,7 @@ export class CloudflareDB {
       residences: {
         total: totalResidences?.count || 0,
         occupied: occupiedResidences?.count || 0,
-        vacant: (totalResidences?.count || 0) - (occupiedResidences?.count || 0)
+        vacant: (Number(totalResidences?.count) || 0) - (Number(occupiedResidences?.count) || 0)
       },
       inventory: {
         total: totalInventoryItems?.count || 0,

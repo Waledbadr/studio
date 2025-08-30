@@ -48,6 +48,7 @@ const DialogContent = React.forwardRef<
         className
       )}
       {...props}
+      aria-describedby={props['aria-describedby'] || undefined}
     >
       {/* Make the inner area scrollable so dialogs never overflow the viewport */}
       <div className="flex flex-col overflow-y-auto max-h-[80vh] w-full custom-scrollbar">

@@ -28,7 +28,7 @@ export default function ConsolidatedReportPage() {
     const { currentUser } = useUsers();
     
     useEffect(() => {
-        loadOrders();
+        loadOrders?.();
     }, [loadOrders]);
 
     const { groupedItems, residenceNames, totalItems, totalCategories } = useMemo(() => {
@@ -41,7 +41,7 @@ export default function ConsolidatedReportPage() {
         const uniqueResidenceNames = new Set<string>();
 
         pendingOrders.forEach(order => {
-            uniqueResidenceNames.add(order.residence);
+            if (order.residence) uniqueResidenceNames.add(order.residence);
             order.items.forEach(item => {
                 const existing = itemMap.get(item.id);
                 if (existing) {
@@ -49,10 +49,10 @@ export default function ConsolidatedReportPage() {
                 } else {
                     itemMap.set(item.id, {
                         id: item.id,
-                        nameAr: item.nameAr,
-                        nameEn: item.nameEn,
+                        nameAr: item.nameAr || '',
+                        nameEn: item.nameEn || '',
                         category: item.category || 'Uncategorized',
-                        unit: item.unit,
+                        unit: item.unit || '',
                         totalQuantity: item.quantity
                     });
                 }

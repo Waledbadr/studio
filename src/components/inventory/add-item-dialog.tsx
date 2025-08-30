@@ -172,7 +172,7 @@ export function AddItemDialog({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: source }),
             });
-            const translationResult = await res.json();
+            const translationResult: { error?: string; arabicName?: string; englishName?: string } = await res.json() as { error?: string; arabicName?: string; englishName?: string };
             if (!res.ok) {
                 const msg = translationResult?.error || `Translation API failed: ${res.status}`;
                 toast({ title: 'Translation Error', description: msg, variant: 'destructive' });
@@ -205,19 +205,30 @@ export function AddItemDialog({
 
         startTransition(async () => {
             try {
-                // Ensure both language names exist (auto-translate if one is empty)
+                // Ensure both language names exist (auto-translate if one is empty), but don't block on failure
                 let finalNameAr = nameAr.trim();
                 let finalNameEn = nameEn.trim();
                 if (!finalNameAr || !finalNameEn) {
-                    const res = await fetch('/api/translate-item', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
-                    });
-                    if (!res.ok) throw new Error(`Translation API failed: ${res.status}`);
-                    const t = await res.json();
-                    finalNameAr = finalNameAr || t.arabicName || '';
-                    finalNameEn = finalNameEn || t.englishName || '';
+                    try {
+                        const res = await fetch('/api/translate-item', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
+                        });
+                        const t: { arabicName?: string; englishName?: string; error?: string } = await res.json() as any;
+                        if (res.ok) {
+                            finalNameAr = finalNameAr || t.arabicName || '';
+                            finalNameEn = finalNameEn || t.englishName || '';
+                        } else {
+                            // Fallback: if translation API returns 400 (e.g., missing key), just duplicate provided name
+                            if (!finalNameAr && finalNameEn) finalNameAr = finalNameEn;
+                            if (!finalNameEn && finalNameAr) finalNameEn = finalNameAr;
+                        }
+                    } catch {
+                        // Network or other error: fallback to duplicating the provided name
+                        if (!finalNameAr && finalNameEn) finalNameAr = finalNameEn;
+                        if (!finalNameEn && finalNameAr) finalNameEn = finalNameAr;
+                    }
                 }
 
                 let totalLifespanDays: number | undefined = undefined;
@@ -252,6 +263,8 @@ export function AddItemDialog({
                     variants: variantList,
                     keywordsAr: keywordsArList.length ? keywordsArList : undefined,
                     keywordsEn: keywordsEnList.length ? keywordsEnList : undefined,
+                    // pass through optional image URL for downstream mappers
+                    imageUrl: imageUrl || undefined,
                 };
 
                 const addedItem = await onItemAdded(newInventoryItem);
@@ -262,8 +275,9 @@ export function AddItemDialog({
 
                 onOpenChange(false);
             } catch (error) {
-                 toast({ title: "Translation Error", description: "Could not translate item name.", variant: "destructive" });
-                 console.error(error);
+                // Do not label all failures as translation errors; show generic failure
+                toast({ title: "Save Error", description: "تعذر حفظ الصنف. حاول مرة أخرى.", variant: "destructive" });
+                console.error(error);
             }
         });
     };

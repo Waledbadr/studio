@@ -9,7 +9,22 @@ export interface CloudflareEnv {
   BUCKET: R2Bucket;
 }
 
-// أنواع البيانات الأساسية
+export interface StockTransfer {
+  id: string;
+  transferNumber: string;
+  fromResidenceId: string;
+  toResidenceId: string;
+  status: string;
+  requestedBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  date: string;
+  items: any[]; // TransferItem[]
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -95,6 +110,23 @@ export interface Order {
   delivery_date?: string;
   delivery_address?: string;
   assigned_to?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  itemId: string;
+  itemNameEn: string;
+  itemNameAr?: string;
+  residenceId: string;
+  date: string;
+  type: 'PURCHASE' | 'SALE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT' | 'USAGE' | 'RETURN';
+  quantity: number;
+  referenceDocId?: string;
+  relatedResidenceId?: string;
+  locationName?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -387,6 +419,92 @@ export class CloudflareDB {
     await this.env.DB.prepare(
       "UPDATE inventory SET is_active = false WHERE id = ?"
     ).bind(id).run();
+  }
+
+  // ===================================================
+  // وظائف التحويلات والمعاملات (Transfers & Transactions)
+  // ===================================================
+
+  async getStockTransfers(limit: number = 50, offset: number = 0): Promise<StockTransfer[]> {
+    const { results } = await this.env.DB.prepare(
+      `SELECT * FROM stock_transfers 
+       ORDER BY created_at DESC 
+       LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all();
+    return results as unknown as StockTransfer[];
+  }
+
+  async getStockTransferById(id: string): Promise<StockTransfer | null> {
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM stock_transfers WHERE id = ?"
+    ).bind(id).first();
+    return result as StockTransfer | null;
+  }
+
+  async getStockTransfersByStatus(status: string): Promise<StockTransfer[]> {
+    const { results } = await this.env.DB.prepare(
+      "SELECT * FROM stock_transfers WHERE status = ? ORDER BY created_at DESC"
+    ).bind(status).all();
+    return results as unknown as StockTransfer[];
+  }
+
+  async getInventoryTransactions(limit: number = 50, offset: number = 0): Promise<InventoryTransaction[]> {
+    const { results } = await this.env.DB.prepare(
+      `SELECT * FROM inventory_transactions 
+       ORDER BY created_at DESC 
+       LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all();
+    return results as unknown as InventoryTransaction[];
+  }
+
+  async getInventoryTransactionsByReference(referenceDocId: string): Promise<InventoryTransaction[]> {
+    const { results } = await this.env.DB.prepare(
+      "SELECT * FROM inventory_transactions WHERE reference_doc_id = ? ORDER BY created_at DESC"
+    ).bind(referenceDocId).all();
+    return results as unknown as InventoryTransaction[];
+  }
+
+  async createInventoryTransaction(transactionData: Omit<InventoryTransaction, 'created_at' | 'updated_at'>): Promise<void> {
+    await this.env.DB.prepare(
+      `INSERT INTO inventory_transactions (
+        id, item_id, item_name_en, item_name_ar, residence_id, date, type,
+        quantity, reference_doc_id, related_residence_id, location_name, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      transactionData.id,
+      transactionData.itemId,
+      transactionData.itemNameEn,
+      transactionData.itemNameAr || null,
+      transactionData.residenceId,
+      transactionData.date,
+      transactionData.type,
+      transactionData.quantity,
+      transactionData.referenceDocId || null,
+      transactionData.relatedResidenceId || null,
+      transactionData.locationName || null,
+      transactionData.notes || null
+    ).run();
+  }
+
+  async createStockTransfer(transferData: Omit<StockTransfer, 'created_at' | 'updated_at'>): Promise<void> {
+    await this.env.DB.prepare(
+      `INSERT INTO stock_transfers (
+        id, transfer_number, from_residence_id, to_residence_id, status,
+        requested_by, approved_by, approved_at, date, items, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      transferData.id,
+      transferData.transferNumber,
+      transferData.fromResidenceId,
+      transferData.toResidenceId,
+      transferData.status,
+      transferData.requestedBy,
+      transferData.approvedBy || null,
+      transferData.approvedAt || null,
+      transferData.date,
+      JSON.stringify(transferData.items),
+      transferData.notes || null
+    ).run();
   }
 
   // ===================================================

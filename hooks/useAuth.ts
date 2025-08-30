@@ -15,6 +15,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   last_login?: string;
+  assignedResidences?: string[];
 }
 
 export interface AuthToken {
@@ -71,11 +72,11 @@ export function useAuthProvider() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في تسجيل الدخول');
       }
 
-  const result = await response.json();
+  const result = await response.json() as { data?: { token?: string; user?: User }; token?: string; user?: User };
   const authData: Partial<AuthToken> & { user?: any } = result.data ?? { token: result.token, user: result.user };
   if (!authData?.user) throw new Error('استجابة غير متوقعة من الخادم');
 
@@ -137,7 +138,7 @@ export function useAuthProvider() {
       const response = await fetch('/api/auth/me', { headers });
 
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { data?: { user?: User }; user?: User };
         const usr = result?.data?.user ?? result?.user;
         if (usr) {
           setUser(usr);

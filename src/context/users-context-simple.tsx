@@ -8,6 +8,7 @@ export interface User {
   nameEn?: string;
   email: string;
   role: string;
+  phone?: string;
   assignedResidences: string[];
   themeSettings?: {
     colorTheme: string;
@@ -76,13 +77,17 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         themeSettings: u.theme_settings || { colorTheme: 'blue', mode: 'system' },
       } as User));
       setUsers(normalized);
-      if (normalized[0]) setCurrentUser(normalized[0]);
+      // Only set current user if not already chosen to avoid infinite loops via dependency changes
+      setCurrentUser((prev) => {
+        if (prev && prev.id) return prev;
+        return normalized[0] ?? prev;
+      });
     } catch (e) {
       console.error('Failed to load users', e);
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, []);
 
   const switchUser = (user: any) => {
     setCurrentUser(user);

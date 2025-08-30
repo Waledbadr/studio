@@ -51,7 +51,7 @@ export default function PurchaseOrdersPage() {
     
     // UseEffect to load orders when the component mounts
     useEffect(() => {
-        loadOrders();
+        loadOrders?.();
         if (residences.length === 0) {
             loadResidences();
         }
@@ -122,7 +122,7 @@ export default function PurchaseOrdersPage() {
                 {loading ? renderSkeleton() : ordersList.length > 0 ? ordersList.map((order) => (
                     <TableRow key={order.id}>
                         <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</TableCell>
-                        <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.date ? (typeof order.date === 'object' && 'toDate' in order.date ? format((order.date as any).toDate(), 'PPP') : format(order.date as Date, 'PPP')) : 'No date'}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>

@@ -14,8 +14,8 @@ function getSafeRpID(hostname: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { type } = body as { type: 'register' | 'authenticate' };
+    const body = await req.json() as { type: 'register' | 'authenticate'; credential?: any; response?: any };
+    const { type } = body;
     const credential = (body.credential || body.response) as any;
 
     const cookieStore = await cookies();

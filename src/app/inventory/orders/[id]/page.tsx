@@ -317,7 +317,7 @@ export default function OrderDetailPage() {
                         </div>
                         <div className="text-right">
                             <p className="font-semibold print-residence-title" style={{ fontWeight: 700 }}>{residenceHeaderText}</p>
-                            <p className="text-sm text-muted-foreground print-date">{format(order.date.toDate(), 'PPP')}</p>
+                            <p className="text-sm text-muted-foreground print-date">{order.date ? (typeof order.date === 'object' && 'toDate' in order.date ? format((order.date as any).toDate(), 'PPP') : format(order.date as Date, 'PPP')) : 'No date'}</p>
                             <Badge className="mt-2 print-badge status-badge" variant={
                                 order.status === 'Delivered' ? 'default'
                                 : order.status === 'Approved' ? 'secondary'

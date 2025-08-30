@@ -162,12 +162,12 @@ export class StorageService {
   async getEntityFiles(entityType: string, entityId: string): Promise<FileMetadata[]> {
     try {
       const { results } = await this.env.DB.prepare(
-        `SELECT * FROM files 
-         WHERE entity_type = ? AND entity_id = ? 
+        `SELECT * FROM files
+         WHERE entity_type = ? AND entity_id = ?
          ORDER BY created_at DESC`
       ).bind(entityType, entityId).all();
-      
-      return results as FileMetadata[];
+
+      return results as unknown as FileMetadata[];
     } catch (error) {
       console.error('خطأ في جلب ملفات الكيان:', error);
       return [];
@@ -182,8 +182,8 @@ export class StorageService {
       const result = await this.env.DB.prepare(
         "SELECT * FROM files WHERE id = ?"
       ).bind(fileId).first();
-      
-      return result as FileMetadata | null;
+
+      return result as unknown as FileMetadata | null;
     } catch (error) {
       console.error('خطأ في جلب معلومات الملف:', error);
       return null;
@@ -204,7 +204,7 @@ export class StorageService {
     } = {}
   ): Promise<FileUploadResult[]> {
     const results: FileUploadResult[] = [];
-    
+
     for (const file of files) {
       try {
         const result = await this.uploadFile(file, options);
@@ -214,7 +214,7 @@ export class StorageService {
         // نواصل مع الملفات الأخرى
       }
     }
-    
+
     return results;
   }
 
@@ -231,7 +231,7 @@ export class StorageService {
       // إنشاء توقيع مؤقت
       const expiry = Math.floor(Date.now() / 1000) + expiresIn;
       const signature = await this.generateSignature(fileMetadata.r2_key, expiry);
-      
+
       return `${fileMetadata.public_url}?expires=${expiry}&signature=${signature}`;
     } catch (error) {
       console.error('خطأ في إنشاء URL مؤقت:', error);
@@ -294,7 +294,7 @@ export class StorageService {
       }
 
       const { results } = await this.env.DB.prepare(sql).bind(...bindings).all();
-      return results as FileMetadata[];
+      return results as unknown as FileMetadata[];
     } catch (error) {
       console.error('خطأ في البحث في الملفات:', error);
       return [];
@@ -320,16 +320,16 @@ export class StorageService {
         this.env.DB.prepare("SELECT COUNT(*) as count FROM files").first(),
         this.env.DB.prepare("SELECT SUM(size_bytes) as total FROM files").first(),
         this.env.DB.prepare(`
-          SELECT mime_type, COUNT(*) as count 
-          FROM files 
-          GROUP BY mime_type 
+          SELECT mime_type, COUNT(*) as count
+          FROM files
+          GROUP BY mime_type
           ORDER BY count DESC
         `).all(),
         this.env.DB.prepare(`
-          SELECT entity_type, COUNT(*) as count 
-          FROM files 
-          WHERE entity_type IS NOT NULL 
-          GROUP BY entity_type 
+          SELECT entity_type, COUNT(*) as count
+          FROM files
+          WHERE entity_type IS NOT NULL
+          GROUP BY entity_type
           ORDER BY count DESC
         `).all()
       ]);
@@ -345,8 +345,8 @@ export class StorageService {
       });
 
       return {
-        totalFiles: totalFiles?.count || 0,
-        totalSize: totalSize?.total || 0,
+        totalFiles: (totalFiles as any)?.count || 0,
+        totalSize: (totalSize as any)?.total || 0,
         filesByType: typeStats,
         filesByEntity: entityStats
       };
@@ -397,7 +397,7 @@ export class StorageService {
   private async saveFileMetadata(metadata: Omit<FileMetadata, 'created_at'>): Promise<void> {
     await this.env.DB.prepare(
       `INSERT INTO files (
-        id, filename, original_name, mime_type, size_bytes, r2_key, 
+        id, filename, original_name, mime_type, size_bytes, r2_key,
         public_url, entity_type, entity_id, uploaded_by, is_public
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(

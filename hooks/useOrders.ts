@@ -27,6 +27,12 @@ export interface Order {
   notes?: string;
   created_at: string;
   updated_at: string;
+  // Request tracking properties for inventory orders
+  requestedById?: string;
+  requestedByName?: string;
+  requestedByEmail?: string;
+  approvedById?: string;
+  approvedByName?: string;
 }
 
 export interface CreateOrderData {
@@ -79,7 +85,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
         throw new Error('فشل في جلب بيانات الطلبات');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data?: Order[] };
       setOrders(result.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
@@ -103,17 +109,17 @@ export function useOrders(options: UseOrdersOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في إنشاء الطلب');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data?: Order };
       await fetchOrders(); // إعادة تحميل البيانات
       
       return {
         success: true,
-        orderId: result.data.id,
-        orderNumber: result.data.order_number
+        orderId: result.data?.id,
+        orderNumber: result.data?.order_number
       };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ في إنشاء الطلب');
@@ -136,7 +142,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في تحديث الطلب');
       }
 
@@ -269,8 +275,8 @@ export function useOrder(orderId: string | null) {
         throw new Error('فشل في جلب بيانات الطلب');
       }
 
-      const result = await response.json();
-      setOrder(result.data);
+      const result = await response.json() as { data?: Order };
+      setOrder(result.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
       console.error('خطأ في جلب الطلب:', err);

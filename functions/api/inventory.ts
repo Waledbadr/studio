@@ -43,9 +43,12 @@ export const onRequestPost: PagesFunction<CloudflareEnv> = async (ctx) => {
       ? rawCondition
       : 'new') as InventoryItem['condition_status'];
 
-    const item: Omit<InventoryItem, "created_at" | "updated_at" | "total_value"> = {
+  // Allow extended fields beyond the base InventoryItem to support extras
+  const item: any = {
       id,
       name: String(body.name),
+      nameAr: body.nameAr ?? body.name_ar ?? undefined,
+      nameEn: body.nameEn ?? body.name_en ?? undefined,
       description: body.description ?? null as any,
       category: String(body.category),
       subcategory: body.subcategory ?? null as any,
@@ -62,9 +65,13 @@ export const onRequestPost: PagesFunction<CloudflareEnv> = async (ctx) => {
       expiry_date: body.expiry_date ?? null as any,
       location: body.location ?? null as any,
   condition_status,
-      image_url: body.image_url ?? null as any,
+      image_url: body.image_url ?? body.imageUrl ?? null as any,
       notes: body.notes ?? null as any,
       is_active: body.is_active !== false,
+      lifespan_days: body.lifespan_days ?? body.lifespanDays ?? null as any,
+      variants: body.variants ? JSON.stringify(body.variants) : null as any,
+      keywords_ar: body.keywords_ar ?? (body.keywordsAr ? JSON.stringify(body.keywordsAr) : null) as any,
+      keywords_en: body.keywords_en ?? (body.keywordsEn ? JSON.stringify(body.keywordsEn) : null) as any,
     };
 
     const db = new CloudflareDB(ctx.env);

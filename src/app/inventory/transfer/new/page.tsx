@@ -24,6 +24,9 @@ import { useLanguage } from '@/context/language-context';
 
 interface TransferItem extends InventoryItem {
     transferQuantity: number;
+    id: string;
+    nameEn: string;
+    nameAr: string;
 }
 
 export default function NewStockTransferPage() {
@@ -152,7 +155,7 @@ export default function NewStockTransferPage() {
                 toResidenceName,
                 requestedById: currentUser.id,
                 items: transferItems.map(item => ({ id: item.id, quantity: item.transferQuantity, nameEn: item.nameEn, nameAr: item.nameAr }))
-            }, currentUser);
+            });
 
             router.push('/inventory/transfer');
         } catch (error) {

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from 'firebase/firestore';
+// TODO: Implement D1-based MRV system
+// import { db } from '@/lib/firebase';
+// import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from 'firebase/firestore';
 
 // Direct MRV API now uses monthly counters for deterministic IDs and short codes.
+/*
 async function reserveNewMrvId(): Promise<{ id: string; short: string }> {
   if (!db) throw new Error('Firebase not initialized');
   const now = new Date();
@@ -24,14 +26,19 @@ async function reserveNewMrvId(): Promise<{ id: string; short: string }> {
     short: `MRV-${yy}${mmNoPad}${nextSeq}`, // MRV-YYMSEQ
   };
 }
+*/
 
 export async function GET() {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'MRV system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based MRV listing
     if (!db) return NextResponse.json({ mrvs: [] });
     const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
     const snap = await getDocs(qRef);
     const mrvs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
     return NextResponse.json({ mrvs });
+    */
   } catch (e) {
     return NextResponse.json({ error: 'Failed to list MRVs' }, { status: 500 });
   }
@@ -39,6 +46,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'MRV system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based MRV creation
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const body = await request.json();
     const { residenceId, items, meta } = body || {};
@@ -99,6 +109,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ id: reserved.id, short: reserved.short });
+    */
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to create MRV' }, { status: 500 });
   }

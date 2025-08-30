@@ -68,8 +68,8 @@ export default function LifespanReportPage() {
                 const latestTx = group[i];
                 const previousTx = group[i+1];
 
-                const latestDate = latestTx.date.toDate();
-                const previousDate = previousTx.date.toDate();
+                const latestDate = new Date(latestTx.date);
+                const previousDate = new Date(previousTx.date);
                 const actualDays = differenceInDays(latestDate, previousDate);
 
                 if (actualDays < itemInfo.lifespanDays) {

@@ -317,14 +317,14 @@ export default function NewOrderPage() {
         
         setIsSubmitting(true);
         try {
-            const newOrderId = await createOrder(newOrderData);
+            const result = await createOrder(newOrderData);
 
-            if (newOrderId) {
+            if (result.success && result.orderId) {
                 toast({ title: "Success", description: "Your order has been submitted." });
                 // Clear draft on success
                 clearDraft();
                 setOrderItems([]);
-                router.push(`/inventory/orders/${newOrderId}`);
+                router.push(`/inventory/orders/${result.orderId}`);
             }
         } finally {
             setIsSubmitting(false);
@@ -388,7 +388,7 @@ export default function NewOrderPage() {
 
     const handleItemUpdated = async (updated: InventoryItem) => {
         try {
-            await updateItem(updated);
+            await updateItem(updated.id, updated);
             // Close dialog
             setEditDialogOpen(false);
             setItemToEdit(null);

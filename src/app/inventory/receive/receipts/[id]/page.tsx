@@ -101,11 +101,11 @@ export default function MRVDetailsPage() {
                   form.append('file', file);
                   const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
                   if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
+                    const err: { error?: string } = await res.json().catch(() => ({})) as { error?: string };
                     throw new Error(err.error || `Upload failed (${res.status})`);
                   } else {
                     // Use server response to update UI immediately
-                    const body = await res.json().catch(() => ({}));
+                    const body: { url?: string; path?: string; attachmentRef?: string } = await res.json().catch(() => ({})) as { url?: string; path?: string; attachmentRef?: string };
                     if (body?.url) {
                       setData((prev: any) => ({ ...(prev || {}), attachmentUrl: body.url, attachmentPath: body.path || null, attachmentRef: body.attachmentRef || null }));
                     }

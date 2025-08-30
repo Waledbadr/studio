@@ -289,10 +289,18 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
     e.dataTransfer.setDragImage(img, 0, 0);
   };
 
+  // Run initial data loads once. Using refs avoids repeated calls under Fast Refresh.
+  const didInitRef = React.useRef(false);
   useEffect(() => {
-    loadResidences();
-    loadUsersContext();
-  }, [loadResidences, loadUsersContext]);
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    try {
+      loadResidences();
+      loadUsersContext();
+    } catch (e) {
+      console.error('Initial load error:', e);
+    }
+  }, []);
 
   // Search & Filters
   const [search, setSearch] = useState('');
@@ -714,8 +722,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Managers</SelectItem>
-                {users.map(u => (
-                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                {users.filter(user => user.id).map(u => (
+                  <SelectItem key={u.id} value={u.id!}>{u.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

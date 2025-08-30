@@ -281,11 +281,11 @@ function ItemMovementContent() {
                   {transactionsWithBalance.length > 0 ? (
                     transactionsWithBalance.map((tx) => (
                       <TableRow
-                        key={`${tx.id}-${tx.residenceId}-${tx.date.toMillis()}`}
+                        key={`${tx.id}-${tx.residenceId}-${new Date(tx.date).getTime()}`}
                         className="cursor-pointer hover:bg-accent/30"
                         onClick={() => openTxDetails(tx)}
                       >
-                        <TableCell>{format(tx.date.toDate(), "PPP p")}</TableCell>
+                        <TableCell>{format(new Date(tx.date), "PPP p")}</TableCell>
                         <TableCell className="font-medium">
                           {renderTransactionDetails(tx)}
                         </TableCell>
@@ -342,7 +342,7 @@ function ItemMovementContent() {
                 {dict.typeLabel}: <span className="font-medium text-foreground">{selectedTx.type}</span>
               </div>
               <div>
-                {dict.date}: {selectedTx.date?.toDate ? format(selectedTx.date.toDate(), "PPP p") : ""}
+                {dict.date}: {format(new Date(selectedTx.date), "PPP p")}
               </div>
               <div>
                 {dict.referenceLabel}: <span className="font-mono">{selectedTx.referenceDocId || "—"}</span>

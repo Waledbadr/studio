@@ -21,12 +21,19 @@ export interface Order {
   items: OrderItem[];
   itemsReceived?: Array<{ id: string; quantityReceived: number }>;
   notes?: string;
+  // Request tracking properties
+  requestedById?: string;
+  requestedByName?: string;
+  requestedByEmail?: string;
+  approvedById?: string;
+  approvedByName?: string;
 }
 
 interface SimpleOrdersContextType {
   orders: Order[];
   loading: boolean;
   addOrder: (order: any) => Promise<void>;
+  createOrder: (order: any) => Promise<{ success: boolean; orderId?: string; orderNumber?: string }>;
   updateOrderStatus: (orderId: string, status: OrderStatus, userId?: string) => Promise<void>;
   updateOrder: (orderId: string, updates: any) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<void>;
@@ -42,6 +49,12 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
   const addOrder = async (order: any) => {
     console.log('Mock: Adding order', order);
+  };
+
+  const createOrder = async (order: any) => {
+    console.log('Mock: Creating order', order);
+    // Mock successful creation
+    return { success: true, orderId: `order-${Date.now()}`, orderNumber: `ORD-${Date.now()}` };
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus, userId?: string) => {
@@ -70,6 +83,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       orders,
       loading,
       addOrder,
+      createOrder,
       updateOrderStatus,
       updateOrder,
   deleteOrder,

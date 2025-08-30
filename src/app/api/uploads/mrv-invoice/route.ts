@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
-
-export const runtime = 'nodejs';
+import { LocalCloudflareDB } from '../../../../lib/local-db';
 
 export async function POST(req: Request) {
   try {
@@ -23,16 +21,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'File too large (max 15MB)' }, { status: 413 });
     }
 
+    const db = new LocalCloudflareDB();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const blobPath = `mrvs/invoices/${Date.now()}_${safeName}`;
 
-    const { url } = await put(blobPath, file, {
-      access: 'public',
-      // Ensure the Vercel Blob token is provided in all environments
-      token: process.env.BLOB_READ_WRITE_TOKEN as string | undefined,
-    } as any);
+    // Create file metadata for R2 storage
+    const fileId = crypto.randomUUID();
+    const now = new Date();
+    const fileMetadata = {
+      id: fileId,
+      filename: safeName,
+      original_name: file.name,
+      mime_type: file.type,
+      size_bytes: file.size,
+      r2_key: blobPath,
+      public_url: `https://your-bucket.r2.cloudflarestorage.com/${blobPath}`,
+      entity_type: 'mrv-invoice',
+      entity_id: null,
+      uploaded_by: null,
+      is_public: true,
+      created_at: now.toISOString()
+    };
 
-    return NextResponse.json({ url, path: blobPath });
+    // Save file metadata to database
+    await db.saveFileMetadata(fileMetadata);
+
+    return NextResponse.json({ url: fileMetadata.public_url, path: blobPath });
   } catch (err: any) {
     console.error('Upload error', err);
     return NextResponse.json({ error: err?.message || 'Upload failed' }, { status: 500 });

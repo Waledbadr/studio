@@ -37,7 +37,7 @@ export default function AccommodationAssignPage() {
     setSubmitting(true);
     try {
       const res = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ residenceId: selectedResidence, roomId: selectedRoom, tenantName }) });
-      const data = await res.json();
+      const data: { error?: string } = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed');
   alert('Assigned successfully');
       setTenantName('');

@@ -196,7 +196,7 @@ export default function EnhancedResidencesPage() {
       toast({ title: 'Error', description: 'Please fill all fields.', variant: 'destructive' });
       return;
     }
-    updateComplex(editingComplex.id, {
+    updateComplex!(editingComplex.id, {
       name: editingComplex.name,
       city: editingComplex.city,
       managerId: editingComplex.managerId,
@@ -217,7 +217,7 @@ export default function EnhancedResidencesPage() {
   const handleAddFacility = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.newFacilityName.trim() || !formData.newFacilityType.trim() || !selectedComplexId) return;
-    addFacility(selectedComplexId, formData.newFacilityName, formData.newFacilityType);
+    addFacility!(selectedComplexId, formData.newFacilityName, formData.newFacilityType);
     setFormData(prev => ({ ...prev, newFacilityName: '', newFacilityType: '' }));
     setDialogStates(prev => ({ ...prev, isAddFacilityDialogOpen: false }));
     setSelectedComplexId(null);
@@ -283,7 +283,7 @@ export default function EnhancedResidencesPage() {
             <div key={service.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  {getServiceIcon(service.type)}
+                  {getServiceIcon(service.type || '')}
                   <div>
                     <p className="font-medium text-sm">{service.name}</p>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{service.type}</p>
@@ -491,7 +491,7 @@ export default function EnhancedResidencesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                          <SelectItem key={user.id} value={user.id!}>{user.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -518,7 +518,7 @@ export default function EnhancedResidencesPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle>{complex.name}</CardTitle>
-                      <CardDescription>Manager: {getManagerName(complex.managerId)}</CardDescription>
+                      <CardDescription>Manager: {getManagerName(complex.managerId || '')}</CardDescription>
                     </div>
                     {isAdmin && (
                       <div className="flex gap-2">
@@ -604,7 +604,7 @@ export default function EnhancedResidencesPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => deleteBuilding(complex.id, building.id)}>Delete</AlertDialogAction>
+                                      <AlertDialogAction onClick={() => deleteBuilding!(complex.id, building.id)}>Delete</AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
@@ -658,7 +658,7 @@ export default function EnhancedResidencesPage() {
                                           </AlertDialogHeader>
                                           <AlertDialogFooter>
                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                            <AlertDialogAction onClick={() => deleteFloor!(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
                                           </AlertDialogFooter>
                                         </AlertDialogContent>
                                       </AlertDialog>
@@ -704,7 +704,7 @@ export default function EnhancedResidencesPage() {
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                  <AlertDialogAction onClick={() => deleteRoom(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
+                                                  <AlertDialogAction onClick={() => deleteRoom!(complex.id, building.id, floor.id, room.id)}>Delete</AlertDialogAction>
                                                 </AlertDialogFooter>
                                               </AlertDialogContent>
                                             </AlertDialog>
@@ -769,7 +769,7 @@ export default function EnhancedResidencesPage() {
                                       </AlertDialogHeader>
                                       <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => deleteFacility(complex.id, facility.id)}>Delete</AlertDialogAction>
+                                        <AlertDialogAction onClick={() => deleteFacility!(complex.id, facility.id)}>Delete</AlertDialogAction>
                                       </AlertDialogFooter>
                                     </AlertDialogContent>
                                   </AlertDialog>
@@ -910,7 +910,7 @@ export default function EnhancedResidencesPage() {
         isOpen={dialogStates.isAddMultipleRoomsDialogOpen}
         onOpenChange={(open) => setDialogStates(prev => ({ ...prev, isAddMultipleRoomsDialogOpen: open }))}
         floorInfo={multipleRoomsFloorInfo}
-        onAddRooms={addMultipleRooms}
+        onAddRooms={addMultipleRooms!}
       />
 
       {/* Edit Complex Dialog */}
@@ -951,7 +951,7 @@ export default function EnhancedResidencesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                      <SelectItem key={user.id} value={user.id!}>{user.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

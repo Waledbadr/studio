@@ -9,7 +9,7 @@ This document summarizes the feedback system added to the app.
   - notifications (existing)
 
 - API Routes:
-  - POST /api/uploads/feedback -> upload dataURL image to Vercel Blob (needs BLOB_READ_WRITE_TOKEN)
+  - POST /api/uploads/feedback -> upload dataURL image to Cloudflare R2 storage
   - GET /api/feedback -> list (optionally by ?userId=)
   - POST /api/feedback -> create (also created directly in client)
   - PATCH /api/feedback/[id] -> update status, add developer comment, and notify the user
@@ -23,7 +23,8 @@ This document summarizes the feedback system added to the app.
 - Rate limiting: middleware limits /api/feedback and /api/uploads/feedback (10/min/IP)
 
 - Setup:
-  - Add env var BLOB_READ_WRITE_TOKEN for uploads
+  - Cloudflare R2 storage is configured in wrangler.toml
+  - File metadata is stored in local database
   - Ensure Firestore is configured (see .env.local)
 
 - Firestore Rules (hardened):

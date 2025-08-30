@@ -88,7 +88,7 @@ export function useInventory(options: UseInventoryOptions = {}) {
         throw new Error('فشل في جلب بيانات المخزون');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data?: InventoryItem[] };
       setInventory(result.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
@@ -112,7 +112,7 @@ export function useInventory(options: UseInventoryOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في إضافة العنصر');
       }
 
@@ -139,7 +139,7 @@ export function useInventory(options: UseInventoryOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في تحديث العنصر');
       }
 
@@ -165,7 +165,7 @@ export function useInventory(options: UseInventoryOptions = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'فشل في حذف العنصر');
       }
 
@@ -267,8 +267,8 @@ export function useInventoryItem(itemId: string | null) {
         throw new Error('فشل في جلب بيانات العنصر');
       }
 
-      const result = await response.json();
-      setItem(result.data);
+      const result = await response.json() as { data?: InventoryItem };
+      setItem(result.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
       console.error('خطأ في جلب عنصر المخزون:', err);

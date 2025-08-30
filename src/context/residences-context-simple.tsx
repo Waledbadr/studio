@@ -1,10 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
 export interface Service {
   id: string;
   name: string;
+  type?: string;
   category: 'Essential' | 'Amenity' | 'Utility' | string;
   status: 'Active' | 'Inactive' | 'Maintenance' | string;
   subFacilities: SubFacility[];
@@ -15,6 +16,7 @@ export interface Service {
 export interface SubFacility {
   id: string;
   name: string;
+  number?: string;
   status: 'Active' | 'Inactive' | 'Maintenance' | string;
 }
 
@@ -40,7 +42,8 @@ export interface Room {
   occupied?: boolean; 
   area?: number; 
   services?: Service[]; 
-  capacity?: number; 
+  capacity?: number;
+  floorId?: string; // Parent floor ID
 }
 
 export interface Floor { 
@@ -48,7 +51,8 @@ export interface Floor {
   name: string; 
   rooms: Room[]; 
   facilities?: Facility[]; 
-  services?: Service[]; 
+  services?: Service[];
+  buildingId?: string; // Parent building ID
 }
 
 export interface Building { 
@@ -56,7 +60,8 @@ export interface Building {
   name: string; 
   floors: Floor[]; 
   facilities?: Facility[]; 
-  services?: Service[]; 
+  services?: Service[];
+  residenceId?: string; // Parent residence ID
 }
 
 export interface Complex { 
@@ -67,6 +72,12 @@ export interface Complex {
   disabled?: boolean; 
   facilities?: Facility[]; 
   managerId?: string; 
+  // Legacy properties for backward compatibility
+  title?: string;
+  address?: string;
+  locationString?: string;
+  location?: any;
+  rooms?: Room[];
 }
 
 interface ResidencesContextType {
@@ -121,11 +132,17 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>(mockResidences);
   const [loading] = useState(false);
 
-  const buildings = residences.flatMap(r => r.buildings);
-  const floors = buildings.flatMap(b => b.floors || []);
-  const rooms = floors.flatMap(f => f.rooms || []);
+  const buildings = residences.flatMap(r => 
+    r.buildings.map(b => ({ ...b, residenceId: r.id }))
+  );
+  const floors = buildings.flatMap(b => 
+    (b.floors || []).map(f => ({ ...f, buildingId: b.id }))
+  );
+  const rooms = floors.flatMap(f => 
+    (f.rooms || []).map(r => ({ ...r, floorId: f.id }))
+  );
 
-  const loadResidences = () => { /* no-op in simple mode */ };
+  const loadResidences = useCallback(() => { /* no-op in simple mode */ }, []);
   const addComplex = async () => { /* no-op */ };
   const addBuilding = async () => { /* no-op */ };
   const addFloor = async () => { /* no-op */ };

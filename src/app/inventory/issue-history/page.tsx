@@ -85,7 +85,7 @@ export default function MIVHistoryPage() {
                             {loading || residencesLoading ? renderSkeleton() : filteredMIVs.length > 0 ? filteredMIVs.map((miv) => (
                                 <TableRow key={miv.id} className="cursor-pointer" onClick={() => router.push(`/inventory/issue-history/${miv.id}`)}>
                                     <TableCell className="font-medium">{formatMivId(miv.id)}</TableCell>
-                                    <TableCell>{format(miv.date.toDate(), 'PPP p')}</TableCell>
+                                    <TableCell>{miv.date ? (typeof miv.date === 'object' && 'toDate' in miv.date ? format((miv.date as any).toDate(), 'PPP p') : format(miv.date as Date, 'PPP p')) : 'No date'}</TableCell>
                                     <TableCell>{getResidenceName(miv.residenceId)}</TableCell>
                                     <TableCell>{miv.locationName}</TableCell>
                                     <TableCell>{miv.itemCount}</TableCell>

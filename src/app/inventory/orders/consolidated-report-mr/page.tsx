@@ -28,7 +28,7 @@ export default function ConsolidatedReportMRPage() {
   const { orders, loading, loadOrders } = useOrders();
   const { currentUser } = useUsers();
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
+  useEffect(() => { loadOrders?.(); }, [loadOrders]);
 
   const data = useMemo(() => {
     if (loading) return null;

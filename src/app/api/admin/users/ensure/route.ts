@@ -1,46 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from 'firebase-admin';
-
-function getProjectIdFallback(): string | undefined {
-  try {
-    if (process.env.GOOGLE_CLOUD_PROJECT) return process.env.GOOGLE_CLOUD_PROJECT;
-    if (process.env.GCLOUD_PROJECT) return process.env.GCLOUD_PROJECT;
-    if (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    if (process.env.FIREBASE_CONFIG) {
-      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
-      if (cfg.projectId) return cfg.projectId;
-    }
-  } catch {}
-  return undefined;
-}
-
-function initAdmin() {
-  if (admin.apps.length) return admin.app();
-  try {
-    const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
-    const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (b64 || svc) {
-      const jsonStr = b64
-        ? Buffer.from(b64, 'base64').toString('utf8')
-        : (typeof svc === 'string' ? svc : JSON.stringify(svc));
-      const credentials = JSON.parse(jsonStr);
-      return admin.initializeApp({
-        credential: admin.credential.cert(credentials as any),
-        projectId: (credentials as any).project_id || getProjectIdFallback(),
-      });
-    }
-    return admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-      projectId: getProjectIdFallback(),
-    } as any);
-  } catch (e) {
-    console.error('firebase-admin init failed', e);
-    throw e;
-  }
-}
+// TODO: Implement D1-based user ensure functionality
+// import admin from 'firebase-admin';
 
 export async function POST(req: NextRequest) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'User ensure system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based user ensure
     initAdmin();
     const authHeader = req.headers.get('authorization') || '';
     const token = authHeader.toLowerCase().startsWith('bearer ')
@@ -84,6 +50,7 @@ export async function POST(req: NextRequest) {
     await db.doc(`users/${uid}`).set(payload, { merge: true });
 
     return NextResponse.json({ uid, email: emailKey, user: payload });
+    */
   } catch (e: any) {
     console.error('ensure user error', e);
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });

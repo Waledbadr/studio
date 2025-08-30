@@ -22,8 +22,8 @@ interface ServiceOrdersContextType {
   updateOrder: (id: string, updates: Partial<ServiceOrder>) => Promise<void>;
   getServiceOrderById: (id: string) => Promise<ServiceOrder | null>;
   getServiceOrderByCode: (code: string) => Promise<ServiceOrder | null>;
-  receiveServiceOrder: (id: string, data: any) => Promise<void>;
-  createAndDispatchServiceOrder?: (payload: any) => Promise<string>;
+  receiveServiceOrder: (id: string, data: any, userId?: string) => Promise<void>;
+  createAndDispatchServiceOrder: (payload: any) => Promise<string>;
 }
 
 const ServiceOrdersContext = createContext<ServiceOrdersContextType | undefined>(undefined);

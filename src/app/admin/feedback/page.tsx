@@ -112,7 +112,7 @@ export default function AdminFeedbackPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTicketId ? { ticketId: newTicketId } : { autoRenumber: true }),
       });
-      const data = await res.json();
+      const data: { error?: string } = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed');
       setTicketEdits((p) => ({ ...p, [id]: '' }));
       await load();

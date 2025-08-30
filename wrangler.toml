@@ -17,7 +17,7 @@ vars = { NODE_ENV = "development" }
 [[d1_databases]]
 binding = "DB"
 database_name = "estatecare-db"
-database_id = "681c7e8d-1085-4bb0-b192-ac455138d6e8"
+database_id = "802520b7-431f-40c7-8399-3ed056744e89"
 
 # KV Storage للتخزين السريع والـ caching
 [[kv_namespaces]]

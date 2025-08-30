@@ -66,7 +66,7 @@ export default function ConsolidatedReportPage() {
     const { currentUser } = useUsers();
     
     useEffect(() => {
-        loadOrders();
+        loadOrders?.();
     }, [loadOrders]);
 
     const { groupedItems, residenceNames, totalItems, totalCategories } = useMemo(() => {
@@ -83,8 +83,8 @@ export default function ConsolidatedReportPage() {
             order.items?.forEach(item => {
                 if (!item) return;
                 const selectedVariant = item.id && item.id.includes('-') ? item.id.split('-').slice(1).join('-') : undefined;
-                const cleanNameAr = (item.nameAr || '').includes(' - ') ? item.nameAr.split(' - ')[0] : (item.nameAr || '');
-                const cleanNameEn = (item.nameEn || '').includes(' - ') ? item.nameEn.split(' - ')[0] : (item.nameEn || '');
+                const cleanNameAr = (item.nameAr || '').includes(' - ') ? (item.nameAr || '').split(' - ')[0] : (item.nameAr || '');
+                const cleanNameEn = (item.nameEn || '').includes(' - ') ? (item.nameEn || '').split(' - ')[0] : (item.nameEn || '');
                 const note = item.notes?.trim();
                 // دمج الـ note في المفتاح لضمان عدم دمج أصناف ذات ملاحظات مختلفة
                 const keyBase = item.id || `${cleanNameEn}-${cleanNameAr}`;

@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, query, orderBy, getDocs, where, limit } from 'firebase/firestore';
-import { generateMonthlySequentialTicketId } from '@/lib/feedback';
+// TODO: Implement D1-based feedback system
+// import { db } from '@/lib/firebase';
+// import { addDoc, collection, serverTimestamp, query, orderBy, getDocs, where, limit } from 'firebase/firestore';
+// import { generateMonthlySequentialTicketId } from '@/lib/feedback';
 
 export async function POST(req: NextRequest) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'Feedback system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based feedback creation
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const body = await req.json();
     const { userId, title, description, category, screenshotUrl, errorCode, errorMessage, stack, deviceInfo, appInfo, settings } = body || {};
     if (!title || !category) return NextResponse.json({ error: 'Missing title or category' }, { status: 400 });
 
-  const now = new Date();
-  const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
+    const now = new Date();
+    const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
 
     const ref = await addDoc(collection(db, 'feedback'), {
       ticketId,
@@ -32,6 +36,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ id: ref.id, ticketId });
+    */
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
@@ -39,6 +44,9 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'Feedback system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based feedback retrieval
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -55,6 +63,7 @@ export async function GET(req: NextRequest) {
         return +dbb - +da;
       });
     return NextResponse.json({ items });
+    */
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }

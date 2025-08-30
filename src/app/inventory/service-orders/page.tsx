@@ -39,7 +39,7 @@ export default function ServiceOrdersListPage() {
   const baseFiltered = useMemo(() => {
     const initial = (serviceOrders || []);
     const byUserResidences = userResidenceIds.length > 0
-      ? initial.filter((o) => userResidenceIds.includes(o.residenceId))
+      ? initial.filter((o) => o.residenceId && userResidenceIds.includes(o.residenceId))
       : initial;
     const byResidence = residenceId === "ALL" ? byUserResidences : byUserResidences.filter((o) => o.residenceId === residenceId);
     const q = search.trim().toLowerCase();

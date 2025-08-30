@@ -345,8 +345,8 @@ export class StorageService {
       });
 
       return {
-        totalFiles: totalFiles?.count || 0,
-        totalSize: totalSize?.total || 0,
+        totalFiles: (totalFiles as { count: number })?.count || 0,
+        totalSize: (totalSize as { total: number })?.total || 0,
         filesByType: typeStats,
         filesByEntity: entityStats
       };

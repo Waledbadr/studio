@@ -87,9 +87,9 @@ export default function StockReconciliationPage() {
       try {
         let list: any[] = [];
         if (residenceId) {
-          list = await getReconciliations(residenceId);
+          list = await getReconciliations();
         } else {
-          list = await getAllReconciliations();
+          list = await getReconciliations();
           if (!isAdmin && currentUser) {
             const allowed = new Set(currentUser.assignedResidences || []);
             list = list.filter((r: any) => allowed.has(String(r.residenceId)));
@@ -105,7 +105,7 @@ export default function StockReconciliationPage() {
       // Load pending requests (admin sees all; others filtered to assigned)
       setPendingLoading(true);
       try {
-        let reqs = await getReconciliationRequests(undefined, 'Pending');
+        let reqs = await getReconciliationRequests();
         if (!isAdmin && currentUser) {
           const allowed = new Set(currentUser.assignedResidences || []);
           reqs = reqs.filter(r => allowed.has(String(r.residenceId)));
@@ -214,17 +214,25 @@ export default function StockReconciliationPage() {
     setIsSubmitting(true);
     try {
       if (isAdmin) {
-        const ref = await reconcileStock(residenceId, adjustments, currentUser?.id);
-        toast({ title: 'Stock reconciled', description: ref ? `Movement recorded (Ref: ${ref}).` : 'Movement recorded.' });
+        const ref = await reconcileStock({
+          residenceId,
+          adjustments,
+          performedById: currentUser?.id
+        });
+        toast({ title: 'Stock reconciled', description: 'Movement recorded.' });
       } else {
-        const id = await createReconciliationRequest(residenceId, adjustments, currentUser?.id || '');
+        const id = await createReconciliationRequest({
+          residenceId,
+          adjustments,
+          requestedById: currentUser?.id || ''
+        });
         toast({ title: 'Submitted', description: `Sent for admin approval (${id}).` });
       }
       setNewStock({});
       setReasons({});
-      const list = await getReconciliations(residenceId);
+      const list = await getReconciliations();
       setRecons(list as unknown as Rec[]);
-      const reqs = await getReconciliationRequests(isAdmin ? undefined : residenceId, 'Pending');
+      const reqs = await getReconciliationRequests();
       setPending(reqs);
     } catch (e: any) {
       const msg = e?.message || 'Failed to submit reconciliation.';
@@ -478,7 +486,7 @@ export default function StockReconciliationPage() {
                               e.stopPropagation();
                               try {
                                 await approveReconciliationRequest(r.id, currentUser?.id || '');
-                                const reqs = await getReconciliationRequests(undefined, 'Pending');
+                                const reqs = await getReconciliationRequests();
                                 let filtered = reqs;
                                 if (!isAdmin && currentUser) {
                                   const allowed = new Set(currentUser.assignedResidences || []);
@@ -486,7 +494,7 @@ export default function StockReconciliationPage() {
                                 }
                                 setPending(filtered);
                                 if (residenceId) {
-                                  const list = await getReconciliations(residenceId);
+                                  const list = await getReconciliations();
                                   setRecons(list as unknown as Rec[]);
                                 }
                               } catch {}
@@ -495,7 +503,7 @@ export default function StockReconciliationPage() {
                               e.stopPropagation();
                               try {
                                 await rejectReconciliationRequest(r.id, currentUser?.id || '');
-                                const reqs = await getReconciliationRequests(undefined, 'Pending');
+                                const reqs = await getReconciliationRequests();
                                 let filtered = reqs;
                                 if (!isAdmin && currentUser) {
                                   const allowed = new Set(currentUser.assignedResidences || []);
@@ -503,7 +511,7 @@ export default function StockReconciliationPage() {
                                 }
                                 setPending(filtered);
                                 if (residenceId) {
-                                  const list = await getReconciliations(residenceId);
+                                  const list = await getReconciliations();
                                   setRecons(list as unknown as Rec[]);
                                 }
                               } catch {}
@@ -713,10 +721,10 @@ export default function StockReconciliationPage() {
               <Button variant="secondary" onClick={async () => {
                 try {
                   await approveReconciliationRequest(selectedReq.id, currentUser?.id || '');
-                  const reqs = await getReconciliationRequests(undefined, 'Pending');
+                  const reqs = await getReconciliationRequests();
                   setPending(reqs);
                   if (residenceId) {
-                    const list = await getReconciliations(residenceId);
+                    const list = await getReconciliations();
                     setRecons(list as unknown as Rec[]);
                   }
                   setReqDetailOpen(false);
@@ -725,7 +733,7 @@ export default function StockReconciliationPage() {
               <Button variant="outline" onClick={async () => {
                 try {
                   await rejectReconciliationRequest(selectedReq.id, currentUser?.id || '');
-                  const reqs = await getReconciliationRequests(undefined, 'Pending');
+                  const reqs = await getReconciliationRequests();
                   setPending(reqs);
                   setReqDetailOpen(false);
                 } catch {}

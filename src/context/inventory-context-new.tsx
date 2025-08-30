@@ -204,15 +204,22 @@ interface InventoryContextType {
   getMIVById: (mivId: string) => Promise<MIVDetails | null>;
   getLastIssueDateForItemAtLocation: (itemId: string, locationId: string) => Promise<Timestamp | null>;
   depreciateItems: (depreciationRequest: DepreciationRequest) => Promise<void>;
-  // Audit functions
-  createAudit: (audit: Omit<InventoryAudit, 'id' | 'createdAt' | 'summary'>) => Promise<string>;
-  getAudits: () => Promise<InventoryAudit[]>;
-  getAuditById: (auditId: string) => Promise<InventoryAudit | null>;
-  updateAuditStatus: (auditId: string, status: InventoryAudit['status']) => Promise<void>;
-  getAuditItems: (auditId: string) => Promise<AuditItem[]>;
-  updateAuditItem: (auditItem: AuditItem) => Promise<void>;
-  submitAuditCount: (auditId: string, itemId: string, physicalStock: number, notes: string, countedBy: string) => Promise<void>;
-  completeAudit: (auditId: string, adjustments: AuditAdjustment[], generalNotes: string) => Promise<void>;
+  // MRV/MIV methods
+  getMRVRequests: () => Promise<any[]>;
+  approveMRVRequest: (id: string, approverId: string) => Promise<void>;
+  rejectMRVRequest: (id: string, rejecterId: string) => Promise<void>;
+  getMRVRequestById: (id: string) => Promise<any>;
+  updateMRVRequest: (id: string, updates: any) => Promise<void>;
+  createMRV: (data: any) => Promise<any>;
+  getMRVs: () => Promise<any[]>;
+  getMRVById: (id: string) => Promise<any>;
+  getMIVById: (id: string) => Promise<any>;
+  getReconciliationItems: (id: string) => Promise<any[]>;
+  getTransferItems: (id: string) => Promise<any[]>;
+  getReconciliationById: (id: string) => Promise<any>;
+  getAllReconciliations: () => Promise<any[]>;
+  // Additional properties
+  inventoryItems?: InventoryItem[];
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);

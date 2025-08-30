@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import {
-  collection,
-  doc,
-  getDocs,
-  runTransaction,
-  Timestamp,
-} from 'firebase/firestore';
+// TODO: Implement D1-based negative stock fix
+// import { db } from '@/lib/firebase';
+// import {
+//   collection,
+//   doc,
+//   getDocs,
+//   runTransaction,
+//   Timestamp,
+// } from 'firebase/firestore';
 
+/*
 type ScanResult = {
   itemId: string;
   negatives: { residenceId: string; value: number }[];
@@ -33,6 +35,7 @@ async function scanForNegatives(): Promise<{ countItems: number; totalNegatives:
   }
   return { countItems: details.length, totalNegatives, details };
 }
+*/
 
 function isDev() {
   return process.env.NODE_ENV !== 'production';
@@ -48,6 +51,9 @@ function verifySecret(req: Request): boolean {
 
 export async function GET(req: Request) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'Fix-negative system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based negative stock scanning
     if (!db) return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
     const url = new URL(req.url);
     const apply = url.searchParams.get('apply');
@@ -114,6 +120,7 @@ export async function GET(req: Request) {
     }
     const res = await scanForNegatives();
     return NextResponse.json({ ok: true, ...res });
+    */
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to scan' }, { status: 500 });
   }
@@ -121,6 +128,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // Temporarily disabled during Firebase to D1 migration
+    return NextResponse.json({ error: 'Fix-negative system temporarily unavailable during migration' }, { status: 503 });
+    /* TODO: Implement D1-based negative stock fixing
     if (!db) return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
     if (!verifySecret(req)) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
@@ -181,6 +191,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, fixedCount, affectedItems: affected });
+    */
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to fix negatives' }, { status: 500 });
   }

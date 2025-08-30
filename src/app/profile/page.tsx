@@ -39,7 +39,7 @@ export default function ProfilePage() {
     setSaving(true);
     try {
   const updated: any = { ...currentUser, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, language: locale, themeSettings: { colorTheme, mode: themeMode } };
-  await updateUser(currentUser.id, updated);
+  await updateUser(currentUser.id!, updated);
   // Note: Firebase auth email update disabled during migration.
       try { setLocale(locale); } catch {}
       toast({ title: 'Saved', description: 'Profile updated.' });
