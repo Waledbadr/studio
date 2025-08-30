@@ -21,12 +21,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 
 type IssueLine = { id: string; nameEn?: string; nameAr?: string; issueQuantity: number; overrideReason?: string | null };
 type LocationEntry = { locationId: string; locationName: string; isFacility: boolean; items: IssueLine[] };
 
 export default function RequestIssuePage() {
-  const { items: allItems, getStockForResidence, issueItemsFromStock, checkItemLifespanAtLocation, addItem, updateItem } = useInventory();
+  const { items: allItems, getStockForResidence, checkItemLifespanAtLocation, addItem, updateItem } = useInventory();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { toast } = useToast();
@@ -36,12 +38,15 @@ export default function RequestIssuePage() {
   // Residence (issue-from)
   const [residenceId, setResidenceId] = useState('');
 
-  // Location selectors, matching MIV page style
+  // Location selectors, matching distribution style
   const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
   const [buildingId, setBuildingId] = useState('');
   const [floorId, setFloorId] = useState('');
   const [roomId, setRoomId] = useState('');
   const [facilityId, setFacilityId] = useState('');
+  // New: Multi-location selection mode and selected targets
+  const [multiMode, setMultiMode] = useState(false);
+  const [selectedTargets, setSelectedTargets] = useState<{ id: string; name: string; isFacility: boolean }[]>([]);
 
   // UI helpers
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,9 +57,19 @@ export default function RequestIssuePage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
   const [, setVariantTick] = useState(0);
-  const [overrideReason, setOverrideReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const canOverride = (currentUser?.role === 'Admin' || currentUser?.role === 'Supervisor');
+  // Justification dialog state (per-add, per-item)
+  const [justOpen, setJustOpen] = useState(false);
+  const [justText, setJustText] = useState('');
+  const justificationResolver = useRef<((val: string | null) => void) | null>(null);
+  const askForJustification = useCallback(async (): Promise<string | null> => {
+    setJustText('');
+    return new Promise((resolve) => {
+      justificationResolver.current = resolve;
+      setJustOpen(true);
+    });
+  }, []);
 
   // Right panel: voucher (current request)
   const [voucherLocations, setVoucherLocations] = useState<LocationEntry[]>([]);
@@ -70,10 +85,10 @@ export default function RequestIssuePage() {
     return selectedResidence.facilities || [];
   }, [selectedResidence, buildings, floors, buildingId, floorId]);
 
-  // Reset cascading selects like in MIV
-  useEffect(() => { setBuildingId(''); setFloorId(''); setRoomId(''); setFacilityId(''); setVoucherLocations([]); }, [residenceId]);
-  useEffect(() => { setFloorId(''); setRoomId(''); setFacilityId(''); }, [buildingId]);
-  useEffect(() => { setRoomId(''); if (locationType === 'facility') setFacilityId(''); }, [floorId, locationType]);
+  // Reset cascading selects when residence changes
+  useEffect(() => { setBuildingId(''); setFloorId(''); setRoomId(''); setFacilityId(''); setVoucherLocations([]); setSelectedTargets([]); }, [residenceId]);
+  useEffect(() => { setFloorId(''); setRoomId(''); setFacilityId(''); setSelectedTargets([]); }, [buildingId]);
+  useEffect(() => { setRoomId(''); if (locationType === 'facility') setFacilityId(''); setSelectedTargets([]); }, [floorId, locationType]);
 
   // Remaining stock per item after current allocations
   const getAggregateIssuedQty = (itemId: string) => voucherLocations.reduce((sum, loc) => {
@@ -84,12 +99,8 @@ export default function RequestIssuePage() {
   const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
   const searchN = normalizeText(searchQuery);
   
-  // Debug logging
-  useEffect(() => {
-    console.log('All items:', allItems);
-    console.log('Categories:', Array.from(new Set(allItems.map(i => i.category).filter(Boolean))));
-    console.log('Selected category:', selectedCategory);
-  }, [allItems, selectedCategory]);
+  // Memoized categories for the filter select
+  const categories = useMemo(() => Array.from(new Set(allItems.map(i => i.category).filter(Boolean))), [allItems]);
   
   const availableInventory = useMemo(() => {
     const base = selectedCategory === 'all' ? allItems : allItems.filter(i => i.category === selectedCategory);
@@ -142,12 +153,14 @@ export default function RequestIssuePage() {
 
   const isLocationSelected = useMemo(() => {
     if (!residenceId) return false;
+    if (multiMode) return selectedTargets.length > 0;
     if (locationType === 'unit') return !!(buildingId && floorId && roomId);
     return !!facilityId;
-  }, [residenceId, locationType, buildingId, floorId, roomId, facilityId]);
+  }, [residenceId, multiMode, selectedTargets.length, locationType, buildingId, floorId, roomId, facilityId]);
 
   const currentLocation = useMemo(() => {
     if (!selectedResidence || !isLocationSelected) return null as null | { id: string; name: string; isFacility: boolean };
+    if (multiMode) return null; // handled via selectedTargets
     if (locationType === 'unit') {
       const b = buildings.find(b => b.id === buildingId);
       const f = floors.find(f => f.id === floorId);
@@ -162,56 +175,55 @@ export default function RequestIssuePage() {
     const f = floors.find(f => f.id === floorId); if (f) parts.push(f.name);
     parts.push(fac.name);
     return { id: fac.id, name: parts.join(' -> '), isFacility: true };
-  }, [selectedResidence, isLocationSelected, locationType, buildings, floors, rooms, availableFacilities, buildingId, floorId, roomId, facilityId]);
+  }, [selectedResidence, isLocationSelected, multiMode, locationType, buildings, floors, rooms, availableFacilities, buildingId, floorId, roomId, facilityId]);
 
   const handleAddToVoucher = (itemToAdd: InventoryItem, variant?: string, qty: number = 1) => {
     if (!isLocationSelected || !currentLocation) {
-      toast({ title: 'Select a location', description: 'Pick residence and location before adding items.', variant: 'destructive' });
-      return;
+      if (!multiMode || selectedTargets.length === 0) {
+        toast({ title: 'Select a location', description: 'Pick residence and location before adding items.', variant: 'destructive' });
+        return;
+      }
     }
     startTransition(async () => {
-      // Show immediate stock warning for MR policy (do not block add to allow MIV path)
+      const targets = multiMode ? selectedTargets : (currentLocation ? [currentLocation] : []);
+      const nameEn = variant ? `${itemToAdd.nameEn || ''} - ${variant}`.trim() : itemToAdd.nameEn;
+      const nameAr = variant ? `${itemToAdd.nameAr || ''} - ${variant}`.trim() : itemToAdd.nameAr;
+
+      // Check if justification is required (stock exists in residence OR lifespan within at any target)
+      let requireJustification = false;
+      try { if (getStockForResidence(itemToAdd, residenceId) > 0) requireJustification = true; } catch {}
       try {
-        const stockInResidence = getStockForResidence(itemToAdd, residenceId);
-        if (stockInResidence > 0) {
-          toast({
-            title: 'Item already in stock',
-            description: `${itemToAdd.nameEn || itemToAdd.nameAr} is available in this residence. Use Issue now (MIV) or note that MR will be blocked.`,
-          });
-        }
+        const lifeResults = await Promise.all(targets.map(t => checkItemLifespanAtLocation(itemToAdd.id, t.id).catch(() => null)));
+        if (lifeResults.some(life => life && life.lifespanDays && life.withinLifespan)) requireJustification = true;
       } catch {}
 
-      // lifespan check
-      const lifespan = await checkItemLifespanAtLocation(itemToAdd.id, currentLocation.id);
-      if (lifespan.lifespanDays && lifespan.withinLifespan) {
-        if (!canOverride) {
-          toast({ title: 'Blocked by lifespan policy', description: `Last installation was ${lifespan.daysSinceLastIssue} days ago (lifespan is ${lifespan.lifespanDays} days).`, variant: 'destructive' });
-          return;
-        }
-        if (!overrideReason || overrideReason.trim().length < 3) {
-          toast({ title: 'Override reason required', description: 'Provide a clear override reason.', variant: 'destructive' });
+      let providedReason: string | null = null;
+      if (requireJustification) {
+        providedReason = await askForJustification();
+        if (!providedReason || providedReason.trim().length < 3) {
+          toast({ title: 'Justification required', description: 'A clear justification is required to add this item.', variant: 'destructive' });
           return;
         }
       }
 
-      const nameEn = variant ? `${itemToAdd.nameEn || ''} - ${variant}`.trim() : itemToAdd.nameEn;
-      const nameAr = variant ? `${itemToAdd.nameAr || ''} - ${variant}`.trim() : itemToAdd.nameAr;
-
       setVoucherLocations(prev => {
         let next = [...prev];
-        let idx = next.findIndex(l => l.locationId === currentLocation.id);
-        if (idx === -1) {
-          next.push({ locationId: currentLocation.id, locationName: currentLocation.name, isFacility: currentLocation.isFacility, items: [] });
-          idx = next.length - 1;
+        for (const target of targets) {
+          let idx = next.findIndex(l => l.locationId === target.id);
+          if (idx === -1) {
+            next.push({ locationId: target.id, locationName: target.name, isFacility: target.isFacility, items: [] });
+            idx = next.length - 1;
+          }
+          const loc = { ...next[idx] };
+          const found = loc.items.find(i => i.id === itemToAdd.id && (i.nameEn === nameEn || i.nameAr === nameAr));
+          if (!found) {
+            loc.items = [...loc.items, { id: itemToAdd.id, nameEn, nameAr, issueQuantity: Math.max(1, qty), overrideReason: requireJustification ? providedReason : null }];
+          } else {
+            found.issueQuantity = found.issueQuantity + Math.max(1, qty);
+            if (requireJustification && providedReason) found.overrideReason = providedReason;
+          }
+          next[idx] = loc;
         }
-        const loc = { ...next[idx] };
-        const found = loc.items.find(i => i.id === itemToAdd.id && (i.nameEn === nameEn || i.nameAr === nameAr));
-        if (!found) {
-          loc.items = [...loc.items, { id: itemToAdd.id, nameEn, nameAr, issueQuantity: Math.max(1, qty), overrideReason: (lifespan.lifespanDays && lifespan.withinLifespan) ? overrideReason : null }];
-        } else {
-          found.issueQuantity = found.issueQuantity + Math.max(1, qty);
-        }
-        next[idx] = loc;
         return next;
       });
 
@@ -230,91 +242,116 @@ export default function RequestIssuePage() {
     setVoucherLocations(prev => prev.map(loc => loc.locationId === locationId ? { ...loc, items: loc.items.filter(i => i.id !== itemId) } : loc).filter(loc => loc.items.length > 0));
   };
 
-  const submit = async (issueNow: boolean) => {
+  const submit = async () => {
     if (!residenceId || voucherLocations.length === 0) {
       toast({ title: 'Incomplete', description: 'Select a residence and add items.', variant: 'destructive' });
       return;
     }
     setIsSubmitting(true);
     try {
-      if (issueNow) {
-        if (!canOverride) {
-          toast({ title: 'Permissions', description: 'Only Supervisor/Admin can issue directly.', variant: 'destructive' });
-          setIsSubmitting(false);
-          return;
-        }
-        // Validate stock availability per residence before issuing
+      // Ensure lines that require justification have one before aggregation (parallelized)
+      {
+        const stockCache = new Map<string, number>();
+        const needCheck: Array<{locName: string; item: InventoryItem; line: IssueLine; locationId: string}> = [];
         for (const loc of voucherLocations) {
           for (const line of loc.items) {
             const item = allItems.find(i => i.id === line.id);
             if (!item) continue;
-            const stock = getStockForResidence(item, residenceId);
-            const allocated = getAggregateIssuedQty(item.id);
-            if (line.issueQuantity > Math.max(0, stock - (allocated - line.issueQuantity))) {
-              toast({
-                title: 'Insufficient stock',
-                description: `Cannot issue ${line.issueQuantity} of ${item.nameEn || item.nameAr}; only ${Math.max(0, stock - (allocated - line.issueQuantity))} available for issuing.`,
-                variant: 'destructive',
-              });
-              setIsSubmitting(false);
-              return;
-            }
+            if (line.overrideReason && line.overrideReason.trim().length >= 3) continue; // already justified
+            needCheck.push({ locName: loc.locationName, item, line, locationId: loc.locationId });
           }
         }
-        const payload = voucherLocations.map(loc => ({
-          locationId: loc.locationId,
-          locationName: loc.locationName,
-          isFacility: loc.isFacility,
-          items: loc.items.map(i => ({ id: i.id, issueQuantity: i.issueQuantity, nameEn: i.nameEn, nameAr: i.nameAr, overrideReason: i.overrideReason ?? null }))
-        }));
-        await issueItemsFromStock(residenceId, payload as any);
-        toast({ title: 'Issued', description: 'Materials issued and transaction logged.' });
-      } else {
-        // MR should not be created when the residence already has stock of the requested item.
-        // If stock exists for any requested item, block and ask to use Issue now (MIV).
-        for (const loc of voucherLocations) {
-          for (const line of loc.items) {
-            const item = allItems.find(i => i.id === line.id);
-            if (!item) continue;
-            const stock = getStockForResidence(item, residenceId);
-            if (stock > 0) {
-              toast({
-                title: 'Item already in stock',
-                description: `${item.nameEn || item.nameAr} is available in this residence. Use Issue now (MIV) instead of creating a request.`,
-                variant: 'destructive',
-              });
-              setIsSubmitting(false);
-              return;
-            }
+        // Preload stock per item
+        for (const { item } of needCheck) {
+          if (!stockCache.has(item.id)) {
+            try { stockCache.set(item.id, getStockForResidence(item, residenceId)); } catch { stockCache.set(item.id, 0); }
           }
         }
-        // MR creation with location-aware lines
-        const lines = voucherLocations.flatMap(loc =>
-          loc.items.map(line => {
-            const inv = allItems.find(i => i.id === line.id);
-            return inv ? {
-              ...inv,
-              quantity: line.issueQuantity,
-              notes: undefined,
-              targetLocationId: loc.locationId,
-              targetLocationName: loc.locationName,
-              overrideReason: line.overrideReason ?? null,
-            } : null;
-          }).filter(Boolean) as any[]
+        // Run lifespan checks in parallel
+        const lifeResults = await Promise.all(
+          needCheck.map(({ item, locationId }) =>
+            checkItemLifespanAtLocation(item.id, locationId).catch(() => null)
+          )
         );
-        const residenceName = selectedResidence?.name || '';
-        const orderId = await createOrder({
-          residence: residenceName,
-          residenceId,
-          requestedById: currentUser?.id || 'unknown',
-          items: lines as any,
-          notes: undefined,
-        });
-        if (!orderId) throw new Error('Failed to create material request');
-        toast({ title: 'Sent for approval', description: `Material request #${orderId} created.` });
+        for (let i = 0; i < needCheck.length; i++) {
+          const { locName, item, line } = needCheck[i];
+          const stock = stockCache.get(item.id) || 0;
+          const life = lifeResults[i];
+          const requires = (stock > 0) || (!!life && life.lifespanDays && life.withinLifespan);
+          if (requires && (!line.overrideReason || line.overrideReason.trim().length < 3)) {
+            toast({ title: 'Justification required', description: `Provide justification for ${item.nameEn || item.nameAr} at ${locName}.`, variant: 'destructive' });
+            setIsSubmitting(false);
+            return;
+          }
+        }
       }
+
+      // MR creation: aggregate by item (old behavior) -> one line per item with total quantity
+      // Group by item + detail to separate variants into distinct lines
+      const aggMap = new Map<string, { inv: any; qty: number; reasons: Set<string>; detail: string }>();
+      for (const loc of voucherLocations) {
+        for (const line of loc.items) {
+          const inv = allItems.find(i => i.id === line.id);
+          if (!inv) continue;
+          // Extract variant detail from name (Base - Detail)
+          const extractDetail = (s?: string) => {
+            if (!s) return '';
+            const idx = s.indexOf(' - ');
+            return idx >= 0 ? s.slice(idx + 3).trim() : '';
+          };
+          const det = extractDetail(line.nameEn) || extractDetail(line.nameAr);
+          const key = `${inv.id}::${det || ''}`;
+          if (!aggMap.has(key)) {
+            aggMap.set(key, { inv, qty: 0, reasons: new Set<string>(), detail: det });
+          }
+          const entry = aggMap.get(key)!;
+          entry.qty += Number(line.issueQuantity) || 0;
+          const r = (line.overrideReason || '').trim();
+          if (r) entry.reasons.add(r);
+        }
+      }
+      const lines = Array.from(aggMap.values()).map(({ inv, qty, reasons, detail }) => ({
+        ...inv,
+        quantity: qty,
+        // Notes contain the detail, matching older requests
+        notes: (detail && detail.length > 0) ? detail : undefined,
+        overrideReason: reasons.size > 0 ? Array.from(reasons).join(' | ') : null,
+        // Default: if there is a justification, leave decision undefined (pending); otherwise mark approved
+        justificationDecision: (reasons.size > 0) ? undefined : 'approved',
+      }));
+      const residenceName = selectedResidence?.name || '';
+      // Build plannedDistribution to reuse later in Issue page
+      const plannedDistribution = voucherLocations.map(loc => ({
+        locationId: loc.locationId,
+        locationName: loc.locationName,
+        isFacility: loc.isFacility,
+        items: loc.items.map(line => {
+          const extractDetail = (s?: string) => {
+            if (!s) return '';
+            const idx = s.indexOf(' - ');
+            return idx >= 0 ? s.slice(idx + 3).trim() : '';
+          };
+          const detail = extractDetail(line.nameEn) || extractDetail(line.nameAr) || undefined;
+          return {
+            id: line.id,
+            detail,
+            quantity: line.issueQuantity,
+            overrideReason: line.overrideReason ?? null,
+          };
+        })
+      }));
+
+      const orderId = await createOrder({
+        residence: residenceName,
+        residenceId,
+        requestedById: currentUser?.id || 'unknown',
+        items: lines as any,
+        notes: undefined,
+        plannedDistribution,
+      });
+      if (!orderId) throw new Error('Failed to create material request');
+  toast({ title: 'تم إنشاء الطلب', description: `تم إرسال طلب المواد #${orderId} للموافقة.`, variant: 'default' });
       setVoucherLocations([]);
-      setOverrideReason('');
     } catch (e: any) {
       console.error(e);
       toast({ title: 'Error', description: e?.message || 'Operation failed.', variant: 'destructive' });
@@ -339,7 +376,10 @@ export default function RequestIssuePage() {
   };
 
   function AddItemButton({ item, disabled }: { item: InventoryItem; disabled?: boolean }) {
-    const [open, setOpen] = useState(false);
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const allowCloseRef = useRef(false);
+    const [, setTick] = useState(0);
+  const [qtyPerLocation, setQtyPerLocation] = useState(1);
     const optionList = useMemo(() => {
       const set = new Set<string>();
       (item.variants || []).forEach(v => { const s = (v || '').trim(); if (s) set.add(s); });
@@ -358,13 +398,31 @@ export default function RequestIssuePage() {
     }
 
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={popoverOpen}
+        onOpenChange={(v) => {
+          if (v) { setPopoverOpen(true); return; }
+          if (allowCloseRef.current) { allowCloseRef.current = false; setPopoverOpen(false); }
+          else { setPopoverOpen(true); }
+        }}
+      >
         <PopoverTrigger asChild>
-          <Button size="icon" variant="outline" disabled={disabled}>
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => { if (popoverOpen) allowCloseRef.current = true; }}
+          >
             <ChevronDown className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
+        <PopoverContent
+          className="w-[300px] p-0"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <ScrollArea className="h-80 max-h-[60vh]">
             <div className="p-1">
               {optionList.map((variant) => {
@@ -378,7 +436,7 @@ export default function RequestIssuePage() {
                           const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
                           if (Boolean(v)) map[variant] = true; else delete map[variant];
                           variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
-                          setVariantTick(t => t + 1);
+                          setTick(t => t + 1);
                         }}
                       />
                     </span>
@@ -389,18 +447,24 @@ export default function RequestIssuePage() {
             </div>
           </ScrollArea>
           <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t p-2 bg-white/60 dark:bg-black/20 backdrop-blur">
-            <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setVariantTick(t => t + 1); }}>Clear</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => { variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); }}>Clear</Button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Qty/location</span>
+                <QuantityStepper value={qtyPerLocation} min={1} onValueChange={setQtyPerLocation} />
+              </div>
+            </div>
             <Button size="sm" onClick={() => {
               const map = variantSelectionsRef.current[item.id] || {};
               const entries = Object.entries(map);
-              if (entries.length === 0) { handleAddToVoucher(item, optionList?.[0]); setOpen(true); return; }
-              if (entries.length === 1) { const [variant] = entries[0]; handleAddToVoucher(item, variant, 1); variantSelectionsRef.current[item.id] = {}; setVariantTick(t => t + 1); setOpen(true); return; }
+              if (entries.length === 0) { handleAddToVoucher(item, optionList?.[0], qtyPerLocation); allowCloseRef.current = true; setPopoverOpen(false); return; }
+              if (entries.length === 1) { const [variant] = entries[0]; handleAddToVoucher(item, variant, qtyPerLocation); variantSelectionsRef.current[item.id] = {}; setTick(t => t + 1); allowCloseRef.current = true; setPopoverOpen(false); return; }
               const combinedLabel = entries.map(([variant]) => variant).join(', ');
-              const totalQty = entries.length;
-              handleAddToVoucher(item, combinedLabel, totalQty);
+              handleAddToVoucher(item, combinedLabel, qtyPerLocation);
               variantSelectionsRef.current[item.id] = {};
-              setVariantTick(t => t + 1);
-              setOpen(true);
+              setTick(t => t + 1);
+              allowCloseRef.current = true;
+              setPopoverOpen(false);
             }}>Add selected</Button>
           </div>
         </PopoverContent>
@@ -412,29 +476,25 @@ export default function RequestIssuePage() {
     <div className="space-y-6 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Request + Issue Materials (MR + MIV) — Beta</h1>
-          <p className="text-muted-foreground">Request materials not in stock (MR) or issue available materials directly (MIV) — with lifespan checks.</p>
+          <h1 className="text-2xl font-bold">Materials Request (MR) — with distribution</h1>
+          <p className="text-muted-foreground">Prepare a materials request distributed to one or more locations. If stock exists or lifespan is not reached, a justification is required.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => submit(false)} disabled={isSubmitting || voucherLocations.length === 0}>
+          <Button variant="secondary" onClick={() => submit()} disabled={isSubmitting || voucherLocations.length === 0}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Send for approval
-          </Button>
-          <Button onClick={() => submit(true)} disabled={isSubmitting || voucherLocations.length === 0 || !canOverride}>
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Issue now (MIV)
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left: Location selection + Available Inventory (like MIV + MR) */}
+  <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-6 items-start">
+  {/* Left: Location selection + Available Inventory */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> Select location & items</CardTitle>
-                <CardDescription>Select residence and location, then add items. Request unavailable items or issue available ones directly.</CardDescription>
+                <CardDescription>Select residence and locations, then add and distribute items.</CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Label className="whitespace-nowrap">Issue from:</Label>
@@ -461,15 +521,29 @@ export default function RequestIssuePage() {
                     <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
                   </div>
                 </RadioGroup>
+                <div className="flex items-center gap-2 pt-1">
+                  <Switch id="multi-locations" checked={multiMode} onCheckedChange={(v) => { setMultiMode(Boolean(v)); setSelectedTargets([]); }} disabled={!residenceId} />
+                  <Label htmlFor="multi-locations" className="text-sm">Select multiple locations</Label>
+                  {multiMode && selectedTargets.length > 0 && (
+                    <span className="text-xs text-muted-foreground">• Selected: {selectedTargets.length}</span>
+                  )}
+                  {multiMode && selectedTargets.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedTargets([])}>Clear</Button>
+                  )}
+                </div>
                 
                 {/* Selected Location Display */}
-                {currentLocation && (
+                {(currentLocation || (multiMode && selectedTargets.length > 0)) && (
                   <div className="p-3 bg-muted/50 rounded-md border-l-4 border-l-primary">
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4 text-primary" />
                       <span className="font-medium">Selected Location:</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">{currentLocation.name}</p>
+                    {!multiMode ? (
+                      <p className="text-sm text-muted-foreground mt-1">{currentLocation?.name}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mt-1">{selectedTargets.length} selected</p>
+                    )}
                   </div>
                 )}
                 
@@ -545,9 +619,14 @@ export default function RequestIssuePage() {
                             {rooms.map(r => (
                               <div
                                 key={r.id}
-                                onClick={() => setRoomId(roomId === r.id ? '' : r.id)}
+                                onClick={() => {
+                                  if (!multiMode) { setRoomId(roomId === r.id ? '' : r.id); return; }
+                                  const id = r.id;
+                                  const name = `${selectedResidence?.name || ''} -> ${buildings.find(b=>b.id===buildingId)?.name || ''} -> ${floors.find(f=>f.id===floorId)?.name || ''} -> ${r.name}`;
+                                  setSelectedTargets(prev => prev.some(t => t.id === id) ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: false }]);
+                                }}
                                 className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                                  roomId === r.id 
+                                  (!multiMode && roomId === r.id) || (multiMode && selectedTargets.some(t => t.id === r.id))
                                     ? 'bg-primary text-primary-foreground border-primary' 
                                     : 'bg-background hover:bg-muted/50 border-border'
                                 } ${!floorId ? 'opacity-50 pointer-events-none' : ''}`}
@@ -572,9 +651,18 @@ export default function RequestIssuePage() {
                             {availableFacilities.map(f => (
                               <div
                                 key={f.id}
-                                onClick={() => setFacilityId(facilityId === f.id ? '' : f.id)}
+                                onClick={() => {
+                                  if (!multiMode) { setFacilityId(facilityId === f.id ? '' : f.id); return; }
+                                  const id = f.id;
+                                  const parts = [selectedResidence?.name];
+                                  const b = buildings.find(b => b.id === buildingId); if (b) parts?.push(b.name);
+                                  const fl = floors.find(fl => fl.id === floorId); if (fl) parts?.push(fl.name);
+                                  parts?.push(f.name);
+                                  const name = parts?.filter(Boolean).join(' -> ') || f.name;
+                                  setSelectedTargets(prev => prev.some(t => t.id === id) ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }]);
+                                }}
                                 className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                                  facilityId === f.id 
+                                  (!multiMode && facilityId === f.id) || (multiMode && selectedTargets.some(t => t.id === f.id))
                                     ? 'bg-primary text-primary-foreground border-primary' 
                                     : 'bg-background hover:bg-muted/50 border-border'
                                 } ${!residenceId ? 'opacity-50 pointer-events-none' : ''}`}
@@ -605,18 +693,14 @@ export default function RequestIssuePage() {
                     onChange={e => setSearchQuery(e.target.value)}
                   />
                 </div>
-                <Select value={selectedCategory} onValueChange={(value) => {
-                  console.log('Category changed to:', value);
-                  setSelectedCategory(value);
-                }}>
+                <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value)}>
                   <SelectTrigger><SelectValue placeholder="Filter by category" /></SelectTrigger>
                   <SelectContent className="z-50" position="popper" side="bottom" sideOffset={4}>
                     <SelectItem value="all">All Categories</SelectItem>
                     {allItems && allItems.length > 0 ? (
-                      Array.from(new Set(allItems.map(i => i.category).filter(Boolean))).map(cat => {
-                        console.log('Category found:', cat);
-                        return (<SelectItem key={cat} value={cat!} className="capitalize">{cat}</SelectItem>);
-                      })
+                      categories.map(cat => (
+                        <SelectItem key={cat} value={cat!} className="capitalize">{cat}</SelectItem>
+                      ))
                     ) : (
                       <>
                         <SelectItem value="electrical">Electrical</SelectItem>
@@ -693,12 +777,7 @@ export default function RequestIssuePage() {
                   )}
                 </ScrollArea>
 
-                {canOverride && (
-                  <div className="space-y-1">
-                    <Label>Override reason (when lifespan is violated)</Label>
-                    <Input value={overrideReason} onChange={e => setOverrideReason(e.target.value)} placeholder="Enter override reason here" />
-                  </div>
-                )}
+                {/* Per-line justification captured during add; no global field needed. */}
               </div>
             </div>
           </CardContent>
@@ -745,6 +824,23 @@ export default function RequestIssuePage() {
       </div>
   <AddItemDialog isOpen={isAddDialogVisible} onOpenChange={setAddDialogVisible} onItemAdded={addItem} onItemAddedAndOrdered={handleNewItemAdded} initialName={searchQuery} />
   <EditItemDialog isOpen={editDialogOpen} onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }} onItemUpdated={handleItemUpdated} item={itemToEdit} />
+  {/* Justification dialog */}
+  <Dialog open={justOpen} onOpenChange={(v) => { setJustOpen(v); if (!v && justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Justification required</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-2">
+        <Label htmlFor="just-text">Provide a clear justification for this item.</Label>
+        <Input id="just-text" value={justText} onChange={(e) => setJustText(e.target.value)} placeholder="Enter justification..." />
+        <p className="text-xs text-muted-foreground">Required when stock exists in residence and/or lifespan not reached.</p>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onClick={() => { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>Cancel</Button>
+        <Button onClick={() => { if (justText.trim().length >= 3) { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(justText.trim()); justificationResolver.current = null; } } }} disabled={justText.trim().length < 3}>Confirm</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
     </div>
   );
 }

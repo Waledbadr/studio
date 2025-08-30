@@ -19,6 +19,7 @@ import { differenceInDays } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/context/language-context';
+import { useOrders, type Order } from '@/context/orders-context';
 
 
 interface IssuedItem extends InventoryItem {
@@ -47,6 +48,7 @@ export default function IssueMaterialPage() {
     const { toast } = useToast();
     const router = useRouter();
     const { dict } = useLanguage();
+    const { orders, loadOrders } = useOrders();
     const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
@@ -60,6 +62,7 @@ export default function IssueMaterialPage() {
     const [selectedFacilityId, setSelectedFacilityId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
+    const [selectedMrId, setSelectedMrId] = useState('');
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -86,6 +89,17 @@ export default function IssueMaterialPage() {
         }
         return selectedComplex.facilities || [];
     }, [selectedComplex, selectedBuildingId, selectedFloorId, selectedFloor, selectedBuilding]);
+
+    // Ensure orders are loaded so MR dropdown is populated
+    useEffect(() => {
+        loadOrders?.();
+        // Also refresh when user identity changes
+    }, [loadOrders]);
+    useEffect(() => {
+        if (currentUser?.id) {
+            loadOrders?.();
+        }
+    }, [currentUser?.id, loadOrders]);
 
 
     const isLocationSelected = useMemo(() => {
@@ -282,6 +296,73 @@ export default function IssueMaterialPage() {
         });
     };
 
+    // Apply planned distribution from an order object
+    const applyPlanFromOrder = (order: Order) => {
+        if (!order || !order.plannedDistribution || !Array.isArray(order.plannedDistribution) || order.plannedDistribution.length === 0) {
+            toast({ title: 'No distribution', description: 'This order has no saved distribution plan.' });
+            return;
+        }
+        if (!selectedComplexId || selectedComplexId !== order.residenceId) {
+            setSelectedComplexId(order.residenceId);
+        }
+        const allocatedByItem = new Map<string, number>();
+        const transformed: VoucherLocation[] = order.plannedDistribution.map(loc => {
+            // Safety check for location object
+            if (!loc || typeof loc !== 'object') return null;
+            
+            const items: IssuedItem[] = [];
+            const locationItems = Array.isArray(loc.items) ? loc.items : [];
+            for (const pi of locationItems) {
+                if (!pi || typeof pi !== 'object') continue;
+                
+                const inv = allItems.find(i => i.id === pi.id);
+                if (!inv) continue;
+                
+                // Match order line by id and detail in notes; use decisions if present
+                const orderItems = Array.isArray(order.items) ? order.items : [];
+                const line = orderItems.find(li => li && li.id === pi.id && (li.notes || '').includes(pi.detail || ''));
+                if (line?.justificationDecision === 'rejected') continue;
+                
+                const stock = getStockForResidence(inv, order.residenceId);
+                const already = allocatedByItem.get(inv.id) ?? 0;
+                const remaining = Math.max(0, stock - already);
+                const plannedQty = typeof line?.approvedQuantity === 'number' ? line!.approvedQuantity : (pi.quantity || 0);
+                const qty = Math.min(plannedQty, remaining);
+                if (qty > 0) {
+                    items.push({ ...inv, issueQuantity: qty });
+                    allocatedByItem.set(inv.id, already + qty);
+                }
+            }
+            return { 
+                locationId: loc.locationId || '', 
+                locationName: loc.locationName || 'Unknown Location', 
+                isFacility: !!loc.isFacility, 
+                items 
+            } as VoucherLocation;
+        }).filter((l): l is VoucherLocation => l !== null && l.items.length > 0);
+
+        if (transformed.length === 0) {
+            toast({ title: 'Nothing to load', description: 'No items available in stock for this plan.', variant: 'destructive' });
+            return;
+        }
+        setVoucherLocations(transformed);
+        toast({ title: 'Distribution loaded', description: `Loaded plan from ${order.id}.` });
+    };
+
+    const handleSelectMr = (id: string) => {
+        setSelectedMrId(id);
+        if (!Array.isArray(orders)) {
+            toast({ title: 'No orders', description: 'Orders list is not available.', variant: 'destructive' });
+            return;
+        }
+        const order = orders.find(o => o && o.id === id);
+        if (!order) {
+            toast({ title: 'Not found', description: `No order found for ${id}.`, variant: 'destructive' });
+            return;
+        }
+        applyPlanFromOrder(order);
+    };
+
 
     const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
          const itemInfo = allItems.find(i => i.id === itemId);
@@ -361,6 +442,12 @@ export default function IssueMaterialPage() {
         return voucherLocations.length > 0 && voucherLocations.every(loc => loc.items.length > 0);
     }, [voucherLocations]);
 
+    // Orders with saved distribution for the selected residence
+    const mrWithPlanForResidence = useMemo(() => {
+        if (!selectedComplexId || !Array.isArray(orders)) return [] as Order[];
+        return orders.filter(o => o && o.residenceId === selectedComplexId && (o.plannedDistribution && Array.isArray(o.plannedDistribution) && o.plannedDistribution.length > 0));
+    }, [orders, selectedComplexId]);
+
     if (residencesLoading || inventoryLoading) {
         return <Skeleton className="h-96 w-full" />
     }
@@ -391,10 +478,24 @@ export default function IssueMaterialPage() {
                                 <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Select Location & Items</CardTitle>
                                 <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
                             </div>
-                            <div className="flex items-center gap-2">
+                             <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <Label className="whitespace-nowrap">{dict.viewHistoryLabel}</Label>
+                                </div>
                                 <Label className="whitespace-nowrap">Issue From:</Label>
                                 <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
                                     <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
+                                <div className="flex items-center gap-2">
+                                    <Label className="whitespace-nowrap">Load MR plan</Label>
+                                    <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
+                                        <SelectTrigger className="w-[220px]"><SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} /></SelectTrigger>
+                                        <SelectContent>
+                                            {mrWithPlanForResidence.map(o => (
+                                                <SelectItem key={o.id} value={o.id}>{o.id} · {o.items.length} items</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                     <SelectContent>
                                         {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
                                     </SelectContent>

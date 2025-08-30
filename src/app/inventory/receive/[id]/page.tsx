@@ -33,6 +33,8 @@ import { db } from '@/lib/firebase';
 interface ReceivedItem extends OrderItem {
     quantityReceived: number;
     alreadyReceived: number;
+    // Distinguish lines with same item id but different details
+    uniqueKey: string; // `${id}::${notes || ''}`
 }
 
 export default function ReceiveOrderPage() {
@@ -69,13 +71,15 @@ export default function ReceiveOrderPage() {
             }
 
             setOrder(fetchedOrder);
-            const initialReceivedItems = fetchedOrder.items.map(item => {
+            const initialReceivedItems = fetchedOrder.items.map((item, idx) => {
                 const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
                 const remainingToReceive = item.quantity - alreadyReceived;
+                const uniqueKey = `${item.id}::${(item.notes || '').trim()}`;
                 return {
                     ...item,
                     quantityReceived: remainingToReceive,
                     alreadyReceived: alreadyReceived,
+                    uniqueKey,
                 }
             });
             setReceivedItems(initialReceivedItems);
@@ -104,17 +108,15 @@ export default function ReceiveOrderPage() {
         }
     }, [currentUser, router, toast]);
 
-    const handleQuantityChange = (itemId: string, newQuantity: number) => {
-        const itemInfo = receivedItems.find(item => item.id === itemId);
+    const handleQuantityChange = (uniqueKey: string, newQuantity: number) => {
+        const itemInfo = receivedItems.find(item => item.uniqueKey === uniqueKey);
         if (!itemInfo) return;
 
         // Allow over-receipt: only enforce non-negative numbers
         const quantity = isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity;
 
         setReceivedItems(prevItems =>
-            prevItems.map(item =>
-                item.id === itemId ? { ...item, quantityReceived: quantity } : item
-            )
+            prevItems.map(item => item.uniqueKey === uniqueKey ? { ...item, quantityReceived: quantity } : item)
         );
     };
 
@@ -128,12 +130,15 @@ export default function ReceiveOrderPage() {
             return;
         }
         
-        const itemsToProcess = receivedItems
+        // Aggregate per item id (multiple detail lines share the same inventory id)
+        const itemsToProcessMap = receivedItems
             .filter(item => item.quantityReceived > 0)
-            .map(item => ({
-                id: item.id,
-                quantityReceived: item.quantityReceived,
-            }));
+            .reduce((map, item) => {
+                const prev = map.get(item.id) || 0;
+                map.set(item.id, prev + item.quantityReceived);
+                return map;
+            }, new Map<string, number>());
+        const itemsToProcess = Array.from(itemsToProcessMap.entries()).map(([id, quantityReceived]) => ({ id, quantityReceived }));
         
         if (itemsToProcess.length === 0 && !forceComplete) {
             toast({ title: dict.noChangeTitle, description: dict.noNewQuantitiesDescription });
@@ -303,7 +308,7 @@ export default function ReceiveOrderPage() {
                         </TableHeader>
                         <TableBody>
                             {receivedItems.map((item) => (
-                                <TableRow key={item.id}>
+                                <TableRow key={item.uniqueKey}>
                                     <TableCell>
                                         <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                         <p className="text-sm text-muted-foreground">{item.category} - {item.unit}</p>
@@ -314,7 +319,7 @@ export default function ReceiveOrderPage() {
                                          <Input 
                                             type="number" 
                                             value={item.quantityReceived} 
-                                            onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))} 
+                                            onChange={(e) => handleQuantityChange(item.uniqueKey, Number(e.target.value))} 
                                             className="w-24 text-center mx-auto [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                                             min={0}
                                         />
