@@ -16,7 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/context/language-context';
 import { useOrders, type Order } from '@/context/orders-context';
@@ -459,7 +458,7 @@ export default function IssueMaterialPage() {
                     <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
                     <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
-                 <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
                         <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
@@ -470,87 +469,160 @@ export default function IssueMaterialPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <Card>
+            {/* Load MR Plan and Issue From Section - Outside Card */}
+            <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap font-medium">Issue From:</Label>
+                    <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Select a residence..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap font-medium">Load MR plan:</Label>
+                    <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
+                        <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {mrWithPlanForResidence.map(o => (
+                                <SelectItem key={o.id} value={o.id}>{o.id} · {o.items.length} items</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start h-[calc(100vh-12rem)]">
+                <Card className="h-full flex flex-col">
                     <CardHeader>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Select Location & Items</CardTitle>
-                                <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
-                            </div>
-                             <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                    <Label className="whitespace-nowrap">{dict.viewHistoryLabel}</Label>
-                                </div>
-                                <Label className="whitespace-nowrap">Issue From:</Label>
-                                <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                                    <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
-                                <div className="flex items-center gap-2">
-                                    <Label className="whitespace-nowrap">Load MR plan</Label>
-                                    <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
-                                        <SelectTrigger className="w-[220px]"><SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} /></SelectTrigger>
-                                        <SelectContent>
-                                            {mrWithPlanForResidence.map(o => (
-                                                <SelectItem key={o.id} value={o.id}>{o.id} · {o.items.length} items</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                    <SelectContent>
-                                        {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
+                        <CardTitle className="flex items-center gap-2">
+                            <MapPin className="h-5 w-5 text-primary"/> Select Location & Items
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <CardContent className="space-y-4 flex-1 overflow-hidden flex flex-col">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-shrink-0">
                             <div className="space-y-4">
                                 <h3 className="font-semibold text-sm">Location Type</h3>
-                                <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="unit" id="r_unit" />
-                                        <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="facility" id="r_facility" />
-                                        <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
-                                    </div>
-                                </RadioGroup>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        variant={locationType === 'unit' ? 'default' : 'outline'} 
+                                        size="sm"
+                                        onClick={() => setLocationType('unit')}
+                                        disabled={!selectedComplexId}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Building className="h-4 w-4" /> Unit
+                                    </Button>
+                                    <Button 
+                                        variant={locationType === 'facility' ? 'default' : 'outline'} 
+                                        size="sm"
+                                        onClick={() => setLocationType('facility')}
+                                        disabled={!selectedComplexId}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <ConciergeBell className="h-4 w-4" /> Facility
+                                    </Button>
+                                </div>
                                 
-                                <div className="space-y-2 pt-2">
-                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {locationType === 'unit' ? (
-                                        <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
-                                            <SelectContent>
-                                                {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
-                                            <SelectContent>
-                                                {availableFacilities.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                <div className="space-y-4 pt-2">
+                                    {/* Buildings */}
+                                    <div className="space-y-2">
+                                        <h4 className="font-medium text-xs text-muted-foreground">Building</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {selectedComplex?.buildings.map(b => (
+                                                <Button
+                                                    key={b.id}
+                                                    variant={selectedBuildingId === b.id ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedBuildingId(b.id);
+                                                        setSelectedFloorId('');
+                                                        setSelectedRoomId('');
+                                                        setSelectedFacilityId('');
+                                                    }}
+                                                    disabled={!selectedComplexId}
+                                                    className="justify-start"
+                                                >
+                                                    <Building className="h-4 w-4 mr-2" />
+                                                    {b.name}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Floors */}
+                                    {selectedBuildingId && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Floor</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {selectedBuilding?.floors.map(f => (
+                                                    <Button
+                                                        key={f.id}
+                                                        variant={selectedFloorId === f.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedFloorId(f.id);
+                                                            setSelectedRoomId('');
+                                                            setSelectedFacilityId('');
+                                                        }}
+                                                        className="justify-start"
+                                                    >
+                                                        {f.name}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Rooms or Facilities */}
+                                    {selectedFloorId && locationType === 'unit' && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Room</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {selectedFloor?.rooms.map(r => (
+                                                    <Button
+                                                        key={r.id}
+                                                        variant={selectedRoomId === r.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => setSelectedRoomId(r.id)}
+                                                        className="justify-start"
+                                                    >
+                                                        {r.name}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {locationType === 'facility' && selectedComplexId && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Facility</h4>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {availableFacilities.map(f => (
+                                                    <Button
+                                                        key={f.id}
+                                                        variant={selectedFacilityId === f.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => setSelectedFacilityId(f.id)}
+                                                        className="justify-start"
+                                                    >
+                                                        <ConciergeBell className="h-4 w-4 mr-2" />
+                                                        {f.name}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-4 flex-1 flex flex-col">
                                 <h3 className="font-semibold text-sm">Available Inventory</h3>
-                                <div className="relative">
+                                <div className="relative flex-shrink-0">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         type="search"
@@ -561,7 +633,7 @@ export default function IssueMaterialPage() {
                                         disabled={!selectedComplexId}
                                     />
                                 </div>
-                                <ScrollArea className="h-[250px] border rounded-md">
+                                <ScrollArea className="flex-1 border rounded-md min-h-0">
                                     {selectedComplexId ? (
                                         <div className="p-2 space-y-2">
                                             {availableInventory.length > 0 ? availableInventory.map(item => {
@@ -597,13 +669,13 @@ export default function IssueMaterialPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="h-full flex flex-col">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
                         <CardDescription>Review all items and locations before submitting.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[430px]">
+                    <CardContent className="flex-1 overflow-hidden flex flex-col">
+                        <ScrollArea className="flex-1 min-h-0">
                         {voucherLocations.length > 0 ? (
                             <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
                                 {voucherLocations.map(location => (

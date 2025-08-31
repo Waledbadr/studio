@@ -56,7 +56,39 @@ const facilityIcons: { [key: string]: React.ElementType } = {
 // Normalize possible legacy shapes (object maps) into arrays
 const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
 
-const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDelete, onDragStart, onDragEnd, showMoveBadge, enableDelete, onRename }: { facility: Facility, canEdit: boolean, onDelete: () => void, onDragStart?: (e: React.DragEvent) => void, onDragEnd?: (e: React.DragEvent) => void, showMoveBadge?: boolean, enableDelete?: boolean, onRename?: () => void }) {
+const FacilityItem = React.memo(function FacilityItem({ 
+  facility, 
+  canEdit, 
+  onDelete, 
+  onDragStart, 
+  onDragEnd, 
+  showMoveBadge, 
+  enableDelete, 
+  onRename,
+  isEditing,
+  editingName,
+  onEditingNameChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  enableInlineEdit
+}: { 
+  facility: Facility, 
+  canEdit: boolean, 
+  onDelete: () => void, 
+  onDragStart?: (e: React.DragEvent) => void, 
+  onDragEnd?: (e: React.DragEvent) => void, 
+  showMoveBadge?: boolean, 
+  enableDelete?: boolean, 
+  onRename?: () => void,
+  isEditing?: boolean,
+  editingName?: string,
+  onEditingNameChange?: (name: string) => void,
+  onStartEdit?: () => void,
+  onSaveEdit?: () => void,
+  onCancelEdit?: () => void,
+  enableInlineEdit?: boolean
+}) {
   const Icon = facilityIcons[facility.type.toLowerCase()] || facilityIcons.default;
   return (
     <div
@@ -68,8 +100,28 @@ const FacilityItem = React.memo(function FacilityItem({ facility, canEdit, onDel
     >
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
-        <span>{facility.name}</span>
-        {canEdit && onRename && (
+        {isEditing ? (
+          <Input 
+            value={editingName || ''} 
+            onChange={(e) => onEditingNameChange?.(e.target.value)}
+            className="h-6 text-sm"
+            autoFocus
+            onBlur={onSaveEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveEdit?.();
+              if (e.key === 'Escape') onCancelEdit?.();
+            }}
+          />
+        ) : (
+          <span 
+            className={`${canEdit && onStartEdit && enableInlineEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+            onClick={canEdit && onStartEdit && enableInlineEdit ? onStartEdit : undefined}
+            title={canEdit && onStartEdit && enableInlineEdit ? 'انقر للتعديل' : undefined}
+          >
+            {facility.name}
+          </span>
+        )}
+        {canEdit && onRename && !onStartEdit && (
           <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
         )}
       </div>
@@ -109,7 +161,14 @@ const FacilitySection = React.memo(function FacilitySection({
   onDrop,
   dragging,
   showMoveBadge,
-  enableDelete
+  enableDelete,
+  editingFacilityId,
+  editingFacilityName,
+  onEditingFacilityNameChange,
+  onStartEditFacility,
+  onSaveEditFacility,
+  onCancelEditFacility,
+  enableInlineEdit
 }: { 
   facilities: Facility[] | undefined, 
   canEdit: boolean,
@@ -122,7 +181,14 @@ const FacilitySection = React.memo(function FacilitySection({
   onDrop?: () => void,
   dragging?: boolean,
   showMoveBadge?: boolean,
-  enableDelete?: boolean
+  enableDelete?: boolean,
+  editingFacilityId?: string,
+  editingFacilityName?: string,
+  onEditingFacilityNameChange?: (name: string) => void,
+  onStartEditFacility?: (facilityId: string) => void,
+  onSaveEditFacility?: () => void,
+  onCancelEditFacility?: () => void,
+  enableInlineEdit?: boolean
 }) {
   return (
     <div
@@ -137,11 +203,18 @@ const FacilitySection = React.memo(function FacilitySection({
             facility={facility}
             canEdit={canEdit}
             onDelete={() => onDelete(facility.id)}
-            onRename={onRename ? () => onRename(facility.id) : undefined}
+            onRename={onRename && !onStartEditFacility ? () => onRename(facility.id) : undefined}
             onDragStart={(e) => onItemDragStart && onItemDragStart(facility.id, e)}
             onDragEnd={(e) => onItemDragEnd && onItemDragEnd(e)}
             showMoveBadge={showMoveBadge}
             enableDelete={enableDelete}
+            isEditing={editingFacilityId === facility.id}
+            editingName={editingFacilityName}
+            onEditingNameChange={onEditingFacilityNameChange}
+            onStartEdit={onStartEditFacility ? () => onStartEditFacility(facility.id) : undefined}
+            onSaveEdit={onSaveEditFacility}
+            onCancelEdit={onCancelEditFacility}
+            enableInlineEdit={enableInlineEdit}
           />
         ))}
         {dragging && (facilities?.length || 0) === 0 && (
@@ -159,7 +232,39 @@ const FacilitySection = React.memo(function FacilitySection({
   );
 });
 
-const RoomItem = React.memo(function RoomItem({ room, canEdit, onDelete, showCapacity, onDragStart, onDragEnd, showMoveBadge, enableDelete, onRename }: { room: Room, canEdit: boolean, onDelete: () => void, showCapacity: boolean, onDragStart?: (e: React.DragEvent) => void, onDragEnd?: (e: React.DragEvent) => void, showMoveBadge?: boolean, enableDelete?: boolean, onRename?: () => void }) {
+const RoomItem = React.memo(function RoomItem({ 
+  room, 
+  canEdit, 
+  onDelete, 
+  showCapacity, 
+  onDragStart, 
+  onDragEnd, 
+  showMoveBadge, 
+  enableDelete, 
+  onRename,
+  isEditing,
+  editingName,
+  onEditingNameChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit
+}: { 
+  room: Room, 
+  canEdit: boolean, 
+  onDelete: () => void, 
+  showCapacity: boolean, 
+  onDragStart?: (e: React.DragEvent) => void, 
+  onDragEnd?: (e: React.DragEvent) => void, 
+  showMoveBadge?: boolean, 
+  enableDelete?: boolean, 
+  onRename?: () => void,
+  isEditing?: boolean,
+  editingName?: string,
+  onEditingNameChange?: (name: string) => void,
+  onStartEdit?: () => void,
+  onSaveEdit?: () => void,
+  onCancelEdit?: () => void
+}) {
   return (
     <div
       className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
@@ -172,8 +277,28 @@ const RoomItem = React.memo(function RoomItem({ room, canEdit, onDelete, showCap
         <DoorOpen className="h-4 w-4 text-muted-foreground" />
         <div>
           <div className="flex items-center gap-2">
-            <span>{room.name}</span>
-            {canEdit && onRename && (
+            {isEditing ? (
+              <Input 
+                value={editingName || ''} 
+                onChange={(e) => onEditingNameChange?.(e.target.value)}
+                className="h-6 text-sm"
+                autoFocus
+                onBlur={onSaveEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onSaveEdit?.();
+                  if (e.key === 'Escape') onCancelEdit?.();
+                }}
+              />
+            ) : (
+              <span 
+                className={`${canEdit && onStartEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                onClick={canEdit && onStartEdit ? onStartEdit : undefined}
+                title={canEdit && onStartEdit ? 'انقر للتعديل' : undefined}
+              >
+                {room.name}
+              </span>
+            )}
+            {canEdit && onRename && !onStartEdit && (
               <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
             )}
           </div>
@@ -286,7 +411,7 @@ const AddFacilityDialog = ({
 };
 
 export default function ResidencesView({ showFacilities = true, showCapacity = true }: { showFacilities?: boolean, showCapacity?: boolean }) {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock, moveRoom, moveRoomAnywhere, moveFacility, updateRoomName, updateFacilityName, updateFloorName } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock, moveRoom, moveRoomAnywhere, moveFacility, updateRoomName, updateFacilityName, updateFloorName, updateBuildingName } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const isAdmin = currentUser?.role === 'Admin';
@@ -318,6 +443,93 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
   // Track expanded buildings per complex to lazy-mount contents
   const [openByComplex, setOpenByComplex] = useState<Record<string, string[]>>({});
+  
+  // Track editing states
+  const [editingBuilding, setEditingBuilding] = useState<{complexId: string, buildingId: string} | null>(null);
+  const [editingFloor, setEditingFloor] = useState<{complexId: string, buildingId: string, floorId: string} | null>(null);
+  const [editingRoom, setEditingRoom] = useState<{complexId: string, buildingId: string, floorId: string, roomId: string} | null>(null);
+  const [editingFacility, setEditingFacility] = useState<{complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string} | null>(null);
+  const [editingBuildingName, setEditingBuildingName] = useState('');
+  const [editingFloorName, setEditingFloorName] = useState('');
+  const [editingRoomName, setEditingRoomName] = useState('');
+  const [editingFacilityName, setEditingFacilityName] = useState('');
+  
+  // Building editing functions
+  const startEditingBuilding = useCallback((complexId: string, buildingId: string, currentName: string) => {
+    setEditingBuilding({ complexId, buildingId });
+    setEditingBuildingName(currentName);
+  }, []);
+
+  const saveEditingBuilding = useCallback(() => {
+    if (editingBuilding && editingBuildingName.trim()) {
+      updateBuildingName(editingBuilding.complexId, editingBuilding.buildingId, editingBuildingName.trim());
+      setEditingBuilding(null);
+      setEditingBuildingName('');
+    }
+  }, [editingBuilding, editingBuildingName, updateBuildingName]);
+
+  const cancelEditingBuilding = useCallback(() => {
+    setEditingBuilding(null);
+    setEditingBuildingName('');
+  }, []);
+
+  // Floor editing functions
+  const startEditingFloor = useCallback((complexId: string, buildingId: string, floorId: string, currentName: string) => {
+    setEditingFloor({ complexId, buildingId, floorId });
+    setEditingFloorName(currentName);
+  }, []);
+
+  const saveEditingFloor = useCallback(() => {
+    if (editingFloor && editingFloorName.trim()) {
+      updateFloorName(editingFloor.complexId, editingFloor.buildingId, editingFloor.floorId, editingFloorName.trim());
+      setEditingFloor(null);
+      setEditingFloorName('');
+    }
+  }, [editingFloor, editingFloorName, updateFloorName]);
+
+  const cancelEditingFloor = useCallback(() => {
+    setEditingFloor(null);
+    setEditingFloorName('');
+  }, []);
+
+  // Room editing functions
+  const startEditingRoom = useCallback((complexId: string, buildingId: string, floorId: string, roomId: string, currentName: string) => {
+    setEditingRoom({ complexId, buildingId, floorId, roomId });
+    setEditingRoomName(currentName);
+  }, []);
+
+  const saveEditingRoom = useCallback(() => {
+    if (editingRoom && editingRoomName.trim()) {
+      updateRoomName(editingRoom.complexId, editingRoom.buildingId, editingRoom.floorId, editingRoom.roomId, editingRoomName.trim());
+      setEditingRoom(null);
+      setEditingRoomName('');
+    }
+  }, [editingRoom, editingRoomName, updateRoomName]);
+
+  const cancelEditingRoom = useCallback(() => {
+    setEditingRoom(null);
+    setEditingRoomName('');
+  }, []);
+
+  // Facility editing functions
+  const startEditingFacility = useCallback((complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', currentName: string, buildingId?: string, floorId?: string) => {
+    setEditingFacility({ complexId, facilityId, level, buildingId, floorId });
+    setEditingFacilityName(currentName);
+  }, []);
+
+  const saveEditingFacility = useCallback(() => {
+    if (editingFacility && editingFacilityName.trim()) {
+      updateFacilityName(editingFacility.complexId, editingFacility.level, editingFacility.facilityId, editingFacilityName.trim(), editingFacility.buildingId, editingFacility.floorId);
+      setEditingFacility(null);
+      setEditingFacilityName('');
+    }
+  }, [editingFacility, editingFacilityName, updateFacilityName]);
+
+  const cancelEditingFacility = useCallback(() => {
+    setEditingFacility(null);
+    setEditingFacilityName('');
+  }, []);
+
   const setOpenForComplex = useCallback((complexId: string, values: string[]) => {
     setOpenByComplex(prev => ({ ...prev, [complexId]: values }));
   }, []);
@@ -860,9 +1072,32 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                       return (
                         <AccordionItem key={building.id} value={itemValue}>
                           <AccordionTrigger iconPosition="left">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-1">
                                   <Building className="h-5 w-5" />
-                                  <span className="font-medium">{building.name}</span>
+                                  {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
+                                    <Input 
+                                      value={editingBuildingName} 
+                                      onChange={(e) => setEditingBuildingName(e.target.value)}
+                                      className="h-7 text-sm font-medium"
+                                      autoFocus
+                                      onBlur={saveEditingBuilding}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') saveEditingBuilding();
+                                        if (e.key === 'Escape') cancelEditingBuilding();
+                                      }}
+                                    />
+                                  ) : (
+                                    <span 
+                                      className={`font-medium ${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                      onClick={isEdit ? (e) => {
+                                        e.stopPropagation();
+                                        startEditingBuilding(complex.id, building.id, building.name);
+                                      } : undefined}
+                                      title={isEdit ? 'انقر للتعديل' : undefined}
+                                    >
+                                      {building.name}
+                                    </span>
+                                  )}
                               </div>
                           </AccordionTrigger>
                           {isOpen && (
@@ -870,13 +1105,13 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                   <div className="pl-4 border-l-2 border-primary/20 space-y-3">
                                       {/* Mode switches moved to top toolbar */}
                                   {isAdmin && (
-                                      <div className="flex justify-end gap-2 mb-2">
-                                          <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}>
-                                              <PlusCircle className="mr-2 h-4 w-4" /> Add Floor
+                                      <div className="flex justify-center gap-1 mb-2">
+                                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}>
+                                              <PlusCircle className="mr-1 h-3 w-3" /> Add Floor
                                           </Button>
                                           <AlertDialog>
                                               <AlertDialogTrigger asChild>
-                                                  <Button variant="destructive" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4" /></Button>
+                                                  <Button variant="destructive" size="sm" className="h-7 w-7 p-0" disabled={!isEdit}><Trash2 className="h-3 w-3" /></Button>
                                               </AlertDialogTrigger>
                                               <AlertDialogContent>
                                                   <AlertDialogHeader>
@@ -909,13 +1144,23 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                         dragging={!!draggingFacility}
                                         showMoveBadge={isMove}
                                         enableDelete={isDelete}
-                                        onRename={isEdit ? (facilityId) => {
+                                        editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
+                                        editingFacilityName={editingFacilityName}
+                                        onEditingFacilityNameChange={setEditingFacilityName}
+                                        onStartEditFacility={isEdit ? (facilityId) => {
+                                          const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
+                                          if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
+                                        } : undefined}
+                                        onSaveEditFacility={saveEditingFacility}
+                                        onCancelEditFacility={cancelEditingFacility}
+                                        onRename={!isEdit ? (facilityId) => {
                                           const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
                                           const val = prompt('Rename facility', current?.name || '');
                                           if (val && val.trim() && val.trim() !== current?.name) {
                                             updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
                                           }
                                         } : undefined}
+                                        enableInlineEdit={isEdit}
                                       />
                                     )}
                                   </div>
@@ -938,27 +1183,39 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     <ChevronDown className={`h-4 w-4 transition-transform ${((openFloorKeys[`${building.id}:${floor.id}`] ?? true) ? '' : '-rotate-90')}`} />
                                                   </Button>
                                                   <Layers className="h-4 w-4" />
-                                                  <span>{floor.name}</span>
-                                                  {isEdit && (
-                                                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
-                                                      const val = prompt('Rename floor', floor.name);
-                                                      if (val && val.trim() && val.trim() !== floor.name) {
-                                                        updateFloorName(complex.id, building.id, floor.id, val.trim());
-                                                      }
-                                                    }}>Rename</Button>
+                                                  {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
+                                                    <Input 
+                                                      value={editingFloorName} 
+                                                      onChange={(e) => setEditingFloorName(e.target.value)}
+                                                      className="h-6 text-sm"
+                                                      autoFocus
+                                                      onBlur={saveEditingFloor}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') saveEditingFloor();
+                                                        if (e.key === 'Escape') cancelEditingFloor();
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    <span 
+                                                      className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                                      onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
+                                                      title={isEdit ? 'انقر للتعديل' : undefined}
+                                                    >
+                                                      {floor.name}
+                                                    </span>
                                                   )}
                                               </div>
                                               {isAdmin && (
-                                                  <div className="flex gap-2">
-                                                      <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
-                                                          <PlusCircle className="mr-2 h-4 w-4" /> Add Room
+                                                  <div className="flex justify-center gap-1">
+                                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                          <PlusCircle className="mr-1 h-3 w-3" /> Room
                                                       </Button>
-                                                      <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
-                                                          <Plus className="mr-2 h-4 w-4" /> Add Multiple Rooms
+                                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                          <Plus className="mr-1 h-3 w-3" /> Multi
                                                       </Button>
                                                       <AlertDialog>
                                                           <AlertDialogTrigger asChild>
-                                                              <Button variant="destructive" size="icon" className="h-7 w-7"><Trash2 className="h-4 w-4" /></Button>
+                                                              <Button variant="destructive" size="sm" className="h-6 w-6 p-0" disabled={!isEdit}><Trash2 className="h-3 w-3" /></Button>
                                                           </AlertDialogTrigger>
                                                           <AlertDialogContent>
                                                               <AlertDialogHeader>
@@ -994,12 +1251,12 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     onDragEnd={isMove ? handleDragEnd : undefined}
                                                     showMoveBadge={isMove}
                                                     enableDelete={isDelete}
-                                                    onRename={isEdit ? () => {
-                                                      const val = prompt('Rename room', room.name);
-                                                      if (val && val.trim() && val.trim() !== room.name) {
-                                                        updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
-                                                      }
-                                                    } : undefined}
+                                                    isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
+                                                    editingName={editingRoomName}
+                                                    onEditingNameChange={setEditingRoomName}
+                                                    onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
+                                                    onSaveEdit={saveEditingRoom}
+                                                    onCancelEdit={cancelEditingRoom}
                                                     />
                                                   ))}
                                               </div>
@@ -1023,13 +1280,23 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     dragging={!!draggingFacility}
                                                     showMoveBadge={isMove}
                                                     enableDelete={isDelete}
-                                                    onRename={isEdit ? (facilityId) => {
+                                                    editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
+                                                    editingFacilityName={editingFacilityName}
+                                                    onEditingFacilityNameChange={setEditingFacilityName}
+                                                    onStartEditFacility={isEdit ? (facilityId) => {
+                                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
+                                                      if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
+                                                    } : undefined}
+                                                    onSaveEditFacility={saveEditingFacility}
+                                                    onCancelEditFacility={cancelEditingFacility}
+                                                    onRename={!isEdit ? (facilityId) => {
                                                       const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
                                                       const val = prompt('Rename facility', current?.name || '');
                                                       if (val && val.trim() && val.trim() !== current?.name) {
                                                         updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
                                                       }
                                                     } : undefined}
+                                                    enableInlineEdit={isEdit}
                                                   />
                                                 )}
                                               </div>
@@ -1068,6 +1335,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 updateFacilityName(complex.id, 'complex', facilityId, val.trim());
                               }
                             } : undefined}
+                            enableInlineEdit={isEdit}
                           />
                         )}
                       </>
@@ -1123,12 +1391,32 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                   <ChevronDown className={`h-4 w-4 transition-transform ${bOpen ? '' : '-rotate-90'}`} />
                                 </Button>
                                 <Building className="h-4 w-4 text-muted-foreground" />
-                                <div className="font-medium">{building.name}</div>
+                                {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
+                                  <Input 
+                                    value={editingBuildingName} 
+                                    onChange={(e) => setEditingBuildingName(e.target.value)}
+                                    className="h-6 text-sm font-medium"
+                                    autoFocus
+                                    onBlur={saveEditingBuilding}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') saveEditingBuilding();
+                                      if (e.key === 'Escape') cancelEditingBuilding();
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    className={`font-medium ${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                    onClick={isEdit ? () => startEditingBuilding(complex.id, building.id, building.name) : undefined}
+                                    title={isEdit ? 'انقر للتعديل' : undefined}
+                                  >
+                                    {building.name}
+                                  </div>
+                                )}
                                 <div className="text-xs text-muted-foreground">{floorsCount} floors • {roomsCount} rooms</div>
                               </div>
                               {isAdmin && (
-                                <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Floor</Button>
+                                <div className="flex justify-center gap-1">
+              <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-3 w-3 mr-1" /> Floor</Button>
                                 </div>
                               )}
                             </div>
@@ -1145,12 +1433,32 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                             <ChevronDown className={`h-4 w-4 transition-transform ${fOpen ? '' : '-rotate-90'}`} />
                                           </Button>
                                           <Layers className="h-4 w-4" />
-                                          <span>{floor.name}</span>
+                                          {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
+                                            <Input 
+                                              value={editingFloorName} 
+                                              onChange={(e) => setEditingFloorName(e.target.value)}
+                                              className="h-6 text-sm"
+                                              autoFocus
+                                              onBlur={saveEditingFloor}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') saveEditingFloor();
+                                                if (e.key === 'Escape') cancelEditingFloor();
+                                              }}
+                                            />
+                                          ) : (
+                                            <span 
+                                              className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                              onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
+                                              title={isEdit ? 'انقر للتعديل' : undefined}
+                                            >
+                                              {floor.name}
+                                            </span>
+                                          )}
                                         </div>
                                         {isAdmin && (
-                                          <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Room</Button>
-                                            <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-4 w-4 mr-1" /> Add Multiple</Button>
+                                          <div className="flex justify-center gap-1">
+                                            <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-3 w-3 mr-1" /> Room</Button>
+                                            <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-3 w-3 mr-1" /> Multi</Button>
                                           </div>
                                         )}
                                       </div>
@@ -1174,12 +1482,12 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   onDragEnd={isMove ? handleDragEnd : undefined}
                                                   showMoveBadge={isMove}
                                                   enableDelete={isDelete}
-                                                  onRename={isEdit ? () => {
-                                                    const val = prompt('Rename room', room.name);
-                                                    if (val && val.trim() && val.trim() !== room.name) {
-                                                      updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
-                                                    }
-                                                  } : undefined}
+                                                  isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
+                                                  editingName={editingRoomName}
+                                                  onEditingNameChange={setEditingRoomName}
+                                                  onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
+                                                  onSaveEdit={saveEditingRoom}
+                                                  onCancelEdit={cancelEditingRoom}
                                                 />
                                               ))}
                                             </div>
@@ -1203,13 +1511,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   dragging={!!draggingFacility}
                                                   showMoveBadge={isMove}
                                                   enableDelete={isDelete}
-                                                  onRename={isEdit ? (facilityId) => {
+                                                  editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
+                                                  editingFacilityName={editingFacilityName}
+                                                  onEditingFacilityNameChange={setEditingFacilityName}
+                                                  onStartEditFacility={isEdit ? (facilityId) => {
                                                     const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
-                                                    const val = prompt('Rename facility', current?.name || '');
-                                                    if (val && val.trim() && val.trim() !== current?.name) {
-                                                      updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
-                                                    }
+                                                    if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
                                                   } : undefined}
+                                                  onSaveEditFacility={saveEditingFacility}
+                                                  onCancelEditFacility={cancelEditingFacility}
+                                                  enableInlineEdit={isEdit}
                                                 />
                                               )}
                                             </div>
@@ -1234,13 +1545,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                       dragging={!!draggingFacility}
                                       showMoveBadge={isMove}
                                       enableDelete={isDelete}
-                                      onRename={isEdit ? (facilityId) => {
+                                      editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
+                                      editingFacilityName={editingFacilityName}
+                                      onEditingFacilityNameChange={setEditingFacilityName}
+                                      onStartEditFacility={isEdit ? (facilityId) => {
                                         const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
-                                        const val = prompt('Rename facility', current?.name || '');
-                                        if (val && val.trim() && val.trim() !== current?.name) {
-                                          updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
-                                        }
+                                        if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
                                       } : undefined}
+                                      onSaveEditFacility={saveEditingFacility}
+                                      onCancelEditFacility={cancelEditingFacility}
+                                      enableInlineEdit={isEdit}
                                     />
                                   )}
                                 </div>
@@ -1265,13 +1579,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                               dragging={!!draggingFacility}
                               showMoveBadge={isMove}
                               enableDelete={isDelete}
-                              onRename={isEdit ? (facilityId) => {
+                              editingFacilityId={editingFacility?.level === 'complex' && editingFacility?.complexId === complex.id ? editingFacility.facilityId : undefined}
+                              editingFacilityName={editingFacilityName}
+                              onEditingFacilityNameChange={setEditingFacilityName}
+                              onStartEditFacility={isEdit ? (facilityId) => {
                                 const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
-                                const val = prompt('Rename facility', current?.name || '');
-                                if (val && val.trim() && val.trim() !== current?.name) {
-                                  updateFacilityName(complex.id, 'complex', facilityId, val.trim());
-                                }
+                                if (current) startEditingFacility(complex.id, facilityId, 'complex', current.name);
                               } : undefined}
+                              onSaveEditFacility={saveEditingFacility}
+                              onCancelEditFacility={cancelEditingFacility}
+                              enableInlineEdit={isEdit}
                             />
                           )}
                         </div>
@@ -1327,7 +1644,27 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                         <div className="p-3 border-b flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Building className="h-4 w-4 text-muted-foreground" />
-                            <div className="font-medium">{building.name}</div>
+                            {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
+                              <Input 
+                                value={editingBuildingName} 
+                                onChange={(e) => setEditingBuildingName(e.target.value)}
+                                className="h-6 text-sm font-medium"
+                                autoFocus
+                                onBlur={saveEditingBuilding}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveEditingBuilding();
+                                  if (e.key === 'Escape') cancelEditingBuilding();
+                                }}
+                              />
+                            ) : (
+                              <div 
+                                className={`font-medium ${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                onClick={isEdit ? () => startEditingBuilding(complex.id, building.id, building.name) : undefined}
+                                title={isEdit ? 'انقر للتعديل' : undefined}
+                              >
+                                {building.name}
+                              </div>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground">{floorsCount}F • {roomsCount}R</div>
                         </div>
@@ -1337,12 +1674,32 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                               <div className="px-3 py-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2 font-semibold">
                                   <Layers className="h-4 w-4" />
-                                  <span>{floor.name}</span>
+                                  {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
+                                    <Input 
+                                      value={editingFloorName} 
+                                      onChange={(e) => setEditingFloorName(e.target.value)}
+                                      className="h-6 text-sm"
+                                      autoFocus
+                                      onBlur={saveEditingFloor}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') saveEditingFloor();
+                                        if (e.key === 'Escape') cancelEditingFloor();
+                                      }}
+                                    />
+                                  ) : (
+                                    <span 
+                                      className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                      onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
+                                      title={isEdit ? 'انقر للتعديل' : undefined}
+                                    >
+                                      {floor.name}
+                                    </span>
+                                  )}
                                 </div>
                                 {isAdmin && (
-                                  <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-4 w-4 mr-1" /> Room</Button>
-                                    <Button variant="outline" size="sm" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-4 w-4 mr-1" /> Multi</Button>
+                                  <div className="flex justify-center gap-1">
+                                    <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-3 w-3 mr-1" /> Room</Button>
+                                    <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-3 w-3 mr-1" /> Multi</Button>
                                   </div>
                                 )}
                               </div>
@@ -1363,12 +1720,12 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                       onDragEnd={isMove ? handleDragEnd : undefined}
                                       showMoveBadge={isMove}
                                       enableDelete={isDelete}
-                                      onRename={isEdit ? () => {
-                                        const val = prompt('Rename room', room.name);
-                                        if (val && val.trim() && val.trim() !== room.name) {
-                                          updateRoomName(complex.id, building.id, floor.id, room.id, val.trim());
-                                        }
-                                      } : undefined}
+                                      isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
+                                      editingName={editingRoomName}
+                                      onEditingNameChange={setEditingRoomName}
+                                      onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
+                                      onSaveEdit={saveEditingRoom}
+                                      onCancelEdit={cancelEditingRoom}
                                     />
                                   ))}
                                 </div>
@@ -1376,6 +1733,34 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                   <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
                                     Drop room here
                                   </div>
+                                )}
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
+                                {showFacilities && (
+                                  <FacilitySection 
+                                    facilities={asArray<Facility>(floor.facilities)}
+                                    canEdit={!!isAdmin}
+                                    canAdd={isEdit}
+                                    onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
+                                    onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
+                                    onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
+                                    onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                    onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                    dragging={!!draggingFacility}
+                                    showMoveBadge={isMove}
+                                    enableDelete={isDelete}
+                                    editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
+                                    editingFacilityName={editingFacilityName}
+                                    onEditingFacilityNameChange={setEditingFacilityName}
+                                    onStartEditFacility={isEdit ? (facilityId) => {
+                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
+                                      if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
+                                    } : undefined}
+                                    onSaveEditFacility={saveEditingFacility}
+                                    onCancelEditFacility={cancelEditingFacility}
+                                    enableInlineEdit={isEdit}
+                                  />
                                 )}
                               </div>
                             </div>
@@ -1395,13 +1780,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 dragging={!!draggingFacility}
                                 showMoveBadge={isMove}
                                 enableDelete={isDelete}
-                                onRename={isEdit ? (facilityId) => {
+                                editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
+                                editingFacilityName={editingFacilityName}
+                                onEditingFacilityNameChange={setEditingFacilityName}
+                                onStartEditFacility={isEdit ? (facilityId) => {
                                   const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
-                                  const val = prompt('Rename facility', current?.name || '');
-                                  if (val && val.trim() && val.trim() !== current?.name) {
-                                    updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
-                                  }
+                                  if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
                                 } : undefined}
+                                onSaveEditFacility={saveEditingFacility}
+                                onCancelEditFacility={cancelEditingFacility}
+                                enableInlineEdit={isEdit}
                               />
                             )}
                           </div>
@@ -1430,6 +1818,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                         onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'complex' })}
                         dragging={!!draggingFacility}
                         showMoveBadge={isMove}
+                        editingFacilityId={editingFacility?.level === 'complex' && editingFacility?.complexId === complex.id ? editingFacility.facilityId : undefined}
+                        editingFacilityName={editingFacilityName}
+                        onEditingFacilityNameChange={setEditingFacilityName}
+                        onStartEditFacility={isEdit ? (facilityId) => {
+                          const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
+                          if (current) startEditingFacility(complex.id, facilityId, 'complex', current.name);
+                        } : undefined}
+                        onSaveEditFacility={saveEditingFacility}
+                        onCancelEditFacility={cancelEditingFacility}
+                        enableInlineEdit={isEdit}
                         enableDelete={isDelete}
                         onRename={isEdit ? (facilityId) => {
                           const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);

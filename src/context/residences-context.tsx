@@ -117,6 +117,7 @@ interface ResidencesContextType {
     floorId?: string
   ) => Promise<void>;
   updateFloorName: (complexId: string, buildingId: string, floorId: string, newName: string) => Promise<void>;
+  updateBuildingName: (complexId: string, buildingId: string, newName: string) => Promise<void>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -448,6 +449,49 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     } catch (e) {
       console.error('updateFloorName error:', e);
       toast({ title: 'Error', description: 'Failed to update floor name.', variant: 'destructive' });
+    }
+  };
+
+  const updateBuildingName = async (complexId: string, buildingId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (!db) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          if (c.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+            toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });
+            return c;
+          }
+          return {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b)
+          };
+        });
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });
+      } catch (e) {
+        console.error('updateBuildingName local error:', e);
+        toast({ title: 'خطأ', description: 'فشل تحديث الاسم محلياً.', variant: 'destructive' });
+      }
+      return;
+    }
+    try {
+      const ref = doc(db, 'residences', complexId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
+      if (data.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+        toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });
+        return;
+      }
+      const buildings = data.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b);
+      await updateDoc(ref, { buildings });
+      toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });
+    } catch (e) {
+      console.error('updateBuildingName error:', e);
+      toast({ title: 'Error', description: 'Failed to update building name.', variant: 'destructive' });
     }
   };
   
@@ -1657,6 +1701,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           updateRoomName,
           updateFacilityName,
           updateFloorName,
+          updateBuildingName,
         } as ResidencesContextType
       }
     >
