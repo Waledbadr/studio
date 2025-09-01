@@ -124,7 +124,7 @@ export default function TransferHistoryPage() {
                                     <TableCell>{format(transfer.date.toDate(), 'PPP')}</TableCell>
                                     <TableCell>{getResidenceName(transfer.fromResidenceId)}</TableCell>
                                     <TableCell>{getResidenceName(transfer.toResidenceId)}</TableCell>
-                                    <TableCell>{transfer.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
+                                    <TableCell>{(Array.isArray(transfer.items) ? transfer.items : (transfer.items && typeof transfer.items === 'object' ? Object.values(transfer.items as any) : [])).reduce((acc: number, item: any) => acc + (Number(item?.quantity) || 0), 0)}</TableCell>
                     <TableCell className="font-mono">{formatTrsId(transfer.codeShort)}</TableCell>
                                     <TableCell>
                                         <Badge variant={

@@ -93,7 +93,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   const headerClass = cn(
     // Glassmorphism header
-    'sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6',
+    'sticky top-0 z-30 flex h-16 items-center gap-4 border-b px-4 sm:px-6',
     'bg-white/60 dark:bg-white/10 backdrop-blur-xl border-white/30 dark:border-white/10',
     className,
   );

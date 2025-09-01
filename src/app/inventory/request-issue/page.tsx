@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useInventory, type InventoryItem } from '@/context/inventory-context';
 import { useOrders } from '@/context/orders-context';
-import { useResidences } from '@/context/residences-context';
+import { useResidences, type FacilityComponent } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
@@ -44,6 +44,7 @@ export default function RequestIssuePage() {
   const [floorId, setFloorId] = useState('');
   const [roomId, setRoomId] = useState('');
   const [facilityId, setFacilityId] = useState('');
+  const [componentId, setComponentId] = useState(''); // New: للمكونات الفرعية للممر
   // New: Multi-location selection mode and selected targets
   const [multiMode, setMultiMode] = useState(false);
   const [selectedTargets, setSelectedTargets] = useState<{ id: string; name: string; isFacility: boolean }[]>([]);
@@ -74,6 +75,23 @@ export default function RequestIssuePage() {
   // Right panel: voucher (current request)
   const [voucherLocations, setVoucherLocations] = useState<LocationEntry[]>([]);
 
+  // Helper to render mixed-direction paths consistently with LTR arrows
+  const PathDisplay = ({ path }: { path?: string | null }) => {
+    if (!path) return null;
+    const arrow = '\u200E→\u200E';
+    const segs = String(path).split('->').map(s => s.trim()).filter(Boolean);
+    return (
+      <span dir="ltr">
+        {segs.map((s, i) => (
+          <span key={i} className="inline">
+            <span dir="auto">{s}</span>
+            {i < segs.length - 1 ? <span className="mx-1">{arrow}</span> : null}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
   const selectedResidence = useMemo(() => residences.find(r => r.id === residenceId), [residences, residenceId]);
   const buildings = selectedResidence?.buildings || [];
   const floors = buildings.find(b => b.id === buildingId)?.floors || [];
@@ -85,10 +103,19 @@ export default function RequestIssuePage() {
     return selectedResidence.facilities || [];
   }, [selectedResidence, buildings, floors, buildingId, floorId]);
 
+  // Get available components for selected facility
+  const availableComponents = useMemo<FacilityComponent[]>(() => {
+    if (!facilityId) return [];
+    const facility = availableFacilities.find(f => f.id === facilityId);
+    // Components live under `components` on Facility
+    return ((facility as any)?.components || []) as FacilityComponent[];
+  }, [facilityId, availableFacilities]);
+
   // Reset cascading selects when residence changes
-  useEffect(() => { setBuildingId(''); setFloorId(''); setRoomId(''); setFacilityId(''); setVoucherLocations([]); setSelectedTargets([]); }, [residenceId]);
-  useEffect(() => { setFloorId(''); setRoomId(''); setFacilityId(''); setSelectedTargets([]); }, [buildingId]);
-  useEffect(() => { setRoomId(''); if (locationType === 'facility') setFacilityId(''); setSelectedTargets([]); }, [floorId, locationType]);
+  useEffect(() => { setBuildingId(''); setFloorId(''); setRoomId(''); setFacilityId(''); setComponentId(''); setVoucherLocations([]); setSelectedTargets([]); }, [residenceId]);
+  useEffect(() => { setFloorId(''); setRoomId(''); setFacilityId(''); setComponentId(''); setSelectedTargets([]); }, [buildingId]);
+  useEffect(() => { setRoomId(''); if (locationType === 'facility') { setFacilityId(''); setComponentId(''); } setSelectedTargets([]); }, [floorId, locationType]);
+  useEffect(() => { setComponentId(''); }, [facilityId]); // Reset component when facility changes
 
   // Remaining stock per item after current allocations
   const getAggregateIssuedQty = (itemId: string) => voucherLocations.reduce((sum, loc) => {
@@ -174,8 +201,19 @@ export default function RequestIssuePage() {
     const b = buildings.find(b => b.id === buildingId); if (b) parts.push(b.name);
     const f = floors.find(f => f.id === floorId); if (f) parts.push(f.name);
     parts.push(fac.name);
+    
+    // If component is selected, add it to the location name
+    if (componentId) {
+  const component = availableComponents.find((c: FacilityComponent) => c.id === componentId);
+      if (component) {
+        parts.push(component.name);
+        // Use component ID as the location ID for more specific tracking
+        return { id: componentId, name: parts.join(' -> '), isFacility: true };
+      }
+    }
+    
     return { id: fac.id, name: parts.join(' -> '), isFacility: true };
-  }, [selectedResidence, isLocationSelected, multiMode, locationType, buildings, floors, rooms, availableFacilities, buildingId, floorId, roomId, facilityId]);
+  }, [selectedResidence, isLocationSelected, multiMode, locationType, buildings, floors, rooms, availableFacilities, buildingId, floorId, roomId, facilityId, componentId, availableComponents]);
 
   const handleAddToVoucher = (itemToAdd: InventoryItem, variant?: string, qty: number = 1) => {
     if (!isLocationSelected || !currentLocation) {
@@ -540,7 +578,9 @@ export default function RequestIssuePage() {
                       <span className="font-medium">Selected Location:</span>
                     </div>
                     {!multiMode ? (
-                      <p className="text-sm text-muted-foreground mt-1">{currentLocation?.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        <PathDisplay path={currentLocation?.name} />
+                      </p>
                     ) : (
                       <p className="text-sm text-muted-foreground mt-1">{selectedTargets.length} selected</p>
                     )}
@@ -669,10 +709,41 @@ export default function RequestIssuePage() {
                               >
                                 <div className="flex items-center gap-2">
                                   <ConciergeBell className="h-4 w-4" />
-                                  <span className="text-sm font-medium">{f.name}</span>
+                                  <span className="text-sm font-medium"><span dir="ltr">{f.name}</span></span>
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Component Selection - Show only when a facility is selected and has components */}
+                        {!multiMode && facilityId && availableComponents.length > 0 && (
+                          <div className="mt-4">
+                            <Label className="text-sm font-medium mb-1 block">Select Component (Optional)</Label>
+                            {/* helper text removed per request */}
+                            <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                              {availableComponents.map((component: FacilityComponent) => (
+                                <div
+                                  key={component.id}
+                                  onClick={() => setComponentId(componentId === component.id ? '' : component.id)}
+                                  className={`p-2 rounded-md border cursor-pointer text-xs transition-colors flex items-center gap-2 ${
+                                    componentId === component.id 
+                                      ? 'bg-primary text-primary-foreground border-primary' 
+                                      : 'bg-background hover:bg-muted/50 border-border'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-sm flex-shrink-0">
+                                      {component.type === 'light' ? '💡' : 
+                                       component.type === 'outlet' ? '🔌' : 
+                                       component.type === 'switch' ? '⚡' : 
+                                       component.type === 'fan' ? '🌀' : '⚙️'}
+                                    </span>
+                                    <span className="font-medium truncate" title={component.name}>{component.name}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </>
@@ -797,7 +868,7 @@ export default function RequestIssuePage() {
                 {voucherLocations.map(loc => (
                   <div key={loc.locationId} className="rounded-md border">
                     <div className="flex items-center justify-between border-b p-3">
-                      <div className="font-medium">{loc.locationName}</div>
+                      <div className="font-medium"><PathDisplay path={loc.locationName} /></div>
                     </div>
                     <div className="divide-y">
                       {loc.items.map(line => (

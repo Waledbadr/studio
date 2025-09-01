@@ -76,6 +76,9 @@ export default function ConsolidatedReportPage() {
         loadOrders();
     }, [loadOrders]);
 
+    // Helper to normalize items possibly stored as object maps into arrays
+    const normalizeItems = (items: any): any[] => Array.isArray(items) ? items : (items && typeof items === 'object' ? Object.values(items) : []);
+
     const { groupedItems, residenceNames, totalItems, totalCategories, pendingOrders } = useMemo(() => {
         if (loading || !currentUser || currentUser.role !== 'Admin') {
             return { groupedItems: {}, residenceNames: [], totalItems: 0, totalCategories: 0, pendingOrders: [] };
@@ -85,9 +88,11 @@ export default function ConsolidatedReportPage() {
         const itemMap = new Map<string, AggregatedItem>();
         const uniqueResidenceNames = new Set<string>();
 
+    // (local helpers already defined above)
+
         pendingOrders.forEach(order => {
             if (order?.residence) uniqueResidenceNames.add(order.residence);
-            order.items?.forEach(item => {
+            normalizeItems(order.items)?.forEach((item: any) => {
                 if (!item) return;
                 
                 // تنظيف الأسماء وإزالة التفاصيل بطريقة مباشرة
@@ -1278,13 +1283,15 @@ export default function ConsolidatedReportPage() {
 
                                     {/* Individual Orders for this Residence */}
                                     {residenceOrders.map((order, orderIndex) => {
+                                        // Normalize items to an array (handles legacy object shape or undefined)
+                                        const orderItemsArr = normalizeItems(order.items);
                                         // Group items by category for each order
-                                        const groupedOrderItems = order.items.reduce((acc, item) => {
+                                        const groupedOrderItems = orderItemsArr.reduce((acc, item) => {
                                             const category = item.category || 'Uncategorized';
                                             if (!acc[category]) acc[category] = [];
                                             acc[category].push(item);
                                             return acc;
-                                        }, {} as Record<string, typeof order.items>);
+                                        }, {} as Record<string, typeof orderItemsArr>);
 
                                         return (
                                             <div key={order.id} style={{
@@ -1411,7 +1418,7 @@ export default function ConsolidatedReportPage() {
                                                                             {category}
                                                                         </td>
                                                                     </tr>
-                                                                    {items.map((item) => {
+                                                                    {(items as any[]).map((item: any) => {
                                                                         const ar = splitNameDetail(item.nameAr);
                                                                         const en = splitNameDetail(item.nameEn);
                                                                         const detail = ar.detail || en.detail || '';

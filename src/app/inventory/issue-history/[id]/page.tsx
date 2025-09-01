@@ -97,8 +97,11 @@ export default function MIVDetailPage() {
     }
 
     // Flatten and compute totals for printing
-    const entries = Object.entries(miv.locations);
-    const totalIssued = entries.reduce((sum, [, items]) => sum + items.reduce((s, it) => s + (Number(it.quantity) || 0), 0), 0);
+    const entries = Object.entries(miv.locations || {});
+    const totalIssued = entries.reduce((sum, [, items]) => {
+        const arr = Array.isArray(items) ? items : (items && typeof items === 'object' ? Object.values(items as any) : []);
+        return sum + arr.reduce((s: number, it: any) => s + (Number(it?.quantity) || 0), 0);
+    }, 0);
 
     return (
         <div className="space-y-6">

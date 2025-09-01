@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useResidences } from '@/context/residences-context';
+import { useResidences, type FacilityComponent } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,6 +59,7 @@ export default function IssueMaterialPage() {
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [selectedFacilityId, setSelectedFacilityId] = useState('');
+    const [selectedComponentId, setSelectedComponentId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     const [selectedMrId, setSelectedMrId] = useState('');
@@ -88,6 +89,13 @@ export default function IssueMaterialPage() {
         }
         return selectedComplex.facilities || [];
     }, [selectedComplex, selectedBuildingId, selectedFloorId, selectedFloor, selectedBuilding]);
+
+    // Components for selected facility (if any)
+    const availableComponents = useMemo<FacilityComponent[]>(() => {
+        if (!selectedFacilityId) return [];
+        const fac = availableFacilities.find((f: any) => f.id === selectedFacilityId) as any;
+        return (fac?.components || []) as FacilityComponent[];
+    }, [selectedFacilityId, availableFacilities]);
 
     // Ensure orders are loaded so MR dropdown is populated
     useEffect(() => {
@@ -142,11 +150,13 @@ export default function IssueMaterialPage() {
 
     useEffect(() => {
         setSelectedRoomId('');
-        // Also reset facility ID when floor changes
+        // Also reset facility/component when floor changes
         if(locationType === 'facility') {
             setSelectedFacilityId('');
+            setSelectedComponentId('');
         }
     }, [selectedFloorId, locationType]);
+    useEffect(() => { setSelectedComponentId(''); }, [selectedFacilityId]);
     
     const getAggregateIssuedQty = (itemId: string): number => {
         return voucherLocations.reduce((sum, loc) => {
@@ -205,18 +215,22 @@ export default function IssueMaterialPage() {
                     toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
                     return;
                 }
-                locationId = selectedFacility.id;
-                // Build a hierarchical name for facilities as well
-                // e.g., Residence -> Building -> (Floor ->) Facility
+                // If a component is selected, use it as the location target
+                const selectedComponent = availableComponents.find((c: FacilityComponent) => c.id === selectedComponentId);
+                locationId = selectedComponent ? selectedComponent.id : selectedFacility.id;
+                // Build a hierarchical name for facilities as well, include component when chosen
+                // e.g., Residence -> Building -> (Floor ->) Facility -> Component
                 const parts: string[] = [selectedComplex.name];
                 if (selectedBuilding) parts.push(selectedBuilding.name);
                 if (selectedFloor) parts.push(selectedFloor.name);
                 parts.push(selectedFacility.name);
+                if (selectedComponent) parts.push(selectedComponent.name);
                 locationName = parts.join(' -> ');
                 isFacility = true;
                 newLocationDetails = {
                     facilityId: selectedFacilityId,
                     locationId: selectedFacilityId,
+                    // component context is implicit in locationId when set
                     // Include building/floor context for facilities when available
                     ...(selectedBuilding ? { buildingId: selectedBuildingId, buildingName: selectedBuilding.name } : {}),
                     ...(selectedFloor ? { floorId: selectedFloorId, floorName: selectedFloor.name } : {}),
@@ -612,10 +626,30 @@ export default function IssueMaterialPage() {
                                                         className="justify-start"
                                                     >
                                                         <ConciergeBell className="h-4 w-4 mr-2" />
-                                                        {f.name}
+                                                        <span dir="ltr">{f.name}</span>
                                                     </Button>
                                                 ))}
                                             </div>
+                                            {/* Component selection (optional) */}
+                                            {selectedFacilityId && availableComponents.length > 0 && (
+                                                <div className="mt-2 p-2 border rounded-md bg-muted/20">
+                                                    <Label className="text-xs font-medium mb-2 block">Select Component (Optional)</Label>
+                                                    <div className="text-xs text-muted-foreground mb-2">If no component is selected, issuing will target the facility itself.</div>
+                                                    <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
+                                                        {availableComponents.map((c: FacilityComponent) => (
+                                                            <Button
+                                                                key={c.id}
+                                                                variant={selectedComponentId === c.id ? 'default' : 'outline'}
+                                                                size="sm"
+                                                                onClick={() => setSelectedComponentId(c.id)}
+                                                                className="justify-start"
+                                                            >
+                                                                {c.name}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -681,7 +715,7 @@ export default function IssueMaterialPage() {
                                 {voucherLocations.map(location => (
                                     <AccordionItem key={location.locationId} value={location.locationId}>
                                         <AccordionTrigger className="font-semibold text-base">
-                                            {location.locationName}
+                                            <span dir="ltr">{location.locationName}</span>
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <Table>

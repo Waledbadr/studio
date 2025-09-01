@@ -21,8 +21,8 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-  // Softer, elegant overlay
-  "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+  // Softer, elegant overlay with higher stacking to sit above header/badges
+  "fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
@@ -40,7 +40,7 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
     // Glass dialog container
-    "fixed left-[50%] top-[50%] z-50 grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border p-6 pr-8 pt-6 shadow-lg duration-200 sm:rounded-xl max-h-[90vh]",
+    "fixed left-[50%] top-[50%] z-[110] grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border p-6 pr-8 pt-6 shadow-lg duration-200 sm:rounded-xl max-h-[90vh]",
   // Translucent backgrounds with blur (match Card)
   "bg-white/40 border-white/20 backdrop-blur-xl dark:bg-white/5 dark:border-white/5",
     // Animations

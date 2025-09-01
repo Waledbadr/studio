@@ -56,6 +56,92 @@ const facilityIcons: { [key: string]: React.ElementType } = {
 // Normalize possible legacy shapes (object maps) into arrays
 const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
 
+// Simple component icons
+const componentIcons: { [key: string]: string } = {
+  'light': '💡',
+  'outlet': '🔌', 
+  'switch': '⚡',
+  'fan': '🌀',
+  'sensor': '📡',
+  'other': '⚙️'
+};
+
+// Add Component Form
+const AddComponentForm = ({ 
+  facilityId, 
+  onClose, 
+  onAddComponent 
+}: { 
+  facilityId: string, 
+  onClose: () => void,
+  onAddComponent: (facilityId: string, component: any) => Promise<void>
+}) => {
+  const [componentName, setComponentName] = useState('');
+  const [componentType, setComponentType] = useState('light');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!componentName.trim()) return;
+
+    try {
+      await onAddComponent(facilityId, {
+        name: componentName.trim(),
+        type: componentType,
+        status: 'working', // Default status
+        installDate: new Date().toISOString(),
+        notes: ''
+      });
+      
+      setComponentName('');
+      setComponentType('light');
+      onClose();
+    } catch (error) {
+      console.error('Error adding component:', error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="component-name">اسم المكون</Label>
+        <Input
+          id="component-name"
+          value={componentName}
+          onChange={(e) => setComponentName(e.target.value)}
+          placeholder="مثل: إضاءة 1، مقبس 2"
+          required
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="component-type">نوع المكون</Label>
+        <select
+          id="component-type"
+          value={componentType}
+          onChange={(e) => setComponentType(e.target.value)}
+          className="w-full p-2 border rounded-md bg-background"
+        >
+          <option value="light">💡 إضاءة</option>
+          <option value="outlet">🔌 مقبس كهربائي</option>
+          <option value="switch">⚡ مفتاح</option>
+          <option value="fan">🌀 مروحة</option>
+          <option value="sensor">📡 حساس</option>
+          <option value="other">⚙️ أخرى</option>
+        </select>
+      </div>
+      
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="ghost" onClick={onClose}>
+          إلغاء
+        </Button>
+        <Button type="submit">
+          إضافة المكون
+        </Button>
+      </div>
+    </form>
+  );
+};
+
 const FacilityItem = React.memo(function FacilityItem({ 
   facility, 
   canEdit, 
@@ -89,7 +175,9 @@ const FacilityItem = React.memo(function FacilityItem({
   onCancelEdit?: () => void,
   enableInlineEdit?: boolean
 }) {
-  const Icon = facilityIcons[facility.type.toLowerCase()] || facilityIcons.default;
+  // Be defensive: some legacy facilities may not have a type
+  const iconKey = String(facility.type || 'default').toLowerCase();
+  const Icon = facilityIcons[iconKey] || facilityIcons.default;
   return (
     <div
       className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
@@ -128,7 +216,15 @@ const FacilityItem = React.memo(function FacilityItem({
       {showMoveBadge && (
         <Move className="h-3 w-3 text-muted-foreground mr-2" />
       )}
-  {canEdit && enableDelete && (
+      {/* Show component count and manage button for facilities that can have components */}
+      <div className="flex items-center gap-1">
+        {facility.components && facility.components.length > 0 && (
+          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            {facility.components.length} مكونات
+          </span>
+        )}
+      </div>
+      {canEdit && enableDelete && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
@@ -168,7 +264,9 @@ const FacilitySection = React.memo(function FacilitySection({
   onStartEditFacility,
   onSaveEditFacility,
   onCancelEditFacility,
-  enableInlineEdit
+  enableInlineEdit,
+  onManageComponents,
+  isEdit
 }: { 
   facilities: Facility[] | undefined, 
   canEdit: boolean,
@@ -188,7 +286,9 @@ const FacilitySection = React.memo(function FacilitySection({
   onStartEditFacility?: (facilityId: string) => void,
   onSaveEditFacility?: () => void,
   onCancelEditFacility?: () => void,
-  enableInlineEdit?: boolean
+  enableInlineEdit?: boolean,
+  onManageComponents?: (facilityId: string) => void,
+  isEdit?: boolean
 }) {
   return (
     <div
@@ -196,35 +296,76 @@ const FacilitySection = React.memo(function FacilitySection({
       onDragOver={(e) => { if (canEdit && onDrop) { e.preventDefault(); e.stopPropagation(); } }}
       onDrop={(e) => { if (onDrop) { e.preventDefault(); e.stopPropagation(); onDrop(); } }}
     >
-  <div className={`grid grid-cols-2 gap-2 min-h-12 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
+  <div className={`space-y-3 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
         {(facilities || []).map(facility => (
-          <FacilityItem
-            key={facility.id}
-            facility={facility}
-            canEdit={canEdit}
-            onDelete={() => onDelete(facility.id)}
-            onRename={onRename && !onStartEditFacility ? () => onRename(facility.id) : undefined}
-            onDragStart={(e) => onItemDragStart && onItemDragStart(facility.id, e)}
-            onDragEnd={(e) => onItemDragEnd && onItemDragEnd(e)}
-            showMoveBadge={showMoveBadge}
-            enableDelete={enableDelete}
-            isEditing={editingFacilityId === facility.id}
-            editingName={editingFacilityName}
-            onEditingNameChange={onEditingFacilityNameChange}
-            onStartEdit={onStartEditFacility ? () => onStartEditFacility(facility.id) : undefined}
-            onSaveEdit={onSaveEditFacility}
-            onCancelEdit={onCancelEditFacility}
-            enableInlineEdit={enableInlineEdit}
-          />
+          <div key={facility.id} className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <FacilityItem
+                  facility={facility}
+                  canEdit={canEdit}
+                  onDelete={() => onDelete(facility.id)}
+                  onRename={onRename && !onStartEditFacility ? () => onRename(facility.id) : undefined}
+                  onDragStart={(e) => onItemDragStart && onItemDragStart(facility.id, e)}
+                  onDragEnd={(e) => onItemDragEnd && onItemDragEnd(e)}
+                  showMoveBadge={showMoveBadge}
+                  enableDelete={enableDelete}
+                  isEditing={editingFacilityId === facility.id}
+                  editingName={editingFacilityName}
+                  onEditingNameChange={onEditingFacilityNameChange}
+                  onStartEdit={onStartEditFacility ? () => onStartEditFacility(facility.id) : undefined}
+                  onSaveEdit={onSaveEditFacility}
+                  onCancelEdit={onCancelEditFacility}
+                  enableInlineEdit={enableInlineEdit}
+                />
+              </div>
+            </div>
+            
+            {/* Show components if any */}
+    {facility.components && facility.components.length > 0 && (
+              <div className="ml-4 pl-3 border-l-2 border-muted">
+                <div className="grid grid-cols-3 gap-1 text-xs">
+      {facility.components.map((component) => (
+                    <div 
+                      key={component.id}
+                      className="flex items-center gap-1 p-1 bg-muted/50 rounded text-xs"
+                      title={`${component.name} - ${component.status || 'working'}`}
+                    >
+                      <span>{componentIcons[component.type] || '⚙️'}</span>
+                      <span className="truncate">{component.name}</span>
+                      {component.status === 'broken' && <span className="text-red-500">❌</span>}
+                      {component.status === 'needs_replacement' && <span className="text-yellow-500">⚠️</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Add component button */}
+            {canEdit && isEdit && onManageComponents && (
+              <div className="ml-4 mt-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs border-dashed border"
+                  onClick={() => onManageComponents(facility.id)}
+                >
+                  <Plus className="h-3 w-3 mr-1"/> Add Component
+                </Button>
+              </div>
+            )}
+          </div>
         ))}
+        
         {dragging && (facilities?.length || 0) === 0 && (
-          <div className="col-span-full flex items-center justify-center min-h-12 border-2 border-dashed rounded-md text-xs text-muted-foreground">
+          <div className="flex items-center justify-center min-h-12 border-2 border-dashed rounded-md text-xs text-muted-foreground">
             Drop here
           </div>
         )}
-  {canEdit && canAdd && (
-          <Button variant="outline" size="sm" className="h-full border-dashed" onClick={onAdd}>
-            <Plus className="h-4 w-4 mr-2"/> Add
+        
+        {canEdit && canAdd && (
+          <Button variant="outline" size="sm" className="border-dashed" onClick={onAdd}>
+            <Plus className="h-4 w-4 mr-2"/> Add Facility
           </Button>
         )}
       </div>
@@ -332,7 +473,7 @@ const RoomItem = React.memo(function RoomItem({
 });
 
 // Add missing DialogType
-type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms' | 'addFacility';
+type DialogType = 'addComplex' | 'editComplex' | 'addBuilding' | 'addFloor' | 'addRoom' | 'addMultipleRooms' | 'addFacility' | 'manageFacilityComponents';
 
 // Re-introduce AddFacilityDialog component
 const AddFacilityDialog = ({ 
@@ -411,7 +552,7 @@ const AddFacilityDialog = ({
 };
 
 export default function ResidencesView({ showFacilities = true, showCapacity = true }: { showFacilities?: boolean, showCapacity?: boolean }) {
-  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock, moveRoom, moveRoomAnywhere, moveFacility, updateRoomName, updateFacilityName, updateFloorName, updateBuildingName } = useResidences();
+  const { residences, loading, loadResidences, addComplex, addBuilding, addFloor, addRoom, deleteComplex, deleteBuilding, deleteFloor, deleteRoom, updateComplex, addMultipleRooms, addFacility, deleteFacility, setResidenceDisabled, checkResidenceHasStock, moveRoom, moveRoomAnywhere, moveFacility, updateRoomName, updateFacilityName, updateFloorName, updateBuildingName, addFacilityComponent } = useResidences();
   const { users, loadUsers: loadUsersContext, loading: usersLoading, currentUser } = useUsers();
   const { toast } = useToast();
   const isAdmin = currentUser?.role === 'Admin';
@@ -553,6 +694,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
     addRoom: false,
     addMultipleRooms: false,
     addFacility: false,
+    manageFacilityComponents: false,
   });
 
   // Collapsible states
@@ -582,7 +724,21 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   });
 
   const [editingComplex, setEditingComplex] = useState<Complex | null>(null);
-  const [contextIds, setContextIds] = useState<{ level: 'complex' | 'building' | 'floor', complexId: string, buildingId?: string, floorId?: string } | null>(null);
+  const [contextIds, setContextIds] = useState<{ 
+    level?: 'complex' | 'building' | 'floor', 
+    complexId?: string, 
+    buildingId?: string, 
+    floorId?: string,
+    facilityId?: string 
+  } | null>(null);
+  // New: State for managing facility components
+  const [selectedFacilityForComponents, setSelectedFacilityForComponents] = useState<{
+    facility: Facility;
+    complexId: string;
+    level: 'complex' | 'building' | 'floor';
+    buildingId?: string;
+    floorId?: string;
+  } | null>(null);
   // Drag & Drop state for moving rooms between floors
   const [dragging, setDragging] = useState<{ roomId: string; complexId: string; buildingId: string; fromFloorId: string } | null>(null);
   const handleDragStart = useCallback((payload: { roomId: string; complexId: string; buildingId: string; fromFloorId: string }) => setDragging(payload), []);
@@ -747,14 +903,68 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
     }, { complexes: 0, buildings: 0, floors: 0, rooms: 0, facilities: 0 });
   }, [filteredResidences, showFacilities]);
 
-  const openDialog = (type: DialogType, ids: Partial<typeof contextIds> = {}) => {
+  const openDialog = (type: DialogType, ids: Partial<{
+    level?: 'complex' | 'building' | 'floor', 
+    complexId?: string, 
+    buildingId?: string, 
+    floorId?: string,
+    facilityId?: string 
+  }> = {}) => {
     setDialogStates(prev => ({ ...prev, [type]: true }));
-    setContextIds(ids as any);
+  // Important: Only override context when ids are provided; otherwise preserve existing context
+  setContextIds(prev => (ids && Object.keys(ids).length > 0 ? ids : prev));
   };
   
   const closeDialog = (type: DialogType) => {
     setDialogStates(prev => ({ ...prev, [type]: false }));
     setContextIds(null);
+  };
+
+  const handleManageComponents = (facilityId: string, context?: { complexId: string; level: 'complex' | 'building' | 'floor'; buildingId?: string; floorId?: string }) => {
+    console.log('handleManageComponents called with:', { facilityId, context });
+    if (context) {
+      const newContextIds = { 
+        facilityId, 
+        complexId: context.complexId, 
+        level: context.level, 
+        buildingId: context.buildingId, 
+        floorId: context.floorId 
+      };
+      console.log('Setting contextIds to:', newContextIds);
+      setContextIds(newContextIds);
+      openDialog('manageFacilityComponents');
+    } else {
+      // Fallback - try to find context from current state
+      console.log('No context provided, inferring from residences tree');
+      // Try to locate the facility within the currently visible residences
+      let inferred: { complexId?: string; level?: 'complex' | 'building' | 'floor'; buildingId?: string; floorId?: string } = {};
+      for (const complex of filteredResidences) {
+        // Complex level facilities
+        if (asArray<Facility>(complex.facilities).some(f => f.id === facilityId)) {
+          inferred = { complexId: complex.id, level: 'complex' };
+          break;
+        }
+        for (const building of complex.buildings) {
+          // Building level facilities
+          if (asArray<Facility>(building.facilities).some(f => f.id === facilityId)) {
+            inferred = { complexId: complex.id, level: 'building', buildingId: building.id };
+            break;
+          }
+          for (const floor of building.floors) {
+            if (asArray<Facility>(floor.facilities).some(f => f.id === facilityId)) {
+              inferred = { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id };
+              break;
+            }
+          }
+          if (inferred.level) break;
+        }
+        if (inferred.level) break;
+      }
+
+      const newContextIds = { facilityId, ...inferred } as any;
+      setContextIds(prev => ({ ...(prev || {}), ...newContextIds }));
+      openDialog('manageFacilityComponents', newContextIds);
+    }
   };
 
   const handleAddComplex = (e: React.FormEvent) => {
@@ -1161,6 +1371,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                           }
                                         } : undefined}
                                         enableInlineEdit={isEdit}
+                                        onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
+                                        isEdit={isEdit}
                                       />
                                     )}
                                   </div>
@@ -1297,6 +1509,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                       }
                                                     } : undefined}
                                                     enableInlineEdit={isEdit}
+                                                    onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                                    isEdit={isEdit}
                                                   />
                                                 )}
                                               </div>
@@ -1336,6 +1550,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                               }
                             } : undefined}
                             enableInlineEdit={isEdit}
+                            onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'complex' })}
+                            isEdit={isEdit}
                           />
                         )}
                       </>
@@ -1521,6 +1737,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   onSaveEditFacility={saveEditingFacility}
                                                   onCancelEditFacility={cancelEditingFacility}
                                                   enableInlineEdit={isEdit}
+                                                  onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                                  isEdit={isEdit}
                                                 />
                                               )}
                                             </div>
@@ -1555,6 +1773,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                       onSaveEditFacility={saveEditingFacility}
                                       onCancelEditFacility={cancelEditingFacility}
                                       enableInlineEdit={isEdit}
+                                      onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
+                                      isEdit={isEdit}
                                     />
                                   )}
                                 </div>
@@ -1589,6 +1809,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                               onSaveEditFacility={saveEditingFacility}
                               onCancelEditFacility={cancelEditingFacility}
                               enableInlineEdit={isEdit}
+                              onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'complex' })}
+                              isEdit={isEdit}
                             />
                           )}
                         </div>
@@ -1760,6 +1982,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                     onSaveEditFacility={saveEditingFacility}
                                     onCancelEditFacility={cancelEditingFacility}
                                     enableInlineEdit={isEdit}
+                                    onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                    isEdit={isEdit}
                                   />
                                 )}
                               </div>
@@ -1790,10 +2014,12 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 onSaveEditFacility={saveEditingFacility}
                                 onCancelEditFacility={cancelEditingFacility}
                                 enableInlineEdit={isEdit}
+                                onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
+                                isEdit={isEdit}
                               />
                             )}
                           </div>
-                          {isAdmin && (
+                          {isAdmin && isEdit && (
                             <div className="pt-1">
                               <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Floor</Button>
                             </div>
@@ -1829,6 +2055,8 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                         onCancelEditFacility={cancelEditingFacility}
                         enableInlineEdit={isEdit}
                         enableDelete={isDelete}
+                        onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'complex' })}
+                        isEdit={isEdit}
                         onRename={isEdit ? (facilityId) => {
                           const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
                           const val = prompt('Rename facility', current?.name || '');
@@ -2032,14 +2260,51 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
       </Dialog>
       
       {/* Add Facility Dialog */}
-      {contextIds && (
+      {contextIds?.complexId && contextIds.level && (
         <AddFacilityDialog 
             isOpen={dialogStates.addFacility}
             onOpenChange={(open) => open ? openDialog('addFacility') : closeDialog('addFacility')}
-            context={contextIds}
+            context={{
+              level: contextIds.level,
+              complexId: contextIds.complexId,
+              buildingId: contextIds.buildingId,
+              floorId: contextIds.floorId,
+            }}
             onAdd={addFacility}
         />
       )}
+
+      {/* Manage Facility Components Dialog */}
+      <Dialog open={dialogStates.manageFacilityComponents} onOpenChange={(open) => open ? openDialog('manageFacilityComponents') : closeDialog('manageFacilityComponents')}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة مكون جديد</DialogTitle>
+            <DialogDescription>أضف مكون جديد إلى هذا التجهيز</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {contextIds?.facilityId && contextIds?.complexId && contextIds?.level ? (
+              <AddComponentForm
+                facilityId={contextIds.facilityId}
+                onClose={() => closeDialog('manageFacilityComponents')}
+                onAddComponent={async (facilityId, component) => {
+                  await addFacilityComponent(
+                    contextIds.complexId!,
+                    facilityId,
+                    contextIds.level as 'complex' | 'building' | 'floor',
+                    component,
+                    contextIds.buildingId,
+                    contextIds.floorId
+                  );
+                }}
+              />
+            ) : (
+              <div className="text-red-500">
+                Missing context: {JSON.stringify(contextIds)}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
