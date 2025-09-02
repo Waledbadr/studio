@@ -71,9 +71,22 @@ export default function ReceiveOrderPage() {
             }
 
             setOrder(fetchedOrder);
-            const initialReceivedItems = fetchedOrder.items.map((item, idx) => {
+            // Only include:
+            // - items without overrideReason (normal flow)
+            // - items with overrideReason AND justificationDecision === 'approved' (use approvedQuantity)
+            const filteredItems = (Array.isArray(fetchedOrder.items) ? fetchedOrder.items : []).map((item) => {
+                const needsReview = !!(item as any).overrideReason;
+                if (!needsReview) return item;
+                if ((item as any).justificationDecision === 'approved') {
+                    const q = typeof (item as any).approvedQuantity === 'number' ? (item as any).approvedQuantity : 0;
+                    return { ...item, quantity: q } as any;
+                }
+                return null as any; // pending or rejected: not receivable yet
+            }).filter(Boolean) as OrderItem[];
+
+            const initialReceivedItems = filteredItems.map((item, idx) => {
                 const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
-                const remainingToReceive = item.quantity - alreadyReceived;
+                const remainingToReceive = Math.max(0, (item.quantity || 0) - alreadyReceived);
                 const uniqueKey = `${item.id}::${(item.notes || '').trim()}`;
                 return {
                     ...item,

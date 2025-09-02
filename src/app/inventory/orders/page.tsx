@@ -156,11 +156,17 @@ export default function PurchaseOrdersPage() {
                                                         <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                                         <Eye className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Details'}
                                         </DropdownMenuItem>
-                                        {isAdmin && (
-                                            <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
-                                                <Pencil className="mr-2 h-4 w-4" /> Edit Request
-                                            </DropdownMenuItem>
-                                        )}
+                                                                                {isAdmin && (
+                                                                                        Array.isArray(order.plannedDistribution) && order.plannedDistribution.length > 0 ? (
+                                                                                            <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit-plan`)}>
+                                                                                                <Pencil className="mr-2 h-4 w-4" /> Edit Plan
+                                                                                            </DropdownMenuItem>
+                                                                                        ) : (
+                                                                                            <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
+                                                                                                <Pencil className="mr-2 h-4 w-4" /> Edit Request
+                                                                                            </DropdownMenuItem>
+                                                                                        )
+                                                                                )}
                                         {isAdmin && <DropdownMenuSub>
                                             <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
                                             <DropdownMenuSubContent>
