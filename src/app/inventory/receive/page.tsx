@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 import { useRouter } from "next/navigation";
 import { useUsers } from "@/context/users-context";
-import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus } from "lucide-react";
+import { ArrowRight, History, Archive, ChevronDown, ChevronUp, CheckCircle, Truck, Clock, XCircle, Plus, Paperclip } from "lucide-react";
 import { useResidences } from "@/context/residences-context";
 import { useLanguage } from '@/context/language-context';
 
@@ -185,6 +185,7 @@ export default function ReceiveMaterialsPage() {
                         id: mrv.id,
                         type: 'MRV',
             mrRef: mrv.orderId || null,
+                        hasAttachment: !!(mrv.attachmentUrl || mrv.attachmentPath),
                         dateLabel: mrv.date?.toDate ? format(mrv.date.toDate(), 'PPP') : '-',
                         residence: residenceName(mrv.residenceId),
                         items: Number(mrv.itemCount || 0),
@@ -216,7 +217,14 @@ export default function ReceiveMaterialsPage() {
                                             onClick={() => { if (row.href) router.push(row.href); }}
                                             className={row.href ? 'cursor-pointer hover:bg-muted/50' : ''}
                                         >
-                                                <TableCell className="font-medium">{row.id}</TableCell>
+                                                                                                <TableCell className="font-medium">
+                                                                                                        <div className="flex items-center gap-2">
+                                                                                                                <span>{row.id}</span>
+                                                                                                                {row.hasAttachment ? (
+                                                                                                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                                                                                                ) : null}
+                                                                                                        </div>
+                                                                                                </TableCell>
                                                 <TableCell>{row.type || '-'}</TableCell>
                         {showMrRef && (<TableCell>{row.mrRef || '-'}</TableCell>)}
                                                 <TableCell>{row.dateLabel}</TableCell>

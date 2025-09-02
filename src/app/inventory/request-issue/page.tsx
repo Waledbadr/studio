@@ -103,6 +103,28 @@ export default function RequestIssuePage() {
     return selectedResidence.facilities || [];
   }, [selectedResidence, buildings, floors, buildingId, floorId]);
 
+  // Hide non-selected facilities after a facility is chosen (applies to single and multi)
+  const visibleFacilities = useMemo(() => {
+    if (!facilityId) return availableFacilities;
+    return availableFacilities.filter(f => f.id === facilityId);
+  }, [availableFacilities, facilityId]);
+
+  // Compact view: hide non-selected ancestors after picking deeper levels (single mode only)
+  const visibleBuildings = useMemo(() => {
+    if (!buildingId) return buildings;
+    // After selecting next level (floor/room/facility), keep only the chosen building (applies to single and multi)
+    if (floorId || roomId || facilityId) return buildings.filter(b => b.id === buildingId);
+    return buildings;
+  }, [buildings, buildingId, floorId, roomId, facilityId]);
+
+  const visibleFloors = useMemo(() => {
+    if (!buildingId) return [];
+    if (!floorId) return floors;
+    // After selecting room or facility/component, keep only the chosen floor (applies to single and multi)
+    if (roomId || facilityId || componentId) return floors.filter(f => f.id === floorId);
+    return floors;
+  }, [floors, buildingId, floorId, roomId, facilityId, componentId]);
+
   // Get available components for selected facility
   const availableComponents = useMemo<FacilityComponent[]>(() => {
     if (!facilityId) return [];
@@ -593,11 +615,11 @@ export default function RequestIssuePage() {
                     <Label className="text-sm font-medium mb-2 block">Building</Label>
                     {!residenceId ? (
                       <div className="text-xs text-muted-foreground mb-2">Select a residence first.</div>
-                    ) : buildings.length === 0 ? (
+          ) : visibleBuildings.length === 0 ? (
                       <div className="text-xs text-muted-foreground mb-2">No buildings available.</div>
                     ) : (
                       <div className="space-y-2 max-h-[480px] overflow-y-auto">
-                        {buildings.map(b => (
+            {visibleBuildings.map(b => (
                           <div
                             key={b.id}
                             onClick={() => setBuildingId(buildingId === b.id ? '' : b.id)}
@@ -622,11 +644,11 @@ export default function RequestIssuePage() {
                     <Label className="text-sm font-medium mb-2 block">Floor</Label>
                     {!buildingId ? (
                       <div className="text-xs text-muted-foreground mb-2">Select a building first.</div>
-                    ) : floors.length === 0 ? (
+          ) : visibleFloors.length === 0 ? (
                       <div className="text-xs text-muted-foreground mb-2">No floors available.</div>
                     ) : (
                       <div className="space-y-2 max-h-[480px] overflow-y-auto">
-                        {floors.map(f => (
+            {visibleFloors.map(f => (
                           <div
                             key={f.id}
                             onClick={() => setFloorId(floorId === f.id ? '' : f.id)}
@@ -684,11 +706,11 @@ export default function RequestIssuePage() {
                         <Label className="text-sm font-medium mb-2 block">Facility</Label>
                         {!residenceId ? (
                           <div className="text-xs text-muted-foreground mb-2">Select a residence first.</div>
-                        ) : availableFacilities.length === 0 ? (
+            ) : visibleFacilities.length === 0 ? (
                           <div className="text-xs text-muted-foreground mb-2">No facilities available.</div>
                         ) : (
                           <div className="space-y-2 max-h-[480px] overflow-y-auto">
-                            {availableFacilities.map(f => (
+              {visibleFacilities.map(f => (
                               <div
                                 key={f.id}
                                 onClick={() => {
@@ -699,7 +721,18 @@ export default function RequestIssuePage() {
                                   const fl = floors.find(fl => fl.id === floorId); if (fl) parts?.push(fl.name);
                                   parts?.push(f.name);
                                   const name = parts?.filter(Boolean).join(' -> ') || f.name;
-                                  setSelectedTargets(prev => prev.some(t => t.id === id) ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }]);
+                                  setSelectedTargets(prev => {
+                                    const exists = prev.some(t => t.id === id);
+                                    let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
+                                    // If facility is being added, remove its components from targets to avoid duplication
+                                    if (!exists) {
+                                      const compIds = (availableComponents || []).map(c => c.id);
+                                      next = next.filter(t => !compIds.includes(t.id));
+                                    }
+                                    return next;
+                                  });
+                                  // Also toggle facilityId for filtering and component visibility in multi-mode
+                                  setFacilityId(prev => prev === f.id ? '' : f.id);
                                 }}
                                 className={`p-2 rounded-md border cursor-pointer transition-colors ${
                                   (!multiMode && facilityId === f.id) || (multiMode && selectedTargets.some(t => t.id === f.id))
@@ -715,41 +748,64 @@ export default function RequestIssuePage() {
                             ))}
                           </div>
                         )}
-
-                        {/* Component Selection - Show only when a facility is selected and has components */}
-                        {!multiMode && facilityId && availableComponents.length > 0 && (
-                          <div className="mt-4">
-                            <Label className="text-sm font-medium mb-1 block">Select Component (Optional)</Label>
-                            {/* helper text removed per request */}
-                            <div className="space-y-2 max-h-[260px] overflow-y-auto">
-                              {availableComponents.map((component: FacilityComponent) => (
-                                <div
-                                  key={component.id}
-                                  onClick={() => setComponentId(componentId === component.id ? '' : component.id)}
-                                  className={`p-2 rounded-md border cursor-pointer text-xs transition-colors flex items-center gap-2 ${
-                                    componentId === component.id 
-                                      ? 'bg-primary text-primary-foreground border-primary' 
-                                      : 'bg-background hover:bg-muted/50 border-border'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-sm flex-shrink-0">
-                                      {component.type === 'light' ? '💡' : 
-                                       component.type === 'outlet' ? '🔌' : 
-                                       component.type === 'switch' ? '⚡' : 
-                                       component.type === 'fan' ? '🌀' : '⚙️'}
-                                    </span>
-                                    <span className="font-medium truncate" title={component.name}>{component.name}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Moved: Component Selection below the grid for clearer placement */}
+                {locationType === 'facility' && facilityId && availableComponents.length > 0 && (
+                  <div className="mt-4">
+                    <Label className="text-sm font-medium mb-1 block">Select Component (Optional)</Label>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                        {availableComponents.map((component: FacilityComponent) => (
+                          <div
+                            key={component.id}
+                            onClick={() => {
+                              if (!multiMode) {
+                                setComponentId(componentId === component.id ? '' : component.id);
+                                return;
+                              }
+                              // Multi-mode: toggle component as a separate target
+                              const id = component.id;
+                              const parts = [selectedResidence?.name];
+                              const b = buildings.find(b => b.id === buildingId); if (b) (parts as any)?.push(b.name);
+                              const fl = floors.find(fl => fl.id === floorId); if (fl) (parts as any)?.push(fl.name);
+                              const fac = availableFacilities.find(f => f.id === facilityId); if (fac) (parts as any)?.push(fac.name);
+                              (parts as any)?.push(component.name);
+                              const name = (parts as any)?.filter(Boolean).join(' -> ') || component.name;
+                              setSelectedTargets(prev => {
+                                const exists = prev.some(t => t.id === id);
+                                let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
+                                // If any component under current facility is selected, remove the base facility target to avoid duplication
+                                if (facilityId) {
+                                  next = next.filter(t => t.id !== facilityId);
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`p-2 rounded-md border cursor-pointer text-xs transition-colors flex items-center gap-2 ${
+                              (!multiMode && componentId === component.id) || (multiMode && selectedTargets.some(t => t.id === component.id))
+                                ? 'bg-primary text-primary-foreground border-primary' 
+                                : 'bg-background hover:bg-muted/50 border-border'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm flex-shrink-0">
+                                {component.type === 'light' ? '💡' : 
+                                 component.type === 'outlet' ? '🔌' : 
+                                 component.type === 'switch' ? '⚡' : 
+                                 component.type === 'fan' ? '🌀' : '⚙️'}
+                              </span>
+                              <span className="font-medium truncate" title={component.name}>{component.name}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -872,7 +928,7 @@ export default function RequestIssuePage() {
                     </div>
                     <div className="divide-y">
                       {loc.items.map(line => (
-                        <div key={line.id} className="flex items-center justify-between p-3">
+                        <div key={`${loc.locationId}:${line.id}:${line.nameEn || line.nameAr || ''}`} className="flex items-center justify-between p-3">
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-medium">{line.nameEn || line.nameAr || line.id}</div>
                             {!!line.overrideReason && <div className="text-xs text-amber-700">Override: {line.overrideReason}</div>}

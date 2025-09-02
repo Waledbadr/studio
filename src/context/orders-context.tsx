@@ -68,7 +68,10 @@ export interface Order {
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived' | 'approvedById'>;
-type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId' | 'notes'>;
+type UpdateOrderPayload = Pick<Order, 'items' | 'residence' | 'residenceId' | 'notes'> & {
+  // Allow editing the saved distribution plan when the order was created via request-issue
+  plannedDistribution?: PlannedDistributionLocation[];
+};
 
 
 interface OrdersContextType {
@@ -271,7 +274,9 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
-        await updateDoc(orderDocRef, { ...orderData });
+  // Remove undefined fields to avoid Firestore update errors or unintended clears
+  const sanitized = Object.fromEntries(Object.entries(orderData).filter(([, v]) => v !== undefined));
+  await updateDoc(orderDocRef, sanitized as any);
         toast({ title: "Success", description: "Order updated successfully." });
     } catch (error) {
         console.error("Error updating order:", error);

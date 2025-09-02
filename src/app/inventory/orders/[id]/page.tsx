@@ -103,6 +103,20 @@ export default function OrderDetailPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [db, order?.requestedById, order?.requestedByName, requestedBy?.name, (order as any)?.requestedByEmail]);
 
+    // Helper to normalize items when they were accidentally saved as an object with numeric keys
+    const normalizeItems = (items: any): any[] => {
+        if (Array.isArray(items)) return items;
+        if (items && typeof items === 'object') {
+            const keys = Object.keys(items);
+            const numericKeys = keys.filter(k => /^\d+$/.test(k)).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+            if (numericKeys.length > 0) return numericKeys.map(k => (items as any)[k]);
+            // Fallback: if values look like line items, return Object.values
+            const values = Object.values(items);
+            if (values.length > 0 && values.every(v => v && typeof v === 'object')) return values as any[];
+        }
+        return [];
+    };
+
     // Real-time subscription to keep page in sync without hard refresh
     useEffect(() => {
         if (!db || typeof id !== 'string') return;
@@ -112,10 +126,14 @@ export default function OrderDetailPage() {
             if (snap.exists()) {
                 const data = snap.data() as any;
                 // Ensure items is always an array
-                const normalizedData = {
-                    ...data,
-                    items: Array.isArray(data.items) ? data.items : []
-                };
+                const itemsArray = normalizeItems(data.items);
+                const normalizedData = { ...data, items: itemsArray };
+                // Attempt a one-time self-repair if the document has items as a numeric-keyed map
+                try {
+                    if (!Array.isArray(data.items) && Array.isArray(itemsArray) && itemsArray.length > 0) {
+                        updateDoc(ref, { items: itemsArray } as any).catch(() => {});
+                    }
+                } catch {}
                 setOrder({ id: snap.id, ...normalizedData } as Order);
             } else {
                 setOrder(null);
@@ -202,9 +220,22 @@ export default function OrderDetailPage() {
         return getStockForResidence(baseItem, order.residenceId);
     }
 
-    // Render items as-is to preserve separate lines for different details
-    // Be defensive: some legacy orders may have items missing or null
-    const itemsForRender: OrderItem[] = Array.isArray(order.items) ? order.items : [];
+    // Build items for main table: include all normal lines, and only approved justification lines (use approvedQuantity)
+    const rawItems: OrderItem[] = Array.isArray(order.items) ? order.items : [];
+    const itemsForRender: OrderItem[] = rawItems
+        .map((it) => {
+            if (!it) return null as any;
+            const needsReview = !!it.overrideReason;
+            if (!needsReview) return it;
+            // Only include if approved; set quantity to approvedQuantity
+            if (it.justificationDecision === 'approved') {
+                const q = typeof it.approvedQuantity === 'number' ? it.approvedQuantity : 0;
+                if (q > 0) return { ...it, quantity: q } as OrderItem;
+                return null as any;
+            }
+            return null as any; // pending or rejected => not shown in main list
+        })
+        .filter(Boolean) as OrderItem[];
 
     const totalItems = itemsForRender.length;
 
@@ -396,12 +427,21 @@ export default function OrderDetailPage() {
                             <PackageCheck className="mr-2 h-4 w-4" /> Receive MRV
                         </Button>
                     )}
-                    {canEdit && (
-                         <Button variant="secondary" onClick={handleEdit}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit Request
-                         </Button>
-                    )}
+                                        {canEdit && (
+                                                <>
+                                                    {Array.isArray(order.plannedDistribution) && order.plannedDistribution.length > 0 ? (
+                                                        <Button variant="secondary" onClick={() => router.push(`/inventory/orders/${order.id}/edit-plan`)}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit Plan
+                                                        </Button>
+                                                    ) : (
+                                                        <Button variant="secondary" onClick={handleEdit}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit Request
+                                                        </Button>
+                                                    )}
+                                                </>
+                                        )}
                     <Button onClick={handlePrint}>
                         <Printer className="mr-2 h-4 w-4" />
                         Print Request
@@ -516,11 +556,11 @@ export default function OrderDetailPage() {
                     </div>
                 </CardFooter>
             </Card>
-                        {canApproveReject && (
+                        {canApproveReject && (Array.isArray(order.items) && order.items.some(it => !!it?.overrideReason)) && (
                             <Card className="no-print">
                                 <CardHeader>
                                     <CardTitle>مراجعة التبريرات</CardTitle>
-                                    <CardDescription>الأصناف التي تتطلب قبول/رفض مع إمكانية تحديد كمية مقبولة جزئياً.</CardDescription>
+                                    <CardDescription>اعتماد أو رفض الأصناف التي تتطلب تبريراً وتحديد الكمية المقبولة عند الاعتماد.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <Table>
@@ -576,23 +616,39 @@ function JustificationCell({ orderId, itemIndex, item }: { orderId: string; item
     
     const [note, setNote] = React.useState(safeItem.justificationReviewNote || '');
     const [qty, setQty] = React.useState<number>(safeApprovedQuantity);
+    const [saving, setSaving] = React.useState(false);
     const decision = safeItem.justificationDecision;
     const pending = typeof decision === 'undefined' && !!safeItem.overrideReason;
     const disabled = !pending;
     const clampQty = (n: number) => Math.max(0, Math.min(n, safeQuantity));
     const apply = async (value: 'approved' | 'rejected') => {
+        if (saving) return;
+        setSaving(true);
         try {
             if (!db) return;
             const ref = doc(db, 'orders', orderId);
-            const path = `items.${itemIndex}`;
-            await updateDoc(ref, {
-                [`${path}.justificationDecision`]: value,
-                [`${path}.justificationReviewNote`]: note || null,
-                [`${path}.approvedQuantity`]: value === 'approved' ? clampQty(qty) : 0,
-            } as any);
+            // Read current items, update the target element, then write back the whole array (Firestore-safe)
+            const snap = await getDoc(ref);
+            if (!snap.exists()) throw new Error('Order not found');
+            const data = snap.data() as any;
+            const items: any[] = Array.isArray(data.items) ? data.items : [];
+            const idx = itemIndex;
+            if (!(idx in items)) throw new Error('Item index out of range');
+            const existing = items[idx] || {};
+            const updated = {
+                ...existing,
+                justificationDecision: value,
+                justificationReviewNote: note || null,
+                approvedQuantity: value === 'approved' ? clampQty(qty) : 0,
+            };
+            const newItems = items.slice();
+            newItems[idx] = updated;
+            await updateDoc(ref, { items: newItems } as any);
         } catch (e) {
             console.error('Failed to update line decision', e);
             alert('Failed to update decision');
+        } finally {
+            setSaving(false);
         }
     };
     return (
@@ -614,15 +670,15 @@ function JustificationCell({ orderId, itemIndex, item }: { orderId: string; item
                 <span className="text-muted-foreground">/ {safeQuantity}</span>
             </div>
             <div className="flex items-center gap-1">
-                <Button size="sm" variant="secondary" disabled={disabled} onClick={() => apply('approved')}>قبول</Button>
-                <Button size="sm" variant="destructive" disabled={disabled} onClick={() => apply('rejected')}>رفض</Button>
+                <Button size="sm" variant="secondary" disabled={disabled || saving} onClick={() => apply('approved')}>{saving ? '...': 'قبول'}</Button>
+                <Button size="sm" variant="destructive" disabled={disabled || saving} onClick={() => apply('rejected')}>{saving ? '...': 'رفض'}</Button>
             </div>
             <input
                 className="border rounded px-2 py-1 text-xs w-full"
                 placeholder="ملاحظة المراجع (اختياري)"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                disabled={!pending}
+                disabled={!pending || saving}
             />
             {!pending && (
                 <Badge variant={decision === 'approved' ? 'default' : 'destructive'}>

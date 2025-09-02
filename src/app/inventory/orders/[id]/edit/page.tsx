@@ -157,7 +157,7 @@ function AddItemButton({
 
 export default function EditOrderPage() {
     const { dict } = useLanguage();
-    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem } = useInventory();
+    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem, checkItemLifespanAtLocation } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
     // Add residences context to resolve/display residence name properly
@@ -450,12 +450,33 @@ export default function EditOrderPage() {
             return;
         }
 
+        // Constraint parity: require justification when item exists in residence stock
+        for (const it of orderItems) {
+            try {
+                const stock = handleGetStockForOrderItem(it);
+                if (stock > 0 && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
+                    toast({ title: 'Justification required', description: `Provide a justification for ${it.nameEn || it.id} since it exists in stock.`, variant: 'destructive' });
+                    return;
+                }
+            } catch {}
+            try {
+                const locId = (it as any).targetLocationId as string | undefined;
+                if (locId) {
+                    const life = await checkItemLifespanAtLocation((it as any).id || '', locId).catch(() => null);
+                    if (life && life.lifespanDays && life.withinLifespan && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
+                        toast({ title: 'Justification required', description: `Provide a justification for ${it.nameEn || it.id} (within lifespan at selected location).`, variant: 'destructive' });
+                        return;
+                    }
+                }
+            } catch {}
+        }
+
         // Resolve residence name correctly using residenceId if name is missing
         const resolvedResidenceName = residenceName || (residences.find(r => r.id === residenceId)?.name ?? '');
         // Also resolve residenceId from the resolved name if id is missing
         const resolvedResidenceId = residenceId || (residences.find(r => r.name === resolvedResidenceName)?.id ?? '');
 
-        const updatedOrderData = {
+    const updatedOrderData = {
             residence: resolvedResidenceName,
             residenceId: resolvedResidenceId,
             items: orderItems,
@@ -797,18 +818,19 @@ export default function EditOrderPage() {
                                         <div key={category} className="rounded-md border">
                                             <div className="bg-muted/50 px-3 py-2 font-semibold text-primary capitalize">{category}</div>
                                             <div className="divide-y">
-                                                {items.map((item) => {
+                        {items.map((item, idx) => {
                                                     const ar = splitNameDetail(item.nameAr);
                                                     const en = splitNameDetail(item.nameEn);
                                                     const detail = ar.detail || en.detail || '';
                                                     const stock = handleGetStockForOrderItem(item);
                                                     return (
-                                                        <div key={item.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] items-start sm:items-center gap-3">
+                            <div key={`${item.id}:${(item as any).variantId || (item as any).variantLabel || item.nameEn || item.nameAr || ''}:${idx}`} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] items-start sm:items-center gap-3">
                                                             <div className="min-w-0">
                                                                 <div className="font-medium truncate">{en.base || item.nameEn} | {ar.base || item.nameAr}</div>
                                                                 <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
                                                                     <span className="capitalize">{item.category}</span>
                                                                     {item.unit && <span>• {item.unit}</span>}
+                                                                    {(item as any).overrideReason && <span className="text-amber-700">• Justification: {(item as any).overrideReason}</span>}
                                                                     <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>• Stock: {stock}</span>
                                                                     {detail && <span className="italic">• {detail}</span>}
                                                                 </div>
@@ -838,6 +860,18 @@ export default function EditOrderPage() {
                                                                                 onChange={(e) => handleNotesChange(item.id, e.target.value)}
                                                                                 placeholder="e.g., Please provide the new model."
                                                                             />
+                                                                            <div className="space-y-2 pt-2">
+                                                                                <h4 className="font-medium leading-none">Justification</h4>
+                                                                                <p className="text-sm text-muted-foreground">Required if this item exists in stock or within lifespan at the target location.</p>
+                                                                                <Input
+                                                                                    value={(item as any).overrideReason || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value;
+                                                                                        setOrderItems(prev => prev.map(it => it.id === item.id ? { ...it, overrideReason: val } as OrderItem : it));
+                                                                                    }}
+                                                                                    placeholder="Explain why this is needed..."
+                                                                                />
+                                                                            </div>
                                                                         </div>
                                                                     </PopoverContent>
                                                                 </Popover>
