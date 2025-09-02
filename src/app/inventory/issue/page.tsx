@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useResidences } from '@/context/residences-context';
+import { useResidences, type FacilityComponent } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,9 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useRouter } from 'next/navigation';
 import { differenceInDays } from 'date-fns';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/context/language-context';
+import { useOrders, type Order } from '@/context/orders-context';
 
 
 interface IssuedItem extends InventoryItem {
@@ -47,6 +47,7 @@ export default function IssueMaterialPage() {
     const { toast } = useToast();
     const router = useRouter();
     const { dict } = useLanguage();
+    const { orders, loadOrders } = useOrders();
     const [isPending, startTransition] = useTransition();
     
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
@@ -58,8 +59,10 @@ export default function IssueMaterialPage() {
     const [selectedFloorId, setSelectedFloorId] = useState('');
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [selectedFacilityId, setSelectedFacilityId] = useState('');
+    const [selectedComponentId, setSelectedComponentId] = useState('');
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
+    const [selectedMrId, setSelectedMrId] = useState('');
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -86,6 +89,24 @@ export default function IssueMaterialPage() {
         }
         return selectedComplex.facilities || [];
     }, [selectedComplex, selectedBuildingId, selectedFloorId, selectedFloor, selectedBuilding]);
+
+    // Components for selected facility (if any)
+    const availableComponents = useMemo<FacilityComponent[]>(() => {
+        if (!selectedFacilityId) return [];
+        const fac = availableFacilities.find((f: any) => f.id === selectedFacilityId) as any;
+        return (fac?.components || []) as FacilityComponent[];
+    }, [selectedFacilityId, availableFacilities]);
+
+    // Ensure orders are loaded so MR dropdown is populated
+    useEffect(() => {
+        loadOrders?.();
+        // Also refresh when user identity changes
+    }, [loadOrders]);
+    useEffect(() => {
+        if (currentUser?.id) {
+            loadOrders?.();
+        }
+    }, [currentUser?.id, loadOrders]);
 
 
     const isLocationSelected = useMemo(() => {
@@ -129,11 +150,13 @@ export default function IssueMaterialPage() {
 
     useEffect(() => {
         setSelectedRoomId('');
-        // Also reset facility ID when floor changes
+        // Also reset facility/component when floor changes
         if(locationType === 'facility') {
             setSelectedFacilityId('');
+            setSelectedComponentId('');
         }
     }, [selectedFloorId, locationType]);
+    useEffect(() => { setSelectedComponentId(''); }, [selectedFacilityId]);
     
     const getAggregateIssuedQty = (itemId: string): number => {
         return voucherLocations.reduce((sum, loc) => {
@@ -192,18 +215,22 @@ export default function IssueMaterialPage() {
                     toast({ title: "Facility not found", description: "An error occurred with the selected facility.", variant: "destructive"});
                     return;
                 }
-                locationId = selectedFacility.id;
-                // Build a hierarchical name for facilities as well
-                // e.g., Residence -> Building -> (Floor ->) Facility
+                // If a component is selected, use it as the location target
+                const selectedComponent = availableComponents.find((c: FacilityComponent) => c.id === selectedComponentId);
+                locationId = selectedComponent ? selectedComponent.id : selectedFacility.id;
+                // Build a hierarchical name for facilities as well, include component when chosen
+                // e.g., Residence -> Building -> (Floor ->) Facility -> Component
                 const parts: string[] = [selectedComplex.name];
                 if (selectedBuilding) parts.push(selectedBuilding.name);
                 if (selectedFloor) parts.push(selectedFloor.name);
                 parts.push(selectedFacility.name);
+                if (selectedComponent) parts.push(selectedComponent.name);
                 locationName = parts.join(' -> ');
                 isFacility = true;
                 newLocationDetails = {
                     facilityId: selectedFacilityId,
                     locationId: selectedFacilityId,
+                    // component context is implicit in locationId when set
                     // Include building/floor context for facilities when available
                     ...(selectedBuilding ? { buildingId: selectedBuildingId, buildingName: selectedBuilding.name } : {}),
                     ...(selectedFloor ? { floorId: selectedFloorId, floorName: selectedFloor.name } : {}),
@@ -280,6 +307,73 @@ export default function IssueMaterialPage() {
                 }
             });
         });
+    };
+
+    // Apply planned distribution from an order object
+    const applyPlanFromOrder = (order: Order) => {
+        if (!order || !order.plannedDistribution || !Array.isArray(order.plannedDistribution) || order.plannedDistribution.length === 0) {
+            toast({ title: 'No distribution', description: 'This order has no saved distribution plan.' });
+            return;
+        }
+        if (!selectedComplexId || selectedComplexId !== order.residenceId) {
+            setSelectedComplexId(order.residenceId);
+        }
+        const allocatedByItem = new Map<string, number>();
+        const transformed: VoucherLocation[] = order.plannedDistribution.map(loc => {
+            // Safety check for location object
+            if (!loc || typeof loc !== 'object') return null;
+            
+            const items: IssuedItem[] = [];
+            const locationItems = Array.isArray(loc.items) ? loc.items : [];
+            for (const pi of locationItems) {
+                if (!pi || typeof pi !== 'object') continue;
+                
+                const inv = allItems.find(i => i.id === pi.id);
+                if (!inv) continue;
+                
+                // Match order line by id and detail in notes; use decisions if present
+                const orderItems = Array.isArray(order.items) ? order.items : [];
+                const line = orderItems.find(li => li && li.id === pi.id && (li.notes || '').includes(pi.detail || ''));
+                if (line?.justificationDecision === 'rejected') continue;
+                
+                const stock = getStockForResidence(inv, order.residenceId);
+                const already = allocatedByItem.get(inv.id) ?? 0;
+                const remaining = Math.max(0, stock - already);
+                const plannedQty = typeof line?.approvedQuantity === 'number' ? line!.approvedQuantity : (pi.quantity || 0);
+                const qty = Math.min(plannedQty, remaining);
+                if (qty > 0) {
+                    items.push({ ...inv, issueQuantity: qty });
+                    allocatedByItem.set(inv.id, already + qty);
+                }
+            }
+            return { 
+                locationId: loc.locationId || '', 
+                locationName: loc.locationName || 'Unknown Location', 
+                isFacility: !!loc.isFacility, 
+                items 
+            } as VoucherLocation;
+        }).filter((l): l is VoucherLocation => l !== null && l.items.length > 0);
+
+        if (transformed.length === 0) {
+            toast({ title: 'Nothing to load', description: 'No items available in stock for this plan.', variant: 'destructive' });
+            return;
+        }
+        setVoucherLocations(transformed);
+        toast({ title: 'Distribution loaded', description: `Loaded plan from ${order.id}.` });
+    };
+
+    const handleSelectMr = (id: string) => {
+        setSelectedMrId(id);
+        if (!Array.isArray(orders)) {
+            toast({ title: 'No orders', description: 'Orders list is not available.', variant: 'destructive' });
+            return;
+        }
+        const order = orders.find(o => o && o.id === id);
+        if (!order) {
+            toast({ title: 'Not found', description: `No order found for ${id}.`, variant: 'destructive' });
+            return;
+        }
+        applyPlanFromOrder(order);
     };
 
 
@@ -361,6 +455,12 @@ export default function IssueMaterialPage() {
         return voucherLocations.length > 0 && voucherLocations.every(loc => loc.items.length > 0);
     }, [voucherLocations]);
 
+    // Orders with saved distribution for the selected residence
+    const mrWithPlanForResidence = useMemo(() => {
+        if (!selectedComplexId || !Array.isArray(orders)) return [] as Order[];
+        return orders.filter(o => o && o.residenceId === selectedComplexId && (o.plannedDistribution && Array.isArray(o.plannedDistribution) && o.plannedDistribution.length > 0));
+    }, [orders, selectedComplexId]);
+
     if (residencesLoading || inventoryLoading) {
         return <Skeleton className="h-96 w-full" />
     }
@@ -372,7 +472,7 @@ export default function IssueMaterialPage() {
                     <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
                     <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
-                 <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
                         <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
@@ -383,73 +483,180 @@ export default function IssueMaterialPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <Card>
+            {/* Load MR Plan and Issue From Section - Outside Card */}
+            <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap font-medium">Issue From:</Label>
+                    <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Select a residence..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap font-medium">Load MR plan:</Label>
+                    <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
+                        <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {mrWithPlanForResidence.map(o => (
+                                <SelectItem key={o.id} value={o.id}>{o.id} · {o.items.length} items</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start h-[calc(100vh-12rem)]">
+                <Card className="h-full flex flex-col">
                     <CardHeader>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary"/> Select Location & Items</CardTitle>
-                                <CardDescription>First, select the location. Then, add items from the available inventory below.</CardDescription>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Label className="whitespace-nowrap">Issue From:</Label>
-                                <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                                    <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a residence..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
+                        <CardTitle className="flex items-center gap-2">
+                            <MapPin className="h-5 w-5 text-primary"/> Select Location & Items
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <CardContent className="space-y-4 flex-1 overflow-hidden flex flex-col">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-shrink-0">
                             <div className="space-y-4">
                                 <h3 className="font-semibold text-sm">Location Type</h3>
-                                <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!selectedComplexId}>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="unit" id="r_unit" />
-                                        <Label htmlFor="r_unit" className="flex items-center gap-2"><Building className="h-4 w-4" /> Unit</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="facility" id="r_facility" />
-                                        <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
-                                    </div>
-                                </RadioGroup>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        variant={locationType === 'unit' ? 'default' : 'outline'} 
+                                        size="sm"
+                                        onClick={() => setLocationType('unit')}
+                                        disabled={!selectedComplexId}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Building className="h-4 w-4" /> Unit
+                                    </Button>
+                                    <Button 
+                                        variant={locationType === 'facility' ? 'default' : 'outline'} 
+                                        size="sm"
+                                        onClick={() => setLocationType('facility')}
+                                        disabled={!selectedComplexId}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <ConciergeBell className="h-4 w-4" /> Facility
+                                    </Button>
+                                </div>
                                 
-                                <div className="space-y-2 pt-2">
-                                    <Select value={selectedBuildingId} onValueChange={setSelectedBuildingId} disabled={!selectedComplexId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Building" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedComplex?.buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={selectedFloorId} onValueChange={setSelectedFloorId} disabled={!selectedBuildingId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Floor" /></SelectTrigger>
-                                        <SelectContent>
-                                            {selectedBuilding?.floors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {locationType === 'unit' ? (
-                                        <Select value={selectedRoomId} onValueChange={setSelectedRoomId} disabled={!selectedFloorId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
-                                            <SelectContent>
-                                                {selectedFloor?.rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId} disabled={!selectedComplexId}>
-                                            <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
-                                            <SelectContent>
-                                                {availableFacilities.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                <div className="space-y-4 pt-2">
+                                    {/* Buildings */}
+                                    <div className="space-y-2">
+                                        <h4 className="font-medium text-xs text-muted-foreground">Building</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {selectedComplex?.buildings.map(b => (
+                                                <Button
+                                                    key={b.id}
+                                                    variant={selectedBuildingId === b.id ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedBuildingId(b.id);
+                                                        setSelectedFloorId('');
+                                                        setSelectedRoomId('');
+                                                        setSelectedFacilityId('');
+                                                    }}
+                                                    disabled={!selectedComplexId}
+                                                    className="justify-start"
+                                                >
+                                                    <Building className="h-4 w-4 mr-2" />
+                                                    {b.name}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Floors */}
+                                    {selectedBuildingId && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Floor</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {selectedBuilding?.floors.map(f => (
+                                                    <Button
+                                                        key={f.id}
+                                                        variant={selectedFloorId === f.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedFloorId(f.id);
+                                                            setSelectedRoomId('');
+                                                            setSelectedFacilityId('');
+                                                        }}
+                                                        className="justify-start"
+                                                    >
+                                                        {f.name}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Rooms or Facilities */}
+                                    {selectedFloorId && locationType === 'unit' && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Room</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {selectedFloor?.rooms.map(r => (
+                                                    <Button
+                                                        key={r.id}
+                                                        variant={selectedRoomId === r.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => setSelectedRoomId(r.id)}
+                                                        className="justify-start"
+                                                    >
+                                                        {r.name}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {locationType === 'facility' && selectedComplexId && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">Facility</h4>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {availableFacilities.map(f => (
+                                                    <Button
+                                                        key={f.id}
+                                                        variant={selectedFacilityId === f.id ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => setSelectedFacilityId(f.id)}
+                                                        className="justify-start"
+                                                    >
+                                                        <ConciergeBell className="h-4 w-4 mr-2" />
+                                                        <span dir="ltr">{f.name}</span>
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                            {/* Component selection (optional) */}
+                                            {selectedFacilityId && availableComponents.length > 0 && (
+                                                <div className="mt-2 p-2 border rounded-md bg-muted/20">
+                                                    <Label className="text-xs font-medium mb-2 block">Select Component (Optional)</Label>
+                                                    <div className="text-xs text-muted-foreground mb-2">If no component is selected, issuing will target the facility itself.</div>
+                                                    <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
+                                                        {availableComponents.map((c: FacilityComponent) => (
+                                                            <Button
+                                                                key={c.id}
+                                                                variant={selectedComponentId === c.id ? 'default' : 'outline'}
+                                                                size="sm"
+                                                                onClick={() => setSelectedComponentId(c.id)}
+                                                                className="justify-start"
+                                                            >
+                                                                {c.name}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-4 flex-1 flex flex-col">
                                 <h3 className="font-semibold text-sm">Available Inventory</h3>
-                                <div className="relative">
+                                <div className="relative flex-shrink-0">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         type="search"
@@ -460,7 +667,7 @@ export default function IssueMaterialPage() {
                                         disabled={!selectedComplexId}
                                     />
                                 </div>
-                                <ScrollArea className="h-[250px] border rounded-md">
+                                <ScrollArea className="flex-1 border rounded-md min-h-0">
                                     {selectedComplexId ? (
                                         <div className="p-2 space-y-2">
                                             {availableInventory.length > 0 ? availableInventory.map(item => {
@@ -496,19 +703,19 @@ export default function IssueMaterialPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="h-full flex flex-col">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
                         <CardDescription>Review all items and locations before submitting.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[430px]">
+                    <CardContent className="flex-1 overflow-hidden flex flex-col">
+                        <ScrollArea className="flex-1 min-h-0">
                         {voucherLocations.length > 0 ? (
                             <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
                                 {voucherLocations.map(location => (
                                     <AccordionItem key={location.locationId} value={location.locationId}>
                                         <AccordionTrigger className="font-semibold text-base">
-                                            {location.locationName}
+                                            <span dir="ltr">{location.locationName}</span>
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <Table>

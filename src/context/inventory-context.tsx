@@ -50,6 +50,10 @@ export interface InventoryTransaction {
   roomId?: string;
   movementType?: string;
   timestamp?: number | string | Date;
+  // Optional override (lifespan) metadata when issuing within expected lifetime
+  overrideReason?: string | null;
+  overrideById?: string;
+  overrideByName?: string;
 }
 
 export interface DepreciationRequest {
@@ -293,7 +297,7 @@ interface InventoryContextType {
   approveTransfer: (transferId: string, approverId: string) => Promise<void>;
   rejectTransfer: (transferId: string, rejecterId: string) => Promise<void>;
   // For issuing, only id and quantity are required; names are optional and resolved from inventory when available
-  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => Promise<void>;
+  issueItemsFromStock: (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string, overrideReason?: string | null}>[]) => Promise<void>;
   getInventoryTransactions: (itemId: string, residenceId: string) => Promise<InventoryTransaction[]>;
   getAllInventoryTransactions: () => Promise<InventoryTransaction[]>;
   getAllInventoryTransactionsRaw?: () => Promise<any[]>;
@@ -341,6 +345,13 @@ interface InventoryContextType {
   getMRVRequests: (status?: MRVRequest['status']) => Promise<MRVRequest[]>;
   approveMRVRequest: (requestId: string, approverId: string) => Promise<string>;
   rejectMRVRequest: (requestId: string, rejecterId: string, reason?: string) => Promise<void>;
+  // Lifespan helper for proactive checks
+  checkItemLifespanAtLocation: (itemId: string, locationId: string) => Promise<{
+    lifespanDays: number | null;
+    lastIssueDate: Timestamp | null;
+    daysSinceLastIssue: number | null;
+    withinLifespan: boolean; // true means still within lifespan window (i.e., should block unless override)
+  }>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -683,7 +694,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return `TRS-${yy}${mmNoPad}${nextSeq}`;
   };
 
-  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string}>[]) => {
+  const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string, overrideReason?: string | null}>[]) => {
     if (!db) {
         throw new Error(firebaseErrorMessage);
     }
@@ -754,8 +765,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
               return s;
             };
 
-            for (const location of voucherLocations) {
-                for (const issuedItem of location.items) {
+      for (const location of voucherLocations) {
+        for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
                     totalItemsCount += issuedItem.issueQuantity;
 
@@ -763,7 +774,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
                     const snap = itemSnapshots.get(issuedItem.id);
                     const inv: any = snap?.data() || {};
-                    transaction.set(transactionRef, {
+          transaction.set(transactionRef, {
                         itemId: issuedItem.id,
                         itemNameEn: inv.nameEn || inv.name || pretty(issuedItem.nameEn) || '',
                         itemNameAr: inv.nameAr || inv.name || pretty(issuedItem.nameAr) || '',
@@ -773,7 +784,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         quantity: issuedItem.issueQuantity,
                         referenceDocId: mivId,
                         locationId: location.locationId,
-                        locationName: location.locationName,
+            locationName: location.locationName,
+            overrideReason: (issuedItem as any).overrideReason || null,
+            overrideById: (issuedItem as any).overrideReason ? (currentUser?.id || null) : undefined,
+            overrideByName: (issuedItem as any).overrideReason ? (currentUser?.name || undefined) : undefined,
                     } as Omit<InventoryTransaction, 'id'>);
                 }
             }
@@ -996,6 +1010,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error fetching last issue date:', error);
       toast({ title: 'Error', description: 'Failed to fetch last issue date.', variant: 'destructive' });
       return null;
+    }
+  };
+
+  // Helper: compute lifespan status for an item at a specific location
+  const checkItemLifespanAtLocation = async (
+    itemId: string,
+    locationId: string
+  ): Promise<{ lifespanDays: number | null; lastIssueDate: Timestamp | null; daysSinceLastIssue: number | null; withinLifespan: boolean }> => {
+    if (!db) {
+      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      return { lifespanDays: null, lastIssueDate: null, daysSinceLastIssue: null, withinLifespan: false };
+    }
+    try {
+      const itemRef = doc(db, 'inventory', itemId);
+      const itemSnap = await getDoc(itemRef);
+      const item = itemSnap.exists() ? (itemSnap.data() as any) : null;
+      const lifespanDays: number | null = item && typeof item.lifespanDays === 'number' && item.lifespanDays > 0 ? Number(item.lifespanDays) : null;
+      const lastIssueDate = await getLastIssueDateForItemAtLocation(itemId, locationId);
+      if (!lifespanDays || !lastIssueDate) {
+        return { lifespanDays, lastIssueDate, daysSinceLastIssue: null, withinLifespan: false };
+      }
+      const now = Date.now();
+      const daysSince = Math.floor((now - lastIssueDate.toMillis()) / (1000 * 60 * 60 * 24));
+      const within = daysSince < lifespanDays;
+      return { lifespanDays, lastIssueDate, daysSinceLastIssue: daysSince, withinLifespan: within };
+    } catch (e) {
+      console.error('checkItemLifespanAtLocation failed', e);
+      return { lifespanDays: null, lastIssueDate: null, daysSinceLastIssue: null, withinLifespan: false };
     }
   };
 
@@ -2343,6 +2385,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getMRVs,
       getMRVById,
       // MRV requests
+  checkItemLifespanAtLocation,
       getMRVRequests,
       approveMRVRequest,
       rejectMRVRequest,

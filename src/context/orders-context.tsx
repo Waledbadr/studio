@@ -15,6 +15,31 @@ import type { DocumentReference } from 'firebase/firestore';
 export interface OrderItem extends InventoryItem {
   quantity: number;
   notes?: string;
+  // New: optional target location metadata for planned installation
+  targetLocationId?: string;
+  targetLocationName?: string;
+  // Optional: if this line is intended to override lifespan policy (for audit)
+  overrideReason?: string | null;
+  // Admin review fields for per-line justification
+  justificationDecision?: 'approved' | 'rejected';
+  justificationReviewNote?: string;
+  // Admin can approve partial quantity per line
+  approvedQuantity?: number;
+}
+
+// Optional planned distribution to reuse during issuing (MIV)
+export interface PlannedDistributionItem {
+  id: string;
+  detail?: string;
+  quantity: number;
+  overrideReason?: string | null;
+}
+
+export interface PlannedDistributionLocation {
+  locationId: string;
+  locationName: string;
+  isFacility: boolean;
+  items: PlannedDistributionItem[];
 }
 
 export interface ReceivedOrderItem {
@@ -38,6 +63,8 @@ export interface Order {
   itemsReceived?: ReceivedOrderItem[]; // Tracks total received quantities per item
   status: OrderStatus;
   notes?: string;
+  // Optional: Saved distribution plan for later issuing steps
+  plannedDistribution?: PlannedDistributionLocation[];
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived' | 'approvedById'>;
@@ -174,7 +201,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       const newOrderId = await generateNewOrderId();
       const newOrderRef = doc(db, "orders", newOrderId);
 
-      const newOrder: Omit<Order, 'id'> = {
+  const newOrder: Omit<Order, 'id'> = {
         ...safeOrderData,
         requestedByName: requesterName,
         requestedByEmail: requesterEmail,

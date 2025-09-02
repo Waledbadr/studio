@@ -48,7 +48,8 @@ export default function MRVDetailsPage() {
 
   // Merge duplicate items by itemId and attach unit from inventory
   const mergedItems = useMemo(() => {
-    const list = data?.items || [];
+    const listRaw = data?.items as any;
+    const list = Array.isArray(listRaw) ? listRaw : (listRaw && typeof listRaw === 'object' ? Object.values(listRaw) : []);
     const byId = new Map<string, { itemId: string; itemNameEn: string; itemNameAr: string; quantity: number; unit?: string }>();
     const getUnit = (itemId: string): string | undefined => {
       const exact = inventoryItems?.find(i => i.id === itemId);

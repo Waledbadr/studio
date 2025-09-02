@@ -324,6 +324,7 @@ export default function NewOrderPage() {
                 // Clear draft on success
                 clearDraft();
                 setOrderItems([]);
+                setGeneralNotes('');
                 router.push(`/inventory/orders/${newOrderId}`);
             }
         } finally {
@@ -602,7 +603,7 @@ function AddItemButton({
                     {lastDraftSavedAt && (
                         <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
                     )}
-                        {hasDraft && (
+                    {hasDraft && (
                         <Button variant="outline" onClick={() => { setOrderItems([]); setGeneralNotes(''); /* keep residence */ clearDraft(); }}>
                             {dict.ui?.discardDraft || 'Discard Draft'}
                         </Button>

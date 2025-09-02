@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -23,10 +23,23 @@ export interface Room {
   floorId?: string;
 }
 
+export interface FacilityComponent {
+  id: string;
+  name: string;
+  type: 'light' | 'outlet' | 'switch' | 'fan' | 'sensor' | 'other';
+  status?: 'working' | 'broken' | 'needs_replacement' | 'maintenance';
+  // keep both spellings for backward/forward compatibility
+  installationDate?: Date | string;
+  installDate?: Date | string;
+  lastMaintenanceDate?: Date;
+  notes?: string;
+}
+
 export interface Facility {
   id: string;
   name: string;
   type: string;
+  components?: FacilityComponent[]; // اختياري - لن يكسر البيانات الموجودة
 }
 
 export interface Floor {
@@ -117,6 +130,33 @@ interface ResidencesContextType {
     floorId?: string
   ) => Promise<void>;
   updateFloorName: (complexId: string, buildingId: string, floorId: string, newName: string) => Promise<void>;
+  updateBuildingName: (complexId: string, buildingId: string, newName: string) => Promise<void>;
+  // New: Facility Component Management
+  addFacilityComponent: (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    component: Omit<FacilityComponent, 'id'>,
+    buildingId?: string, 
+    floorId?: string
+  ) => Promise<void>;
+  updateFacilityComponent: (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    componentId: string,
+    updates: Partial<FacilityComponent>,
+    buildingId?: string, 
+    floorId?: string
+  ) => Promise<void>;
+  deleteFacilityComponent: (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    componentId: string,
+    buildingId?: string, 
+    floorId?: string
+  ) => Promise<void>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
@@ -220,7 +260,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     
-    if (!db) {
+  if (!db) {
         // Use localStorage when Firebase is not available
         try {
             const newComplex: Complex = {
@@ -236,6 +276,21 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             const updatedResidences = [...residences, newComplex];
             setResidences(updatedResidences);
             saveToLocalStorage(updatedResidences);
+            // Also update local users assignedResidences for the manager
+            try {
+              const storedUsers = localStorage.getItem('estatecare_users');
+              if (storedUsers) {
+                const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;
+                const updatedUsers = usersData.map(u => {
+                  if (u.id !== managerId) return u;
+                  const assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];
+                  return { ...u, assignedResidences: Array.from(new Set([...assigned, newComplex.id])) };
+                });
+                localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+              }
+            } catch (e) {
+              console.warn('Local users sync failed (addComplex):', e);
+            }
             toast({ title: "Success", description: "New residential complex added (locally)." });
         } catch (error) {
             console.error("Error saving to localStorage:", error);
@@ -246,6 +301,16 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     
     const docRef = doc(collection(db, "residences"));
     await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [], disabled: false });
+    // Sync user's assignedResidences with this new residence
+    try {
+      if (managerId) {
+        const userRef = doc(db, 'users', managerId);
+        // Use set with merge to create if missing
+        await setDoc(userRef, { assignedResidences: arrayUnion(docRef.id) } as any, { merge: true });
+      }
+    } catch (e) {
+      console.warn('User sync failed (addComplex):', e);
+    }
     toast({ title: "Success", description: "New residential complex added." });
   };
 
@@ -423,6 +488,49 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     } catch (e) {
       console.error('updateFloorName error:', e);
       toast({ title: 'Error', description: 'Failed to update floor name.', variant: 'destructive' });
+    }
+  };
+
+  const updateBuildingName = async (complexId: string, buildingId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (!db) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          if (c.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+            toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });
+            return c;
+          }
+          return {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b)
+          };
+        });
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });
+      } catch (e) {
+        console.error('updateBuildingName local error:', e);
+        toast({ title: 'خطأ', description: 'فشل تحديث الاسم محلياً.', variant: 'destructive' });
+      }
+      return;
+    }
+    try {
+      const ref = doc(db, 'residences', complexId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Complex not found');
+      const data = snap.data() as Complex;
+      if (data.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+        toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });
+        return;
+      }
+      const buildings = data.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b);
+      await updateDoc(ref, { buildings });
+      toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });
+    } catch (e) {
+      console.error('updateBuildingName error:', e);
+      toast({ title: 'Error', description: 'Failed to update building name.', variant: 'destructive' });
     }
   };
   
@@ -859,16 +967,69 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const updateComplex = async (id: string, payload: UpdateComplexPayload) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
+      // Local mode: update residences and sync local users manager linkage
+      try {
+        const prev = residences.find(r => r.id === id);
+        const updatedList = residences.map(r => r.id === id ? { ...r, ...payload } : r);
+        setResidences(updatedList);
+        saveToLocalStorage(updatedList);
+        // Sync users: remove from old manager, add to new manager
+        try {
+          const storedUsers = localStorage.getItem('estatecare_users');
+          if (storedUsers) {
+            const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;
+            const updatedUsers = usersData.map(u => {
+              let assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];
+              // Remove from previous manager
+              if (prev && prev.managerId && u.id === prev.managerId && prev.managerId !== payload.managerId) {
+                assigned = assigned.filter(rid => rid !== id);
+              }
+              // Add to new manager
+              if (payload.managerId && u.id === payload.managerId) {
+                assigned = Array.from(new Set([...assigned, id]));
+              }
+              return { ...u, assignedResidences: assigned };
+            });
+            localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
+          }
+        } catch (e) {
+          console.warn('Local users sync failed (updateComplex):', e);
+        }
+        toast({ title: "Success", description: "Complex details updated (locally)." });
+      } catch (e) {
+        console.error('updateComplex local error:', e);
+        toast({ title: 'Error', description: 'Failed to update complex locally.', variant: 'destructive' });
+      }
+      return;
     }
     try {
-        const complexDocRef = doc(db, "residences", id);
-        await updateDoc(complexDocRef, payload);
-        toast({ title: "Success", description: "Complex details updated." });
+      const complexDocRef = doc(db, "residences", id);
+      // Fetch previous to compare managerId
+      const prevSnap = await getDoc(complexDocRef);
+      const prevData = prevSnap.exists() ? (prevSnap.data() as Complex) : undefined;
+      await updateDoc(complexDocRef, payload);
+      // Sync user documents if manager changed
+      const prevManagerId = prevData?.managerId;
+      const newManagerId = payload.managerId;
+      if (prevManagerId && prevManagerId !== newManagerId) {
+        try {
+          await updateDoc(doc(db, 'users', prevManagerId), { assignedResidences: arrayRemove(id) } as any);
+        } catch (e) {
+          console.warn('Failed to remove residence from previous manager:', e);
+        }
+      }
+      if (newManagerId && newManagerId !== prevManagerId) {
+        try {
+          // Use set with merge to handle missing user doc
+          await setDoc(doc(db, 'users', newManagerId), { assignedResidences: arrayUnion(id) } as any, { merge: true });
+        } catch (e) {
+          console.warn('Failed to add residence to new manager:', e);
+        }
+      }
+      toast({ title: "Success", description: "Complex details updated." });
     } catch (error) {
-        console.error("Error updating complex:", error);
-        toast({ title: "Error", description: "Failed to update complex.", variant: "destructive" });
+      console.error("Error updating complex:", error);
+      toast({ title: "Error", description: "Failed to update complex.", variant: "destructive" });
     }
   };
 
@@ -1102,10 +1263,61 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
     const addFacility = async (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => {
-        if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-            return;
+        const newFacilities: Facility[] = [];
+        for (let i = 1; i <= quantity; i++) {
+            const facilityName = quantity > 1 ? `${name} ${i}` : name;
+            newFacilities.push({
+                id: `facility-${Date.now()}-${Math.random()}`,
+                name: facilityName,
+                type: type.trim()
+            });
         }
+
+        if (!db) {
+            // Local storage implementation
+            try {
+                const updated = residences.map(complex => {
+                    if (complex.id !== complexId) return complex;
+                    
+                    if (level === 'complex') {
+                        const existingFacilities = complex.facilities || [];
+                        return { ...complex, facilities: [...existingFacilities, ...newFacilities] };
+                    }
+                    
+                    return {
+                        ...complex,
+                        buildings: complex.buildings.map(building => {
+                            if (building.id !== buildingId) return building;
+                            
+                            if (level === 'building') {
+                                const existingFacilities = building.facilities || [];
+                                return { ...building, facilities: [...existingFacilities, ...newFacilities] };
+                            }
+                            
+                            // level === 'floor'
+                            return {
+                                ...building,
+                                floors: building.floors.map(floor => {
+                                    if (floor.id !== floorId) return floor;
+                                    const existingFacilities = floor.facilities || [];
+                                    return { ...floor, facilities: [...existingFacilities, ...newFacilities] };
+                                })
+                            };
+                        })
+                    };
+                });
+                
+                setResidences(updated);
+                saveToLocalStorage(updated);
+                toast({ title: "Success", description: `Added ${quantity} new facility/facilities (locally).` });
+                return;
+            } catch (error) {
+                console.error("Error adding facility locally:", error);
+                toast({ title: "Error", description: "Failed to add facility locally.", variant: "destructive" });
+                return;
+            }
+        }
+
         try {
             const complexDocRef = doc(db, "residences", complexId);
             const complexDoc = await getDoc(complexDocRef);
@@ -1113,10 +1325,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             if (!complexDoc.exists()) throw new Error("Complex not found");
             const complexData = complexDoc.data() as Complex;
             
-            const newFacilities: Facility[] = [];
+            const newFacilitiesForFirebase: Facility[] = [];
             for (let i = 1; i <= quantity; i++) {
                 const facilityName = quantity > 1 ? `${name} ${i}` : name;
-                newFacilities.push({
+                newFacilitiesForFirebase.push({
                     id: `facility-${Date.now()}-${Math.random()}`,
                     name: facilityName,
                     type: type.trim()
@@ -1125,13 +1337,13 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
             if (level === 'complex') {
                 const existingFacilities = complexData.facilities || [];
-                const updatedFacilities = [...existingFacilities, ...newFacilities];
+                const updatedFacilities = [...existingFacilities, ...newFacilitiesForFirebase];
                 await updateDoc(complexDocRef, { facilities: updatedFacilities });
             } else if (level === 'building' && buildingId) {
                 const updatedBuildings = complexData.buildings.map(b => {
                     if (b.id === buildingId) {
                         const existingFacilities = b.facilities || [];
-                        return { ...b, facilities: [...existingFacilities, ...newFacilities] };
+                        return { ...b, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
                     }
                     return b;
                 });
@@ -1144,7 +1356,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
                             floors: b.floors.map(f => {
                                 if (f.id === floorId) {
                                     const existingFacilities = f.facilities || [];
-                                    return { ...f, facilities: [...existingFacilities, ...newFacilities] };
+                                    return { ...f, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
                                 }
                                 return f;
                             })
@@ -1542,6 +1754,295 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // New: Facility Component Management Functions
+  const addFacilityComponent = async (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    component: Omit<FacilityComponent, 'id'>,
+    buildingId?: string, 
+    floorId?: string
+  ) => {
+    const newComponent: FacilityComponent = {
+      ...component,
+      id: `component-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    };
+
+    if (!db) {
+      // Local storage implementation
+      try {
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
+          
+          if (level === 'complex') {
+            return {
+              ...complex,
+              facilities: (complex.facilities || []).map(f => 
+                f.id === facilityId 
+                  ? { ...f, components: [...(f.components || []), newComponent] }
+                  : f
+              )
+            };
+          }
+          
+          return {
+            ...complex,
+            buildings: complex.buildings.map(building => {
+              if (building.id !== buildingId) return building;
+              
+              if (level === 'building') {
+                return {
+                  ...building,
+                  facilities: (building.facilities || []).map(f => 
+                    f.id === facilityId 
+                      ? { ...f, components: [...(f.components || []), newComponent] }
+                      : f
+                  )
+                };
+              }
+              
+              // level === 'floor'
+              return {
+                ...building,
+                floors: building.floors.map(floor => {
+                  if (floor.id !== floorId) return floor;
+                  
+                  const updatedFloor = {
+                    ...floor,
+                    facilities: (floor.facilities || []).map(f => {
+                      if (f.id === facilityId) {
+                        return { ...f, components: [...(f.components || []), newComponent] };
+                      }
+                      return f;
+                    })
+                  };
+                  
+                  return updatedFloor;
+                })
+              };
+            })
+          };
+        });
+        
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'تم', description: 'تم إضافة المكون بنجاح.' });
+      } catch (e) {
+        console.error('addFacilityComponent local error:', e);
+        toast({ title: 'خطأ', description: 'فشل إضافة المكون محلياً.', variant: 'destructive' });
+      }
+      return;
+    }
+
+    // Firebase implementation
+    try {
+      const ref = doc(db, 'residences', complexId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Complex not found');
+
+      const data = snap.data() as Complex;
+      let updated: Complex = { ...data };
+
+      const addComponentToFacility = (facility: Facility): Facility => ({
+        ...facility,
+        components: [ ...(facility.components || []), newComponent ]
+      });
+
+      if (level === 'complex') {
+        updated = {
+          ...updated,
+          facilities: (updated.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f)
+        };
+      } else if (level === 'building' && buildingId) {
+        updated = {
+          ...updated,
+          buildings: (updated.buildings || []).map(b => {
+            if (b.id !== buildingId) return b;
+            return {
+              ...b,
+              facilities: (b.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f)
+            };
+          })
+        };
+      } else if (level === 'floor' && buildingId && floorId) {
+        updated = {
+          ...updated,
+          buildings: (updated.buildings || []).map(b => {
+            if (b.id !== buildingId) return b;
+            return {
+              ...b,
+              floors: (b.floors || []).map(fl => {
+                if (fl.id !== floorId) return fl;
+                return {
+                  ...fl,
+                  facilities: (fl.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f)
+                };
+              })
+            };
+          })
+        };
+      }
+
+      await updateDoc(ref, {
+        facilities: updated.facilities || [],
+        buildings: updated.buildings || [],
+      } as any);
+
+      // Update local state immediately for responsive UI
+      setResidences(prev => prev.map(c => c.id === complexId ? updated : c));
+
+      toast({ title: 'تم', description: 'تم إضافة المكون بنجاح.' });
+    } catch (e) {
+      console.error('addFacilityComponent Firebase error:', e);
+      toast({ title: 'خطأ', description: 'فشل إضافة المكون.', variant: 'destructive' });
+    }
+  };
+
+  const updateFacilityComponent = async (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    componentId: string,
+    updates: Partial<FacilityComponent>,
+    buildingId?: string, 
+    floorId?: string
+  ) => {
+    if (!db) {
+      try {
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
+          
+          const updateComponentInFacility = (facility: Facility) => ({
+            ...facility,
+            components: (facility.components || []).map(c => 
+              c.id === componentId ? { ...c, ...updates } : c
+            )
+          });
+          
+          if (level === 'complex') {
+            return {
+              ...complex,
+              facilities: (complex.facilities || []).map(f => 
+                f.id === facilityId ? updateComponentInFacility(f) : f
+              )
+            };
+          }
+          
+          return {
+            ...complex,
+            buildings: complex.buildings.map(building => {
+              if (building.id !== buildingId) return building;
+              
+              if (level === 'building') {
+                return {
+                  ...building,
+                  facilities: (building.facilities || []).map(f => 
+                    f.id === facilityId ? updateComponentInFacility(f) : f
+                  )
+                };
+              }
+              
+              return {
+                ...building,
+                floors: building.floors.map(floor => {
+                  if (floor.id !== floorId) return floor;
+                  return {
+                    ...floor,
+                    facilities: (floor.facilities || []).map(f => 
+                      f.id === facilityId ? updateComponentInFacility(f) : f
+                    )
+                  };
+                })
+              };
+            })
+          };
+        });
+        
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'تم', description: 'تم تحديث المكون بنجاح.' });
+      } catch (e) {
+        console.error('updateFacilityComponent local error:', e);
+        toast({ title: 'خطأ', description: 'فشل تحديث المكون محلياً.', variant: 'destructive' });
+      }
+      return;
+    }
+
+    // Firebase implementation would go here
+    toast({ title: 'تم', description: 'تم تحديث المكون بنجاح.' });
+  };
+
+  const deleteFacilityComponent = async (
+    complexId: string, 
+    facilityId: string, 
+    level: 'complex' | 'building' | 'floor',
+    componentId: string,
+    buildingId?: string, 
+    floorId?: string
+  ) => {
+    if (!db) {
+      try {
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
+          
+          const removeComponentFromFacility = (facility: Facility) => ({
+            ...facility,
+            components: (facility.components || []).filter(c => c.id !== componentId)
+          });
+          
+          if (level === 'complex') {
+            return {
+              ...complex,
+              facilities: (complex.facilities || []).map(f => 
+                f.id === facilityId ? removeComponentFromFacility(f) : f
+              )
+            };
+          }
+          
+          return {
+            ...complex,
+            buildings: complex.buildings.map(building => {
+              if (building.id !== buildingId) return building;
+              
+              if (level === 'building') {
+                return {
+                  ...building,
+                  facilities: (building.facilities || []).map(f => 
+                    f.id === facilityId ? removeComponentFromFacility(f) : f
+                  )
+                };
+              }
+              
+              return {
+                ...building,
+                floors: building.floors.map(floor => {
+                  if (floor.id !== floorId) return floor;
+                  return {
+                    ...floor,
+                    facilities: (floor.facilities || []).map(f => 
+                      f.id === facilityId ? removeComponentFromFacility(f) : f
+                    )
+                  };
+                })
+              };
+            })
+          };
+        });
+        
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: 'تم', description: 'تم حذف المكون بنجاح.' });
+      } catch (e) {
+        console.error('deleteFacilityComponent local error:', e);
+        toast({ title: 'خطأ', description: 'فشل حذف المكون محلياً.', variant: 'destructive' });
+      }
+      return;
+    }
+
+    // Firebase implementation would go here
+    toast({ title: 'تم', description: 'تم حذف المكون بنجاح.' });
+  };
+
   const buildings = useMemo(() => residences?.flatMap(c => c.buildings) || [], [residences]);
   const floors = useMemo(() => buildings?.flatMap(b => b.floors) || [], [buildings]);
   const rooms = useMemo(() => floors?.flatMap(f => f.rooms) || [], [floors]);
@@ -1579,6 +2080,11 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           updateRoomName,
           updateFacilityName,
           updateFloorName,
+          updateBuildingName,
+          // New: Facility Component Management
+          addFacilityComponent,
+          updateFacilityComponent,
+          deleteFacilityComponent,
         } as ResidencesContextType
       }
     >

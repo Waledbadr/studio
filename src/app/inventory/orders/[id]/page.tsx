@@ -17,7 +17,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { useResidences } from '@/context/residences-context';
 // Subscribe to Firestore document for real-time updates
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -35,6 +35,44 @@ export default function OrderDetailPage() {
     const [requestedByNameLocal, setRequestedByNameLocal] = useState<string>('...');
     const requestedByName = order?.requestedByName || requestedBy?.name || requestedByNameLocal || order?.requestedByEmail || '...';
     const approvedByName = order?.approvedByName || approvedBy?.name || '...';
+
+    // Last dates for items with justifications (per residence)
+    const [lastDates, setLastDates] = useState<Record<string, { lastReceive?: Date | null; lastIssue?: Date | null }>>({});
+    useEffect(() => {
+        const run = async () => {
+            if (!db || !order) return;
+            const residenceId = order.residenceId;
+            const itemsNeedingReview = Array.isArray(order.items) ? order.items.map((it, idx) => ({ it, idx })).filter(x => !!x.it.overrideReason) : [];
+            const results: Record<string, { lastReceive?: Date | null; lastIssue?: Date | null }> = {};
+            const getBaseId = (raw?: string) => (raw || '').split('-')[0];
+            await Promise.all(itemsNeedingReview.map(async ({ it }) => {
+                const key = it.id;
+                const baseId = getBaseId(it.id as any);
+                const txCol = collection(db as any, 'inventoryTransactions');
+                // Last receive (IN/RECEIVE)
+                const recvQ = fbQuery(txCol, where('residenceId', '==', residenceId), where('itemId', '==', baseId), where('type', 'in', ['RECEIVE', 'IN'] as any));
+                const recvSnap = await getDocs(recvQ);
+                let lastRecv: Date | null = null;
+                recvSnap.forEach(docu => {
+                    const d = (docu.data() as any)?.date;
+                    const dt = d?.toDate ? d.toDate() : (d ? new Date(d) : null);
+                    if (dt && (!lastRecv || dt > lastRecv)) lastRecv = dt;
+                });
+                // Last issue (OUT)
+                const outQ = fbQuery(txCol, where('residenceId', '==', residenceId), where('itemId', '==', baseId), where('type', '==', 'OUT'));
+                const outSnap = await getDocs(outQ);
+                let lastOut: Date | null = null;
+                outSnap.forEach(docu => {
+                    const d = (docu.data() as any)?.date;
+                    const dt = d?.toDate ? d.toDate() : (d ? new Date(d) : null);
+                    if (dt && (!lastOut || dt > lastOut)) lastOut = dt;
+                });
+                results[key] = { lastReceive: lastRecv, lastIssue: lastOut };
+            }));
+            setLastDates(results);
+        };
+        run();
+    }, [order?.id]);
 
     // Resolve requester name if missing by fetching users/{requestedById} or by email
     useEffect(() => {
@@ -72,7 +110,13 @@ export default function OrderDetailPage() {
         const ref = doc(db, 'orders', id);
         const unsub = onSnapshot(ref, (snap) => {
             if (snap.exists()) {
-                setOrder({ id: snap.id, ...(snap.data() as any) } as Order);
+                const data = snap.data() as any;
+                // Ensure items is always an array
+                const normalizedData = {
+                    ...data,
+                    items: Array.isArray(data.items) ? data.items : []
+                };
+                setOrder({ id: snap.id, ...normalizedData } as Order);
             } else {
                 setOrder(null);
             }
@@ -158,10 +202,13 @@ export default function OrderDetailPage() {
         return getStockForResidence(baseItem, order.residenceId);
     }
 
-    const totalItems = order.items.length;
+    // Render items as-is to preserve separate lines for different details
+    // Be defensive: some legacy orders may have items missing or null
+    const itemsForRender: OrderItem[] = Array.isArray(order.items) ? order.items : [];
 
+    const totalItems = itemsForRender.length;
 
-    const groupedItems = order.items.reduce((acc, item) => {
+    const groupedItems = itemsForRender.reduce((acc, item) => {
         const category = item.category || 'Uncategorized';
         if (!acc[category]) {
             acc[category] = [];
@@ -202,6 +249,19 @@ export default function OrderDetailPage() {
     const residenceNameText = order?.residence || currentResidence?.name || '—';
     const cityText = (currentResidence?.city || (currentResidence as any)?.locationString || (currentResidence as any)?.address || '').toString().trim();
     const residenceHeaderText = cityText ? `${cityText}: ${residenceNameText}` : residenceNameText;
+
+    // Safely format Firestore Timestamp | Date | string
+    const formattedOrderDate = (() => {
+        try {
+            const d: any = (order as any)?.date;
+            if (!d) return '—';
+            const jsDate: Date = typeof d?.toDate === 'function' ? d.toDate() : (d instanceof Date ? d : new Date(d));
+            if (!jsDate || isNaN(jsDate.getTime())) return '—';
+            return format(jsDate, 'PPP');
+        } catch {
+            return '—';
+        }
+    })();
 
     return (
         <div className="space-y-6">
@@ -359,7 +419,7 @@ export default function OrderDetailPage() {
                         </div>
                         <div className="text-right">
                             <p className="font-semibold print-residence-title" style={{ fontWeight: 700 }}>{residenceHeaderText}</p>
-                            <p className="text-sm text-muted-foreground print-date">{format(order.date.toDate(), 'PPP')}</p>
+                            <p className="text-sm text-muted-foreground print-date">{formattedOrderDate}</p>
                             <Badge className="mt-2 print-badge status-badge" variant={
                                 order.status === 'Delivered' ? 'default'
                                 : order.status === 'Approved' ? 'secondary'
@@ -384,13 +444,13 @@ export default function OrderDetailPage() {
                         </Card>
                     )}
                     <Table className="print-table print-compact-table">
-                        <TableHeader>
+            <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[45%]">الصنف • Item</TableHead>
                                 <TableHead className="w-[25%]">ملاحظات • Notes</TableHead>
                                 <TableHead className="w-[10%]">وحدة • Unit</TableHead>
                                 <TableHead className="w-[10%] text-right">الكمية • Qty</TableHead>
-                                <TableHead className="w-[10%] text-center">المتوفر • Stock</TableHead>
+                <TableHead className="w-[10%] text-center">المتوفر • Stock</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -401,7 +461,10 @@ export default function OrderDetailPage() {
                                             {category}
                                         </TableCell>
                                     </TableRow>
-                                    {items.map((item: OrderItem) => {
+                                    {items.map((item: OrderItem, idx: number) => {
+                                        // Safety check for item integrity
+                                        if (!item || typeof item !== 'object') return null;
+                                        
                                         const ar = splitNameDetail(item.nameAr);
                                         const en = splitNameDetail(item.nameEn);
                                         const detail = ar.detail || en.detail || '';
@@ -411,8 +474,11 @@ export default function OrderDetailPage() {
                                             if (detail) return detail;
                                             return baseNotes || '-';
                                         })();
+                                        
+                                        // Safe key generation
+                                        const safeId = item.id || `unknown-${idx}`;
                                         return (
-                                            <TableRow key={item.id}>
+                                                                                        <TableRow key={`${safeId}-${idx}`}>
                                                 <TableCell className="font-medium">
                                                     {en.base || item.nameEn} | {ar.base || item.nameAr}
                                                 </TableCell>
@@ -421,7 +487,7 @@ export default function OrderDetailPage() {
                                                 </TableCell>
                                                 <TableCell>{item.unit}</TableCell>
                                                 <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                                                <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
+                                                                                                                                                <TableCell className="text-center">{handleGetStockForResidence(item)}</TableCell>
                                             </TableRow>
                                         );
                                     })}
@@ -450,6 +516,119 @@ export default function OrderDetailPage() {
                     </div>
                 </CardFooter>
             </Card>
+                        {canApproveReject && (
+                            <Card className="no-print">
+                                <CardHeader>
+                                    <CardTitle>مراجعة التبريرات</CardTitle>
+                                    <CardDescription>الأصناف التي تتطلب قبول/رفض مع إمكانية تحديد كمية مقبولة جزئياً.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>الصنف</TableHead>
+                                                <TableHead>مبرر الطالب</TableHead>
+                                                <TableHead>آخر استلام</TableHead>
+                                                <TableHead>آخر صرف/تركيب</TableHead>
+                                                <TableHead className="text-center">قرار</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Array.isArray(order.items) ? order.items.map((it, idx) => {
+                                                if (!it || !it.overrideReason) return null;
+                                                const ar = splitNameDetail(it.nameAr);
+                                                const en = splitNameDetail(it.nameEn);
+                                                const key = it.id || `unknown-${idx}`;
+                                                const dates = lastDates[key] || {};
+                                                const fmt = (d?: Date | null) => {
+                                                    try {
+                                                        return d && !isNaN(d.getTime()) ? format(d, 'PPP') : '—';
+                                                    } catch {
+                                                        return '—';
+                                                    }
+                                                };
+                                                return (
+                                                    <TableRow key={`${key}-${idx}`}>
+                                                        <TableCell className="font-medium">{en.base || it.nameEn} | {ar.base || it.nameAr}</TableCell>
+                                                        <TableCell className="max-w-[320px] whitespace-pre-wrap">{it.overrideReason}</TableCell>
+                                                        <TableCell>{fmt(dates.lastReceive)}</TableCell>
+                                                        <TableCell>{fmt(dates.lastIssue)}</TableCell>
+                                                        <TableCell className="text-center">
+                                                            <JustificationCell orderId={order.id} itemIndex={idx} item={it as any} />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            }) : null}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        )}
         </div>
     )
+}
+
+function JustificationCell({ orderId, itemIndex, item }: { orderId: string; itemIndex: number; item: OrderItem }) {
+    // Safety checks for item properties
+    const safeItem = item || {} as OrderItem;
+    const safeQuantity = typeof safeItem.quantity === 'number' ? safeItem.quantity : 0;
+    const safeApprovedQuantity = typeof safeItem.approvedQuantity === 'number' ? safeItem.approvedQuantity : safeQuantity;
+    
+    const [note, setNote] = React.useState(safeItem.justificationReviewNote || '');
+    const [qty, setQty] = React.useState<number>(safeApprovedQuantity);
+    const decision = safeItem.justificationDecision;
+    const pending = typeof decision === 'undefined' && !!safeItem.overrideReason;
+    const disabled = !pending;
+    const clampQty = (n: number) => Math.max(0, Math.min(n, safeQuantity));
+    const apply = async (value: 'approved' | 'rejected') => {
+        try {
+            if (!db) return;
+            const ref = doc(db, 'orders', orderId);
+            const path = `items.${itemIndex}`;
+            await updateDoc(ref, {
+                [`${path}.justificationDecision`]: value,
+                [`${path}.justificationReviewNote`]: note || null,
+                [`${path}.approvedQuantity`]: value === 'approved' ? clampQty(qty) : 0,
+            } as any);
+        } catch (e) {
+            console.error('Failed to update line decision', e);
+            alert('Failed to update decision');
+        }
+    };
+    return (
+        <div className="flex flex-col items-center gap-2">
+            <div className="text-xs max-w-[220px] break-words whitespace-pre-wrap">
+                <span className="font-semibold">مبرر الطالب:</span> {safeItem.overrideReason || '—'}
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+                <span>الكمية المقبولة:</span>
+                <input
+                    type="number"
+                    className="border rounded px-2 py-1 text-xs w-20 text-center"
+                    min={0}
+                    max={safeQuantity}
+                    value={qty}
+                    onChange={(e) => setQty(clampQty(parseInt(e.target.value || '0', 10)))}
+                    disabled={!pending}
+                />
+                <span className="text-muted-foreground">/ {safeQuantity}</span>
+            </div>
+            <div className="flex items-center gap-1">
+                <Button size="sm" variant="secondary" disabled={disabled} onClick={() => apply('approved')}>قبول</Button>
+                <Button size="sm" variant="destructive" disabled={disabled} onClick={() => apply('rejected')}>رفض</Button>
+            </div>
+            <input
+                className="border rounded px-2 py-1 text-xs w-full"
+                placeholder="ملاحظة المراجع (اختياري)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={!pending}
+            />
+            {!pending && (
+                <Badge variant={decision === 'approved' ? 'default' : 'destructive'}>
+                    {decision === 'approved' ? 'مقبول' : 'مرفوض'}
+                </Badge>
+            )}
+        </div>
+    );
 }

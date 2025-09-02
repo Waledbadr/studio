@@ -183,9 +183,34 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         if ('id' in user && user.id) {
           // Update existing user by id
           const { id, ...payload } = user as User;
+          // Compute diffs for assignedResidences
+          const prevLocal = usersData.find(u => u.id === id) as User | undefined;
+          const prevAssigned = new Set(prevLocal?.assignedResidences || []);
+          const nextAssigned = new Set(payload.assignedResidences || []);
+          const added: string[] = []; const removed: string[] = [];
+          nextAssigned.forEach(rid => { if (!prevAssigned.has(rid)) added.push(rid); });
+          prevAssigned.forEach(rid => { if (!nextAssigned.has(rid)) removed.push(rid); });
+
           const updatedUsers = usersData.map((u) => u.id === id ? { ...u, ...payload, id } : u);
           localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
           setUsers(updatedUsers);
+
+          // Sync into local residences: set managerId if empty when added; clear if user was manager and removed
+          try {
+            const storedResidences = localStorage.getItem('estatecare_residences');
+            if (storedResidences) {
+              const resData = JSON.parse(storedResidences) as Array<{ id: string; managerId?: string }>
+              const updatedResidences = resData.map(r => {
+                if (added.includes(r.id) && !r.managerId) return { ...r, managerId: id };
+                if (removed.includes(r.id) && r.managerId === id) return { ...r, managerId: '' };
+                return r;
+              });
+              localStorage.setItem('estatecare_residences', JSON.stringify(updatedResidences));
+            }
+          } catch (e) {
+            console.warn('Local residences sync from user update failed:', e);
+          }
+
           toast({ title: "Success", description: "User updated successfully (locally)." });
         } else {
           // Create or link by email
@@ -216,7 +241,43 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         // Update existing user document directly (users/{id})
         const { id, ...payload } = user as User;
         const userRef = doc(db!, 'users', id);
+        // Compute diffs for assignedResidences to sync residences.managerId
+        const prevUser = users.find(u => u.id === id) || null;
+        const prevAssigned = new Set(prevUser?.assignedResidences || []);
+        const nextAssigned = new Set(payload.assignedResidences || []);
+        const added: string[] = [];
+        const removed: string[] = [];
+        nextAssigned.forEach(rid => { if (!prevAssigned.has(rid)) added.push(rid); });
+        prevAssigned.forEach(rid => { if (!nextAssigned.has(rid)) removed.push(rid); });
+
         await updateDoc(userRef, { ...payload });
+
+        // Two-way sync: when user gains a residence, set it as manager if empty; when loses and was manager, clear.
+        try {
+          for (const rid of added) {
+            const resRef = doc(db!, 'residences', rid);
+            const snap = await getDoc(resRef);
+            if (snap.exists()) {
+              const data = snap.data() as any;
+              if (!data.managerId) {
+                await updateDoc(resRef, { managerId: id });
+              }
+            }
+          }
+          for (const rid of removed) {
+            const resRef = doc(db!, 'residences', rid);
+            const snap = await getDoc(resRef);
+            if (snap.exists()) {
+              const data = snap.data() as any;
+              if ((data.managerId || '') === id) {
+                await updateDoc(resRef, { managerId: '' });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Residences sync from user update failed:', e);
+        }
+
         toast({ title: "Success", description: "User updated successfully." });
       } else {
         // Create user via Admin API using Auth as source of truth.
@@ -249,7 +310,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
         toast({ title: "Success", description: "User created and linked to Auth." });
       }
-    } catch (error) {
+  } catch (error) {
       console.error('Error saving user:', error);
       const msg = (error as Error)?.message || 'Failed to save user.';
       toast({ title: 'Error', description: msg, variant: 'destructive' });
