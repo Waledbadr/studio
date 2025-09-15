@@ -860,7 +860,13 @@ export default function RequestIssuePage() {
                                     <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <Button variant="ghost" size="icon" onClick={() => setItemToEdit(item)}><Edit className="h-4 w-4" /></Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
                                     <AddItemButton item={item} disabled={!isLocationSelected} />
                                   </div>
                                 </div>
@@ -881,7 +887,13 @@ export default function RequestIssuePage() {
                               <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => setItemToEdit(item)}><Edit className="h-4 w-4" /></Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
                               <AddItemButton item={item} disabled={!isLocationSelected} />
                             </div>
                           </div>
