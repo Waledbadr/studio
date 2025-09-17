@@ -116,7 +116,6 @@ export function AppSidebar() {
         { href: '/inventory/orders', label: dict.sidebar?.materialRequests || 'Material Requests', abbreviation: ' (MR)', icon: ListOrdered },
         { href: '/inventory/receive', label: dict.sidebar?.receiveMaterials || 'Receive Materials', abbreviation: ' (MRV)', icon: PackageCheck },
         { href: '/inventory/issue', label: dict.sidebar?.issueMaterials || 'Issue Materials', abbreviation: ' (MIV)', icon: ClipboardMinus, exact: true },
-  { href: '/inventory/precheck', label: 'MR Precheck (Beta)', icon: History },
   { href: '/inventory/request-issue', label: 'Request + Issue (Beta)', icon: PackageCheck },
       ]
     },
