@@ -58,7 +58,8 @@ export default function FunctionTestPage() {
         setResult('addFacilityComponent: Success');
       }
     } catch (error) {
-      setResult(`${functionName}: Error - ${error.message}`);
+      const e: any = error;
+      setResult(`${functionName}: Error - ${e?.message || String(e)}`);
     }
   };
 
@@ -69,8 +70,8 @@ export default function FunctionTestPage() {
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">الدوال المتاحة:</h2>
         <ul className="list-disc list-inside text-sm">
-          {Object.keys(context).map(key => (
-            <li key={key}>{key}: {typeof context[key]}</li>
+          {Object.keys(context as any).map(key => (
+            <li key={key}>{key}: {typeof (context as any)[key]}</li>
           ))}
         </ul>
       </div>

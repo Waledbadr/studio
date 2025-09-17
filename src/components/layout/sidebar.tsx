@@ -58,6 +58,7 @@ export function AppSidebar() {
             <nav className="space-y-2">
               <a href="/accommodation/residences" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
               <a href="/accommodation/assign" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
+                  <a href="/accommodation/workers" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">🧑‍💼 Manage workers</a>
             </nav>
           </div>
         </SidebarContent>

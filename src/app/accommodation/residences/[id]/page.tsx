@@ -49,6 +49,26 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     return () => { mounted = false; };
   }, [id, residences, loadResidences]);
 
+  // load occupants and workers from localStorage for display
+  useEffect(() => {
+    try {
+      const oRaw = typeof window !== 'undefined' ? localStorage.getItem('ac_occupants') : null;
+      const wRaw = typeof window !== 'undefined' ? localStorage.getItem('ac_workers') : null;
+      const tRaw = typeof window !== 'undefined' ? localStorage.getItem('ac_transfers') : null;
+      const occ = oRaw ? JSON.parse(oRaw) : [];
+      const w = wRaw ? JSON.parse(wRaw) : [];
+      const trs = tRaw ? JSON.parse(tRaw) : [];
+      setOccupants(occ.filter((o:any) => o.residenceId === id));
+      const map: Record<string, any> = {};
+      for (const wk of w) map[wk.id] = wk;
+      setWorkersMap(map);
+      setTransfers(trs);
+    } catch (e) {
+      console.error('failed to load occupancy data', e);
+    }
+  }, [id]);
+
+
   if (loading) return <div>{dict.loading || 'Loading...'}</div>;
   if (error) return <div className="text-red-600">{error}</div>;
   if (!residence) return <div>{dict.noResidenceData || 'No residence data.'}</div>;
@@ -60,6 +80,9 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
   );
   const [tenantName, setTenantName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [occupants, setOccupants] = useState<any[]>([]);
+  const [workersMap, setWorkersMap] = useState<Record<string, any>>({});
+  const [transfers, setTransfers] = useState<any[]>([]);
 
   const handleAssign = async () => {
     if (!selectedRoom || !tenantName) return alert('Select a room and enter tenant name');
@@ -80,6 +103,32 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
       setSubmitting(false);
     }
   };
+
+  function occupantsForRoom(roomId: string) {
+    return occupants.filter(o => o.roomId === roomId);
+  }
+
+  // Swap two occupants if nationality matches
+  function swapOccupants(aId: string, bId: string) {
+    const a = occupants.find(o=>o.workerId===aId);
+    const b = occupants.find(o=>o.workerId===bId);
+    if (!a || !b) return alert('Occupants not found');
+    const wa = workersMap[a.workerId];
+    const wb = workersMap[b.workerId];
+    if (wa?.nationaliy !== wb?.nationaliy) return alert('Cannot swap different nationalities');
+    // swap roomIds
+    const oRaw = localStorage.getItem('ac_occupants') || '[]';
+    const all = JSON.parse(oRaw);
+    const updated = all.map((o:any)=>{
+      if (o.workerId===aId) return { ...o, roomId: b.roomId };
+      if (o.workerId===bId) return { ...o, roomId: a.roomId };
+      return o;
+    });
+    localStorage.setItem('ac_occupants', JSON.stringify(updated));
+    // refresh local view
+    setOccupants(updated.filter((o:any)=>o.residenceId===id));
+    alert('Swapped occupants');
+  }
 
   return (
     <div className="space-y-4">
@@ -123,22 +172,44 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
                 // If top-level rooms exist, render them. Otherwise render buildings -> floors -> rooms
                 (residence.rooms && residence.rooms.length) ? (
                   residence.rooms.map(r => (
-                    <li key={r.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
-                      <div>
-                        <div className="font-medium">{r.name}</div>
-                        <div className="text-sm text-muted-foreground">Capacity: {r.capacity}</div>
+                    <li key={r.id} className="flex flex-col gap-2 border rounded px-3 py-2 bg-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{r.name}</div>
+                          <div className="text-sm text-muted-foreground">Capacity: {r.capacity || r.spaceSqm || '—'}</div>
+                        </div>
+                        <div className={r.occupied ? 'text-red-600' : 'text-emerald-600'}>{r.occupied ? 'Occupied' : 'Vacant'}</div>
                       </div>
-                      <div className={r.occupied ? 'text-red-600' : 'text-emerald-600'}>{r.occupied ? 'Occupied' : 'Vacant'}</div>
+                      <div className="text-sm">
+                        <div className="font-medium">Occupants:</div>
+                        <ul className="pl-4">
+                          {occupantsForRoom(r.id).length ? occupantsForRoom(r.id).map((o:any) => {
+                            const wk = workersMap[o.workerId] || { name: o.workerId };
+                            return (<li key={o.workerId} className="flex items-center justify-between"><div>{wk.name} <span className="text-xs text-muted-foreground">{wk.nationaliy}</span></div><div><button className="text-xs underline" onClick={()=>swapOccupants(o.workerId, occupantsForRoom(r.id)[0]?.workerId)}>Swap</button></div></li>);
+                          }) : <li className="text-muted-foreground">No occupants</li>}
+                        </ul>
+                      </div>
                     </li>
                   ))
                 ) : (
                   residence.buildings!.flatMap(b => b.floors || []).flatMap(f => f.rooms || []).map(r => (
-                    <li key={r.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
-                      <div>
-                        <div className="font-medium">{r.name}</div>
-                        <div className="text-sm text-muted-foreground">Capacity: {r.capacity}</div>
+                    <li key={r.id} className="flex flex-col gap-2 border rounded px-3 py-2 bg-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{r.name}</div>
+                          <div className="text-sm text-muted-foreground">Capacity: {r.capacity || r.spaceSqm || '—'}</div>
+                        </div>
+                        <div className={r.occupied ? 'text-red-600' : 'text-emerald-600'}>{r.occupied ? 'Occupied' : 'Vacant'}</div>
                       </div>
-                      <div className={r.occupied ? 'text-red-600' : 'text-emerald-600'}>{r.occupied ? 'Occupied' : 'Vacant'}</div>
+                      <div>
+                        <div className="font-medium">Occupants:</div>
+                        <ul className="pl-4">
+                          {occupantsForRoom(r.id).length ? occupantsForRoom(r.id).map((o:any) => {
+                            const wk = workersMap[o.workerId] || { name: o.workerId };
+                            return (<li key={o.workerId} className="flex items-center justify-between"><div>{wk.name} <span className="text-xs text-muted-foreground">{wk.nationaliy}</span></div><div><button className="text-xs underline" onClick={()=>swapOccupants(o.workerId, occupantsForRoom(r.id)[0]?.workerId)}>Swap</button></div></li>);
+                          }) : <li className="text-muted-foreground">No occupants</li>}
+                        </ul>
+                      </div>
                     </li>
                   ))
                 )
