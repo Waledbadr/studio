@@ -109,9 +109,12 @@ export default function IssueMaterialPage() {
     }, [currentUser?.id, loadOrders]);
 
 
+    // Consider a location selected when at least the building is chosen for units.
+    // We allow targeting building-level, floor-level, or room-level locations.
     const isLocationSelected = useMemo(() => {
         if (locationType === 'unit') {
-            return !!(selectedComplexId && selectedBuildingId && selectedFloorId && selectedRoomId);
+            // allow building or floor or room to be a valid target
+            return !!(selectedComplexId && selectedBuildingId);
         }
         return !!(selectedComplexId && selectedFacilityId);
     }, [locationType, selectedComplexId, selectedBuildingId, selectedFloorId, selectedRoomId, selectedFacilityId]);
@@ -193,22 +196,44 @@ export default function IssueMaterialPage() {
             let newLocationDetails: Partial<VoucherLocation> = {};
 
             if (locationType === 'unit') {
+                // Prefer most specific selection: room -> floor -> building
                 const selectedRoom = selectedFloor?.rooms.find(r => r.id === selectedRoomId);
-                if (!selectedBuilding || !selectedFloor || !selectedRoom) {
-                    toast({ title: "Location not found", description: "An error occurred with the selected room.", variant: "destructive"});
+                if (selectedRoom) {
+                    locationId = selectedRoom.id;
+                    locationName = `${selectedComplex.name} -> ${selectedBuilding?.name || ''} -> ${selectedFloor?.name || ''} -> ${selectedRoom.name}`;
+                    isFacility = false;
+                    newLocationDetails = {
+                        buildingId: selectedBuildingId,
+                        buildingName: selectedBuilding?.name,
+                        floorId: selectedFloorId,
+                        floorName: selectedFloor?.name,
+                        roomId: selectedRoomId,
+                        roomName: selectedRoom.name,
+                    };
+                } else if (selectedFloor) {
+                    // Fall back to floor-level target
+                    locationId = selectedFloor.id;
+                    locationName = `${selectedComplex.name} -> ${selectedBuilding?.name || ''} -> ${selectedFloor.name}`;
+                    isFacility = false;
+                    newLocationDetails = {
+                        buildingId: selectedBuildingId,
+                        buildingName: selectedBuilding?.name,
+                        floorId: selectedFloorId,
+                        floorName: selectedFloor.name,
+                    };
+                } else if (selectedBuilding) {
+                    // Fall back to building-level target
+                    locationId = selectedBuilding.id;
+                    locationName = `${selectedComplex.name} -> ${selectedBuilding.name}`;
+                    isFacility = false;
+                    newLocationDetails = {
+                        buildingId: selectedBuildingId,
+                        buildingName: selectedBuilding.name,
+                    };
+                } else {
+                    toast({ title: "Location not found", description: "Please select at least a building.", variant: "destructive"});
                     return;
                 }
-                locationId = selectedRoom.id;
-                locationName = `${selectedComplex.name} -> ${selectedBuilding.name} -> ${selectedFloor.name} -> ${selectedRoom.name}`;
-                isFacility = false;
-                newLocationDetails = {
-                    buildingId: selectedBuildingId,
-                    buildingName: selectedBuilding.name,
-                    floorId: selectedFloorId,
-                    floorName: selectedFloor.name,
-                    roomId: selectedRoomId,
-                    roomName: selectedRoom.name,
-                };
             } else {
                 const selectedFacility = availableFacilities.find(f => f.id === selectedFacilityId);
                  if (!selectedFacility) {
