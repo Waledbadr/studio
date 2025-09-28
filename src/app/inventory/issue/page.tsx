@@ -641,17 +641,18 @@ export default function IssueMaterialPage() {
                                     {locationType === 'facility' && selectedComplexId && (
                                         <div className="space-y-2">
                                             <h4 className="font-medium text-xs text-muted-foreground">Facility</h4>
-                                            <div className="grid grid-cols-1 gap-2">
+                                            {/* Responsive multi-column grid to fit more facilities */}
+                                            <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                                                 {availableFacilities.map(f => (
                                                     <Button
                                                         key={f.id}
                                                         variant={selectedFacilityId === f.id ? 'default' : 'outline'}
                                                         size="sm"
                                                         onClick={() => setSelectedFacilityId(f.id)}
-                                                        className="justify-start"
+                                                        className="justify-start overflow-hidden"
                                                     >
-                                                        <ConciergeBell className="h-4 w-4 mr-2" />
-                                                        <span dir="ltr">{f.name}</span>
+                                                        <ConciergeBell className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                        <span dir="ltr" className="truncate">{f.name}</span>
                                                     </Button>
                                                 ))}
                                             </div>
@@ -660,16 +661,17 @@ export default function IssueMaterialPage() {
                                                 <div className="mt-2 p-2 border rounded-md bg-muted/20">
                                                     <Label className="text-xs font-medium mb-2 block">Select Component (Optional)</Label>
                                                     <div className="text-xs text-muted-foreground mb-2">If no component is selected, issuing will target the facility itself.</div>
-                                                    <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
+                                                    {/* Responsive grid for components as well */}
+                                                    <div className="grid gap-2 max-h-56 overflow-y-auto grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                                                         {availableComponents.map((c: FacilityComponent) => (
                                                             <Button
                                                                 key={c.id}
                                                                 variant={selectedComponentId === c.id ? 'default' : 'outline'}
                                                                 size="sm"
                                                                 onClick={() => setSelectedComponentId(c.id)}
-                                                                className="justify-start"
+                                                                className="justify-start overflow-hidden"
                                                             >
-                                                                {c.name}
+                                                                <span className="truncate" title={c.name}>{c.name}</span>
                                                             </Button>
                                                         ))}
                                                     </div>

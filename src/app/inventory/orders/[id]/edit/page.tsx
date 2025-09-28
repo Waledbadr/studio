@@ -177,6 +177,35 @@ export default function EditOrderPage() {
     const router = useRouter();
     const { id } = useParams();
 
+    const selectableResidences = useMemo(() => {
+        const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+        const assigned = new Set(currentUser?.assignedResidences || []);
+        const filtered = residences.filter((res) => {
+            if (res.id === 'main-warehouse') return false;
+            if (res.disabled) return false;
+            if (!currentUser) return true;
+            if (currentUser.role === 'Admin') return true;
+            return assigned.has(res.id);
+        });
+        return [...filtered].sort((a, b) => collator.compare(a.name || '', b.name || ''));
+    }, [currentUser, residences]);
+
+    const currentResidenceOption = useMemo(() => {
+        if (!residenceId) return null;
+        return residences.find((res) => res.id === residenceId) ?? null;
+    }, [residenceId, residences]);
+
+    const residenceOptions = useMemo(() => {
+        if (!currentResidenceOption) return selectableResidences;
+        if (selectableResidences.some((res) => res.id === currentResidenceOption.id)) return selectableResidences;
+        return [currentResidenceOption, ...selectableResidences];
+    }, [selectableResidences, currentResidenceOption]);
+
+    const residenceSelectValue = useMemo<string | undefined>(() => {
+        if (residenceId) return residenceId;
+        return currentResidenceOption?.id;
+    }, [residenceId, currentResidenceOption]);
+
     // Map of quantity input refs keyed by order item id
     const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
     // Track which item should receive focus on its quantity input
@@ -249,6 +278,14 @@ export default function EditOrderPage() {
     useEffect(() => {
         loadInventory();
     }, [loadInventory]);
+
+    useEffect(() => {
+        if (residenceId || !residenceName) return;
+        const match = residences.find((res) => res.name === residenceName);
+        if (match) {
+            setResidenceId(match.id);
+        }
+    }, [residenceId, residenceName, residences]);
 
     // Load recent items from localStorage
     useEffect(() => {
@@ -438,6 +475,13 @@ export default function EditOrderPage() {
         setGeneralNotes(e.target.value);
     };
 
+    const handleResidenceChange = useCallback((value: string) => {
+        isDraftDirtyRef.current = true;
+        setResidenceId(value);
+        const selected = residences.find((res) => res.id === value);
+        setResidenceName(selected?.name || '');
+    }, [residences]);
+
     const canEdit = status === 'Pending' ? (currentUser?.role === 'Admin' || currentUser?.id === order?.requestedById) : (currentUser?.role === 'Admin');
 
     const handleUpdateOrder = async () => {
@@ -566,7 +610,7 @@ export default function EditOrderPage() {
     }
 
     // Derive a display name for residence using id if the name string is empty
-    const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
+    const residenceDisplayName = residenceName || currentResidenceOption?.name || '';
 
     // When orderItems change and we have a target to focus, focus and select its quantity input
     useEffect(() => {
@@ -796,15 +840,32 @@ export default function EditOrderPage() {
 
                  <Card>
                     <CardHeader>
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center gap-4">
                             <div>
                                 <CardTitle>{dict.ui?.currentRequest || 'Current Request'}</CardTitle>
                                 <CardDescription>Review and adjust the items in your request.</CardDescription>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right min-w-[12rem]">
                                 <Label htmlFor='residence' className="text-xs text-muted-foreground">Residence</Label>
-                                {/* Display resolved residence name even if the stored name is empty */}
-                                <Input id="residence" readOnly value={residenceDisplayName} className="w-48 mt-1 text-sm font-medium" />
+                                {canEdit && residenceOptions.length > 0 ? (
+                                    <Select
+                                        value={residenceSelectValue}
+                                        onValueChange={handleResidenceChange}
+                                    >
+                                        <SelectTrigger id="residence" className="w-48 mt-1 text-sm font-medium">
+                                            <SelectValue placeholder={dict.ui?.selectResidence || 'Select residence'} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {residenceOptions.map((res) => (
+                                                <SelectItem key={res.id} value={res.id}>
+                                                    {res.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Input id="residence" readOnly value={residenceDisplayName} className="w-48 mt-1 text-sm font-medium" />
+                                )}
                             </div>
                         </div>
                     </CardHeader>

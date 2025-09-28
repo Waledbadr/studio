@@ -1,8 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { db, auth, authReady } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDoc, Unsubscribe } from 'firebase/firestore';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { db, auth } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, query, limit, Unsubscribe } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -127,6 +127,95 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { toast } = useToast();
   const workersUnsubRef = useRef<Unsubscribe | null>(null);
+  const workersPermissionWarnedRef = useRef(false);
+  const workersFirestoreDisabledRef = useRef(false);
+
+  const loadWorkersFromLocalStorage = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("ac_workers");
+      const parsed = raw ? (JSON.parse(raw) as Worker[]) : [];
+      setWorkers(parsed);
+    } catch (err) {
+      console.warn("Accommodation: failed to load workers from localStorage", err);
+    }
+  }, []);
+
+  const handleWorkersSnapshotError = useCallback(
+    (err: unknown) => {
+      const code =
+        typeof err === "object" && err && "code" in err && typeof (err as { code: unknown }).code === "string"
+          ? (err as { code: string }).code
+          : "";
+      const message =
+        typeof err === "object" && err && "message" in err && typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "";
+      const isPermissionIssue = code === "permission-denied" || /permission|insufficient permissions/i.test(message);
+
+      if (isPermissionIssue) {
+        workersFirestoreDisabledRef.current = true;
+        if (workersUnsubRef.current) {
+          try {
+            workersUnsubRef.current();
+          } catch {}
+          workersUnsubRef.current = null;
+        }
+        console.warn("Accommodation: Firestore denied access to workers collection. Falling back to local cache.");
+        if (!workersPermissionWarnedRef.current) {
+          workersPermissionWarnedRef.current = true;
+          try {
+            toast({
+              title: "Firestore permission",
+              description: "لا يمكن تحميل بيانات العمال من Firestore، سيتم استخدام البيانات المخزنة محلياً فقط.",
+              variant: "destructive",
+            });
+          } catch {}
+        }
+        loadWorkersFromLocalStorage();
+        return;
+      }
+
+      console.error("Failed to subscribe to workers collection:", err);
+    },
+    [loadWorkersFromLocalStorage, toast]
+  );
+
+  const startWorkersListener = useCallback(async () => {
+    if (!db || workersFirestoreDisabledRef.current) return;
+    if (workersUnsubRef.current) return;
+
+    try {
+      await getDocs(query(collection(db, "workers"), limit(1)));
+    } catch (err) {
+      handleWorkersSnapshotError(err);
+      return;
+    }
+
+    const col = collection(db, "workers");
+    workersUnsubRef.current = onSnapshot(
+      col,
+      (snap) => {
+        workersPermissionWarnedRef.current = false;
+        const list: Worker[] = snap.docs.map((d) => {
+          const data = d.data();
+          const role = data?.role;
+          const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
+          return {
+            id: d.id,
+            name: typeof data?.name === "string" ? data.name : "",
+            nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
+            role: normalizedRole,
+          } satisfies Worker;
+        });
+        setWorkers(list);
+        try {
+          localStorage.setItem("ac_workers", JSON.stringify(list));
+        } catch {}
+      },
+      handleWorkersSnapshotError
+    );
+  }, [handleWorkersSnapshotError]);
 
   function mapComplexToResidence(complex: any): Residence {
     return {
@@ -201,69 +290,43 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!db) return;
 
-    // If Firebase Auth is present but no currentUser, wait until auth is ready to avoid permission errors
-    if (auth && !auth.currentUser) {
-      const unsub = onAuthStateChanged(auth, (u) => {
-        if (u) {
-          // re-run subscription by triggering effect cleanup and re-run
-          try { if (workersUnsubRef.current) { workersUnsubRef.current(); workersUnsubRef.current = null; } } catch {}
-          // small timeout to allow re-entry
-          setTimeout(() => {
-            try {
-              const col = collection(db, 'workers');
-              workersUnsubRef.current = onSnapshot(col, (snap) => {
-                const list: Worker[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Worker));
-                setWorkers(list);
-                try { localStorage.setItem('ac_workers', JSON.stringify(list)); } catch {}
-              }, (err) => {
-                console.error('Failed to subscribe to workers collection:', err);
-                const msg = (err && (err as any).message) || '';
-                if (/permission|insufficient permissions|Missing or insufficient permissions/i.test(msg)) {
-                  console.warn('Firestore permission error - falling back to localStorage for workers');
-                  try { const raw = typeof window !== 'undefined' ? localStorage.getItem('ac_workers') : null; setWorkers(raw ? JSON.parse(raw) : []); } catch {}
-                  try { toast({ title: 'Firestore Permission', description: 'Unable to read workers from Firestore. Using local data only.', variant: 'destructive' }); } catch {}
-                }
-              });
-            } catch (e) {
-              console.error('Accommodation: workers listener init failed after auth ready', e);
-            }
-          }, 50);
-        }
-      });
-      return () => { try { unsub(); } catch {} };
+    const hasImmediateAccess = !auth || !!auth.currentUser;
+    if (hasImmediateAccess) {
+      void startWorkersListener();
     }
 
-    try {
-      const col = collection(db, 'workers');
-      // unsubscribe previous if any
-      if (workersUnsubRef.current) {
-        try { workersUnsubRef.current(); } catch {}
-        workersUnsubRef.current = null;
-      }
-      workersUnsubRef.current = onSnapshot(col, (snap) => {
-        const list: Worker[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Worker));
-        setWorkers(list);
-        try { localStorage.setItem('ac_workers', JSON.stringify(list)); } catch {}
-      }, (err) => {
-        console.error('Failed to subscribe to workers collection:', err);
-        const msg = (err && (err as any).message) || '';
-        if (/permission|insufficient permissions|Missing or insufficient permissions/i.test(msg)) {
-          console.warn('Firestore permission error - falling back to localStorage for workers');
-          try { const raw = typeof window !== 'undefined' ? localStorage.getItem('ac_workers') : null; setWorkers(raw ? JSON.parse(raw) : []); } catch {}
-          try { toast({ title: 'Firestore Permission', description: 'Unable to read workers from Firestore. Using local data only.', variant: 'destructive' }); } catch {}
+    let authUnsubscribe: Unsubscribe | null = null;
+    if (auth) {
+      authUnsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          workersFirestoreDisabledRef.current = false;
+          void startWorkersListener();
+        } else {
+          if (workersUnsubRef.current) {
+            try {
+              workersUnsubRef.current();
+            } catch {}
+            workersUnsubRef.current = null;
+          }
+          loadWorkersFromLocalStorage();
         }
       });
-    } catch (e) {
-      console.error('Accommodation: workers listener init failed', e);
     }
 
     return () => {
+      if (authUnsubscribe) {
+        try {
+          authUnsubscribe();
+        } catch {}
+      }
       if (workersUnsubRef.current) {
-        try { workersUnsubRef.current(); } catch {}
+        try {
+          workersUnsubRef.current();
+        } catch {}
         workersUnsubRef.current = null;
       }
     };
-  }, []);
+  }, [loadWorkersFromLocalStorage, startWorkersListener]);
 
   // Listen to storage events so changes made by other tabs / pages (legacy localStorage writes) reflect in context.
   useEffect(() => {

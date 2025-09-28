@@ -147,6 +147,15 @@ export default function RequestIssuePage() {
 
   const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
   const searchN = normalizeText(searchQuery);
+
+  // Show only residences assigned to the current user (admins see all)
+  const userResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
+
+  const filteredResidences = useMemo(() => userResidences.filter(r => r.id !== 'main-warehouse'), [userResidences]);
   
   // Memoized categories for the filter select
   const categories = useMemo(() => Array.from(new Set(allItems.map(i => i.category).filter(Boolean))), [allItems]);
@@ -200,28 +209,23 @@ export default function RequestIssuePage() {
     } catch {}
   }, [allItems]);
 
-  // Consider a location selected when at least the building is chosen for units.
-  // This enables adding items targeted at building- or floor-level when room is not selected.
   const isLocationSelected = useMemo(() => {
     if (!residenceId) return false;
     if (multiMode) return selectedTargets.length > 0;
-    if (locationType === 'unit') return !!(buildingId);
+    if (locationType === 'unit') return !!(buildingId && floorId && roomId);
     return !!facilityId;
   }, [residenceId, multiMode, selectedTargets.length, locationType, buildingId, floorId, roomId, facilityId]);
 
   const currentLocation = useMemo(() => {
     if (!selectedResidence || !isLocationSelected) return null as null | { id: string; name: string; isFacility: boolean };
-      if (multiMode) return null; // handled via selectedTargets
-      if (locationType === 'unit') {
-        const b = buildings.find(b => b.id === buildingId);
-        const f = floors.find(f => f.id === floorId);
-        const r = rooms.find(r => r.id === roomId);
-        // Prefer room, then floor, then building
-        if (r) return { id: r.id, name: `${selectedResidence.name} -> ${b?.name || ''} -> ${f?.name || ''} -> ${r.name}`, isFacility: false };
-        if (f) return { id: f.id, name: `${selectedResidence.name} -> ${b?.name || ''} -> ${f.name}`, isFacility: false };
-        if (b) return { id: b.id, name: `${selectedResidence.name} -> ${b.name}`, isFacility: false };
-        return null;
-      }
+    if (multiMode) return null; // handled via selectedTargets
+    if (locationType === 'unit') {
+      const b = buildings.find(b => b.id === buildingId);
+      const f = floors.find(f => f.id === floorId);
+      const r = rooms.find(r => r.id === roomId);
+      if (!b || !f || !r) return null;
+      return { id: r.id, name: `${selectedResidence.name} -> ${b.name} -> ${f.name} -> ${r.name}`, isFacility: false };
+    }
     const fac = availableFacilities.find(fl => fl.id === facilityId);
     if (!fac) return null;
     const parts = [selectedResidence.name];
@@ -565,9 +569,9 @@ export default function RequestIssuePage() {
                 <Label className="whitespace-nowrap">Issue from:</Label>
                 <Select value={residenceId} onValueChange={setResidenceId}>
                   <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select residence" /></SelectTrigger>
-                  <SelectContent>
-                    {residences.filter(r => r.id !== 'main-warehouse').map(r => (<SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>))}
-                  </SelectContent>
+                    <SelectContent>
+                      {filteredResidences.map(r => (<SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>))}
+                    </SelectContent>
                 </Select>
               </div>
             </div>

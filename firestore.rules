@@ -63,6 +63,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Accommodation workers
+    match /workers/{workerId} {
+      // Allow signed-in users to view worker roster
+      allow read: if isSignedIn();
+      // Only Admins and Supervisors can create or modify workers
+      allow create, update: if isAdmin() || isSupervisor();
+      // Restrict deletions to Admins
+      allow delete: if isAdmin();
+    }
+
   // Users collection: basic access model
     match /users/{uid} {
       allow read: if isSignedIn();
