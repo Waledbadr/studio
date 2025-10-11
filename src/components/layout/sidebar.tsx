@@ -43,27 +43,146 @@ export function AppSidebar() {
     return null;
   }
 
-  // When inside the accommodation app, render an intentionally empty sidebar
+  // When inside the accommodation app, render accommodation sidebar
   const isAccommodation = pathname?.startsWith('/accommodation');
   if (isAccommodation) {
     return (
       <>
         <SidebarHeader>
-          <div className="flex items-center gap-2 p-2">
-            <span className="text-lg font-semibold text-amber-600">Accommodation</span>
+          <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+              <Building className="h-8 w-8 text-amber-600" />
+              <span className="text-xl font-semibold text-amber-600 group-data-[collapsible=icon]:hidden">Accommodation</span>
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
-          <div className="p-2">
-            <nav className="space-y-2">
-              <a href="/accommodation/residences" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">📋 View residences</a>
-              <a href="/accommodation/assign" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">👥 Assign tenant</a>
-                  <a href="/accommodation/workers" onClick={() => { if (isMobile) setOpenMobile(false); }} className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted">🧑‍💼 Manage workers</a>
-            </nav>
-          </div>
+          <SidebarMenu>
+            {/* Main Section */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Main
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/overview'} tooltip="Overview">
+                  <Link href="/accommodation/overview" onClick={handleNavigate}>
+                    <Home />
+                    <span className="group-data-[collapsible=icon]:hidden">Overview</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Management Section */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Management
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/residences'} tooltip="Residences">
+                  <Link href="/accommodation/residences" onClick={handleNavigate}>
+                    <Building />
+                    <span className="group-data-[collapsible=icon]:hidden">Residences</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/workers'} tooltip="Workers">
+                  <Link href="/accommodation/workers" onClick={handleNavigate}>
+                    <Users />
+                    <span className="group-data-[collapsible=icon]:hidden">Workers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/assign'} tooltip="Assign Workers">
+                  <Link href="/accommodation/assign" onClick={handleNavigate}>
+                    <Move />
+                    <span className="group-data-[collapsible=icon]:hidden">Assign Workers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/transfers'} tooltip="Transfers">
+                  <Link href="/accommodation/transfers" onClick={handleNavigate}>
+                    <GitBranch />
+                    <span className="group-data-[collapsible=icon]:hidden">Transfers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Contracts & Billing Section */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Contracts & Billing
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/companies'} tooltip="Companies">
+                  <Link href="/accommodation/companies" onClick={handleNavigate}>
+                    <Building />
+                    <span className="group-data-[collapsible=icon]:hidden">Companies</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/contracts'} tooltip="Contracts">
+                  <Link href="/accommodation/contracts" onClick={handleNavigate}>
+                    <FileCheck />
+                    <span className="group-data-[collapsible=icon]:hidden">Contracts</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/invoices'} tooltip="Invoices">
+                  <Link href="/accommodation/invoices" onClick={handleNavigate}>
+                    <ClipboardList />
+                    <span className="group-data-[collapsible=icon]:hidden">Invoices</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Reports Section */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Reports
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/reports'} tooltip="Reports">
+                  <Link href="/accommodation/reports" onClick={handleNavigate}>
+                    <AreaChart />
+                    <span className="group-data-[collapsible=icon]:hidden">Reports</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </div>
+          </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
-          <div className="p-2" />
+          <div className="p-2">
+            <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
+              <div className="flex items-center gap-2">
+                <Avatar className="size-8">
+                  {currentUser ? (
+                    <>
+                      <AvatarImage src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23e5e7eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='20'%3EIMG%3C/text%3E%3C/svg%3E" alt={currentUser.name} data-ai-hint="profile picture" />
+                      <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
+                    </>
+                  ) : (
+                    <AvatarFallback />
+                  )}
+                </Avatar>
+                <div className="group-data-[collapsible=icon]:hidden text-left">
+                  <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                  <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </SidebarFooter>
       </>
     );
@@ -136,6 +255,7 @@ export function AppSidebar() {
       title: dict.sidebar?.settings || 'Settings',
       items: [
   { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
+        { href: '/accommodation', label: 'Accommodation', icon: Home },
         ...(currentUser?.role === 'Admin' ? [
           { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
           { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },

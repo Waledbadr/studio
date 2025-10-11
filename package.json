@@ -12,6 +12,10 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "migrate:workers": "node scripts/migrate-local-workers-to-firestore.mjs",
+    "import:workers": "node scripts/import-workers-from-desktop.mjs",
+    "convert:workers": "node scripts/convert-workers-data.mjs",
+    "parse:text": "node scripts/parse-text-workers.mjs",
+    "validate:workers": "node scripts/validate-workers-json.mjs",
     "keep-alive": "node scripts/keep-alive.mjs",
     "lookup:uid": "node --env-file=.env.local scripts/lookup-uid.mjs"
   },

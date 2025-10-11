@@ -5,6 +5,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, query, limit, Unsubscribe } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/context/notifications-context';
 
 export type Location = { lat: number; lng: number } | null;
 
@@ -41,9 +42,12 @@ export type Residence = {
 
 // New domain types
 export type Worker = {
-  id: string;
-  name: string;
-  nationaliy?: string;
+  id: string; // معرّف فريد في النظام
+  name: string; // اسم العامل
+  employeeId?: string; // رقم الموظف (مثل: 40097) - يمكن تكراره في شركات مختلفة
+  idNumber?: string; // رقم الهوية الوطنية (مثل: 2059537999) - فريد لكل شخص
+  nationaliy?: string; // الجنسية
+  company?: string; // الشركة - لتمييز العمال بنفس الرقم الوظيفي
   role?: "Worker" | "Supervisor" | "Engineer";
 };
 
@@ -77,6 +81,53 @@ export type Notification = {
   read?: boolean;
 };
 
+// New types for Companies, Contracts, and Invoices
+export type Company = {
+  id: string;
+  name: string;
+  nameAr?: string;
+  nameEn?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type Contract = {
+  id: string;
+  companyId: string;
+  residenceId: string;
+  startDate: string; // ISO date
+  endDate: string; // ISO date
+  ratePerPersonPerMonth: number;
+  expectedWorkers?: number;
+  status: "Active" | "Expired" | "Cancelled";
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+  createdBy?: string;
+};
+
+export type Invoice = {
+  id: string;
+  contractId: string;
+  companyId: string;
+  residenceId: string;
+  month: string; // format: YYYY-MM
+  startDate: string; // ISO date
+  endDate: string; // ISO date
+  numberOfWorkers: number;
+  numberOfDays: number;
+  ratePerPerson: number;
+  totalAmount: number;
+  status: "Draft" | "Pending" | "Paid" | "Overdue" | "Cancelled";
+  generatedAt: string;
+  paidAt?: string;
+  pdfUrl?: string;
+  notes?: string;
+};
+
 type AccommodationContextValue = {
   residences: Residence[];
   loading: boolean;
@@ -86,6 +137,10 @@ type AccommodationContextValue = {
   occupants: Occupant[];
   transferRequests: TransferRequest[];
   notifications: Notification[];
+  // new domain objects
+  companies: Company[];
+  contracts: Contract[];
+  invoices: Invoice[];
   findWorkers: (q: string) => Worker[];
   // worker CRUD (firestore-backed when available)
   saveWorker: (worker: Worker | Omit<Worker, 'id'>) => Promise<void>;
@@ -114,6 +169,20 @@ type AccommodationContextValue = {
     year: number,
     month: number
   ) => { perResidence: Record<string, number>; perOccupant: Record<string, number> };
+  // Company CRUD
+  saveCompany: (company: Company | Omit<Company, 'id' | 'createdAt'>) => Promise<void>;
+  deleteCompany: (id: string) => Promise<void>;
+  // Contract CRUD
+  saveContract: (contract: Contract | Omit<Contract, 'id' | 'createdAt'>) => Promise<void>;
+  deleteContract: (id: string) => Promise<void>;
+  // Invoice CRUD & generation
+  saveInvoice: (invoice: Invoice | Omit<Invoice, 'id'>) => Promise<void>;
+  deleteInvoice: (id: string) => Promise<void>;
+  generateMonthlyInvoices: (month: string) => Promise<{ generated: number; errors: number }>;
+  // Utility
+  getContractsByCompany: (companyId: string) => Contract[];
+  getInvoicesByContract: (contractId: string) => Invoice[];
+  getActiveContractsForResidence: (residenceId: string) => Contract[];
 };
 
 export const AccommodationContext = createContext<AccommodationContextValue | undefined>(undefined);
@@ -125,10 +194,18 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const [occupants, setOccupants] = useState<Occupant[]>([]);
   const [transferRequests, setTransferRequests] = useState<TransferRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  // New state for companies, contracts, invoices
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
+  const globalNotifications = useNotifications();
   const workersUnsubRef = useRef<Unsubscribe | null>(null);
   const workersPermissionWarnedRef = useRef(false);
   const workersFirestoreDisabledRef = useRef(false);
+  const companiesUnsubRef = useRef<Unsubscribe | null>(null);
+  const contractsUnsubRef = useRef<Unsubscribe | null>(null);
+  const invoicesUnsubRef = useRef<Unsubscribe | null>(null);
 
   const loadWorkersFromLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -182,20 +259,37 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   );
 
   const startWorkersListener = useCallback(async () => {
-    if (!db || workersFirestoreDisabledRef.current) return;
-    if (workersUnsubRef.current) return;
+    console.log('📡 [startWorkersListener] Called', {
+      hasDb: !!db,
+      firestoreDisabled: workersFirestoreDisabledRef.current,
+      hasExistingListener: !!workersUnsubRef.current
+    });
+    
+    if (!db || workersFirestoreDisabledRef.current) {
+      console.log('⏭️ [startWorkersListener] Skipping (no DB or disabled)');
+      return;
+    }
+    if (workersUnsubRef.current) {
+      console.log('⏭️ [startWorkersListener] Skipping (listener already exists)');
+      return;
+    }
 
     try {
+      console.log('🧪 [startWorkersListener] Testing permissions with limit(1) query...');
       await getDocs(query(collection(db, "workers"), limit(1)));
+      console.log('✅ [startWorkersListener] Permission test passed');
     } catch (err) {
+      console.error('❌ [startWorkersListener] Permission test failed:', err);
       handleWorkersSnapshotError(err);
       return;
     }
 
+    console.log('📻 [startWorkersListener] Setting up onSnapshot listener...');
     const col = collection(db, "workers");
     workersUnsubRef.current = onSnapshot(
       col,
       (snap) => {
+        console.log('📦 [startWorkersListener] Snapshot received:', snap.docs.length, 'documents');
         workersPermissionWarnedRef.current = false;
         const list: Worker[] = snap.docs.map((d) => {
           const data = d.data();
@@ -204,7 +298,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           return {
             id: d.id,
             name: typeof data?.name === "string" ? data.name : "",
+            employeeId: typeof data?.employeeId === "string" ? data.employeeId : undefined,
+            idNumber: typeof data?.idNumber === "string" ? data.idNumber : undefined,
             nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
+            company: typeof data?.company === "string" ? data.company : undefined,
             role: normalizedRole,
           } satisfies Worker;
         });
@@ -288,20 +385,39 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // If Firestore is available, subscribe to the workers collection and keep local state in sync.
   useEffect(() => {
-    if (!db) return;
+    if (!db) {
+      console.log('🔴 [Accommodation Context] Firestore DB not initialized');
+      return;
+    }
 
     const hasImmediateAccess = !auth || !!auth.currentUser;
+    console.log('🔐 [Accommodation Context] Auth status:', {
+      hasAuth: !!auth,
+      hasCurrentUser: !!auth?.currentUser,
+      currentUser: auth?.currentUser?.email,
+      hasImmediateAccess
+    });
+    
     if (hasImmediateAccess) {
+      console.log('✅ [Accommodation Context] Starting workers listener (immediate)');
       void startWorkersListener();
     }
 
     let authUnsubscribe: Unsubscribe | null = null;
     if (auth) {
       authUnsubscribe = onAuthStateChanged(auth, (user) => {
+        console.log('🔐 [Accommodation Context] Auth state changed:', {
+          hasUser: !!user,
+          userEmail: user?.email,
+          uid: user?.uid
+        });
+        
         if (user) {
           workersFirestoreDisabledRef.current = false;
+          console.log('✅ [Accommodation Context] Starting workers listener (after auth)');
           void startWorkersListener();
         } else {
+          console.log('⚠️ [Accommodation Context] No user, loading from localStorage');
           if (workersUnsubRef.current) {
             try {
               workersUnsubRef.current();
@@ -337,9 +453,62 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           setWorkers(parsed);
         } catch {}
       }
+      if (ev.key === 'ac_companies' && typeof ev.newValue === 'string') {
+        try { setCompanies(JSON.parse(ev.newValue || '[]')); } catch {}
+      }
+      if (ev.key === 'ac_contracts' && typeof ev.newValue === 'string') {
+        try { setContracts(JSON.parse(ev.newValue || '[]')); } catch {}
+      }
+      if (ev.key === 'ac_invoices' && typeof ev.newValue === 'string') {
+        try { setInvoices(JSON.parse(ev.newValue || '[]')); } catch {}
+      }
     };
     if (typeof window !== 'undefined') window.addEventListener('storage', onStorage);
     return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage); };
+  }, []);
+
+  // Setup Firestore listeners for companies, contracts, invoices, and occupants
+  useEffect(() => {
+    if (!db || !auth?.currentUser) return;
+
+    // Companies listener
+    const companiesCol = collection(db, 'companies');
+    companiesUnsubRef.current = onSnapshot(companiesCol, (snap) => {
+      const list: Company[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
+      setCompanies(list);
+      try { localStorage.setItem('ac_companies', JSON.stringify(list)); } catch {}
+    }, (err) => { console.error('Companies snapshot error:', err); });
+
+    // Contracts listener
+    const contractsCol = collection(db, 'contracts');
+    contractsUnsubRef.current = onSnapshot(contractsCol, (snap) => {
+      const list: Contract[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contract));
+      setContracts(list);
+      try { localStorage.setItem('ac_contracts', JSON.stringify(list)); } catch {}
+    }, (err) => { console.error('Contracts snapshot error:', err); });
+
+    // Invoices listener
+    const invoicesCol = collection(db, 'invoices');
+    invoicesUnsubRef.current = onSnapshot(invoicesCol, (snap) => {
+      const list: Invoice[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+      setInvoices(list);
+      try { localStorage.setItem('ac_invoices', JSON.stringify(list)); } catch {}
+    }, (err) => { console.error('Invoices snapshot error:', err); });
+
+    // Occupants listener
+    const occupantsCol = collection(db, 'occupants');
+    const occupantsUnsub = onSnapshot(occupantsCol, (snap) => {
+      const list: Occupant[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setOccupants(list);
+      try { localStorage.setItem('ac_occupants', JSON.stringify(list)); } catch {}
+    }, (err) => { console.error('Occupants snapshot error:', err); });
+
+    return () => {
+      if (companiesUnsubRef.current) { try { companiesUnsubRef.current(); } catch {} }
+      if (contractsUnsubRef.current) { try { contractsUnsubRef.current(); } catch {} }
+      if (invoicesUnsubRef.current) { try { invoicesUnsubRef.current(); } catch {} }
+      if (occupantsUnsub) { try { occupantsUnsub(); } catch {} }
+    };
   }, []);
 
   // Helpers: persist domain data
@@ -350,10 +519,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       localStorage.setItem("ac_occupants", JSON.stringify(occupants));
       localStorage.setItem("ac_transfers", JSON.stringify(transferRequests));
       localStorage.setItem("ac_notifications", JSON.stringify(notifications));
+      localStorage.setItem("ac_companies", JSON.stringify(companies));
+      localStorage.setItem("ac_contracts", JSON.stringify(contracts));
+      localStorage.setItem("ac_invoices", JSON.stringify(invoices));
     } catch (e) {
       console.error("Accommodation: persist failed", e);
     }
-  }, [workers, occupants, transferRequests, notifications]);
+  }, [workers, occupants, transferRequests, notifications, companies, contracts, invoices]);
 
   // Capacity calculation per role
   function calcCapacityFromSpace(spaceSqm: number, role: "Worker" | "Supervisor" | "Engineer") {
@@ -378,7 +550,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return undefined;
   }
 
-  // Search workers by name, id, nationality
+  // Search workers by name, id, nationality, employee ID, national ID number, company
   function findWorkers(q: string) {
     const norm = q.trim().toLowerCase();
     if (!norm) return workers;
@@ -386,7 +558,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       (w) =>
         (w.name || "").toLowerCase().includes(norm) ||
         (w.id || "").toLowerCase().includes(norm) ||
-        (w.nationaliy || "").toLowerCase().includes(norm)
+        (w.employeeId || "").toLowerCase().includes(norm) ||
+        (w.idNumber || "").toLowerCase().includes(norm) ||
+        (w.nationaliy || "").toLowerCase().includes(norm) ||
+        (w.company || "").toLowerCase().includes(norm)
     );
   }
 
@@ -395,7 +570,14 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       if (db) {
         const id = ('id' in worker && worker.id) ? worker.id : `w_${Date.now()}`;
-        const payload = { name: (worker as any).name, nationaliy: (worker as any).nationaliy || '', role: (worker as any).role || 'Worker' };
+        const payload = { 
+          name: (worker as any).name, 
+          employeeId: (worker as any).employeeId || '',
+          idNumber: (worker as any).idNumber || '',
+          nationaliy: (worker as any).nationaliy || '', 
+          company: (worker as any).company || '',
+          role: (worker as any).role || 'Worker' 
+        };
         await setDoc(doc(db, 'workers', id), payload, { merge: true } as any);
         return;
       }
@@ -408,7 +590,15 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const raw = typeof window !== 'undefined' ? localStorage.getItem('ac_workers') : null;
       const list: Worker[] = raw ? JSON.parse(raw) : [];
       const id = ('id' in worker && (worker as any).id) ? (worker as any).id : `w_${Date.now()}`;
-      const payload: Worker = { id, name: (worker as any).name, nationaliy: (worker as any).nationaliy || '', role: (worker as any).role || 'Worker' };
+      const payload: Worker = { 
+        id, 
+        name: (worker as any).name, 
+        employeeId: (worker as any).employeeId || '',
+        idNumber: (worker as any).idNumber || '',
+        nationaliy: (worker as any).nationaliy || '', 
+        company: (worker as any).company || '',
+        role: (worker as any).role || 'Worker' 
+      };
       const idx = list.findIndex(w => w.id === id);
       if (idx >= 0) list[idx] = payload; else list.unshift(payload);
       if (typeof window !== 'undefined') localStorage.setItem('ac_workers', JSON.stringify(list));
@@ -453,7 +643,14 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       for (const w of list) {
         try {
           const id = w.id || `w_${Date.now()}`;
-          await setDoc(doc(db, 'workers', id), { name: w.name, nationaliy: w.nationaliy || '', role: w.role || 'Worker' } as any);
+          await setDoc(doc(db, 'workers', id), { 
+            name: w.name, 
+            employeeId: w.employeeId || '',
+            idNumber: w.idNumber || '',
+            nationaliy: w.nationaliy || '', 
+            company: w.company || '',
+            role: w.role || 'Worker' 
+          } as any);
           result.migrated += 1;
         } catch (e) {
           console.error('Failed to migrate worker', w, e);
@@ -524,7 +721,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   function createTransferRequest(req: Omit<TransferRequest, "id" | "requestedAt" | "status">) {
     const tr: TransferRequest = { ...req, id: `trs_${Date.now()}`, requestedAt: new Date().toISOString(), status: "Pending" };
     setTransferRequests((prev) => [tr, ...prev]);
-    // notify destination responsible
+    
+    // Add notification to global notifications system
+    if (globalNotifications?.addNotification && auth?.currentUser) {
+      globalNotifications.addNotification({
+        userId: req.requestedBy,
+        type: 'transfer_request',
+        title: 'طلب نقل جديد',
+        message: `طلب نقل ${tr.workerIds.length} عامل إلى ${tr.to.residenceId}`,
+        href: '/accommodation/transfers',
+        referenceId: tr.id,
+      }).catch(err => console.error('Failed to add notification:', err));
+    }
+    
+    // Keep local notification for backward compatibility
     const note: Notification = {
       id: `n_${Date.now()}_t`,
       title: "New transfer request",
@@ -542,6 +752,19 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (tr.status !== "Pending") return { ok: false, error: "already-reviewed" };
     const updated: TransferRequest = { ...tr, status: approve ? "Approved" : "Rejected", reviewedBy: reviewerId, reviewedAt: new Date().toISOString() };
     setTransferRequests((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    
+    // Add notification to global notifications system
+    if (globalNotifications?.addNotification && tr.requestedBy && auth?.currentUser) {
+      globalNotifications.addNotification({
+        userId: tr.requestedBy,
+        type: approve ? 'order_approved' : 'generic',
+        title: approve ? 'تمت الموافقة على طلب النقل' : 'تم رفض طلب النقل',
+        message: `طلب النقل #${id.slice(0, 8)} ${approve ? 'تمت الموافقة عليه' : 'تم رفضه'}`,
+        href: '/accommodation/transfers',
+        referenceId: id,
+      }).catch(err => console.error('Failed to add notification:', err));
+    }
+    
     // if approved, perform automatic allocation where possible
     if (approve) {
       const targetRoomId = tr.to.roomId;
@@ -613,6 +836,239 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { perResidence, perOccupant };
   }
 
+  // ============ COMPANY CRUD ============
+  async function saveCompany(company: Company | Omit<Company, 'id' | 'createdAt'>) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      const id = ('id' in company && company.id) ? company.id : `comp_${Date.now()}`;
+      const now = new Date().toISOString();
+      const payload: Company = {
+        id,
+        name: company.name,
+        nameAr: company.nameAr,
+        nameEn: company.nameEn,
+        contactEmail: company.contactEmail,
+        contactPhone: company.contactPhone,
+        address: company.address,
+        createdAt: ('createdAt' in company) ? company.createdAt : now,
+        updatedAt: now,
+      };
+      await setDoc(doc(db, 'companies', id), payload, { merge: true } as any);
+      toast({ title: 'Success', description: 'Company saved successfully' });
+    } catch (e) {
+      console.error('saveCompany failed:', e);
+      toast({ title: 'Error', description: 'Failed to save company', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  async function deleteCompany(id: string) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      // Check if company has active contracts
+      const activeContracts = contracts.filter(c => c.companyId === id && c.status === 'Active');
+      if (activeContracts.length > 0) {
+        toast({ title: 'Cannot delete', description: 'Company has active contracts', variant: 'destructive' });
+        return;
+      }
+      await deleteDoc(doc(db, 'companies', id));
+      toast({ title: 'Deleted', description: 'Company deleted successfully' });
+    } catch (e) {
+      console.error('deleteCompany failed:', e);
+      toast({ title: 'Error', description: 'Failed to delete company', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  // ============ CONTRACT CRUD ============
+  async function saveContract(contract: Contract | Omit<Contract, 'id' | 'createdAt'>) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      const id = ('id' in contract && contract.id) ? contract.id : `ctr_${Date.now()}`;
+      const now = new Date().toISOString();
+      const payload: Contract = {
+        id,
+        companyId: contract.companyId,
+        residenceId: contract.residenceId,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        ratePerPersonPerMonth: contract.ratePerPersonPerMonth,
+        expectedWorkers: contract.expectedWorkers,
+        status: contract.status || 'Active',
+        notes: contract.notes,
+        createdAt: ('createdAt' in contract) ? contract.createdAt : now,
+        updatedAt: now,
+        createdBy: contract.createdBy,
+      };
+      await setDoc(doc(db, 'contracts', id), payload, { merge: true } as any);
+      toast({ title: 'Success', description: 'Contract saved successfully' });
+    } catch (e) {
+      console.error('saveContract failed:', e);
+      toast({ title: 'Error', description: 'Failed to save contract', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  async function deleteContract(id: string) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      // Check if contract has invoices
+      const contractInvoices = invoices.filter(inv => inv.contractId === id);
+      if (contractInvoices.length > 0) {
+        toast({ title: 'Cannot delete', description: 'Contract has associated invoices', variant: 'destructive' });
+        return;
+      }
+      await deleteDoc(doc(db, 'contracts', id));
+      toast({ title: 'Deleted', description: 'Contract deleted successfully' });
+    } catch (e) {
+      console.error('deleteContract failed:', e);
+      toast({ title: 'Error', description: 'Failed to delete contract', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  // ============ INVOICE CRUD ============
+  async function saveInvoice(invoice: Invoice | Omit<Invoice, 'id'>) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      const id = ('id' in invoice && invoice.id) ? invoice.id : `inv_${Date.now()}`;
+      const payload: Invoice = {
+        id,
+        contractId: invoice.contractId,
+        companyId: invoice.companyId,
+        residenceId: invoice.residenceId,
+        month: invoice.month,
+        startDate: invoice.startDate,
+        endDate: invoice.endDate,
+        numberOfWorkers: invoice.numberOfWorkers,
+        numberOfDays: invoice.numberOfDays,
+        ratePerPerson: invoice.ratePerPerson,
+        totalAmount: invoice.totalAmount,
+        status: invoice.status || 'Draft',
+        generatedAt: invoice.generatedAt,
+        paidAt: invoice.paidAt,
+        pdfUrl: invoice.pdfUrl,
+        notes: invoice.notes,
+      };
+      await setDoc(doc(db, 'invoices', id), payload, { merge: true } as any);
+      toast({ title: 'Success', description: 'Invoice saved successfully' });
+    } catch (e) {
+      console.error('saveInvoice failed:', e);
+      toast({ title: 'Error', description: 'Failed to save invoice', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  async function deleteInvoice(id: string) {
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      const invoice = invoices.find(inv => inv.id === id);
+      if (invoice?.status === 'Paid') {
+        toast({ title: 'Cannot delete', description: 'Cannot delete paid invoices', variant: 'destructive' });
+        return;
+      }
+      await deleteDoc(doc(db, 'invoices', id));
+      toast({ title: 'Deleted', description: 'Invoice deleted successfully' });
+    } catch (e) {
+      console.error('deleteInvoice failed:', e);
+      toast({ title: 'Error', description: 'Failed to delete invoice', variant: 'destructive' });
+      throw e;
+    }
+  }
+
+  // ============ INVOICE GENERATION ============
+  async function generateMonthlyInvoices(month: string): Promise<{ generated: number; errors: number }> {
+    // month format: YYYY-MM
+    const result = { generated: 0, errors: 0 };
+    try {
+      if (!db) throw new Error('Firestore not configured');
+      
+      const [year, monthNum] = month.split('-').map(Number);
+      const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
+      const endDate = new Date(Date.UTC(year, monthNum, 0)); // last day of month
+      const daysInMonth = endDate.getDate();
+
+      // Find all active contracts for this month
+      const activeContracts = contracts.filter(c => {
+        if (c.status !== 'Active') return false;
+        const contractStart = new Date(c.startDate);
+        const contractEnd = new Date(c.endDate);
+        return contractStart <= endDate && contractEnd >= startDate;
+      });
+
+      for (const contract of activeContracts) {
+        try {
+          // Check if invoice already exists for this month
+          const existing = invoices.find(inv => 
+            inv.contractId === contract.id && inv.month === month
+          );
+          if (existing) {
+            console.log(`Invoice already exists for contract ${contract.id} month ${month}`);
+            continue;
+          }
+
+          // Count workers for this residence during this month
+          const workersInResidence = occupants.filter(occ => {
+            const occStart = new Date(occ.since);
+            return occ.residenceId === contract.residenceId && occStart <= endDate;
+          }).length;
+
+          if (workersInResidence === 0) {
+            console.log(`No workers found for contract ${contract.id} in month ${month}`);
+            continue;
+          }
+
+          // Calculate total amount: (workers × rate × days) / 30
+          const totalAmount = (workersInResidence * contract.ratePerPersonPerMonth * daysInMonth) / 30;
+
+          const invoice: Invoice = {
+            id: `inv_${contract.id}_${month.replace('-', '')}`,
+            contractId: contract.id,
+            companyId: contract.companyId,
+            residenceId: contract.residenceId,
+            month,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            numberOfWorkers: workersInResidence,
+            numberOfDays: daysInMonth,
+            ratePerPerson: contract.ratePerPersonPerMonth,
+            totalAmount: Math.round(totalAmount * 100) / 100,
+            status: 'Pending',
+            generatedAt: new Date().toISOString(),
+          };
+
+          await saveInvoice(invoice);
+          result.generated++;
+        } catch (e) {
+          console.error(`Failed to generate invoice for contract ${contract.id}:`, e);
+          result.errors++;
+        }
+      }
+
+      toast({ 
+        title: 'Invoice Generation Complete', 
+        description: `Generated ${result.generated} invoices with ${result.errors} errors` 
+      });
+    } catch (e) {
+      console.error('generateMonthlyInvoices failed:', e);
+      toast({ title: 'Error', description: 'Failed to generate invoices', variant: 'destructive' });
+    }
+    return result;
+  }
+
+  // ============ UTILITY FUNCTIONS ============
+  function getContractsByCompany(companyId: string): Contract[] {
+    return contracts.filter(c => c.companyId === companyId);
+  }
+
+  function getInvoicesByContract(contractId: string): Invoice[] {
+    return invoices.filter(inv => inv.contractId === contractId);
+  }
+
+  function getActiveContractsForResidence(residenceId: string): Contract[] {
+    return contracts.filter(c => c.residenceId === residenceId && c.status === 'Active');
+  }
+
   const value: AccommodationContextValue = {
     residences,
     loading,
@@ -621,6 +1077,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     occupants,
     transferRequests,
     notifications,
+    companies,
+    contracts,
+    invoices,
     findWorkers,
     saveWorker,
     deleteWorker,
@@ -630,6 +1089,16 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     reviewTransferRequest,
     getDailyReport,
     getMonthlyReport,
+    saveCompany,
+    deleteCompany,
+    saveContract,
+    deleteContract,
+    saveInvoice,
+    deleteInvoice,
+    generateMonthlyInvoices,
+    getContractsByCompany,
+    getInvoicesByContract,
+    getActiveContractsForResidence,
   };
 
   return <AccommodationContext.Provider value={value}>{children}</AccommodationContext.Provider>;

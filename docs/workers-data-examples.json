@@ -1,0 +1,157 @@
+{
+  "description": "نماذج مختلفة لتنسيق بيانات العمال للاستيراد",
+  "examples": {
+    "basic": {
+      "description": "تنسيق أساسي - الحد الأدنى المطلوب",
+      "data": [
+        {
+          "name": "أحمد محمد"
+        },
+        {
+          "name": "محمد علي"
+        }
+      ]
+    },
+    "complete": {
+      "description": "تنسيق كامل - جميع الحقول الجديدة",
+      "data": [
+        {
+          "id": "w001",
+          "name": "أحمد محمد السيد",
+          "employeeId": "40097",
+          "idNumber": "2059537999",
+          "nationaliy": "سعودي",
+          "company": "شركة المقاولات",
+          "role": "Worker"
+        },
+        {
+          "id": "w002",
+          "name": "محمد علي حسن",
+          "employeeId": "50123",
+          "idNumber": "1234567890",
+          "nationaliy": "مصري",
+          "company": "شركة الصيانة",
+          "role": "Supervisor"
+        },
+        {
+          "id": "w003",
+          "name": "خالد أحمد عبدالله",
+          "employeeId": "60789",
+          "idNumber": "9876543210",
+          "nationaliy": "سوري",
+          "company": "شركة الكهرباء",
+          "role": "Engineer"
+        }
+      ]
+    },
+    "mixed": {
+      "description": "تنسيق مختلط - بعض الحقول اختيارية",
+      "data": [
+        {
+          "id": "w101",
+          "name": "عبدالله حسن",
+          "nationaliy": "يمني"
+        },
+        {
+          "name": "سعيد أحمد",
+          "role": "Worker"
+        },
+        {
+          "id": "w103",
+          "name": "فيصل محمد"
+        }
+      ]
+    },
+    "english": {
+      "description": "أسماء بالإنجليزية",
+      "data": [
+        {
+          "id": "w201",
+          "name": "Ahmed Mohammed",
+          "nationaliy": "Saudi",
+          "role": "Worker"
+        },
+        {
+          "id": "w202",
+          "name": "Mohammed Ali",
+          "nationaliy": "Egyptian",
+          "role": "Supervisor"
+        }
+      ]
+    },
+    "large_batch": {
+      "description": "دفعة كبيرة - مثال لـ 10 عمال",
+      "data": [
+        { "id": "w301", "name": "أحمد محمد", "nationaliy": "سعودي", "role": "Worker" },
+        { "id": "w302", "name": "محمد علي", "nationaliy": "مصري", "role": "Worker" },
+        { "id": "w303", "name": "خالد أحمد", "nationaliy": "سوري", "role": "Supervisor" },
+        { "id": "w304", "name": "عبدالله حسن", "nationaliy": "يمني", "role": "Worker" },
+        { "id": "w305", "name": "سعيد فيصل", "nationaliy": "أردني", "role": "Engineer" },
+        { "id": "w306", "name": "فهد عبدالعزيز", "nationaliy": "سعودي", "role": "Worker" },
+        { "id": "w307", "name": "ياسر محمود", "nationaliy": "فلسطيني", "role": "Worker" },
+        { "id": "w308", "name": "طارق سليمان", "nationaliy": "لبناني", "role": "Supervisor" },
+        { "id": "w309", "name": "وليد كمال", "nationaliy": "مصري", "role": "Worker" },
+        { "id": "w310", "name": "باسم رشيد", "nationaliy": "عراقي", "role": "Engineer" }
+      ]
+    }
+  },
+  "csv_example": {
+    "description": "مثال على ملف CSV (احفظ كـ .csv ثم حوّله)",
+    "content": "id,name,nationaliy,role\nw001,أحمد محمد,سعودي,Worker\nw002,محمد علي,مصري,Supervisor\nw003,خالد أحمد,سوري,Engineer"
+  },
+  "tsv_example": {
+    "description": "مثال على ملف TSV (tab-separated)",
+    "content": "id\tname\tnationaliy\trole\nw001\tأحمد محمد\tسعودي\tWorker\nw002\tمحمد علي\tمصري\tSupervisor"
+  },
+  "pipe_example": {
+    "description": "مثال مع محدد | (pipe)",
+    "content": "id|name|nationaliy|role\nw001|أحمد محمد|سعودي|Worker\nw002|محمد علي|مصري|Supervisor"
+  },
+  "conversion_commands": {
+    "csv_to_json": "npm run convert:workers data.csv workers.json",
+    "tsv_to_json": "node scripts/convert-workers-data.mjs data.tsv workers.json --delimiter=\"\\t\"",
+    "pipe_to_json": "node scripts/convert-workers-data.mjs data.txt workers.json --delimiter=\"|\""
+  },
+  "new_fields_example": {
+    "description": "مثال يوضح الحقول الجديدة",
+    "scenario": "عامل واحد يعمل في شركتين مختلفتين بنفس الرقم الوظيفي",
+    "data": [
+      {
+        "name": "أحمد محمد",
+        "employeeId": "40097",
+        "idNumber": "2059537999",
+        "nationaliy": "سعودي",
+        "company": "شركة المقاولات",
+        "role": "Worker"
+      },
+      {
+        "name": "أحمد محمد",
+        "employeeId": "40097",
+        "idNumber": "2059537999",
+        "nationaliy": "سعودي",
+        "company": "شركة الكهرباء",
+        "role": "Worker"
+      }
+    ]
+  },
+  "text_file_examples": {
+    "description": "أمثلة على ملفات text عادية يمكن تحويلها",
+    "csv_format": "40097,أحمد محمد,2059537999,سعودي,شركة المقاولات,Worker\n50123,محمد علي,1234567890,مصري,شركة الصيانة,Supervisor",
+    "tab_format": "40097\tأحمد محمد\t2059537999\tسعودي\tشركة المقاولات\tWorker\n50123\tمحمد علي\t1234567890\tمصري\tشركة الصيانة\tSupervisor",
+    "space_format": "40097    أحمد محمد    2059537999    سعودي    شركة المقاولات    Worker\n50123    محمد علي    1234567890    مصري     شركة الصيانة      Supervisor",
+    "convert_command": "npm run parse:text"
+  },
+  "notes": [
+    "الحقل 'name' إجباري في جميع الأمثلة",
+    "الحقل 'id' اختياري - سيتم توليده تلقائياً إذا لم يُوفّر",
+    "الحقل 'employeeId' (رقم الموظف) - يمكن تكراره في شركات مختلفة (مثل: 40097)",
+    "الحقل 'idNumber' (رقم الهوية الوطنية) - فريد لكل شخص (مثل: 2059537999)",
+    "الحقل 'company' (الشركة) - يستخدم لتمييز العمال بنفس الرقم الوظيفي",
+    "الأدوار المتاحة: Worker, Supervisor, Engineer",
+    "إذا لم يُحدد الدور، سيكون 'Worker' افتراضياً",
+    "يمكن استخدام 'nationality' بدلاً من 'nationaliy' (كلاهما مقبول)",
+    "يمكن استخدام 'nationalId' بدلاً من 'idNumber' (كلاهما مقبول)",
+    "تدعم البيانات اللغة العربية والإنجليزية",
+    "للملفات text العادية، استخدم: npm run parse:text"
+  ]
+}

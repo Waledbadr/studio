@@ -100,24 +100,27 @@ function ItemMovementContent() {
     (): Array<InventoryTransaction & { balance: number }> => {
       if (transactionsLoading || !item) return [] as any;
 
-      const netMovement = transactions.reduce((acc, tx) => {
-        const quantity =
-          tx.type === "IN" || tx.type === "TRANSFER_IN" ? tx.quantity : -tx.quantity;
-        return acc + quantity;
-      }, 0);
+      // Sort transactions from newest to oldest for display
+      const sortedTransactions = [...transactions].sort(
+        (a, b) => b.date.toMillis() - a.date.toMillis()
+      );
 
-      const startingBalance = (currentStock || 0) - netMovement;
-
-      let runningBalance = startingBalance;
-      return transactions
-        .map((tx) => {
-          runningBalance +=
-            tx.type === "IN" || tx.type === "TRANSFER_IN"
-              ? tx.quantity
-              : -tx.quantity;
-          return { ...(tx as any), balance: runningBalance };
-        })
-        .sort((a, b) => b.date.toMillis() - a.date.toMillis());
+      // Start with current stock and work backwards
+      let runningBalance = currentStock || 0;
+      
+      return sortedTransactions.map((tx) => {
+        // The balance AFTER this transaction (which is the current running balance)
+        const balanceAfterTx = runningBalance;
+        
+        // Update running balance for next (older) transaction
+        // Since we're going backwards, we subtract IN and add back OUT
+        runningBalance -=
+          tx.type === "IN" || tx.type === "TRANSFER_IN"
+            ? tx.quantity
+            : -tx.quantity;
+        
+        return { ...(tx as any), balance: balanceAfterTx };
+      });
     },
     [transactions, item, currentStock, transactionsLoading]
   );
@@ -302,7 +305,7 @@ function ItemMovementContent() {
                               : "text-red-600"
                           }`}
                         >
-                          {`$${
+                          {`${
                             tx.type === "IN" || tx.type === "TRANSFER_IN" ? "+" : "-"
                           }${tx.quantity}`}
                         </TableCell>

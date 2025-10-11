@@ -73,6 +73,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Accommodation Companies (sister companies for contracts)
+    match /companies/{companyId} {
+      allow read: if isSignedIn();
+      // Admins and users with Housing Officer or Finance roles can manage companies
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Contracts
+    match /contracts/{contractId} {
+      allow read: if isSignedIn();
+      // Admins and authorized roles can manage contracts
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Invoices
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn();
+      // Admins and Finance roles can manage invoices
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Occupants (worker assignments to rooms)
+    match /occupants/{occupantId} {
+      allow read: if isSignedIn();
+      // Admins and authorized roles can manage occupancy
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
   // Users collection: basic access model
     match /users/{uid} {
       allow read: if isSignedIn();

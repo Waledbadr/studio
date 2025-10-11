@@ -1,83 +1,255 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useAccommodation } from '@/context/accommodation-context';
+import { useResidences } from '@/context/residences-context';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle2, XCircle, Clock, ArrowRight, Users, Home, Plus } from 'lucide-react';
+import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
 
 export default function TransfersPage() {
-  const [requests, setRequests] = useState<any[]>([]);
+  const { transferRequests, reviewTransferRequest, workers, occupants } = useAccommodation();
+  const { residences } = useResidences();
+  const { toast } = useToast();
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
-  useEffect(()=>{
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('ac_transfers') : null;
-      const arr = raw ? JSON.parse(raw) : [];
-      setRequests(arr);
-    } catch(e){ console.error(e); }
-  },[]);
+  const getResidenceName = (id: string) => {
+    return residences?.find(r => r.id === id)?.name || id;
+  };
 
-  function review(id: string, approve: boolean) {
-    const raw = localStorage.getItem('ac_transfers') || '[]';
-    const arr = JSON.parse(raw);
-    const updated = arr.map((t:any)=> t.id===id ? { ...t, status: approve? 'Approved' : 'Rejected', reviewedAt: new Date().toISOString(), reviewedBy: 'local-manager' } : t);
-    localStorage.setItem('ac_transfers', JSON.stringify(updated));
-    setRequests(updated);
-    // if approved: try auto-assign (simple)
-    if (approve) {
-      const tr = updated.find((x:any)=>x.id===id);
-      if (tr) {
-        const wRaw = localStorage.getItem('ac_workers') || '[]';
-        const occRaw = localStorage.getItem('ac_occupants') || '[]';
-        const workers = JSON.parse(wRaw);
-        const occupants = JSON.parse(occRaw);
-        // try to assign to specified room or find first room with space
-        if (tr.to?.roomId) {
-          for (const wid of tr.workerIds) occupants.push({ workerId: wid, residenceId: tr.to.residenceId, roomId: tr.to.roomId, since: new Date().toISOString() });
-        } else {
-          // naive: place into rooms of residence sequentially
-          const resRaw = localStorage.getItem('estatecare_residences') || '[]';
-          const res = JSON.parse(resRaw).find((r:any)=>r.id===tr.to.residenceId);
-          const rooms: any[] = [];
-          if (res) {
-            if (res.rooms) rooms.push(...res.rooms);
-            if (res.buildings) for (const b of res.buildings) if (b.floors) for (const f of b.floors) if (f.rooms) rooms.push(...f.rooms);
-          }
-          for (const wid of tr.workerIds) {
-            const w = workers.find((x:any)=>x.id===wid);
-            if (!w) continue;
-            for (const rm of rooms) {
-              const occCount = occupants.filter((o:any)=>o.roomId===rm.id && o.residenceId===tr.to.residenceId).length;
-              const cap = rm.spaceSqm && rm.roomType ? Math.floor(rm.spaceSqm / (rm.roomType==='Worker'?4: rm.roomType==='Supervisor'?8:16)) : (rm.capacity || 1);
-              const firstOcc = occupants.find((o:any)=>o.roomId===rm.id && o.residenceId===tr.to.residenceId);
-              const firstNat = firstOcc ? (workers.find((x:any)=>x.id===firstOcc.workerId)?.nationaliy) : null;
-              if (occCount < cap && (!firstNat || firstNat === w.nationaliy)) { occupants.push({ workerId: wid, residenceId: tr.to.residenceId, roomId: rm.id, since: new Date().toISOString() }); break; }
-            }
-          }
+  const getWorkerName = (id: string) => {
+    return workers?.find(w => w.id === id)?.name || id;
+  };
+
+  const getRoomInfo = (residenceId: string, roomId: string) => {
+    const residence = residences?.find(r => r.id === residenceId);
+    if (!residence) return roomId;
+    
+    // Search in flat rooms
+    if (residence.rooms) {
+      const room = residence.rooms.find(r => r.id === roomId);
+      if (room) return room.name || roomId;
+    }
+    
+    // Search in buildings
+    if (residence.buildings) {
+      for (const building of residence.buildings) {
+        for (const floor of building.floors || []) {
+          const room = floor.rooms?.find(r => r.id === roomId);
+          if (room) return `${building.name || 'Building'} - ${floor.name || 'Floor'} - ${room.name || roomId}`;
         }
-        localStorage.setItem('ac_occupants', JSON.stringify(occupants));
       }
     }
-  }
+    
+    return roomId;
+  };
+
+  const handleReview = async (id: string, approve: boolean) => {
+    try {
+      await reviewTransferRequest(id, approve, 'current-user-id');
+      toast({
+        title: approve ? 'تمت الموافقة' : 'تم الرفض',
+        description: approve 
+          ? 'تمت الموافقة على طلب النقل بنجاح' 
+          : 'تم رفض طلب النقل',
+        variant: approve ? 'default' : 'destructive',
+      });
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل في معالجة الطلب',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Pending':
+        return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> قيد الانتظار</Badge>;
+      case 'Approved':
+        return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" /> موافق عليه</Badge>;
+      case 'Rejected':
+        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> مرفوض</Badge>;
+      case 'Cancelled':
+        return <Badge variant="secondary" className="gap-1">ملغي</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const pendingRequests = transferRequests?.filter(r => r.status === 'Pending') || [];
+  const reviewedRequests = transferRequests?.filter(r => r.status !== 'Pending') || [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Transfer requests</h1>
-      <div className="rounded-md border p-4 bg-white/80">
-        <ul className="space-y-2">
-          {requests.length ? requests.map(r=> (
-            <li key={r.id} className="p-3 border rounded">
-              <div className="flex justify-between items-center">
-                <div>
-                  <div className="font-semibold">{r.id} • {r.status}</div>
-                  <div className="text-sm text-muted-foreground">To: {r.to?.residenceId} {r.to?.roomId? '/ '+r.to.roomId : ''}</div>
-                  <div className="text-sm">Workers: {r.workerIds.join(', ')}</div>
-                </div>
-                <div className="flex gap-2">
-                  {r.status==='Pending' && <button className="rounded-md bg-emerald-600 text-white px-3 py-1" onClick={()=>review(r.id, true)}>Approve</button>}
-                  {r.status==='Pending' && <button className="rounded-md bg-red-600 text-white px-3 py-1" onClick={()=>review(r.id,false)}>Reject</button>}
-                </div>
-              </div>
-            </li>
-          )) : <li className="text-sm text-muted-foreground">No requests</li>}
-        </ul>
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">طلبات النقل</h1>
+          <p className="text-muted-foreground mt-1">إدارة طلبات نقل العمال بين المساكن</p>
+        </div>
+        <div className="flex gap-3 items-center">
+          <Button onClick={() => setTransferDialogOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            طلب نقل جديد
+          </Button>
+          <Badge variant="secondary" className="text-lg px-4 py-2">
+            {pendingRequests.length} قيد الانتظار
+          </Badge>
+        </div>
       </div>
+      
+      <CreateTransferDialog 
+        isOpen={transferDialogOpen} 
+        onOpenChange={setTransferDialogOpen}
+      />
+
+      {/* Pending Requests */}
+      {pendingRequests.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            طلبات قيد المراجعة
+          </h2>
+          <div className="grid gap-4">
+            {pendingRequests.map(request => (
+              <Card key={request.id} className="border-amber-200 dark:border-amber-900">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">طلب نقل #{request.id.slice(0, 8)}</CardTitle>
+                      <CardDescription>
+                        تاريخ الطلب: {new Date(request.requestedAt).toLocaleDateString('ar-EG')}
+                      </CardDescription>
+                    </div>
+                    {getStatusBadge(request.status)}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Transfer Info */}
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Home className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">من:</p>
+                        <p className="text-muted-foreground">
+                          {request.from?.residenceId 
+                            ? `${getResidenceName(request.from.residenceId)}${request.from.roomId ? ` - ${getRoomInfo(request.from.residenceId, request.from.roomId)}` : ''}`
+                            : 'غير محدد'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <ArrowRight className="h-5 w-5 text-primary flex-shrink-0" />
+                    
+                    <div className="flex items-center gap-2 flex-1">
+                      <Home className="h-4 w-4 text-primary" />
+                      <div>
+                        <p className="font-medium">إلى:</p>
+                        <p className="text-primary">
+                          {getResidenceName(request.to.residenceId)}
+                          {request.to.roomId && ` - ${getRoomInfo(request.to.residenceId, request.to.roomId)}`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Workers */}
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm mb-1">العمال ({request.workerIds.length}):</p>
+                      <div className="flex flex-wrap gap-2">
+                        {request.workerIds.map(wid => (
+                          <Badge key={wid} variant="secondary">
+                            {getWorkerName(wid)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reason */}
+                  {request.reason && (
+                    <div className="bg-muted p-3 rounded-md">
+                      <p className="text-sm"><span className="font-medium">السبب:</span> {request.reason}</p>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      onClick={() => handleReview(request.id, true)}
+                      className="flex-1"
+                      variant="default"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      موافقة
+                    </Button>
+                    <Button 
+                      onClick={() => handleReview(request.id, false)}
+                      className="flex-1"
+                      variant="destructive"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      رفض
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reviewed Requests */}
+      {reviewedRequests.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">الطلبات السابقة</h2>
+          <div className="grid gap-3">
+            {reviewedRequests.map(request => (
+              <Card key={request.id} className="bg-muted/50">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">#{request.id.slice(0, 8)}</span>
+                        {getStatusBadge(request.status)}
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-2">
+                        <span>{getResidenceName(request.to.residenceId)}</span>
+                        <ArrowRight className="h-3 w-3" />
+                        <span>{request.workerIds.length} عامل</span>
+                      </div>
+                      {request.reviewedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          تمت المراجعة: {new Date(request.reviewedAt).toLocaleDateString('ar-EG')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {transferRequests?.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <ArrowRight className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">لا توجد طلبات نقل</h3>
+            <p className="text-muted-foreground text-center">
+              لم يتم إنشاء أي طلبات نقل بعد
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

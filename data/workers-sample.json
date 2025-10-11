@@ -1,0 +1,42 @@
+[
+  {
+    "name": "أحمد محمد السيد",
+    "employeeId": "40097",
+    "idNumber": "2059537999",
+    "nationaliy": "سعودي",
+    "company": "شركة المقاولات",
+    "role": "Worker"
+  },
+  {
+    "name": "محمد علي حسن",
+    "employeeId": "50123",
+    "idNumber": "1234567890",
+    "nationaliy": "مصري",
+    "company": "شركة الصيانة",
+    "role": "Supervisor"
+  },
+  {
+    "name": "خالد أحمد عبدالله",
+    "employeeId": "60789",
+    "idNumber": "9876543210",
+    "nationaliy": "سوري",
+    "company": "شركة الكهرباء",
+    "role": "Engineer"
+  },
+  {
+    "name": "عبدالله حسن محمد",
+    "employeeId": "70456",
+    "idNumber": "5555555555",
+    "nationaliy": "يمني",
+    "company": "شركة المقاولات",
+    "role": "Worker"
+  },
+  {
+    "name": "سعيد فيصل علي",
+    "employeeId": "40097",
+    "idNumber": "3333333333",
+    "nationaliy": "سعودي",
+    "company": "شركة الصيانة",
+    "role": "Worker"
+  }
+]
