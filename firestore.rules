@@ -105,6 +105,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Accommodation History (immutable log of all check-in/out/transfer operations)
+    match /accommodationHistory/{historyId} {
+      // All signed-in users can read history for reporting and auditing
+      allow read: if isSignedIn();
+      // Only Admins and Supervisors can create history records (done by accommodation operations)
+      allow create: if isAdmin() || isSupervisor();
+      // History records are immutable - no updates or deletes allowed (except by Admin for corrections)
+      allow update, delete: if isAdmin();
+    }
+
   // Users collection: basic access model
     match /users/{uid} {
       allow read: if isSignedIn();

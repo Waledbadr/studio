@@ -385,3 +385,72 @@ Built following best practices from:
 **Completion Date**: 2025-10-09  
 **Lines of Code Added**: ~2,500+  
 **Files Created**: 6 pages + extended context + documentation
+
+---
+
+## 🎉 Update: Enhanced System with Timeline & History (October 2025)
+
+### ✨ NEW: Complete Historical Tracking System
+
+The system has been enhanced with a comprehensive timeline and history tracking system that records every worker movement with full details.
+
+#### 📝 What's New
+
+**1. Accommodation History System**
+- ✅ Complete immutable history in `accommodationHistory` Firestore collection
+- ✅ Every check-in, check-out, transfer, and swap is permanently recorded
+- ✅ Detailed metadata: dates, locations, reasons, notes, user who performed action
+- ✅ Timeline queries by worker, room, or date range
+
+**2. Enhanced Operations with Dates**
+- ✅ `checkInWorker` - Check-in with custom date and notes
+- ✅ `checkOutWorkerEnhanced` - Check-out with automatic duration calculation
+- ✅ `transferWorker` - Transfer between locations with full tracking
+- ✅ `swapWorkers` - NEW: Swap two workers between rooms
+- ✅ All operations create history records automatically
+
+**3. Batch Operations**
+- ✅ `bulkCheckIn` - Check-in multiple workers at once
+- ✅ `bulkCheckOut` - Check-out multiple workers with shared date
+- ✅ `bulkTransfer` - Transfer multiple workers to same location
+- ✅ Detailed results per worker with error handling
+
+**4. New UI Pages**
+- ✅ `/accommodation/worker-timeline/[id]` - Beautiful visual timeline for each worker
+- ✅ `/accommodation/timeline-reports` - Advanced timeline reports with analytics
+- ✅ `BatchOperationsDialog` component for bulk operations
+
+**5. Advanced Queries**
+- ✅ `getWorkerHistory(workerId)` - All movements for a worker
+- ✅ `getRoomHistory(residenceId, roomId)` - All occupants in a room
+- ✅ `getHistoryByDateRange(start, end)` - Operations within a period
+
+#### 📚 Documentation Added
+- ✅ `ACCOMMODATION_ENHANCED_SYSTEM.md` - Comprehensive system guide (400+ lines)
+- ✅ `ACCOMMODATION_QUICK_GUIDE.md` - Quick usage guide with examples (250+ lines)
+- ✅ `ACCOMMODATION_CHANGELOG.md` - Detailed changelog (350+ lines)
+
+#### 📊 Enhanced Statistics
+- **Additional Code**: ~4,200 lines
+- **New Functions**: 10 (7 operations + 3 queries)
+- **New Pages**: 3
+- **New Components**: 1
+- **Documentation**: 3 comprehensive files
+
+#### 🎯 Key Benefits
+1. **Complete Transparency** - Every action is documented
+2. **Accountability** - Know who did what and when
+3. **Analytics** - Accurate data for better decision making
+4. **Compliance** - Full audit trail for reviews
+5. **User-Friendly** - Intuitive interfaces with visual timelines
+
+#### 🚀 Backward Compatible
+- All existing functions still work
+- No breaking changes
+- Gradual upgrade possible
+- New features are optional
+
+**Updated Version**: 2.0.0  
+**Enhancement Date**: 2025-10-15  
+**Total Lines**: ~6,700+ lines
+**Status**: ✅ Enhanced and Production Ready

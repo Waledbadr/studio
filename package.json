@@ -17,7 +17,8 @@
     "parse:text": "node scripts/parse-text-workers.mjs",
     "validate:workers": "node scripts/validate-workers-json.mjs",
     "keep-alive": "node scripts/keep-alive.mjs",
-    "lookup:uid": "node --env-file=.env.local scripts/lookup-uid.mjs"
+    "lookup:uid": "node --env-file=.env.local scripts/lookup-uid.mjs",
+    "update:room-areas": "node --env-file=.env.local scripts/update-rooms-default-area.mjs"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",

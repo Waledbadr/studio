@@ -1,0 +1,8 @@
+C_Number	Employee Name	W Type	Iqama_No	Nationality	Company
+37433	Akram Naimu Deen	Workers	2326188378	Indian	SACODECO
+33023	Mohamed El Shawadfi	Workers	2286381633	Egypt	SACODECO
+20931	مو أرمان مينودين	Workers		Indian	FAST
+38216	Jalei Ahmad Al Frsaney	Workers	1094693585	Saudi	SACODECO
+33136	Ibrahim Youssef Ibrahim Antar	Workers	2288184878	Egypt	SACODECO
+50708	RASHID KHAN SAID RASOOL	Workers	2604730339	Pakistan	SACODECO
+48335	MD NAUSHAD ALAM	Workers	2549347611	Indian	SACODECO

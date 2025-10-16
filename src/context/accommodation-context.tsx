@@ -57,7 +57,56 @@ export type Occupant = {
   buildingId?: string;
   floorId?: string;
   roomId: string;
-  since: string; // ISO date
+  since: string; // ISO date - Check-in date
+  until?: string; // ISO date - Check-out date (null = still active)
+  checkInBy?: string; // User ID who performed check-in
+  checkOutBy?: string; // User ID who performed check-out
+  notes?: string; // Optional notes about this occupancy
+};
+
+// Historical record of all accommodation movements (immutable)
+export type AccommodationHistory = {
+  id: string; // Unique ID for this history entry
+  workerId: string;
+  workerName?: string; // Cached for faster queries
+  workerNationality?: string;
+  
+  actionType: 'CHECK_IN' | 'CHECK_OUT' | 'TRANSFER' | 'SWAP'; // Type of action
+  actionDate: string; // ISO date when action occurred
+  actionBy: string; // User ID who performed the action
+  actionByName?: string; // Cached user name
+  
+  // Location details
+  residenceId: string;
+  residenceName?: string; // Cached
+  buildingId?: string;
+  buildingName?: string;
+  floorId?: string;
+  floorName?: string;
+  roomId: string;
+  roomName?: string;
+  
+  // Transfer-specific fields
+  fromResidenceId?: string; // For TRANSFER actions
+  fromResidenceName?: string;
+  fromRoomId?: string;
+  fromRoomName?: string;
+  toResidenceId?: string; // For TRANSFER actions
+  toResidenceName?: string;
+  toRoomId?: string;
+  toRoomName?: string;
+  
+  // Swap-specific fields
+  swappedWithWorkerId?: string; // For SWAP actions
+  swappedWithWorkerName?: string;
+  
+  // Metadata
+  reason?: string; // Reason for action (optional)
+  notes?: string; // Additional notes
+  duration?: number; // Days stayed (calculated for CHECK_OUT)
+  relatedTransferRequestId?: string; // Link to TransferRequest if applicable
+  
+  createdAt: string; // Timestamp when record was created
 };
 
 export type TransferRequest = {
@@ -135,6 +184,7 @@ type AccommodationContextValue = {
   // new exports
   workers: Worker[];
   occupants: Occupant[];
+  accommodationHistory: AccommodationHistory[]; // NEW: Complete history of all movements
   transferRequests: TransferRequest[];
   notifications: Notification[];
   // new domain objects
@@ -142,20 +192,116 @@ type AccommodationContextValue = {
   contracts: Contract[];
   invoices: Invoice[];
   findWorkers: (q: string) => Worker[];
+  
+  // History queries
+  getWorkerHistory: (workerId: string) => AccommodationHistory[];
+  getRoomHistory: (residenceId: string, roomId: string) => AccommodationHistory[];
+  getHistoryByDateRange: (startDate: string, endDate: string) => AccommodationHistory[];
   // worker CRUD (firestore-backed when available)
   saveWorker: (worker: Worker | Omit<Worker, 'id'>) => Promise<void>;
   deleteWorker: (id: string) => Promise<void>;
   migrateLocalWorkersToFirestore?: (opts?: { removeLocal?: boolean }) => Promise<{ migrated: number; skipped: number; errors: number }>;
+  
+  // ===== NEW: Enhanced operations with complete history tracking =====
+  checkInWorker: (params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    buildingId?: string;
+    floorId?: string;
+    checkInDate?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
+  
+  checkOutWorkerEnhanced: (params: {
+    workerId: string;
+    checkOutDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
+  
+  transferWorker: (params: {
+    workerId: string;
+    toResidenceId: string;
+    toRoomId: string;
+    toBuildingId?: string;
+    toFloorId?: string;
+    transferDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
+  
+  swapWorkers: (params: {
+    worker1Id: string;
+    worker2Id: string;
+    swapDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string; historyIds?: string[] }>;
+  
+  // Batch operations with dates
+  bulkCheckIn: (params: {
+    workerIds: string[];
+    residenceId: string;
+    roomId: string;
+    buildingId?: string;
+    floorId?: string;
+    checkInDate?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }>;
+  
+  bulkCheckOut: (params: {
+    workerIds: string[];
+    checkOutDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }>;
+  
+  bulkTransfer: (params: {
+    workerIds: string[];
+    toResidenceId: string;
+    toRoomId: string;
+    toBuildingId?: string;
+    toFloorId?: string;
+    transferDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }>;
+  
+  // ===== LEGACY: Kept for backward compatibility =====
   assignWorkerToRoom: (
     workerId: string,
     residenceId: string,
-    roomId: string
+    roomId: string,
+    checkInDate?: string
   ) => { ok: boolean; error?: string };
   bulkAssign: (
     workerIds: string[],
     residenceId: string,
-    roomId: string
+    roomId: string,
+    checkInDate?: string
   ) => { ok: boolean; results: Record<string, string | true> };
+  checkOutWorker: (
+    workerId: string,
+    residenceId: string,
+    roomId: string,
+    checkOutDate?: string
+  ) => { ok: boolean; error?: string };
+  quickTransfer: (
+    workerId: string,
+    fromResidenceId: string,
+    fromRoomId: string,
+    toResidenceId: string,
+    toRoomId: string,
+    checkInDate?: string
+  ) => { ok: boolean; error?: string };
   createTransferRequest: (
     req: Omit<TransferRequest, "id" | "requestedAt" | "status">
   ) => TransferRequest;
@@ -192,6 +338,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [occupants, setOccupants] = useState<Occupant[]>([]);
+  const [accommodationHistory, setAccommodationHistory] = useState<AccommodationHistory[]>([]); // NEW
   const [transferRequests, setTransferRequests] = useState<TransferRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   // New state for companies, contracts, invoices
@@ -202,6 +349,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const globalNotifications = useNotifications();
   const workersUnsubRef = useRef<Unsubscribe | null>(null);
   const workersPermissionWarnedRef = useRef(false);
+  const historyUnsubRef = useRef<Unsubscribe | null>(null); // NEW
   const workersFirestoreDisabledRef = useRef(false);
   const companiesUnsubRef = useRef<Unsubscribe | null>(null);
   const contractsUnsubRef = useRef<Unsubscribe | null>(null);
@@ -502,11 +650,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       setOccupants(list);
       try { localStorage.setItem('ac_occupants', JSON.stringify(list)); } catch {}
     }, (err) => { console.error('Occupants snapshot error:', err); });
+    
+    // Accommodation History listener - NEW!
+    const historyCol = collection(db, 'accommodationHistory');
+    historyUnsubRef.current = onSnapshot(historyCol, (snap) => {
+      const list: AccommodationHistory[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory));
+      setAccommodationHistory(list);
+      try { localStorage.setItem('ac_history', JSON.stringify(list)); } catch {}
+    }, (err) => { console.error('Accommodation History snapshot error:', err); });
 
     return () => {
       if (companiesUnsubRef.current) { try { companiesUnsubRef.current(); } catch {} }
       if (contractsUnsubRef.current) { try { contractsUnsubRef.current(); } catch {} }
       if (invoicesUnsubRef.current) { try { invoicesUnsubRef.current(); } catch {} }
+      if (historyUnsubRef.current) { try { historyUnsubRef.current(); } catch {} } // NEW
       if (occupantsUnsub) { try { occupantsUnsub(); } catch {} }
     };
   }, []);
@@ -517,6 +674,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (typeof window === "undefined") return;
       localStorage.setItem("ac_workers", JSON.stringify(workers));
       localStorage.setItem("ac_occupants", JSON.stringify(occupants));
+      localStorage.setItem("ac_history", JSON.stringify(accommodationHistory)); // NEW
       localStorage.setItem("ac_transfers", JSON.stringify(transferRequests));
       localStorage.setItem("ac_notifications", JSON.stringify(notifications));
       localStorage.setItem("ac_companies", JSON.stringify(companies));
@@ -525,7 +683,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     } catch (e) {
       console.error("Accommodation: persist failed", e);
     }
-  }, [workers, occupants, transferRequests, notifications, companies, contracts, invoices]);
+  }, [workers, occupants, accommodationHistory, transferRequests, notifications, companies, contracts, invoices]);
 
   // Capacity calculation per role
   function calcCapacityFromSpace(spaceSqm: number, role: "Worker" | "Supervisor" | "Engineer") {
@@ -668,14 +826,14 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // Assign single worker to room with nationality & capacity checks
-  function assignWorkerToRoom(workerId: string, residenceId: string, roomId: string) {
+  function assignWorkerToRoom(workerId: string, residenceId: string, roomId: string, checkInDate?: string) {
     const w = workers.find((x) => x.id === workerId);
     if (!w) return { ok: false, error: "worker-not-found" };
     const room = findRoom(residenceId, roomId);
     if (!room) return { ok: false, error: "room-not-found" };
     if (!room.spaceSqm || !room.roomType) return { ok: false, error: "room-metadata-missing" };
     // nationality check: occupants in same room must share nationality
-    const existing = occupants.filter((o) => o.roomId === roomId && o.residenceId === residenceId);
+    const existing = occupants.filter((o) => o.roomId === roomId && o.residenceId === residenceId && !o.until);
     if (existing.length > 0) {
       const firstWorker = workers.find((x) => x.id === existing[0].workerId);
       if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
@@ -692,7 +850,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       roomId,
       buildingId: undefined,
       floorId: undefined,
-      since: new Date().toISOString(),
+      since: checkInDate || new Date().toISOString(),
     };
     setOccupants((prev) => [...prev, occ]);
     // notification if near full
@@ -709,13 +867,31 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { ok: true };
   }
 
-  function bulkAssign(workerIds: string[], residenceId: string, roomId: string) {
+  function bulkAssign(workerIds: string[], residenceId: string, roomId: string, checkInDate?: string) {
     const results: Record<string, string | true> = {};
     for (const wid of workerIds) {
-      const r = assignWorkerToRoom(wid, residenceId, roomId);
+      const r = assignWorkerToRoom(wid, residenceId, roomId, checkInDate);
       results[wid] = r.ok ? true : r.error || "error";
     }
     return { ok: true, results };
+  }
+
+  function checkOutWorker(workerId: string, residenceId: string, roomId: string, checkOutDate?: string) {
+    const occ = occupants.find(o => o.workerId === workerId && o.residenceId === residenceId && o.roomId === roomId && !o.until);
+    if (!occ) return { ok: false, error: "occupant-not-found" };
+    const updatedOcc: Occupant = { ...occ, until: checkOutDate || new Date().toISOString() };
+    setOccupants((prev) => prev.map((o) => (o.workerId === workerId && o.residenceId === residenceId && o.roomId === roomId ? updatedOcc : o)));
+    return { ok: true };
+  }
+
+  function quickTransfer(workerId: string, fromResidenceId: string, fromRoomId: string, toResidenceId: string, toRoomId: string, checkInDate?: string) {
+    // First, check out from current room
+    const checkOutResult = checkOutWorker(workerId, fromResidenceId, fromRoomId);
+    if (!checkOutResult.ok) return checkOutResult;
+    // Then, assign to new room
+    const assignResult = assignWorkerToRoom(workerId, toResidenceId, toRoomId, checkInDate);
+    if (!assignResult.ok) return assignResult;
+    return { ok: true };
   }
 
   function createTransferRequest(req: Omit<TransferRequest, "id" | "requestedAt" | "status">) {
@@ -1069,22 +1245,661 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return contracts.filter(c => c.residenceId === residenceId && c.status === 'Active');
   }
 
+  // ============ NEW: HISTORY QUERY FUNCTIONS ============
+  function getWorkerHistory(workerId: string): AccommodationHistory[] {
+    return accommodationHistory
+      .filter(h => h.workerId === workerId)
+      .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+  }
+
+  function getRoomHistory(residenceId: string, roomId: string): AccommodationHistory[] {
+    return accommodationHistory
+      .filter(h => 
+        (h.residenceId === residenceId && h.roomId === roomId) ||
+        (h.toResidenceId === residenceId && h.toRoomId === roomId) ||
+        (h.fromResidenceId === residenceId && h.fromRoomId === roomId)
+      )
+      .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+  }
+
+  function getHistoryByDateRange(startDate: string, endDate: string): AccommodationHistory[] {
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+    return accommodationHistory
+      .filter(h => {
+        const actionTime = new Date(h.actionDate).getTime();
+        return actionTime >= start && actionTime <= end;
+      })
+      .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+  }
+
+  // ============ NEW: ENHANCED OPERATIONS WITH HISTORY ============
+  
+  // Helper: Create history record
+  async function createHistoryRecord(historyData: Omit<AccommodationHistory, 'id' | 'createdAt'>): Promise<string> {
+    const id = `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const history: AccommodationHistory = {
+      ...historyData,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'accommodationHistory', id), history);
+      }
+      setAccommodationHistory(prev => [history, ...prev]);
+      return id;
+    } catch (e) {
+      console.error('Failed to create history record:', e);
+      throw e;
+    }
+  }
+
+  // Enhanced Check-In with history
+  async function checkInWorker(params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    buildingId?: string;
+    floorId?: string;
+    checkInDate?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
+    try {
+      const w = workers.find(x => x.id === params.workerId);
+      if (!w) return { ok: false, error: "worker-not-found" };
+
+      // Check if worker is already assigned
+      const existing = occupants.find(o => o.workerId === params.workerId && !o.until);
+      if (existing) {
+        return { ok: false, error: "worker-already-assigned" };
+      }
+
+      const room = findRoom(params.residenceId, params.roomId);
+      if (!room) return { ok: false, error: "room-not-found" };
+      if (!room.spaceSqm || !room.roomType) return { ok: false, error: "room-metadata-missing" };
+
+      // Nationality check
+      const roomOccupants = occupants.filter(o => 
+        o.roomId === params.roomId && 
+        o.residenceId === params.residenceId && 
+        !o.until
+      );
+      
+      if (roomOccupants.length > 0) {
+        const firstWorker = workers.find(x => x.id === roomOccupants[0].workerId);
+        if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
+          return { ok: false, error: "nationality-mismatch" };
+        }
+      }
+
+      // Capacity check
+      const cap = calcCapacityFromSpace(room.spaceSqm, room.roomType);
+      if (roomOccupants.length >= cap) {
+        return { ok: false, error: "room-full" };
+      }
+
+      const checkInDate = params.checkInDate || new Date().toISOString();
+
+      // Create occupant record
+      const occupant: Occupant = {
+        workerId: params.workerId,
+        residenceId: params.residenceId,
+        roomId: params.roomId,
+        buildingId: params.buildingId,
+        floorId: params.floorId,
+        since: checkInDate,
+        checkInBy: params.performedBy,
+        notes: params.notes,
+      };
+
+      // Get residence name for history
+      const residence = residences.find(r => r.id === params.residenceId);
+
+      // Create history record
+      const historyId = await createHistoryRecord({
+        workerId: params.workerId,
+        workerName: w.name,
+        workerNationality: w.nationaliy,
+        actionType: 'CHECK_IN',
+        actionDate: checkInDate,
+        actionBy: params.performedBy,
+        residenceId: params.residenceId,
+        residenceName: residence?.name,
+        buildingId: params.buildingId,
+        floorId: params.floorId,
+        roomId: params.roomId,
+        roomName: room.name,
+        notes: params.notes,
+      });
+
+      // Save occupant to Firestore
+      if (db) {
+        const occupantId = `occ_${params.workerId}_${Date.now()}`;
+        await setDoc(doc(db, 'occupants', occupantId), occupant);
+      }
+
+      setOccupants(prev => [...prev, occupant]);
+
+      toast({
+        title: "تم التسكين بنجاح",
+        description: `تم تسكين ${w.name} في ${room.name || params.roomId}`,
+      });
+
+      return { ok: true, historyId };
+    } catch (e: any) {
+      console.error('checkInWorker failed:', e);
+      return { ok: false, error: e.message || 'unknown-error' };
+    }
+  }
+
+  // Enhanced Check-Out with history
+  async function checkOutWorkerEnhanced(params: {
+    workerId: string;
+    checkOutDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
+    try {
+      const w = workers.find(x => x.id === params.workerId);
+      if (!w) return { ok: false, error: "worker-not-found" };
+
+      const occupant = occupants.find(o => o.workerId === params.workerId && !o.until);
+      if (!occupant) return { ok: false, error: "worker-not-assigned" };
+
+      const checkOutDate = params.checkOutDate || new Date().toISOString();
+      const checkInDate = new Date(occupant.since);
+      const checkOutDateObj = new Date(checkOutDate);
+      const duration = Math.ceil((checkOutDateObj.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      const room = findRoom(occupant.residenceId, occupant.roomId);
+      const residence = residences.find(r => r.id === occupant.residenceId);
+
+      // Create history record
+      const historyId = await createHistoryRecord({
+        workerId: params.workerId,
+        workerName: w.name,
+        workerNationality: w.nationaliy,
+        actionType: 'CHECK_OUT',
+        actionDate: checkOutDate,
+        actionBy: params.performedBy,
+        residenceId: occupant.residenceId,
+        residenceName: residence?.name,
+        buildingId: occupant.buildingId,
+        floorId: occupant.floorId,
+        roomId: occupant.roomId,
+        roomName: room?.name,
+        reason: params.reason,
+        notes: params.notes,
+        duration,
+      });
+
+      // Update occupant record
+      const updatedOccupant: Occupant = {
+        ...occupant,
+        until: checkOutDate,
+        checkOutBy: params.performedBy,
+        notes: params.notes ? `${occupant.notes || ''}\nCheck-out: ${params.notes}` : occupant.notes,
+      };
+
+      if (db) {
+        // Find and update the occupant document
+        const occupantsRef = collection(db, 'occupants');
+        const q = query(occupantsRef);
+        const snapshot = await getDocs(q);
+        const occupantDoc = snapshot.docs.find(d => {
+          const data = d.data();
+          return data.workerId === params.workerId && !data.until;
+        });
+        
+        if (occupantDoc) {
+          await setDoc(doc(db, 'occupants', occupantDoc.id), updatedOccupant);
+        }
+      }
+
+      setOccupants(prev => prev.map(o => 
+        o.workerId === params.workerId && !o.until ? updatedOccupant : o
+      ));
+
+      toast({
+        title: "تم الإخراج بنجاح",
+        description: `تم إخراج ${w.name} بعد ${duration} يوم`,
+      });
+
+      return { ok: true, historyId };
+    } catch (e: any) {
+      console.error('checkOutWorkerEnhanced failed:', e);
+      return { ok: false, error: e.message || 'unknown-error' };
+    }
+  }
+
+  // Enhanced Transfer with history
+  async function transferWorker(params: {
+    workerId: string;
+    toResidenceId: string;
+    toRoomId: string;
+    toBuildingId?: string;
+    toFloorId?: string;
+    transferDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
+    try {
+      const w = workers.find(x => x.id === params.workerId);
+      if (!w) return { ok: false, error: "worker-not-found" };
+
+      const currentOccupant = occupants.find(o => o.workerId === params.workerId && !o.until);
+      if (!currentOccupant) return { ok: false, error: "worker-not-assigned" };
+
+      // Check target room
+      const toRoom = findRoom(params.toResidenceId, params.toRoomId);
+      if (!toRoom) return { ok: false, error: "target-room-not-found" };
+      if (!toRoom.spaceSqm || !toRoom.roomType) return { ok: false, error: "target-room-metadata-missing" };
+
+      // Nationality check
+      const targetRoomOccupants = occupants.filter(o => 
+        o.roomId === params.toRoomId && 
+        o.residenceId === params.toResidenceId && 
+        !o.until
+      );
+      
+      if (targetRoomOccupants.length > 0) {
+        const firstWorker = workers.find(x => x.id === targetRoomOccupants[0].workerId);
+        if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
+          return { ok: false, error: "nationality-mismatch" };
+        }
+      }
+
+      // Capacity check
+      const cap = calcCapacityFromSpace(toRoom.spaceSqm, toRoom.roomType);
+      if (targetRoomOccupants.length >= cap) {
+        return { ok: false, error: "target-room-full" };
+      }
+
+      const transferDate = params.transferDate || new Date().toISOString();
+
+      // Get names for history
+      const fromResidence = residences.find(r => r.id === currentOccupant.residenceId);
+      const fromRoom = findRoom(currentOccupant.residenceId, currentOccupant.roomId);
+      const toResidence = residences.find(r => r.id === params.toResidenceId);
+
+      // Create history record
+      const historyId = await createHistoryRecord({
+        workerId: params.workerId,
+        workerName: w.name,
+        workerNationality: w.nationaliy,
+        actionType: 'TRANSFER',
+        actionDate: transferDate,
+        actionBy: params.performedBy,
+        fromResidenceId: currentOccupant.residenceId,
+        fromResidenceName: fromResidence?.name,
+        fromRoomId: currentOccupant.roomId,
+        fromRoomName: fromRoom?.name,
+        toResidenceId: params.toResidenceId,
+        toResidenceName: toResidence?.name,
+        toRoomId: params.toRoomId,
+        toRoomName: toRoom.name,
+        residenceId: params.toResidenceId,
+        roomId: params.toRoomId,
+        reason: params.reason,
+        notes: params.notes,
+      });
+
+      // Check out from current room
+      const updatedCurrentOccupant: Occupant = {
+        ...currentOccupant,
+        until: transferDate,
+        checkOutBy: params.performedBy,
+      };
+
+      // Create new occupant record
+      const newOccupant: Occupant = {
+        workerId: params.workerId,
+        residenceId: params.toResidenceId,
+        roomId: params.toRoomId,
+        buildingId: params.toBuildingId,
+        floorId: params.toFloorId,
+        since: transferDate,
+        checkInBy: params.performedBy,
+        notes: params.notes,
+      };
+
+      if (db) {
+        // Update old occupant
+        const occupantsRef = collection(db, 'occupants');
+        const q = query(occupantsRef);
+        const snapshot = await getDocs(q);
+        const occupantDoc = snapshot.docs.find(d => {
+          const data = d.data();
+          return data.workerId === params.workerId && !data.until;
+        });
+        
+        if (occupantDoc) {
+          await setDoc(doc(db, 'occupants', occupantDoc.id), updatedCurrentOccupant);
+        }
+
+        // Create new occupant
+        const newOccupantId = `occ_${params.workerId}_${Date.now()}`;
+        await setDoc(doc(db, 'occupants', newOccupantId), newOccupant);
+      }
+
+      setOccupants(prev => [
+        ...prev.map(o => o.workerId === params.workerId && !o.until ? updatedCurrentOccupant : o),
+        newOccupant,
+      ]);
+
+      toast({
+        title: "تم النقل بنجاح",
+        description: `تم نقل ${w.name} من ${fromRoom?.name || currentOccupant.roomId} إلى ${toRoom.name || params.toRoomId}`,
+      });
+
+      return { ok: true, historyId };
+    } catch (e: any) {
+      console.error('transferWorker failed:', e);
+      return { ok: false, error: e.message || 'unknown-error' };
+    }
+  }
+
+  // Swap workers between rooms
+  async function swapWorkers(params: {
+    worker1Id: string;
+    worker2Id: string;
+    swapDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; error?: string; historyIds?: string[] }> {
+    try {
+      const w1 = workers.find(x => x.id === params.worker1Id);
+      const w2 = workers.find(x => x.id === params.worker2Id);
+      if (!w1 || !w2) return { ok: false, error: "worker-not-found" };
+
+      const occ1 = occupants.find(o => o.workerId === params.worker1Id && !o.until);
+      const occ2 = occupants.find(o => o.workerId === params.worker2Id && !o.until);
+      if (!occ1 || !occ2) return { ok: false, error: "workers-not-assigned" };
+
+      const swapDate = params.swapDate || new Date().toISOString();
+
+      // Get names for history
+      const res1 = residences.find(r => r.id === occ1.residenceId);
+      const res2 = residences.find(r => r.id === occ2.residenceId);
+      const room1 = findRoom(occ1.residenceId, occ1.roomId);
+      const room2 = findRoom(occ2.residenceId, occ2.roomId);
+
+      // Create history records for both workers
+      const history1Id = await createHistoryRecord({
+        workerId: params.worker1Id,
+        workerName: w1.name,
+        workerNationality: w1.nationaliy,
+        actionType: 'SWAP',
+        actionDate: swapDate,
+        actionBy: params.performedBy,
+        fromResidenceId: occ1.residenceId,
+        fromResidenceName: res1?.name,
+        fromRoomId: occ1.roomId,
+        fromRoomName: room1?.name,
+        toResidenceId: occ2.residenceId,
+        toResidenceName: res2?.name,
+        toRoomId: occ2.roomId,
+        toRoomName: room2?.name,
+        residenceId: occ2.residenceId,
+        roomId: occ2.roomId,
+        swappedWithWorkerId: params.worker2Id,
+        swappedWithWorkerName: w2.name,
+        reason: params.reason,
+        notes: params.notes,
+      });
+
+      const history2Id = await createHistoryRecord({
+        workerId: params.worker2Id,
+        workerName: w2.name,
+        workerNationality: w2.nationaliy,
+        actionType: 'SWAP',
+        actionDate: swapDate,
+        actionBy: params.performedBy,
+        fromResidenceId: occ2.residenceId,
+        fromResidenceName: res2?.name,
+        fromRoomId: occ2.roomId,
+        fromRoomName: room2?.name,
+        toResidenceId: occ1.residenceId,
+        toResidenceName: res1?.name,
+        toRoomId: occ1.roomId,
+        toRoomName: room1?.name,
+        residenceId: occ1.residenceId,
+        roomId: occ1.roomId,
+        swappedWithWorkerId: params.worker1Id,
+        swappedWithWorkerName: w1.name,
+        reason: params.reason,
+        notes: params.notes,
+      });
+
+      // Close old occupancies
+      const updatedOcc1: Occupant = { ...occ1, until: swapDate, checkOutBy: params.performedBy };
+      const updatedOcc2: Occupant = { ...occ2, until: swapDate, checkOutBy: params.performedBy };
+
+      // Create new occupancies (swapped)
+      const newOcc1: Occupant = {
+        workerId: params.worker1Id,
+        residenceId: occ2.residenceId,
+        roomId: occ2.roomId,
+        buildingId: occ2.buildingId,
+        floorId: occ2.floorId,
+        since: swapDate,
+        checkInBy: params.performedBy,
+        notes: params.notes,
+      };
+
+      const newOcc2: Occupant = {
+        workerId: params.worker2Id,
+        residenceId: occ1.residenceId,
+        roomId: occ1.roomId,
+        buildingId: occ1.buildingId,
+        floorId: occ1.floorId,
+        since: swapDate,
+        checkInBy: params.performedBy,
+        notes: params.notes,
+      };
+
+      if (db) {
+        const occupantsRef = collection(db, 'occupants');
+        const q = query(occupantsRef);
+        const snapshot = await getDocs(q);
+        
+        // Update old occupancies
+        const occ1Doc = snapshot.docs.find(d => {
+          const data = d.data();
+          return data.workerId === params.worker1Id && !data.until;
+        });
+        const occ2Doc = snapshot.docs.find(d => {
+          const data = d.data();
+          return data.workerId === params.worker2Id && !data.until;
+        });
+
+        if (occ1Doc) await setDoc(doc(db, 'occupants', occ1Doc.id), updatedOcc1);
+        if (occ2Doc) await setDoc(doc(db, 'occupants', occ2Doc.id), updatedOcc2);
+
+        // Create new occupancies
+        await setDoc(doc(db, 'occupants', `occ_${params.worker1Id}_${Date.now()}`), newOcc1);
+        await setDoc(doc(db, 'occupants', `occ_${params.worker2Id}_${Date.now() + 1}`), newOcc2);
+      }
+
+      setOccupants(prev => [
+        ...prev.map(o => {
+          if (o.workerId === params.worker1Id && !o.until) return updatedOcc1;
+          if (o.workerId === params.worker2Id && !o.until) return updatedOcc2;
+          return o;
+        }),
+        newOcc1,
+        newOcc2,
+      ]);
+
+      toast({
+        title: "تم التبديل بنجاح",
+        description: `تم تبديل ${w1.name} مع ${w2.name}`,
+      });
+
+      return { ok: true, historyIds: [history1Id, history2Id] };
+    } catch (e: any) {
+      console.error('swapWorkers failed:', e);
+      return { ok: false, error: e.message || 'unknown-error' };
+    }
+  }
+
+  // Bulk Check-In
+  async function bulkCheckIn(params: {
+    workerIds: string[];
+    residenceId: string;
+    roomId: string;
+    buildingId?: string;
+    floorId?: string;
+    checkInDate?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
+
+    for (const workerId of params.workerIds) {
+      const result = await checkInWorker({
+        workerId,
+        residenceId: params.residenceId,
+        roomId: params.roomId,
+        buildingId: params.buildingId,
+        floorId: params.floorId,
+        checkInDate: params.checkInDate,
+        notes: params.notes,
+        performedBy: params.performedBy,
+      });
+
+      results[workerId] = {
+        success: result.ok,
+        error: result.error,
+        historyId: result.historyId,
+      };
+    }
+
+    const successCount = Object.values(results).filter(r => r.success).length;
+    toast({
+      title: "عملية التسكين الجماعي",
+      description: `تم تسكين ${successCount} من ${params.workerIds.length} عامل بنجاح`,
+    });
+
+    return { ok: true, results };
+  }
+
+  // Bulk Check-Out
+  async function bulkCheckOut(params: {
+    workerIds: string[];
+    checkOutDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
+
+    for (const workerId of params.workerIds) {
+      const result = await checkOutWorkerEnhanced({
+        workerId,
+        checkOutDate: params.checkOutDate,
+        reason: params.reason,
+        notes: params.notes,
+        performedBy: params.performedBy,
+      });
+
+      results[workerId] = {
+        success: result.ok,
+        error: result.error,
+        historyId: result.historyId,
+      };
+    }
+
+    const successCount = Object.values(results).filter(r => r.success).length;
+    toast({
+      title: "عملية الإخراج الجماعي",
+      description: `تم إخراج ${successCount} من ${params.workerIds.length} عامل بنجاح`,
+    });
+
+    return { ok: true, results };
+  }
+
+  // Bulk Transfer
+  async function bulkTransfer(params: {
+    workerIds: string[];
+    toResidenceId: string;
+    toRoomId: string;
+    toBuildingId?: string;
+    toFloorId?: string;
+    transferDate?: string;
+    reason?: string;
+    notes?: string;
+    performedBy: string;
+  }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
+
+    for (const workerId of params.workerIds) {
+      const result = await transferWorker({
+        workerId,
+        toResidenceId: params.toResidenceId,
+        toRoomId: params.toRoomId,
+        toBuildingId: params.toBuildingId,
+        toFloorId: params.toFloorId,
+        transferDate: params.transferDate,
+        reason: params.reason,
+        notes: params.notes,
+        performedBy: params.performedBy,
+      });
+
+      results[workerId] = {
+        success: result.ok,
+        error: result.error,
+        historyId: result.historyId,
+      };
+    }
+
+    const successCount = Object.values(results).filter(r => r.success).length;
+    toast({
+      title: "عملية النقل الجماعي",
+      description: `تم نقل ${successCount} من ${params.workerIds.length} عامل بنجاح`,
+    });
+
+    return { ok: true, results };
+  }
+
   const value: AccommodationContextValue = {
     residences,
     loading,
     refresh,
     workers,
     occupants,
+    accommodationHistory, // NEW
     transferRequests,
     notifications,
     companies,
     contracts,
     invoices,
     findWorkers,
+    // History queries - NEW
+    getWorkerHistory,
+    getRoomHistory,
+    getHistoryByDateRange,
+    // Enhanced operations - NEW
+    checkInWorker,
+    checkOutWorkerEnhanced,
+    transferWorker,
+    swapWorkers,
+    bulkCheckIn,
+    bulkCheckOut,
+    bulkTransfer,
+    // Legacy operations
     saveWorker,
     deleteWorker,
     assignWorkerToRoom,
     bulkAssign,
+    checkOutWorker,
+    quickTransfer,
     createTransferRequest,
     reviewTransferRequest,
     getDailyReport,

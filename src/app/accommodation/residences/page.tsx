@@ -8,9 +8,12 @@ export default function AccommodationResidencesPage() {
   const { dict } = useLanguage();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">المساكن</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight">Residences</h1>
+        <p className="text-muted-foreground">
+          View and manage all residences and rooms with occupancy information
+        </p>
       </div>
       <AccommodationResidencesView />
     </div>
