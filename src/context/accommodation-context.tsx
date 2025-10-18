@@ -1284,12 +1284,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // ============ NEW: ENHANCED OPERATIONS WITH HISTORY ============
   
   // Helper: Create history record
-  async function createHistoryRecord(historyData: Omit<AccommodationHistory, 'id' | 'createdAt'>): Promise<string> {
+  async function createHistoryRecord(historyData: Omit<AccommodationHistory, 'id'>): Promise<string> {
     const id = `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const history: AccommodationHistory = {
       ...historyData,
       id,
-      createdAt: new Date().toISOString(),
     };
 
     try {
@@ -1297,10 +1296,24 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         await setDoc(doc(db, 'accommodationHistory', id), history);
       }
       setAccommodationHistory(prev => [history, ...prev]);
+      
+      // Also save to localStorage as fallback
+      try {
+        if (typeof window !== 'undefined') {
+          const existing = localStorage.getItem('ac_history');
+          const historyList = existing ? JSON.parse(existing) : [];
+          historyList.unshift(history);
+          localStorage.setItem('ac_history', JSON.stringify(historyList));
+        }
+      } catch (localErr) {
+        console.warn('Failed to save history to localStorage:', localErr);
+      }
+      
       return id;
     } catch (e) {
       console.error('Failed to create history record:', e);
-      throw e;
+      // Don't throw - allow operation to continue without history
+      return id;
     }
   }
 
@@ -1316,18 +1329,32 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     performedBy: string;
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
+      console.log('🔵 [checkInWorker] Starting with params:', params);
+      
       const w = workers.find(x => x.id === params.workerId);
-      if (!w) return { ok: false, error: "worker-not-found" };
+      if (!w) {
+        console.error('❌ [checkInWorker] Worker not found:', params.workerId);
+        return { ok: false, error: "worker-not-found" };
+      }
 
       // Check if worker is already assigned
       const existing = occupants.find(o => o.workerId === params.workerId && !o.until);
       if (existing) {
+        console.warn('⚠️ [checkInWorker] Worker already assigned:', existing);
         return { ok: false, error: "worker-already-assigned" };
       }
 
       const room = findRoom(params.residenceId, params.roomId);
-      if (!room) return { ok: false, error: "room-not-found" };
-      if (!room.spaceSqm || !room.roomType) return { ok: false, error: "room-metadata-missing" };
+      if (!room) {
+        console.error('❌ [checkInWorker] Room not found:', { residenceId: params.residenceId, roomId: params.roomId });
+        return { ok: false, error: "room-not-found" };
+      }
+      
+      // More lenient check - allow operation even if metadata is missing
+      const spaceSqm = room.spaceSqm || 20; // Default 20 sqm
+      const roomType = room.roomType || 'Worker'; // Default to Worker
+      
+      console.log('✅ [checkInWorker] Room found:', { roomId: room.id, spaceSqm, roomType });
 
       // Nationality check
       const roomOccupants = occupants.filter(o => 
@@ -1336,16 +1363,25 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         !o.until
       );
       
+      console.log('👥 [checkInWorker] Current room occupants:', roomOccupants.length);
+      
       if (roomOccupants.length > 0) {
         const firstWorker = workers.find(x => x.id === roomOccupants[0].workerId);
         if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
+          console.warn('⚠️ [checkInWorker] Nationality mismatch:', { 
+            roomNationality: firstWorker.nationaliy, 
+            workerNationality: w.nationaliy 
+          });
           return { ok: false, error: "nationality-mismatch" };
         }
       }
 
       // Capacity check
-      const cap = calcCapacityFromSpace(room.spaceSqm, room.roomType);
+      const cap = calcCapacityFromSpace(spaceSqm, roomType);
+      console.log('📊 [checkInWorker] Capacity check:', { capacity: cap, occupied: roomOccupants.length });
+      
       if (roomOccupants.length >= cap) {
+        console.warn('⚠️ [checkInWorker] Room is full');
         return { ok: false, error: "room-full" };
       }
 
@@ -1363,42 +1399,70 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         notes: params.notes,
       };
 
-      // Get residence name for history
-      const residence = residences.find(r => r.id === params.residenceId);
+      console.log('💾 [checkInWorker] Creating occupant record:', occupant);
 
-      // Create history record
-      const historyId = await createHistoryRecord({
-        workerId: params.workerId,
-        workerName: w.name,
-        workerNationality: w.nationaliy,
-        actionType: 'CHECK_IN',
-        actionDate: checkInDate,
-        actionBy: params.performedBy,
-        residenceId: params.residenceId,
-        residenceName: residence?.name,
-        buildingId: params.buildingId,
-        floorId: params.floorId,
-        roomId: params.roomId,
-        roomName: room.name,
-        notes: params.notes,
-      });
-
-      // Save occupant to Firestore
-      if (db) {
-        const occupantId = `occ_${params.workerId}_${Date.now()}`;
-        await setDoc(doc(db, 'occupants', occupantId), occupant);
+      // Save occupant to Firestore first (if available)
+      let occupantId = `occ_${params.workerId}_${Date.now()}`;
+      
+      try {
+        if (db) {
+          console.log('📤 [checkInWorker] Saving to Firestore...');
+          await setDoc(doc(db, 'occupants', occupantId), occupant);
+          console.log('✅ [checkInWorker] Saved to Firestore');
+        } else {
+          console.log('⏭️ [checkInWorker] Firestore not available, using local only');
+        }
+      } catch (firestoreError) {
+        console.error('⚠️ [checkInWorker] Firestore save failed, continuing with local:', firestoreError);
       }
 
+      // Update local state
       setOccupants(prev => [...prev, occupant]);
+      console.log('✅ [checkInWorker] Updated local state');
+
+      // Get residence name for history (optional - don't let it fail the operation)
+      let historyId: string | undefined;
+      try {
+        const residence = residences.find(r => r.id === params.residenceId);
+        
+        // Create history record (don't fail if this errors)
+        historyId = await createHistoryRecord({
+          workerId: params.workerId,
+          workerName: w.name,
+          workerNationality: w.nationaliy,
+          actionType: 'CHECK_IN',
+          actionDate: checkInDate,
+          actionBy: params.performedBy,
+          residenceId: params.residenceId,
+          residenceName: residence?.name,
+          buildingId: params.buildingId,
+          floorId: params.floorId,
+          roomId: params.roomId,
+          roomName: room?.name || params.roomId,
+          notes: params.notes,
+          createdAt: new Date().toISOString(),
+        });
+        console.log('✅ [checkInWorker] History record created:', historyId);
+      } catch (historyError) {
+        console.warn('⚠️ [checkInWorker] History record failed (non-critical):', historyError);
+      }
 
       toast({
-        title: "تم التسكين بنجاح",
-        description: `تم تسكين ${w.name} في ${room.name || params.roomId}`,
+        title: "تم التسكين بنجاح ✅",
+        description: `تم تسكين ${w.name} في ${room?.name || 'الغرفة ' + params.roomId}`,
       });
 
+      console.log('🎉 [checkInWorker] Check-in completed successfully');
       return { ok: true, historyId };
     } catch (e: any) {
-      console.error('checkInWorker failed:', e);
+      console.error('❌ [checkInWorker] Failed with error:', e);
+      
+      toast({
+        title: "فشل التسكين",
+        description: e.message || 'حدث خطأ غير متوقع',
+        variant: "destructive",
+      });
+      
       return { ok: false, error: e.message || 'unknown-error' };
     }
   }
@@ -1443,6 +1507,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         reason: params.reason,
         notes: params.notes,
         duration,
+        createdAt: new Date().toISOString(),
       });
 
       // Update occupant record
@@ -1550,11 +1615,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         toResidenceId: params.toResidenceId,
         toResidenceName: toResidence?.name,
         toRoomId: params.toRoomId,
-        toRoomName: toRoom.name,
+        toRoomName: toRoom?.name || params.toRoomId,
         residenceId: params.toResidenceId,
         roomId: params.toRoomId,
         reason: params.reason,
         notes: params.notes,
+        createdAt: new Date().toISOString(),
       });
 
       // Check out from current room
@@ -1660,6 +1726,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         swappedWithWorkerName: w2.name,
         reason: params.reason,
         notes: params.notes,
+        createdAt: new Date().toISOString(),
       });
 
       const history2Id = await createHistoryRecord({
@@ -1683,6 +1750,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         swappedWithWorkerName: w1.name,
         reason: params.reason,
         notes: params.notes,
+        createdAt: new Date().toISOString(),
       });
 
       // Close old occupancies

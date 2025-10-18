@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
 import { useToast } from "@/hooks/use-toast";
@@ -89,9 +89,9 @@ export default function AccommodationAssignPage() {
   const [selectedRoomForDetails, setSelectedRoomForDetails] = useState<any>(null);
   const [assignDate, setAssignDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
-  // Pagination state
+  // Pagination state (increased for faster loading)
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage] = useState(100); // Increased from 50 for better UX
   
   // Debounced search
   const [searchInput, setSearchInput] = useState('');
@@ -101,12 +101,13 @@ export default function AccommodationAssignPage() {
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchOperationType, setBatchOperationType] = useState<'CHECK_IN' | 'CHECK_OUT' | 'TRANSFER'>('CHECK_IN');
 
+  // Auto-select first accessible residence
   useEffect(() => {
-    if (!residences || residences.length === 0) loadResidences();
-    if (accessibleResidences && accessibleResidences.length && !selectedResidence) {
+    if (accessibleResidences && accessibleResidences.length > 0 && !selectedResidence) {
       setSelectedResidence(accessibleResidences[0].id);
+      console.log('[AUTO-SELECT] First residence:', accessibleResidences[0].name);
     }
-  }, [residences, accessibleResidences, loadResidences]);
+  }, [accessibleResidences, selectedResidence]);
 
   // Check if user is authenticated
   useEffect(() => {
@@ -122,32 +123,34 @@ export default function AccommodationAssignPage() {
     }
   }, [currentUserId, toast]);
 
-  // Use workers from context instead of API call
+  // Load workers from context - NO API CALLS
   useEffect(() => {
     console.log('[WORKERS] Workers from context:', workers?.length || 0);
     if (workers && workers.length > 0) {
       setSearchResults(workers);
-      console.log('[WORKERS] Successfully loaded', workers.length, 'workers');
+      console.log('[WORKERS] Successfully loaded', workers.length, 'workers from context');
     } else if (currentUserId) {
-      // Only warn if user is authenticated but no workers
-      console.warn('[WORKERS] No workers loaded from context. Check Firestore permissions.');
+      console.warn('[WORKERS] No workers loaded yet. Waiting for context...');
     }
   }, [workers, currentUserId]);
 
-  // Extract unique nationalities from workers
+  // Extract unique nationalities from workers (memoized & optimized)
   const availableNationalities = React.useMemo(() => {
     if (!workers || workers.length === 0) return [];
     const nationalities = new Set<string>();
-    workers.forEach((w: any) => {
-      if (w.nationaliy) {
-        nationalities.add(w.nationaliy);
-      }
-    });
+    for (const w of workers) {
+      if (w.nationaliy) nationalities.add(w.nationaliy);
+    }
     return Array.from(nationalities).sort();
   }, [workers]);
 
-  // Debounce search input
+  // Debounce search input - LOCAL SEARCH ONLY
   useEffect(() => {
+    if (!workers || workers.length === 0) {
+      setIsSearching(false);
+      return;
+    }
+    
     setIsSearching(true);
     const timer = setTimeout(() => {
       doSearch(searchInput);
@@ -157,28 +160,37 @@ export default function AccommodationAssignPage() {
     return () => clearTimeout(timer);
   }, [searchInput, workers]);
 
-  // Get occupant count for a room
-  const getOccupantCount = (roomId: string) => {
-    return occupants.filter(occ => occ.roomId === roomId).length;
-  };
+  // Memoized occupant count map for better performance
+  const occupantCountMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    occupants.forEach(occ => {
+      map.set(occ.roomId, (map.get(occ.roomId) || 0) + 1);
+    });
+    return map;
+  }, [occupants]);
 
-  // Get occupants in a specific room
-  const getRoomOccupants = (roomId: string) => {
+  // Get occupant count for a room (optimized)
+  const getOccupantCount = useCallback((roomId: string) => {
+    return occupantCountMap.get(roomId) || 0;
+  }, [occupantCountMap]);
+
+  // Get occupants in a specific room (memoized)
+  const getRoomOccupants = useCallback((roomId: string) => {
     return occupants
       .filter(occ => occ.roomId === roomId)
       .map(occ => {
         const worker = workers.find(w => w.id === occ.workerId);
         return {
           ...occ,
-          id: occ.workerId + '_' + occ.roomId, // Unique ID for the occupant
+          id: occ.workerId + '_' + occ.roomId,
           workerName: worker?.name || 'غير معروف',
           workerNationality: worker?.nationaliy || 'غير محدد',
           workerRole: worker?.role || 'Worker',
           employeeId: worker?.employeeId || '',
-          assignedAt: occ.since, // Using 'since' field as assignedAt
+          assignedAt: occ.since,
         };
       });
-  };
+  }, [occupants, workers]);
 
   // Handle room click to show details
   const handleRoomClick = (room: any) => {
@@ -313,21 +325,23 @@ export default function AccommodationAssignPage() {
     setSelectedRoom(null);
   }, [selectedFloor]);
 
-  function doSearch(q: string) {
+  // Optimized search function - runs locally only
+  const doSearch = useCallback((q: string) => {
     setSearchQ(q);
-    setCurrentPage(1); // Reset to first page on new search
-    console.log('🔍 Searching workers with query:', q);
+    setCurrentPage(1);
+    
+    if (!workers || workers.length === 0) {
+      setSearchResults([]);
+      return;
+    }
     
     if (!q || !q.trim()) {
-      // Show all workers if no search query
-      setSearchResults(workers || []);
-      console.log('✅ Showing all', workers?.length || 0, 'workers');
+      setSearchResults(workers);
       return;
     }
 
-    // Filter workers locally - including ID number and Iqama number
     const norm = q.trim().toLowerCase();
-    const filtered = (workers || []).filter((w: any) => 
+    const filtered = workers.filter((w: any) => 
       (w.name || '').toLowerCase().includes(norm) || 
       (w.nameEn || '').toLowerCase().includes(norm) || 
       (w.nameAr || '').includes(norm) ||
@@ -339,8 +353,7 @@ export default function AccommodationAssignPage() {
     );
     
     setSearchResults(filtered);
-    console.log('✅ Filtered results:', filtered.length, 'workers match query');
-  }
+  }, [workers]);
 
   function toggleWorker(wid: string) {
     setSelectedWorkers(prev => prev.includes(wid) ? prev.filter(x => x !== wid) : [...prev, wid]);
