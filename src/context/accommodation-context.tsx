@@ -1330,10 +1330,49 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
       console.log('🔵 [checkInWorker] Starting with params:', params);
+      console.log('📊 [checkInWorker] Current state:', {
+        workersCount: workers.length,
+        residencesCount: residences.length,
+        occupantsCount: occupants.length,
+        hasDb: !!db,
+        hasAuth: !!auth?.currentUser
+      });
+      
+      // Re-validate workers list from Firestore if empty or not found
+      if (workers.length === 0 && db) {
+        console.warn('⚠️ [checkInWorker] Workers list is empty, attempting to reload from Firestore...');
+        try {
+          const workersSnapshot = await getDocs(collection(db, 'workers'));
+          const freshWorkers = workersSnapshot.docs.map((d) => {
+            const data = d.data();
+            const role = data?.role;
+            const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
+            return {
+              id: d.id,
+              name: typeof data?.name === "string" ? data.name : "",
+              employeeId: typeof data?.employeeId === "string" ? data.employeeId : undefined,
+              idNumber: typeof data?.idNumber === "string" ? data.idNumber : undefined,
+              nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
+              company: typeof data?.company === "string" ? data.company : undefined,
+              role: normalizedRole,
+            } satisfies Worker;
+          });
+          setWorkers(freshWorkers);
+          console.log('✅ [checkInWorker] Reloaded workers from Firestore:', freshWorkers.length);
+        } catch (reloadErr) {
+          console.error('❌ [checkInWorker] Failed to reload workers:', reloadErr);
+        }
+      }
       
       const w = workers.find(x => x.id === params.workerId);
       if (!w) {
         console.error('❌ [checkInWorker] Worker not found:', params.workerId);
+        console.error('Available workers:', workers.map(w => ({ id: w.id, name: w.name })));
+        toast({
+          title: "خطأ: العامل غير موجود",
+          description: `لم يتم العثور على العامل (ID: ${params.workerId}). الرجاء التحقق من قاعدة البيانات والمحاولة مرة أخرى.`,
+          variant: "destructive",
+        });
         return { ok: false, error: "worker-not-found" };
       }
 
@@ -1341,12 +1380,39 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const existing = occupants.find(o => o.workerId === params.workerId && !o.until);
       if (existing) {
         console.warn('⚠️ [checkInWorker] Worker already assigned:', existing);
+        toast({
+          title: "خطأ: العامل مسكّن بالفعل",
+          description: `العامل ${w.name} مسكّن حالياً في غرفة أخرى. يجب إخراجه أولاً.`,
+          variant: "destructive",
+        });
         return { ok: false, error: "worker-already-assigned" };
+      }
+
+      // Re-validate residences if empty
+      if (residences.length === 0) {
+        console.warn('⚠️ [checkInWorker] Residences list is empty, attempting to reload from localStorage...');
+        try {
+          const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
+          if (stored) {
+            const parsed = JSON.parse(stored || "[]");
+            const freshResidences = (parsed || []).map(mapComplexToResidence);
+            setResidences(freshResidences);
+            console.log('✅ [checkInWorker] Reloaded residences from localStorage:', freshResidences.length);
+          }
+        } catch (reloadErr) {
+          console.error('❌ [checkInWorker] Failed to reload residences:', reloadErr);
+        }
       }
 
       const room = findRoom(params.residenceId, params.roomId);
       if (!room) {
         console.error('❌ [checkInWorker] Room not found:', { residenceId: params.residenceId, roomId: params.roomId });
+        console.error('Available residences:', residences.map(r => ({ id: r.id, name: r.name })));
+        toast({
+          title: "خطأ: الغرفة غير موجودة",
+          description: `لم يتم العثور على الغرفة (ID: ${params.roomId}) في المبنى (ID: ${params.residenceId}). الرجاء التحقق من البيانات.`,
+          variant: "destructive",
+        });
         return { ok: false, error: "room-not-found" };
       }
       
@@ -1476,11 +1542,76 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     performedBy: string;
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
+      console.log('🔵 [checkOutWorker] Starting with params:', params);
+      console.log('📊 [checkOutWorker] Current state:', {
+        workersCount: workers.length,
+        occupantsCount: occupants.length,
+        hasDb: !!db,
+        hasAuth: !!auth?.currentUser
+      });
+      
+      // Re-validate workers list if empty
+      if (workers.length === 0 && db) {
+        console.warn('⚠️ [checkOutWorker] Workers list is empty, attempting to reload from Firestore...');
+        try {
+          const workersSnapshot = await getDocs(collection(db, 'workers'));
+          const freshWorkers = workersSnapshot.docs.map((d) => {
+            const data = d.data();
+            const role = data?.role;
+            const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
+            return {
+              id: d.id,
+              name: typeof data?.name === "string" ? data.name : "",
+              employeeId: typeof data?.employeeId === "string" ? data.employeeId : undefined,
+              idNumber: typeof data?.idNumber === "string" ? data.idNumber : undefined,
+              nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
+              company: typeof data?.company === "string" ? data.company : undefined,
+              role: normalizedRole,
+            } satisfies Worker;
+          });
+          setWorkers(freshWorkers);
+          console.log('✅ [checkOutWorker] Reloaded workers from Firestore:', freshWorkers.length);
+        } catch (reloadErr) {
+          console.error('❌ [checkOutWorker] Failed to reload workers:', reloadErr);
+        }
+      }
+      
       const w = workers.find(x => x.id === params.workerId);
-      if (!w) return { ok: false, error: "worker-not-found" };
+      if (!w) {
+        console.error('❌ [checkOutWorker] Worker not found:', params.workerId);
+        console.error('Available workers:', workers.map(w => ({ id: w.id, name: w.name })));
+        toast({
+          title: "خطأ: العامل غير موجود",
+          description: `لم يتم العثور على العامل (ID: ${params.workerId}). الرجاء التحقق من قاعدة البيانات.`,
+          variant: "destructive",
+        });
+        return { ok: false, error: "worker-not-found" };
+      }
+
+      // Re-load occupants if needed
+      if (occupants.length === 0 && db) {
+        console.warn('⚠️ [checkOutWorker] Occupants list is empty, attempting to reload from Firestore...');
+        try {
+          const occupantsSnapshot = await getDocs(collection(db, 'occupants'));
+          const freshOccupants = occupantsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+          setOccupants(freshOccupants);
+          console.log('✅ [checkOutWorker] Reloaded occupants from Firestore:', freshOccupants.length);
+        } catch (reloadErr) {
+          console.error('❌ [checkOutWorker] Failed to reload occupants:', reloadErr);
+        }
+      }
 
       const occupant = occupants.find(o => o.workerId === params.workerId && !o.until);
-      if (!occupant) return { ok: false, error: "worker-not-assigned" };
+      if (!occupant) {
+        console.error('❌ [checkOutWorker] Worker is not currently assigned');
+        console.error('Current occupants:', occupants.filter(o => !o.until).map(o => ({ workerId: o.workerId, roomId: o.roomId })));
+        toast({
+          title: "خطأ: العامل غير مسكّن",
+          description: `العامل ${w.name} غير مسكّن حالياً في أي غرفة.`,
+          variant: "destructive",
+        });
+        return { ok: false, error: "worker-not-assigned" };
+      }
 
       const checkOutDate = params.checkOutDate || new Date().toISOString();
       const checkInDate = new Date(occupant.since);

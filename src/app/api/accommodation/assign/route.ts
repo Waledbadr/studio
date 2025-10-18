@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from '@/lib/firebase-admin';
+import serverCache from '@/lib/server-cache';
 
 export async function POST(request: Request) {
   try {
@@ -23,13 +24,48 @@ export async function POST(request: Request) {
       const toAssign = Array.isArray(workerIds) ? workerIds : [workerId];
       const assigned: any[] = [];
       
-      // Get workers collection to verify workers exist (using Admin SDK)
-      const workersSnapshot = await adminDb.collection('workers').get();
-      const workers = workersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      // Get ONLY the specific workers we need using cache
+      const workers: any[] = [];
       
-      // Get existing occupants to check room capacity and nationality rules
-      const occupantsSnapshot = await adminDb.collection('occupants').get();
-      const existingOccupants = occupantsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      // Try to get all workers from cache first
+      const allWorkers = await serverCache.get(
+        'workers:all',
+        async () => {
+          console.log('📡 [Assign] Fetching all workers from Firestore (cache miss)');
+          const snap = await adminDb.collection('workers').get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        },
+        10 * 60 * 1000 // 10 min cache
+      );
+      
+      // Filter only the workers we need from cached data
+      for (const wid of toAssign) {
+        const worker = allWorkers.find((w: any) => w.id === wid);
+        if (worker) {
+          workers.push(worker);
+        }
+      }
+      
+      // Get occupants from cache and filter
+      const allOccupants = await serverCache.get(
+        'occupants:all',
+        async () => {
+          console.log('📡 [Assign] Fetching all occupants from Firestore (cache miss)');
+          const snap = await adminDb.collection('occupants').get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        },
+        2 * 60 * 1000 // 2 min cache (occupants change frequently)
+      );
+      
+      // Filter occupants for this room from cached data
+      const existingOccupants = allOccupants.filter((o: any) => 
+        o.roomId === roomId && o.residenceId === residenceId
+      );
+      
+      // Check if workers are already assigned (from cached data)
+      const alreadyAssignedWorkers = toAssign.filter(wid =>
+        allOccupants.some((o: any) => o.workerId === wid)
+      );
       
       // Get residence data to check room capacity
       const residenceDoc = await adminDb.collection('residences').doc(residenceId).get();
@@ -71,33 +107,48 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
       
+      // Check if any workers are already assigned
+      if (alreadyAssignedWorkers.length > 0) {
+        const workerIds = alreadyAssignedWorkers.join(', ');
+        return NextResponse.json({ 
+          ok: false, 
+          error: `Workers already assigned: ${workerIds}` 
+        }, { status: 400 });
+      }
+      
       // Check nationality rule (all occupants in same room must have same nationality)
       if (currentOccupants.length > 0) {
-        const firstOccupant = currentOccupants[0];
-        const firstWorker = workers.find((w: any) => w.id === firstOccupant.workerId);
+        const firstOccupant = currentOccupants[0] as any;
+        // Get the first occupant's worker from cached workers
+        const firstWorker: any = allWorkers.find((w: any) => w.id === firstOccupant.workerId);
         const firstNationality = firstWorker?.nationaliy;
         
-        for (const wid of toAssign) {
-          const worker = workers.find((w: any) => w.id === wid);
-          if (!worker) {
-            return NextResponse.json({ ok: false, error: `Worker ${wid} not found` }, { status: 404 });
-          }
-          
-          // Check if already assigned
-          const alreadyAssigned = existingOccupants.find((o: any) => o.workerId === wid);
-          if (alreadyAssigned) {
-            return NextResponse.json({ 
-              ok: false, 
-              error: `Worker ${worker.name} is already assigned to a room` 
-            }, { status: 400 });
+        for (const worker of workers) {
+          const w = worker as any;
+          if (!w) {
+            return NextResponse.json({ ok: false, error: `Worker ${w?.id} not found` }, { status: 404 });
           }
           
           // Check nationality match
-          if (firstNationality && worker.nationaliy !== firstNationality) {
+          if (firstNationality && w.nationaliy !== firstNationality) {
             return NextResponse.json({ 
               ok: false, 
-              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${worker.nationaliy}` 
+              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationaliy}` 
             }, { status: 400 });
+          }
+        }
+      } else {
+        // If no existing occupants, verify all workers to assign have same nationality
+        if (workers.length > 1) {
+          const firstNationality = (workers[0] as any).nationaliy;
+          for (const worker of workers.slice(1)) {
+            const w = worker as any;
+            if (w.nationaliy !== firstNationality) {
+              return NextResponse.json({ 
+                ok: false, 
+                error: `Cannot assign workers with different nationalities to the same room` 
+              }, { status: 400 });
+            }
           }
         }
       }
