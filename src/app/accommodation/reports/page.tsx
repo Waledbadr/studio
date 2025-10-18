@@ -161,7 +161,7 @@ export default function ReportsPage() {
   const transferHistory = useMemo(() => {
     return transferRequests
       .map(tr => {
-        const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from.residenceId) : null;
+  const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from?.residenceId) : null;
         const toResidence = residences.find(r => r.id === tr.to.residenceId);
         return {
           transfer: tr,

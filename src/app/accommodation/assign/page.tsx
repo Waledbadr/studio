@@ -29,12 +29,14 @@ export default function AccommodationAssignPage() {
   
   // Get current user ID and role from Firebase Auth and Firestore
   useEffect(() => {
+    if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUserId(user.uid);
         
         // Fetch user role from Firestore
         try {
+          if (!db) return;
           const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -51,7 +53,7 @@ export default function AccommodationAssignPage() {
       }
     });
 
-    return () => unsubscribe();
+    return () => { try { unsubscribe(); } catch {} };
   }, []);
   
   // Filter residences based on user access

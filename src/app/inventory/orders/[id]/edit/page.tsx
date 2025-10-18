@@ -90,7 +90,7 @@ function AddItemButton({
                                     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                                         <Checkbox
                                             checked={selected}
-                                            onCheckedChange={(v) => {
+                                            onCheckedChange={(v: boolean) => {
                                                 const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
                                                 if (Boolean(v)) map[variant] = true; else delete map[variant];
                                                 variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
@@ -853,7 +853,7 @@ export default function EditOrderPage() {
                                         onValueChange={handleResidenceChange}
                                     >
                                         <SelectTrigger id="residence" className="w-48 mt-1 text-sm font-medium">
-                                            <SelectValue placeholder={dict.ui?.selectResidence || 'Select residence'} />
+                                            <SelectValue placeholder={'Select residence'} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {residenceOptions.map((res) => (

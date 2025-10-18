@@ -386,16 +386,24 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           } catch {}
           workersUnsubRef.current = null;
         }
-        console.warn("Accommodation: Firestore denied access to workers collection. Falling back to local cache.");
-        if (!workersPermissionWarnedRef.current) {
-          workersPermissionWarnedRef.current = true;
-          try {
-            toast({
-              title: "Firestore permission",
-              description: "لا يمكن تحميل بيانات العمال من Firestore، سيتم استخدام البيانات المخزنة محلياً فقط.",
-              variant: "destructive",
-            });
-          } catch {}
+        const isAuthed = !!auth?.currentUser;
+        if (isAuthed) {
+          console.warn("Accommodation: Firestore denied access to workers collection. Falling back to local cache.");
+          if (!workersPermissionWarnedRef.current) {
+            workersPermissionWarnedRef.current = true;
+            try {
+              toast({
+                title: "Firestore permission",
+                description: "لا يمكن تحميل بيانات العمال من Firestore، سيتم استخدام البيانات المخزنة محلياً فقط.",
+                variant: "destructive",
+              });
+            } catch {}
+          }
+        } else {
+          // During logout or unauthenticated states, avoid noisy warnings/toasts.
+          console.log(
+            "Accommodation: Workers listener stopped or denied while unauthenticated. Using local cache without warning."
+          );
         }
         loadWorkersFromLocalStorage();
         return;
@@ -403,7 +411,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       console.error("Failed to subscribe to workers collection:", err);
     },
-    [loadWorkersFromLocalStorage, toast]
+    [auth, loadWorkersFromLocalStorage, toast]
   );
 
   const startWorkersListener = useCallback(async () => {
