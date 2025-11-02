@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { ManualSyncButton } from '@/components/accommodation/manual-sync-button';
 
 export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
@@ -129,9 +130,21 @@ export default function AccommodationOverviewPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Accommodation Overview</h1>
-        <p className="text-muted-foreground mt-2">Dashboard and key metrics for accommodation management</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Accommodation Overview</h1>
+          <p className="text-muted-foreground mt-2">Dashboard and key metrics for accommodation management</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* 🚨 EMERGENCY MODE: Manual sync button (replaces real-time listeners) */}
+          <Alert className="py-2 px-3">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              البيانات من ذاكرة التخزين المحلية - اضغط لتحديث من قاعدة البيانات
+            </AlertDescription>
+          </Alert>
+          <ManualSyncButton />
+        </div>
       </div>
 
       {/* Key Metrics Cards */}
