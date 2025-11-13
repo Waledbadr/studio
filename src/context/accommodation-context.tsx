@@ -1338,6 +1338,22 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         hasAuth: !!auth?.currentUser
       });
       
+      // Re-validate residences if empty
+      if (residences.length === 0) {
+        console.warn('⚠️ [checkInWorker] Residences list is empty, attempting to reload from localStorage...');
+        try {
+          const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
+          if (stored) {
+            const parsed = JSON.parse(stored || "[]");
+            const freshResidences = (parsed || []).map(mapComplexToResidence);
+            setResidences(freshResidences);
+            console.log('✅ [checkInWorker] Reloaded residences from localStorage:', freshResidences.length);
+          }
+        } catch (reloadErr) {
+          console.error('❌ [checkInWorker] Failed to reload residences:', reloadErr);
+        }
+      }
+      
       // Re-validate workers list from Firestore if empty or not found
       if (workers.length === 0 && db) {
         console.warn('⚠️ [checkInWorker] Workers list is empty, attempting to reload from Firestore...');
@@ -1407,7 +1423,26 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const room = findRoom(params.residenceId, params.roomId);
       if (!room) {
         console.error('❌ [checkInWorker] Room not found:', { residenceId: params.residenceId, roomId: params.roomId });
-        console.error('Available residences:', residences.map(r => ({ id: r.id, name: r.name })));
+        console.error('Available residences:', residences.map(r => ({ id: r.id, name: r.name, buildings: r.buildings?.length })));
+        
+        // Detailed debugging: show building/floor structure
+        const res = residences.find(r => r.id === params.residenceId);
+        if (res) {
+          console.error('Target residence found:', res.name);
+          console.error('Buildings:', res.buildings?.map(b => ({ id: b.id, name: b.name, floorsCount: b.floors?.length })));
+          if (params.buildingId) {
+            const bld = res.buildings?.find(b => b.id === params.buildingId);
+            if (bld) {
+              console.error('Target building found:', bld.name);
+              console.error('Floors:', bld.floors?.map(f => ({ id: f.id, name: f.name, roomsCount: f.rooms?.length, roomIds: f.rooms?.map(r => r.id) })));
+            } else {
+              console.error('Building NOT found in residence!');
+            }
+          }
+        } else {
+          console.error('Residence ID not found in context!');
+        }
+        
         toast({
           title: "خطأ: الغرفة غير موجودة",
           description: `لم يتم العثور على الغرفة (ID: ${params.roomId}) في المبنى (ID: ${params.residenceId}). الرجاء التحقق من البيانات.`,

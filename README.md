@@ -175,6 +175,35 @@ EstateCare/
    
    سيتم تشغيل التطبيق على: `http://localhost:9002`
 
+### (اختياري) تهيئة Firebase Admin لمسارات الخادم
+
+بعض المسارات الخلفية مثل `POST /api/accommodation/assign` تعتمد على Firebase Admin للوصول الآمن إلى Firestore. إذا لم تُجهّز بيانات اعتماد Admin، سيعمل النظام في "الوضع المحلي" ويستخدم التخزين المحلي وسياق المتصفح كحل بديل.
+
+لتمكين Firebase Admin محلياً أو على الخادم، وفّر أحد الخيارات التالية في البيئة:
+
+- باستخدام متغير واحد Base64:
+   - `FIREBASE_SERVICE_ACCOUNT_B64` = قيمة JSON لمفاتيح الخدمة مشفّرة Base64
+- أو باستخدام JSON خام:
+   - `FIREBASE_SERVICE_ACCOUNT` = كائن JSON لنفس بيانات الخدمة
+- أو باستخدام مفاتيح منفصلة:
+   - `FIREBASE_ADMIN_PROJECT_ID`
+   - `FIREBASE_ADMIN_CLIENT_EMAIL`
+   - `FIREBASE_ADMIN_PRIVATE_KEY` (استبدل \n بأسطر جديدة تلقائياً)
+- بديل: استخدم مسار ملف اعتماد Google:
+   - `GOOGLE_APPLICATION_CREDENTIALS` يشير إلى ملف .json على القرص
+
+ملاحظات:
+- عند عدم توفّر Admin، ستبقى صفحات الإسكان (مثل صفحة `assign`) قابلة للعمل بوضع محلي، وستظهر التغييرات فقط في المتصفح حتى يتم إعداد Firebase.
+- إذا رأيت أخطاء في المتصفح مثل "listener indicated an asynchronous response" فغالباً مصدرها إضافة للمتصفح؛ جرّب إيقاف الإضافات مؤقتاً للتأكد.
+
+### تشغيل dev على منفذ مختلف
+
+المنفذ الافتراضي هو 9002. إذا كان مشغولًا، يمكنك تشغيل Next مباشرة على منفذ بديل:
+
+```powershell
+npx next dev --turbopack -p 9010
+```
+
 ## 🔧 أوامر التطوير
 
 ### تطوير التطبيق
