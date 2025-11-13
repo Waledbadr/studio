@@ -753,7 +753,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
             
             const transactionTime = Timestamp.now();
-            let totalItemsCount = 0;
+            const totalItemsCount = totalsByItem.size; // Count distinct items, not quantities
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
             
             const mivDocRef = doc(db!, 'mivs', mivId);
@@ -768,7 +768,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       for (const location of voucherLocations) {
         for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
-                    totalItemsCount += issuedItem.issueQuantity;
 
                     // Log transaction
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
@@ -859,7 +858,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const now = Timestamp.now();
-      let totalItemCount = 0;
+      const totalItemCount = totalsByItem.size; // Count distinct items, not quantities
 
       // Update stock (stockByResidence and total stock) per item
       for (const [itemId, totalQty] of totalsByItem.entries()) {
@@ -874,7 +873,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }, 0);
         const itemRef = doc(db!, 'inventory', itemId);
         transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
-        totalItemCount += totalQty;
       }
 
       // Log transactions for each line

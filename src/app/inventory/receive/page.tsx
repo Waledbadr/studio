@@ -120,7 +120,7 @@ export default function ReceiveMaterialsPage() {
             type: 'MRV',
             dateLabel: r.requestedAt?.toDate ? format(r.requestedAt.toDate(), 'PPP') : '-',
             residence: residenceName(r.residenceId),
-            items: (r.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+            items: (r.items || []).length,
             status: <Badge variant="secondary">Pending</Badge>,
             href: `/inventory/receive/approvals/${r.id}`,
             action: (
@@ -157,7 +157,7 @@ export default function ReceiveMaterialsPage() {
                         type: 'MR',
                         dateLabel: o.date?.toDate ? format(o.date.toDate(), 'PPP') : '-',
                         residence: residenceName(o.residenceId),
-                        items: (o.items || []).reduce((s: number, it: any) => s + (it.quantity || 0), 0),
+                        items: (o.items || []).length,
                         status: (
                             <Badge variant={o.status === 'Approved' ? 'secondary' : 'outline'}>
                                 {o.status}
