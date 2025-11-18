@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer, LayoutGrid, List } from 'lucide-react';
+import { ListFilter, MoreHorizontal, Pencil, Trash2, Eye, Truck, CheckCircle, XCircle, PlusCircle, ChevronDown, ChevronUp, Archive, Printer, LayoutGrid, List, Paperclip } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { useOrders, type Order, type OrderStatus } from "@/context/orders-context";
 import { useEffect, useState, useMemo } from "react";
@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useUsers } from "@/context/users-context";
 import { useResidences } from "@/context/residences-context";
 import { useLanguage } from '@/context/language-context';
+import { QuickUploadAttachmentDialog } from '@/components/inventory/quick-upload-attachment-dialog';
 
 
 export default function PurchaseOrdersPage() {
@@ -40,6 +41,8 @@ export default function PurchaseOrdersPage() {
     const { residences, loadResidences } = useResidences();
     const isAdmin = currentUser?.role === 'Admin';
     const [isCompletedOpen, setIsCompletedOpen] = useState(false);
+    const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
     // Load completed section state from localStorage
     useEffect(() => {
@@ -106,6 +109,17 @@ export default function PurchaseOrdersPage() {
         }
     };
 
+    const handleViewAttachment = (e: React.MouseEvent, attachmentUrl: string) => {
+        e.stopPropagation();
+        window.open(attachmentUrl, '_blank');
+    };
+
+    const handleOpenUploadDialog = (e: React.MouseEvent, orderId: string) => {
+        e.stopPropagation();
+        setSelectedOrderId(orderId);
+        setUploadDialogOpen(true);
+    };
+
     const renderOrdersTable = (ordersList: Order[], showActions: boolean = true) => (
         <Table>
             <TableHeader>
@@ -121,7 +135,18 @@ export default function PurchaseOrdersPage() {
             <TableBody>
                 {loading ? renderSkeleton() : ordersList.length > 0 ? ordersList.map((order) => (
                     <TableRow key={order.id}>
-                        <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</TableCell>
+                        <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                                <span className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</span>
+                                {order.approvalAttachmentUrl && (
+                                    <Paperclip 
+                                        className="h-4 w-4 text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors" 
+                                        title="View approval attachment"
+                                        onClick={(e) => handleViewAttachment(e, order.approvalAttachmentUrl!)}
+                                    />
+                                )}
+                            </div>
+                        </TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{format(order.date.toDate(), 'PPP')}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.residence}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{order.items.length}</TableCell>
@@ -156,6 +181,11 @@ export default function PurchaseOrdersPage() {
                                                         <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
                                                         <Eye className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Details'}
                                         </DropdownMenuItem>
+                                        {isAdmin && order.status === 'Approved' && !order.approvalAttachmentUrl && (
+                                            <DropdownMenuItem onClick={(e) => handleOpenUploadDialog(e as any, order.id)}>
+                                                <Paperclip className="mr-2 h-4 w-4" /> Add Approval Attachment
+                                            </DropdownMenuItem>
+                                        )}
                                                                                 {isAdmin && (
                                                                                         Array.isArray(order.plannedDistribution) && order.plannedDistribution.length > 0 ? (
                                                                                             <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit-plan`)}>
@@ -384,6 +414,19 @@ export default function PurchaseOrdersPage() {
                         </CollapsibleContent>
                     </Card>
                 </Collapsible>
+            )}
+
+            {/* Quick Upload Attachment Dialog */}
+            {selectedOrderId && (
+                <QuickUploadAttachmentDialog
+                    open={uploadDialogOpen}
+                    onOpenChange={setUploadDialogOpen}
+                    orderId={selectedOrderId}
+                    onSuccess={() => {
+                        loadOrders();
+                        setSelectedOrderId(null);
+                    }}
+                />
             )}
         </div>
     )

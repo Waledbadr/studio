@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer, Pencil, CheckCircle2, XCircle, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Printer, Pencil, CheckCircle2, XCircle, PackageCheck, FileText, Download } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useUsers } from '@/context/users-context';
@@ -15,6 +15,7 @@ import type { OrderItem } from '@/context/orders-context';
 import { useInventory } from '@/context/inventory-context';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useResidences } from '@/context/residences-context';
+import { ApprovalAttachmentDialog } from '@/components/inventory/approval-attachment-dialog';
 // Subscribe to Firestore document for real-time updates
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
@@ -28,6 +29,7 @@ export default function OrderDetailPage() {
     const { residences } = useResidences();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showApprovalDialog, setShowApprovalDialog] = useState(false);
 
     const isAdmin = currentUser?.role === 'Admin';
     const requestedBy = order?.requestedById ? getUserById(order.requestedById) : null;
@@ -154,11 +156,20 @@ export default function OrderDetailPage() {
         router.push(`/inventory/orders/${id}` + '/edit');
     }
 
-    const handleApprove = async () => {
+    const handleApprove = () => {
         if (!order || !currentUser) return;
-        const ok = window.confirm('Approve this request?');
-        if (!ok) return;
-        await updateOrderStatus(order.id, 'Approved', currentUser.id);
+        setShowApprovalDialog(true);
+    };
+
+    const handleApproveWithAttachment = async (
+        attachmentData: {
+            url: string;
+            path: string;
+            filename: string;
+        } | null
+    ) => {
+        if (!order || !currentUser) return;
+        await updateOrderStatus(order.id, 'Approved', currentUser.id, attachmentData);
         // UI will update via onSnapshot
         // Navigate back to orders list per flow requirement
         router.push('/inventory/orders');
@@ -604,6 +615,54 @@ export default function OrderDetailPage() {
                                 </CardContent>
                             </Card>
                         )}
+
+            {/* Approval Attachment Section */}
+            {order.status === 'Approved' && order.approvalAttachmentUrl && (
+                <Card className="no-print">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-emerald-600" />
+                            Approval Attachment
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <FileText className="h-8 w-8 text-primary" />
+                                <div>
+                                    <p className="font-medium" dir="ltr">
+                                        {order.approvalAttachmentName || 'Approval Document'}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {order.approvalAttachmentUploadedAt && 
+                                            `Uploaded: ${format(
+                                                order.approvalAttachmentUploadedAt.toDate(),
+                                                'PPp'
+                                            )}`
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(order.approvalAttachmentUrl!, '_blank')}
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                Download
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Approval Dialog */}
+            <ApprovalAttachmentDialog
+                open={showApprovalDialog}
+                onOpenChange={setShowApprovalDialog}
+                onApprove={handleApproveWithAttachment}
+                orderId={order?.id || ''}
+            />
         </div>
     )
 }

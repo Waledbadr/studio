@@ -970,7 +970,13 @@ export default function RequestIssuePage() {
           </CardContent>
         </Card>
       </div>
-  <AddItemDialog isOpen={isAddDialogVisible} onOpenChange={setAddDialogVisible} onItemAdded={addItem} onItemAddedAndOrdered={handleNewItemAdded} initialName={searchQuery} />
+  <AddItemDialog
+    isOpen={isAddDialogVisible}
+    onOpenChange={setAddDialogVisible}
+    onItemAdded={addItem}
+    onItemAddedAndOrdered={handleNewItemAdded}
+    initialName={searchQuery}
+  />
   <EditItemDialog isOpen={editDialogOpen} onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }} onItemUpdated={handleItemUpdated} item={itemToEdit} />
   {/* Justification dialog */}
   <Dialog open={justOpen} onOpenChange={(v) => { setJustOpen(v); if (!v && justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>
