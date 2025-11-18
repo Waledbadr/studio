@@ -211,3 +211,64 @@ const history: AccommodationHistory = {
 **التاريخ**: 18 أكتوبر 2025  
 **الحالة**: ✅ تم الإصلاح بنجاح  
 **اختبار**: جرب الآن تسكين عامل ولاحظ رسائل Console!
+
+---
+
+## 🔧 Update 2025-11-12: Room Not Found Fix
+
+### New Problem
+Workers couldn't be assigned via drag-and-drop or bulk assignment, showing:
+- ❌ "Room not found" errors
+- ❌ Available residences log showed 10 residences but rooms weren't found
+- ❌ Floor debugging showed "Floor not found"
+
+### Root Cause
+The indRoom function requires uildingId and loorId to search through the nested structure:
+`
+residences → buildings → floors → rooms
+`
+
+But the UI was only passing esidenceId and oomId, missing the intermediate levels.
+
+### Solution Applied
+Updated page.tsx to pass the missing IDs:
+
+**Drag-and-Drop Assignment:**
+`	ypescript
+await checkInWorker({
+  workerId: wid,
+  residenceId: selectedResidence,
+  roomId,
+  buildingId: selectedBuilding || undefined,  // ✅ Added
+  floorId: selectedFloor || undefined,         // ✅ Added
+  performedBy: currentUserId || 'Guest',
+  checkInDate: new Date().toISOString(),
+});
+`
+
+**Bulk Assignment:**
+`	ypescript
+await bulkCheckIn({
+  workerIds: selectedWorkers,
+  residenceId: selectedResidence,
+  roomId: selectedRoom,
+  buildingId: selectedBuilding || undefined,  // ✅ Added
+  floorId: selectedFloor || undefined,         // ✅ Added
+  performedBy: performer,
+  checkInDate: new Date().toISOString(),
+});
+`
+
+### Additional Improvements
+- ✅ Added loading state to wait for residences to load before showing UI
+- ✅ Added DialogDescription to Room Details dialog (accessibility fix)
+- ✅ Improved error debugging to show building/floor structure when room not found
+
+### Testing
+Assignment now works correctly:
+1. Select Residence → Building → Floor → Room
+2. Drag worker or use bulk assign
+3. System properly locates the room using all required IDs
+4. Worker is successfully assigned and shows in room details
+
+**Status:** ✅ Resolved

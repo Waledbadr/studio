@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 
 export default function AccommodationAssignPage() {
   const { residences, loadResidences } = useResidences();
-  const { occupants, workers, checkOutWorkerEnhanced } = useAccommodation();
+  const { occupants, workers, checkOutWorkerEnhanced, checkInWorker, bulkCheckIn } = useAccommodation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -29,6 +29,7 @@ export default function AccommodationAssignPage() {
   
   // Get current user ID and role from Firebase Auth and Firestore
   useEffect(() => {
+    // If Firebase is not configured, allow guest/local mode
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -111,14 +112,15 @@ export default function AccommodationAssignPage() {
 
   // Check if user is authenticated
   useEffect(() => {
-    if (!currentUserId) {
+    const firebaseConfigured = !!auth && !!db;
+    if (!currentUserId && firebaseConfigured) {
       console.warn('[AUTH] User not authenticated - Firestore permissions may fail');
       toast({
         title: "Authentication Required",
         description: "Please sign in to access accommodation assignment",
         variant: "destructive"
       });
-    } else {
+    } else if (currentUserId) {
       console.log('[AUTH] User authenticated:', currentUserId);
     }
   }, [currentUserId, toast]);
@@ -406,29 +408,47 @@ export default function AccommodationAssignPage() {
     
     setSubmitting(true);
     try {
-      const res = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workerIds: selectedWorkers, residenceId: selectedResidence, roomId: selectedRoom }) });
-      const data = await res.json();
-      if (!data?.ok) {
-        const errorMsg = data?.error || 'Assignment failed';
-        toast({
-          title: "Assignment Failed",
-          description: errorMsg,
-          variant: "destructive"
-        });
-        return;
+      const firebaseConfigured = !!auth && !!db;
+      if (firebaseConfigured) {
+        // Try server API first (uses Firebase Admin)
+        const res = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workerIds: selectedWorkers, residenceId: selectedResidence, roomId: selectedRoom }) });
+        const data = await res.json();
+        if (!data?.ok) {
+          // If admin not configured, fall back to client context
+          if (String(data?.error || '').toLowerCase().includes('admin')) {
+            console.warn('[ASSIGN] Falling back to client-side bulkCheckIn');
+          } else {
+            toast({ title: "Assignment Failed", description: data?.error || 'Assignment failed', variant: "destructive" });
+            return;
+          }
+        } else {
+          toast({ title: "Assignment Successful", description: `Assigned ${data.count || selectedWorkers.length} worker(s)` });
+          setSelectedWorkers([]);
+          return;
+        }
       }
-      toast({
-        title: "Assignment Successful",
-        description: `Assigned ${data.count || selectedWorkers.length} worker(s)`,
+
+      // Fallback: client-side context bulk check-in (local mode)
+      const performer = currentUserId || 'Guest';
+      const result = await bulkCheckIn({
+        workerIds: selectedWorkers,
+        residenceId: selectedResidence,
+        roomId: selectedRoom,
+        buildingId: selectedBuilding || undefined,
+        floorId: selectedFloor || undefined,
+        performedBy: performer,
+        checkInDate: new Date().toISOString(),
       });
-      setSelectedWorkers([]);
+      const success = Object.values(result.results).filter(r => r.success).length;
+      if (success > 0) {
+        toast({ title: 'تم التسكين', description: `تم تسكين ${success} عامل محلياً` });
+        setSelectedWorkers([]);
+      } else {
+        toast({ title: 'لم يتم التسكين', description: 'فشل تسكين جميع العمال (وضع محلي).', variant: 'destructive' });
+      }
     } catch (e: any) {
       console.error(e);
-      toast({
-        title: "Error",
-        description: e?.message || 'An error occurred during assignment',
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: e?.message || 'An error occurred during assignment', variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -455,29 +475,41 @@ export default function AccommodationAssignPage() {
     
     setSubmitting(true);
     try {
-      const res = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workerId: wid, residenceId: selectedResidence, roomId }) });
-      const data = await res.json();
-      if (!data?.ok) {
-        const errorMsg = data?.error || 'Assignment failed';
-        toast({
-          title: "Assignment Failed",
-          description: errorMsg,
-          variant: "destructive"
-        });
+      const firebaseConfigured = !!auth && !!db;
+      if (firebaseConfigured) {
+        const res = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workerId: wid, residenceId: selectedResidence, roomId }) });
+        const data = await res.json();
+        if (data?.ok) {
+          const workerName = workers.find((w: any) => w.id === wid)?.name || 'Worker';
+          toast({ title: "Assigned Successfully", description: `تم تسكين ${workerName} بنجاح` });
+          return;
+        }
+        if (!String(data?.error || '').toLowerCase().includes('admin')) {
+          toast({ title: "Assignment Failed", description: data?.error || 'Assignment failed', variant: "destructive" });
+          return;
+        }
+        console.warn('[ASSIGN] Falling back to client-side checkInWorker');
+      }
+
+      // Fallback local check-in
+      const workerName = workers.find((w: any) => w.id === wid)?.name || 'Worker';
+      const result = await checkInWorker({
+        workerId: wid,
+        residenceId: selectedResidence,
+        roomId,
+        buildingId: selectedBuilding || undefined,
+        floorId: selectedFloor || undefined,
+        performedBy: currentUserId || 'Guest',
+        checkInDate: new Date().toISOString(),
+      });
+      if (!result.ok) {
+        toast({ title: 'Assignment Failed', description: result.error || 'Failed', variant: 'destructive' });
         return;
       }
-      const workerName = workers.find((w: any) => w.id === wid)?.name || 'Worker';
-      toast({
-        title: "Assigned Successfully",
-        description: `تم تسكين ${workerName} بنجاح`
-      });
+      toast({ title: 'Assigned Successfully', description: `تم تسكين ${workerName} بنجاح (محلي)` });
     } catch (e:any) {
       console.error(e);
-      toast({
-        title: "خطأ",
-        description: e?.message || 'حدث خطأ أثناء التسكين',
-        variant: "destructive"
-      });
+      toast({ title: "خطأ", description: e?.message || 'حدث خطأ أثناء التسكين', variant: "destructive" });
     } finally { setSubmitting(false); }
   }
 
@@ -490,7 +522,8 @@ export default function AccommodationAssignPage() {
   console.log('[RENDER] rooms.length:', rooms.length);
 
   // Show authentication warning if user is not logged in
-  if (!currentUserId) {
+  const firebaseConfigured = !!auth && !!db;
+  if (!currentUserId && firebaseConfigured) {
     return (
       <div className="space-y-4 p-6">
         <div className="max-w-2xl mx-auto mt-20">
@@ -507,6 +540,21 @@ export default function AccommodationAssignPage() {
               Sign In
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading state while residences are loading
+  if (residences.length === 0 && loading) {
+    return (
+      <div className="space-y-4 p-6">
+        <div className="max-w-2xl mx-auto mt-20 text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-2xl font-semibold mb-2">Loading Residences...</h2>
+          <p className="text-muted-foreground">
+            Please wait while we load the accommodation data.
+          </p>
         </div>
       </div>
     );
@@ -1042,6 +1090,9 @@ export default function AccommodationAssignPage() {
               <Users className="h-5 w-5" />
               {selectedRoomForDetails?.name || 'Room Details'}
             </DialogTitle>
+            <DialogDescription>
+              View room occupants and manage worker assignments
+            </DialogDescription>
           </DialogHeader>
           
           {selectedRoomForDetails && (
