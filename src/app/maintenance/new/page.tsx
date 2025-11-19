@@ -75,7 +75,14 @@ export default function NewMaintenanceRequestPage() {
     form.resetField("roomId", { defaultValue: "" });
   }, [selectedBuildingId, form]);
 
-  const selectedComplex = useMemo(() => residences.find((c) => c.id === selectedComplexId), [selectedComplexId, residences]);
+  // Filter residences based on user role and assigned residences
+  const filteredResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
+
+  const selectedComplex = useMemo(() => filteredResidences.find((c) => c.id === selectedComplexId), [selectedComplexId, filteredResidences]);
   const buildings = useMemo(() => selectedComplex?.buildings || [], [selectedComplex]);
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === selectedBuildingId), [selectedBuildingId, buildings]);
   const rooms = useMemo(() => selectedBuilding?.floors.flatMap(floor => floor.rooms) || [], [selectedBuilding]);
@@ -155,7 +162,7 @@ export default function NewMaintenanceRequestPage() {
                                             <SelectTrigger><SelectValue placeholder="Select a complex" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {residences.map(complex => (
+                                            {filteredResidences.map(complex => (
                                                 <SelectItem key={complex.id} value={complex.id}>{complex.name}</SelectItem>
                                             ))}
                                         </SelectContent>

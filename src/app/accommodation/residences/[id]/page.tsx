@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Residence as AcResidence } from '@/context/accommodation-context';
 import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context';
 import { useLanguage } from '@/context/language-context';
 
 export default function ResidenceDetailPage({ params }: { params: { id: string } }) {
@@ -14,6 +15,7 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
   const [error, setError] = useState<string | null>(null);
 
   const { residences, loadResidences } = useResidences();
+  const { currentUser } = useUsers();
   const { dict } = useLanguage();
 
   useEffect(() => {
@@ -28,6 +30,15 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
         if (!r) {
           setResidence(null);
         } else {
+          // Check if user has access to this residence
+          if (currentUser && currentUser.role !== 'Admin' && !currentUser.assignedResidences.includes(r.id)) {
+            if (mounted) {
+              setError('You do not have permission to view this residence.');
+              setResidence(null);
+            }
+            return;
+          }
+          
           const mapped: AcResidence = {
             id: r.id,
             name: r.name || r.title || 'Unnamed',
@@ -47,7 +58,7 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     };
     load();
     return () => { mounted = false; };
-  }, [id, residences, loadResidences]);
+  }, [id, residences, loadResidences, currentUser]);
 
   // load occupants and workers from localStorage for display
   useEffect(() => {

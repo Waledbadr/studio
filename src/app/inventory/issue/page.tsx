@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useTransition } from 'react';
+import { useEffect, useState, useMemo, useTransition, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,7 +10,7 @@ import { useUsers } from '@/context/users-context';
 import { useInventory, type InventoryItem, type LocationWithItems as IVoucherLocation } from '@/context/inventory-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck, Search } from 'lucide-react';
+import { Plus, Minus, Trash2, MapPin, PackagePlus, Loader2, History, ConciergeBell, Building, Archive, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Clock, Truck, Search, Zap, Copy, Save, BarcodeScannerIcon as Barcode, Keyboard, Command } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -19,6 +19,9 @@ import { differenceInDays } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/context/language-context';
 import { useOrders, type Order } from '@/context/orders-context';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 interface IssuedItem extends InventoryItem {
@@ -53,6 +56,7 @@ export default function IssueMaterialPage() {
     const [selectedComplexId, setSelectedComplexId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
     
     const [locationType, setLocationType] = useState<'unit' | 'facility'>('unit');
     const [selectedBuildingId, setSelectedBuildingId] = useState('');
@@ -63,6 +67,15 @@ export default function IssueMaterialPage() {
 
     const [voucherLocations, setVoucherLocations] = useState<VoucherLocation[]>([]);
     const [selectedMrId, setSelectedMrId] = useState('');
+    
+    // Quick add mode: auto-add items with quantity 1
+    const [quickAddMode, setQuickAddMode] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const quantityInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+    
+    // Bulk operations
+    const [bulkQuantity, setBulkQuantity] = useState<number>(1);
+    const [showBulkDialog, setShowBulkDialog] = useState(false);
     
     const userResidences = useMemo(() => {
         if (!currentUser) return [];
@@ -107,6 +120,82 @@ export default function IssueMaterialPage() {
             loadOrders?.();
         }
     }, [currentUser?.id, loadOrders]);
+
+    // Calculate if voucher can be submitted (needed before keyboard shortcuts)
+    const isVoucherSubmittable = useMemo(() => {
+        return voucherLocations.length > 0 && voucherLocations.every(loc => loc.items.length > 0);
+    }, [voucherLocations]);
+
+    // Handle submit voucher (needed before keyboard shortcuts)
+    const handleSubmitVoucher = useCallback(async () => {
+        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can submit issue vouchers.', variant: 'destructive' });
+            return;
+        }
+        if (!selectedComplexId || !isVoucherSubmittable) {
+            toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            await issueItemsFromStock(selectedComplexId, voucherLocations);
+            toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
+            setVoucherLocations([]);
+            setSelectedBuildingId('');
+            setSelectedFloorId('');
+            setSelectedRoomId('');
+            setSelectedFacilityId('');
+            setLocationType('unit');
+            router.push('/inventory/issue-history');
+        } catch (error) {
+            console.error("Failed to submit voucher:", error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error has occurred";
+            toast({ title: "Submission Error", description: `An error occurred: ${errorMessage}`, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [currentUser, selectedComplexId, isVoucherSubmittable, toast, issueItemsFromStock, voucherLocations, router]);
+
+    // ================ KEYBOARD SHORTCUTS ================
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl/Cmd + K: Focus search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+            // Ctrl/Cmd + Enter: Submit voucher
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (isVoucherSubmittable && !isSubmitting) {
+                    handleSubmitVoucher();
+                }
+            }
+            // Ctrl/Cmd + /: Toggle keyboard shortcuts dialog
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
+                setShowKeyboardShortcuts(true);
+            }
+            // Escape: Clear search
+            if (e.key === 'Escape' && searchQuery) {
+                e.preventDefault();
+                setSearchQuery('');
+            }
+            // Ctrl/Cmd + Q: Toggle quick add mode
+            if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+                e.preventDefault();
+                setQuickAddMode(prev => !prev);
+                toast({ 
+                    title: quickAddMode ? 'Quick Add Disabled' : 'Quick Add Enabled',
+                    description: quickAddMode ? 'Click items to add normally' : 'Click items to instantly add quantity 1',
+                    duration: 2000
+                });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [searchQuery, isVoucherSubmittable, isSubmitting, quickAddMode, toast, handleSubmitVoucher]);
 
 
     // Consider a location selected when at least the building is chosen for units.
@@ -168,7 +257,8 @@ export default function IssueMaterialPage() {
         }, 0);
     };
 
-    const handleAddItemToLocation = (itemToAdd: InventoryItem) => {
+    // ================ OPTIMIZED ADD ITEM WITH QUICK MODE ================
+    const handleAddItemToLocation = useCallback((itemToAdd: InventoryItem, quantity: number = 1) => {
         if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
             toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can issue materials.', variant: 'destructive' });
             return;
@@ -301,7 +391,7 @@ export default function IssueMaterialPage() {
                             };
                             targetLocation.items = updatedItems;
                         } else {
-                             toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
+                            toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
                         }
                         // keep locations order as is when just incrementing existing item
                         newLocations[existingLocationIndex] = targetLocation;
@@ -314,7 +404,7 @@ export default function IssueMaterialPage() {
                             toast({ title: "Stock limit reached", description: `Cannot allocate more than ${stock} available across locations.`, variant: "destructive"});
                             return prevLocations;
                         }
-                        targetLocation.items = [ { ...itemToAdd, issueQuantity: Math.min(1, canAdd) }, ...targetLocation.items ];
+                        targetLocation.items = [ { ...itemToAdd, issueQuantity: Math.min(quantity, canAdd) }, ...targetLocation.items ];
                         // Move this location to the top since a new item was added here
                         newLocations.splice(existingLocationIndex, 1);
                         return [ targetLocation, ...newLocations ];
@@ -325,17 +415,26 @@ export default function IssueMaterialPage() {
                         locationId,
                         locationName,
                         isFacility,
-                        items: [{ ...itemToAdd, issueQuantity: 1 }]
+                        items: [{ ...itemToAdd, issueQuantity: Math.min(quantity, stock) }]
                     };
                     // New location: place at the top
                     return [ newLocation, ...prevLocations ];
                 }
             });
+            
+            // In quick mode, show minimal toast
+            if (quickAddMode) {
+                toast({ 
+                    title: `Added ${itemToAdd.nameEn}`, 
+                    description: `Qty: ${quantity}`,
+                    duration: 1500 
+                });
+            }
         });
-    };
+    }, [currentUser, isLocationSelected, selectedComplex, selectedComplexId, getStockForResidence, getAggregateIssuedQty, locationType, selectedBuildingId, selectedFloorId, selectedRoomId, selectedBuilding, selectedFloor, selectedFacilityId, availableFacilities, availableComponents, selectedComponentId, getLastIssueDateForItemAtLocation, toast, quickAddMode, voucherLocations]);
 
     // Apply planned distribution from an order object
-    const applyPlanFromOrder = (order: Order) => {
+    const applyPlanFromOrder = useCallback((order: Order) => {
         if (!order || !order.plannedDistribution || !Array.isArray(order.plannedDistribution) || order.plannedDistribution.length === 0) {
             toast({ title: 'No distribution', description: 'This order has no saved distribution plan.' });
             return;
@@ -385,9 +484,9 @@ export default function IssueMaterialPage() {
         }
         setVoucherLocations(transformed);
         toast({ title: 'Distribution loaded', description: `Loaded plan from ${order.id}.` });
-    };
+    }, [allItems, getStockForResidence, selectedComplexId, toast]);
 
-    const handleSelectMr = (id: string) => {
+    const handleSelectMr = useCallback((id: string) => {
         setSelectedMrId(id);
         if (!Array.isArray(orders)) {
             toast({ title: 'No orders', description: 'Orders list is not available.', variant: 'destructive' });
@@ -399,10 +498,25 @@ export default function IssueMaterialPage() {
             return;
         }
         applyPlanFromOrder(order);
-    };
+    }, [orders, toast, applyPlanFromOrder]);
+
+    // ================ BULK ADD ITEMS ================
+    const handleBulkAddItems = useCallback((selectedItems: InventoryItem[]) => {
+        if (selectedItems.length === 0) return;
+        
+        selectedItems.forEach(item => {
+            handleAddItemToLocation(item, bulkQuantity);
+        });
+        
+        toast({
+            title: 'Bulk Add Complete',
+            description: `Added ${selectedItems.length} items with quantity ${bulkQuantity}`,
+        });
+        setShowBulkDialog(false);
+    }, [bulkQuantity, handleAddItemToLocation, toast]);
 
 
-    const handleQuantityChange = (locationId: string, itemId: string, newQuantity: number) => {
+    const handleQuantityChange = useCallback((locationId: string, itemId: string, newQuantity: number) => {
          const itemInfo = allItems.find(i => i.id === itemId);
         if (!itemInfo || !selectedComplexId) return;
 
@@ -433,9 +547,9 @@ export default function IssueMaterialPage() {
             ? { ...loc, items: loc.items.map(item => item.id === itemId ? {...item, issueQuantity: quantity} : item) }
             : loc
         ));
-    };
+    }, [allItems, selectedComplexId, getStockForResidence, voucherLocations, toast]);
 
-    const handleRemoveItem = (locationId: string, itemId: string) => {
+    const handleRemoveItem = useCallback((locationId: string, itemId: string) => {
         setVoucherLocations(prev => {
             const newLocations = prev.map(loc => {
                 if (loc.locationId === locationId) {
@@ -445,41 +559,8 @@ export default function IssueMaterialPage() {
             });
             return newLocations.filter(loc => loc.items.length > 0);
         });
-    };
+    }, []);
     
-    const handleSubmitVoucher = async () => {
-        if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
-            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can submit issue vouchers.', variant: 'destructive' });
-            return;
-        }
-        if (!selectedComplexId || !isVoucherSubmittable) {
-            toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            await issueItemsFromStock(selectedComplexId, voucherLocations);
-            toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
-            setVoucherLocations([]);
-            setSelectedBuildingId('');
-            setSelectedFloorId('');
-            setSelectedRoomId('');
-            setSelectedFacilityId('');
-            setLocationType('unit');
-            router.push('/inventory/issue-history');
-        } catch (error) {
-            console.error("Failed to submit voucher:", error);
-            const errorMessage = error instanceof Error ? error.message : "An unknown error has occurred";
-            toast({ title: "Submission Error", description: `An error occurred: ${errorMessage}`, variant: "destructive" });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const isVoucherSubmittable = useMemo(() => {
-        return voucherLocations.length > 0 && voucherLocations.every(loc => loc.items.length > 0);
-    }, [voucherLocations]);
-
     // Orders with saved distribution for the selected residence
     const mrWithPlanForResidence = useMemo(() => {
         if (!selectedComplexId || !Array.isArray(orders)) return [] as Order[];
@@ -491,69 +572,145 @@ export default function IssueMaterialPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <TooltipProvider>
+        <div className="space-y-4">
+            {/* Header with Enhanced Actions */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">{dict.mivTitle}</h1>
+                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                        {dict.mivTitle}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowKeyboardShortcuts(true)}>
+                                    <Keyboard className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Keyboard Shortcuts (Ctrl+/)</TooltipContent>
+                        </Tooltip>
+                    </h1>
                     <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" onClick={() => router.push('/inventory/issue-history')}>
+                <div className="flex items-center gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button 
+                                variant={quickAddMode ? 'default' : 'outline'} 
+                                size="sm"
+                                onClick={() => {
+                                    setQuickAddMode(!quickAddMode);
+                                    toast({ 
+                                        title: !quickAddMode ? 'Quick Add Enabled' : 'Quick Add Disabled',
+                                        description: !quickAddMode ? 'Click items to instantly add qty 1' : 'Normal mode restored',
+                                        duration: 2000
+                                    });
+                                }}
+                            >
+                                <Zap className={`h-4 w-4 mr-2 ${quickAddMode ? 'animate-pulse' : ''}`} />
+                                Quick Add
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Quick Add Mode (Ctrl+Q)</TooltipContent>
+                    </Tooltip>
+                    <Button variant="outline" size="sm" onClick={() => router.push('/inventory/issue-history')}>
                         <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
                     </Button>
-                    <Button onClick={handleSubmitVoucher} disabled={!isVoucherSubmittable || isSubmitting || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    <Button 
+                        onClick={handleSubmitVoucher} 
+                        disabled={!isVoucherSubmittable || isSubmitting || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}
+                        size="sm"
+                        className="min-w-[120px]"
+                    >
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                         {dict.submitVoucher}
                     </Button>
                 </div>
             </div>
 
-            {/* Load MR Plan and Issue From Section - Outside Card */}
-            <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-2">
-                    <Label className="whitespace-nowrap font-medium">Issue From:</Label>
+            {/* Enhanced Header Section */}
+            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border-2 border-primary/20">
+                <div className="flex items-center gap-2 flex-1">
+                    <Label className="whitespace-nowrap font-semibold text-sm">Issue From:</Label>
                     <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                        <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Select a residence..." />
+                        <SelectTrigger className="w-[220px] font-medium">
+                            <SelectValue placeholder="Select residence..." />
                         </SelectTrigger>
                         <SelectContent>
                             {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Label className="whitespace-nowrap font-medium">Load MR plan:</Label>
+                <div className="flex items-center gap-2 flex-1">
+                    <Label className="whitespace-nowrap font-semibold text-sm">Load MR plan:</Label>
                     <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
-                        <SelectTrigger className="w-[220px]">
+                        <SelectTrigger className="w-[240px]">
                             <SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} />
                         </SelectTrigger>
                         <SelectContent>
                             {mrWithPlanForResidence.map(o => (
-                                <SelectItem key={o.id} value={o.id}>{o.id} · {o.items.length} items</SelectItem>
+                                <SelectItem key={o.id} value={o.id}>
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-3 w-3" />
+                                        {o.id} · {o.items.length} items
+                                    </div>
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start h-[calc(100vh-12rem)]">
+            {/* Statistics Bar */}
+            {voucherLocations.length > 0 && (
+                <div className="grid grid-cols-4 gap-4">
+                    <Card className="p-4">
+                        <div className="text-xs text-muted-foreground">Total Locations</div>
+                        <div className="text-2xl font-bold">{voucherLocations.length}</div>
+                    </Card>
+                    <Card className="p-4">
+                        <div className="text-xs text-muted-foreground">Total Items</div>
+                        <div className="text-2xl font-bold">{voucherLocations.reduce((sum, loc) => sum + loc.items.length, 0)}</div>
+                    </Card>
+                    <Card className="p-4">
+                        <div className="text-xs text-muted-foreground">Total Units</div>
+                        <div className="text-2xl font-bold">{voucherLocations.reduce((sum, loc) => sum + loc.items.reduce((s, i) => s + i.issueQuantity, 0), 0)}</div>
+                    </Card>
+                    <Card className="p-4">
+                        <div className="text-xs text-muted-foreground">Quick Actions</div>
+                        <div className="flex gap-1 mt-1">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button size="sm" variant="ghost" onClick={() => setVoucherLocations([])}>
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Clear All</TooltipContent>
+                            </Tooltip>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" style={{height: 'calc(100vh - 18rem)'}}>
                 <Card className="h-full flex flex-col">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
                             <MapPin className="h-5 w-5 text-primary"/> Select Location & Items
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4 flex-1 overflow-hidden flex flex-col">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-shrink-0">
-                            <div className="space-y-4">
-                                <h3 className="font-semibold text-sm">Location Type</h3>
+                    <CardContent className="space-y-3 flex-1 overflow-hidden flex flex-col p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-shrink-0">
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-sm flex items-center gap-2">
+                                    Location Type
+                                    {isLocationSelected && <Badge variant="secondary" className="text-xs">Selected</Badge>}
+                                </h3>
                                 <div className="flex gap-2">
                                     <Button 
                                         variant={locationType === 'unit' ? 'default' : 'outline'} 
                                         size="sm"
                                         onClick={() => setLocationType('unit')}
                                         disabled={!selectedComplexId}
-                                        className="flex items-center gap-2"
+                                        className="flex items-center gap-2 flex-1"
                                     >
                                         <Building className="h-4 w-4" /> Unit
                                     </Button>
@@ -562,16 +719,16 @@ export default function IssueMaterialPage() {
                                         size="sm"
                                         onClick={() => setLocationType('facility')}
                                         disabled={!selectedComplexId}
-                                        className="flex items-center gap-2"
+                                        className="flex items-center gap-2 flex-1"
                                     >
                                         <ConciergeBell className="h-4 w-4" /> Facility
                                     </Button>
                                 </div>
                                 
-                                <div className="space-y-4 pt-2">
+                                <div className="space-y-3 pt-1">
                                     {/* Buildings */}
                                     <div className="space-y-2">
-                                        <h4 className="font-medium text-xs text-muted-foreground">Building</h4>
+                                        <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Building</h4>
                                         <div className="grid grid-cols-2 gap-2">
                                             {selectedComplex?.buildings.map(b => (
                                                 <Button
@@ -585,10 +742,10 @@ export default function IssueMaterialPage() {
                                                         setSelectedFacilityId('');
                                                     }}
                                                     disabled={!selectedComplexId}
-                                                    className="justify-start"
+                                                    className="justify-start h-9"
                                                 >
-                                                    <Building className="h-4 w-4 mr-2" />
-                                                    {b.name}
+                                                    <Building className="h-3 w-3 mr-2" />
+                                                    <span className="truncate">{b.name}</span>
                                                 </Button>
                                             ))}
                                         </div>
@@ -596,8 +753,8 @@ export default function IssueMaterialPage() {
 
                                     {/* Floors */}
                                     {selectedBuildingId && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium text-xs text-muted-foreground">Floor</h4>
+                                        <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Floor</h4>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {selectedBuilding?.floors.map(f => (
                                                     <Button
@@ -609,9 +766,9 @@ export default function IssueMaterialPage() {
                                                             setSelectedRoomId('');
                                                             setSelectedFacilityId('');
                                                         }}
-                                                        className="justify-start"
+                                                        className="justify-start h-9"
                                                     >
-                                                        {f.name}
+                                                        <span className="truncate">{f.name}</span>
                                                     </Button>
                                                 ))}
                                             </div>
@@ -620,8 +777,8 @@ export default function IssueMaterialPage() {
 
                                     {/* Rooms or Facilities */}
                                     {selectedFloorId && locationType === 'unit' && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium text-xs text-muted-foreground">Room</h4>
+                                        <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Room</h4>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {selectedFloor?.rooms.map(r => (
                                                     <Button
@@ -629,9 +786,9 @@ export default function IssueMaterialPage() {
                                                         variant={selectedRoomId === r.id ? 'default' : 'outline'}
                                                         size="sm"
                                                         onClick={() => setSelectedRoomId(r.id)}
-                                                        className="justify-start"
+                                                        className="justify-start h-9"
                                                     >
-                                                        {r.name}
+                                                        <span className="truncate">{r.name}</span>
                                                     </Button>
                                                 ))}
                                             </div>
@@ -639,39 +796,39 @@ export default function IssueMaterialPage() {
                                     )}
                                     
                                     {locationType === 'facility' && selectedComplexId && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium text-xs text-muted-foreground">Facility</h4>
+                                        <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Facility</h4>
                                             {/* Responsive multi-column grid to fit more facilities */}
-                                            <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+                                            <div className="grid gap-2 grid-cols-1">
                                                 {availableFacilities.map(f => (
                                                     <Button
                                                         key={f.id}
                                                         variant={selectedFacilityId === f.id ? 'default' : 'outline'}
                                                         size="sm"
                                                         onClick={() => setSelectedFacilityId(f.id)}
-                                                        className="justify-start overflow-hidden"
+                                                        className="justify-start overflow-hidden h-9"
                                                     >
-                                                        <ConciergeBell className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                        <ConciergeBell className="h-3 w-3 mr-2 flex-shrink-0" />
                                                         <span dir="ltr" className="truncate">{f.name}</span>
                                                     </Button>
                                                 ))}
                                             </div>
                                             {/* Component selection (optional) */}
                                             {selectedFacilityId && availableComponents.length > 0 && (
-                                                <div className="mt-2 p-2 border rounded-md bg-muted/20">
+                                                <div className="mt-2 p-3 border rounded-md bg-muted/20">
                                                     <Label className="text-xs font-medium mb-2 block">Select Component (Optional)</Label>
                                                     <div className="text-xs text-muted-foreground mb-2">If no component is selected, issuing will target the facility itself.</div>
                                                     {/* Responsive grid for components as well */}
-                                                    <div className="grid gap-2 max-h-56 overflow-y-auto grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+                                                    <div className="grid gap-2 max-h-56 overflow-y-auto grid-cols-1">
                                                         {availableComponents.map((c: FacilityComponent) => (
                                                             <Button
                                                                 key={c.id}
                                                                 variant={selectedComponentId === c.id ? 'default' : 'outline'}
                                                                 size="sm"
                                                                 onClick={() => setSelectedComponentId(c.id)}
-                                                                className="justify-start overflow-hidden"
+                                                                className="justify-start overflow-hidden h-9"
                                                             >
-                                                                <span className="truncate" title={c.name}>{c.name}</span>
+                                                                <span className="truncate text-xs" title={c.name}>{c.name}</span>
                                                             </Button>
                                                         ))}
                                                     </div>
@@ -681,22 +838,38 @@ export default function IssueMaterialPage() {
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-4 flex-1 flex flex-col">
-                                <h3 className="font-semibold text-sm">Available Inventory</h3>
+                            <div className="space-y-3 flex-1 flex flex-col">
+                                <h3 className="font-semibold text-sm flex items-center justify-between">
+                                    <span>Available Inventory</span>
+                                    {availableInventory.length > 0 && (
+                                        <Badge variant="secondary" className="text-xs">{availableInventory.length} items</Badge>
+                                    )}
+                                </h3>
                                 <div className="relative flex-shrink-0">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                                     <Input
+                                        ref={searchInputRef}
                                         type="search"
-                                        placeholder="Search items..."
-                                        className="pl-8 w-full"
+                                        placeholder="Search items... (Ctrl+K)"
+                                        className="pl-8 w-full h-9"
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
                                         disabled={!selectedComplexId}
                                     />
+                                    {searchQuery && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-1 top-1 h-7 w-7"
+                                            onClick={() => setSearchQuery('')}
+                                        >
+                                            <XCircle className="h-3 w-3" />
+                                        </Button>
+                                    )}
                                 </div>
                                 <ScrollArea className="flex-1 border rounded-md min-h-0">
                                     {selectedComplexId ? (
-                                        <div className="p-2 space-y-2">
+                                        <div className="p-2 space-y-1">
                                             {availableInventory.length > 0 ? availableInventory.map(item => {
                                                 const stock = getStockForResidence(item, selectedComplexId);
                                                 const allocated = voucherLocations.reduce((sum, loc) => {
@@ -704,24 +877,48 @@ export default function IssueMaterialPage() {
                                                     return sum + (f ? f.issueQuantity : 0);
                                                 }, 0);
                                                 const remaining = Math.max(0, stock - allocated);
+                                                const isLowStock = remaining < stock * 0.2;
+                                                
                                                 return (
-                                                    <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                                                        <div>
-                                                            <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
-                                                            <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
+                                                    <div 
+                                                        key={item.id} 
+                                                        className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-primary/5 border transition-all group cursor-pointer"
+                                                        onClick={() => quickAddMode && isLocationSelected ? handleAddItemToLocation(item, 1) : null}
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-sm truncate">{item.nameAr} / {item.nameEn}</p>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <Badge variant="outline" className="text-xs">{item.category}</Badge>
+                                                                <span className={`text-xs font-medium ${isLowStock ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                                                                    {remaining}/{stock} {item.unit}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                        <Button size="icon" variant="outline" onClick={() => handleAddItemToLocation(item)} disabled={!isLocationSelected || isPending || remaining <= 0}>
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="outline" 
+                                                            className="h-8 w-8 flex-shrink-0 ml-2 group-hover:bg-primary group-hover:text-primary-foreground transition-all" 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleAddItemToLocation(item, 1);
+                                                            }}
+                                                            disabled={!isLocationSelected || isPending || remaining <= 0}
+                                                        >
                                                             <Plus className="h-4 w-4" />
                                                         </Button>
                                                     </div>
                                                 );
                                             }) : (
-                                                <div className="text-center text-muted-foreground p-8 text-sm">No inventory found.</div>
+                                                <div className="text-center text-muted-foreground p-8 text-sm">
+                                                    <Archive className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                    No inventory found.
+                                                </div>
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                                            Select a residence to see items.
+                                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-8">
+                                            <Building className="h-12 w-12 mb-3 opacity-30" />
+                                            <p>Select a residence to see items</p>
                                         </div>
                                     )}
                                 </ScrollArea>
@@ -731,68 +928,152 @@ export default function IssueMaterialPage() {
                 </Card>
 
                 <Card className="h-full flex flex-col">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><PackagePlus className="h-5 w-5 text-primary"/> Voucher Items</CardTitle>
-                        <CardDescription>Review all items and locations before submitting.</CardDescription>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                            <PackagePlus className="h-5 w-5 text-primary"/> Voucher Items
+                        </CardTitle>
+                        <CardDescription>Review all items and locations before submitting (Ctrl+Enter)</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-1 overflow-hidden flex flex-col">
+                    <CardContent className="flex-1 overflow-hidden flex flex-col p-4">
                         <ScrollArea className="flex-1 min-h-0">
                         {voucherLocations.length > 0 ? (
-                            <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)}>
-                                {voucherLocations.map(location => (
-                                    <AccordionItem key={location.locationId} value={location.locationId}>
-                                        <AccordionTrigger className="font-semibold text-base">
-                                            <span dir="ltr">{location.locationName}</span>
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Item</TableHead>
-                                                        <TableHead className="w-[150px] text-center">Quantity</TableHead>
-                                                        <TableHead className="w-[50px] text-right"></TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {location.items.map(item => (
-                                                        <TableRow key={item.id}>
-                                                            <TableCell className="font-medium">
-                                                                <p>{item.nameAr} / {item.nameEn}</p>
-                                                                <p className="text-xs text-muted-foreground">{item.category}</p>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <div className="flex items-center justify-center gap-2">
-                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}>
-                                                                        <Minus className="h-4 w-4" />
-                                                                    </Button>
-                                                                    <Input type="number" value={item.issueQuantity} onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10))} className="w-14 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}>
-                                                                        <Plus className="h-4 w-4" />
-                                                                    </Button>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(location.locationId, item.id)}>
-                                                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                                                </Button>
-                                                            </TableCell>
+                            <Accordion type="multiple" defaultValue={voucherLocations.map(l => l.locationId)} className="space-y-2">
+                                {voucherLocations.map(location => {
+                                    const totalQty = location.items.reduce((sum, i) => sum + i.issueQuantity, 0);
+                                    return (
+                                        <AccordionItem key={location.locationId} value={location.locationId} className="border rounded-lg px-4 bg-card">
+                                            <AccordionTrigger className="font-semibold text-sm hover:no-underline py-3">
+                                                <div className="flex items-center justify-between w-full pr-2">
+                                                    <span dir="ltr" className="truncate">{location.locationName}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="secondary">{location.items.length} items</Badge>
+                                                        <Badge variant="outline">{totalQty} units</Badge>
+                                                    </div>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="pb-2">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="text-xs">Item</TableHead>
+                                                            <TableHead className="w-[160px] text-center text-xs">Quantity</TableHead>
+                                                            <TableHead className="w-[40px] text-right"></TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                ))}
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {location.items.map(item => (
+                                                            <TableRow key={item.id} className="group">
+                                                                <TableCell className="py-2">
+                                                                    <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
+                                                                    <p className="text-xs text-muted-foreground">{item.category}</p>
+                                                                </TableCell>
+                                                                <TableCell className="py-2">
+                                                                    <div className="flex items-center justify-center gap-1">
+                                                                        <Button 
+                                                                            variant="outline" 
+                                                                            size="icon" 
+                                                                            className="h-7 w-7" 
+                                                                            onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity - 1)}
+                                                                        >
+                                                                            <Minus className="h-3 w-3" />
+                                                                        </Button>
+                                                                        <Input 
+                                                                            type="number" 
+                                                                            value={item.issueQuantity} 
+                                                                            onChange={(e) => handleQuantityChange(location.locationId, item.id, parseInt(e.target.value, 10) || 1)} 
+                                                                            className="w-14 h-7 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                                                        />
+                                                                        <Button 
+                                                                            variant="outline" 
+                                                                            size="icon" 
+                                                                            className="h-7 w-7" 
+                                                                            onClick={() => handleQuantityChange(location.locationId, item.id, item.issueQuantity + 1)}
+                                                                        >
+                                                                            <Plus className="h-3 w-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-right py-2">
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="icon" 
+                                                                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        onClick={() => handleRemoveItem(location.locationId, item.id)}
+                                                                    >
+                                                                        <Trash2 className="h-3 w-3 text-destructive"/>
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    );
+                                })}
                             </Accordion>
                         ) : (
-                            <div className="text-center text-muted-foreground p-8 h-[400px] flex items-center justify-center">
-                                No items added to the voucher yet.
+                            <div className="text-center text-muted-foreground h-full flex flex-col items-center justify-center">
+                                <PackagePlus className="h-16 w-16 mb-4 opacity-20" />
+                                <p className="text-sm font-medium">No items added to the voucher yet</p>
+                                <p className="text-xs mt-1">Select a location and add items to get started</p>
                             </div>
                         )}
                         </ScrollArea>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Keyboard Shortcuts Dialog */}
+            <Dialog open={showKeyboardShortcuts} onOpenChange={setShowKeyboardShortcuts}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Keyboard className="h-5 w-5" />
+                            Keyboard Shortcuts
+                        </DialogTitle>
+                        <DialogDescription>Speed up your workflow with these shortcuts</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Navigation</h4>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Focus Search</span>
+                                    <Badge variant="secondary" className="font-mono">Ctrl+K</Badge>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Clear Search</span>
+                                    <Badge variant="secondary" className="font-mono">Esc</Badge>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Show Shortcuts</span>
+                                    <Badge variant="secondary" className="font-mono">Ctrl+/</Badge>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Actions</h4>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Submit Voucher</span>
+                                    <Badge variant="secondary" className="font-mono">Ctrl+Enter</Badge>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Toggle Quick Add</span>
+                                    <Badge variant="secondary" className="font-mono">Ctrl+Q</Badge>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                        <p className="text-xs text-muted-foreground">
+                            <strong>Quick Add Mode:</strong> When enabled, clicking on an item instantly adds it with quantity 1 to the selected location.
+                        </p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
+        </TooltipProvider>
     );
 }

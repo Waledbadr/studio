@@ -82,6 +82,14 @@ const en = {
     recentDepreciation: 'Recent Depreciation',
     recentStockTransfers: 'Recent Stock Transfers',
     },
+    // Quick Actions
+    quickActions: {
+        addNewOrder: 'Add New Order',
+        addMaterialReceipt: 'Add Material Receipt',
+        issueMaterials: 'Issue Materials',
+        serviceOrder: 'Service Order',
+        maintenanceRequest: 'Maintenance Request',
+    },
     // Reports
     reportsTitle: 'Reports',
     reportsDescription: 'View and create reports for inventory, maintenance and more.',
@@ -502,6 +510,14 @@ const ar = {
     noServiceOrdersFound: 'لا توجد أوامر خدمة.',
     recentDepreciation: 'الاستهلاكات الأخيرة',
     recentStockTransfers: 'تحويلات المخزون الأخيرة',
+    },
+    // Quick Actions
+    quickActions: {
+        addNewOrder: 'اضافة طلب جديد',
+        addMaterialReceipt: 'اضافة استلام مواد',
+        issueMaterials: 'فتح توزيع الطلبات',
+        serviceOrder: 'طلب خدمة',
+        maintenanceRequest: 'طلب صيانة',
     },
     // Reports (AR)
     reportsTitle: 'التقارير',

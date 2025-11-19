@@ -9,9 +9,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // Disable source maps in production to avoid fetch errors
   productionBrowserSourceMaps: false,
   images: {

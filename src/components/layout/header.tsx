@@ -2,17 +2,19 @@
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing } from 'lucide-react';
+import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing, PlusCircle, Download, Truck, ClipboardList, Wrench } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -110,6 +112,83 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       </button>
 
       <div className="flex-1" />
+
+      {/* Quick Actions */}
+      <div className="flex items-center gap-1 mr-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50">
+                <Link href="/inventory/new-order">
+                  <PlusCircle className="h-5 w-5" />
+                  <span className="sr-only">{dict.quickActions?.addNewOrder || 'Add New Order'}</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{dict.quickActions?.addNewOrder || 'Add New Order'}</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/50">
+                <Link href="/inventory/receive/new-approval">
+                  <Download className="h-5 w-5" />
+                  <span className="sr-only">{dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/50">
+                <Link href="/inventory/issue">
+                  <Truck className="h-5 w-5" />
+                  <span className="sr-only">{dict.quickActions?.issueMaterials || 'Issue Materials'}</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{dict.quickActions?.issueMaterials || 'Issue Materials'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-fuchsia-600 hover:text-fuchsia-700 hover:bg-fuchsia-50 dark:text-fuchsia-400 dark:hover:bg-fuchsia-950/50">
+                <Link href="/inventory/service-orders/new">
+                  <ClipboardList className="h-5 w-5" />
+                  <span className="sr-only">{dict.quickActions?.serviceOrder || 'Service Order'}</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{dict.quickActions?.serviceOrder || 'Service Order'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50">
+                <Link href="/maintenance/new">
+                  <Wrench className="h-5 w-5" />
+                  <span className="sr-only">{dict.quickActions?.maintenanceRequest || 'Maintenance Request'}</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{dict.quickActions?.maintenanceRequest || 'Maintenance Request'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <div className="h-6 w-px bg-border mx-1" />
+      </div>
+
   {/* Feedback trigger in header */}
   <FeedbackWidget />
       <DropdownMenu>

@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -11,6 +12,14 @@ import { ManualSyncButton } from '@/components/accommodation/manual-sync-button'
 export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
   const { workers, occupants, residences, contracts, invoices, transferRequests, companies } = ctx;
+  const { currentUser } = useUsers();
+  
+  // Filter residences based on user role
+  const filteredResidences = useMemo(() => {
+    if (!currentUser) return residences;
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -22,7 +31,7 @@ export default function AccommodationOverviewPage() {
     // Occupancy by residence
     const occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
     
-    for (const res of residences) {
+    for (const res of filteredResidences) {
       let totalCapacity = 0;
       let totalRooms = 0;
 
@@ -319,7 +328,7 @@ export default function AccommodationOverviewPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {residences.map(res => {
+            {filteredResidences.map(res => {
               const data = metrics.occupancyByResidence[res.id] || { occupied: 0, capacity: 0, rooms: 0 };
               const rate = data.capacity > 0 ? Math.round((data.occupied / data.capacity) * 100) : 0;
               const statusColor = rate >= 90 ? 'bg-red-500' : rate >= 70 ? 'bg-orange-500' : 'bg-green-500';

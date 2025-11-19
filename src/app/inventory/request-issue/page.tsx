@@ -13,7 +13,7 @@ import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, Building as BuildingIcon, ConciergeBell, Loader2, Search, Plus, Trash2, Edit, ChevronDown, Clock, PlusCircle } from 'lucide-react';
+import { MapPin, Building as BuildingIcon, ConciergeBell, Loader2, Search, Plus, Trash2, Edit, ChevronDown, Clock, PlusCircle, ShoppingCart, Package, ArrowRight, Check, X, AlertCircle, FileText } from 'lucide-react';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,6 +23,11 @@ import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type IssueLine = { id: string; nameEn?: string; nameAr?: string; issueQuantity: number; overrideReason?: string | null };
 type LocationEntry = { locationId: string; locationName: string; isFacility: boolean; items: IssueLine[] };
@@ -34,6 +39,55 @@ export default function RequestIssuePage() {
   const { toast } = useToast();
   const { createOrder } = useOrders();
   const [isPending, startTransition] = useTransition();
+
+  // Resizable columns state
+  const [leftColWidth, setLeftColWidth] = useState(320);
+  const [rightColWidth, setRightColWidth] = useState(350);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeStateRef.current) return;
+      
+      const { startX, startWidth } = resizeStateRef.current;
+      const delta = e.clientX - startX;
+
+      if (isResizingLeft) {
+        // Left column: dragging right increases width
+        const newWidth = Math.max(250, Math.min(600, startWidth + delta));
+        setLeftColWidth(newWidth);
+      } else if (isResizingRight) {
+        // Right column: dragging left increases width (delta is negative when moving left)
+        // Wait, the right column is on the right side.
+        // If I drag the handle (which is on the left of the right column) to the left, the right column grows.
+        // So delta < 0 -> width increases.
+        const newWidth = Math.max(250, Math.min(600, startWidth - delta));
+        setRightColWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+      resizeStateRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    if (isResizingLeft || isResizingRight) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingLeft, isResizingRight]);
 
   // Residence (issue-from)
   const [residenceId, setResidenceId] = useState('');
@@ -542,423 +596,486 @@ export default function RequestIssuePage() {
   }
 
   return (
-    <div className="space-y-6 p-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-background">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
         <div>
-          <h1 className="text-2xl font-bold">Materials Request (MR) — with distribution</h1>
-          <p className="text-muted-foreground">Prepare a materials request distributed to one or more locations. If stock exists or lifespan is not reached, a justification is required.</p>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <FileText className="h-5 w-5 text-primary" />
+            Materials Request
+          </h1>
+          <p className="text-xs text-muted-foreground">Create and distribute material requests across locations</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => submit()} disabled={isSubmitting || voucherLocations.length === 0}>
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Send for approval
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-md border">
+            <span className="text-xs font-medium text-muted-foreground">Issue From:</span>
+            <Select value={residenceId} onValueChange={setResidenceId}>
+              <SelectTrigger className="h-7 w-[180px] border-0 bg-transparent focus:ring-0 p-0 text-sm font-semibold">
+                <SelectValue placeholder="Select Residence" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredResidences.map(r => (<SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={() => submit()} disabled={isSubmitting || voucherLocations.length === 0} size="sm">
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+            Submit Request
           </Button>
         </div>
-      </div>
+      </header>
 
-  <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-6 items-start">
-  {/* Left: Location selection + Available Inventory */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> Select location & items</CardTitle>
-                <CardDescription>Select residence and locations, then add and distribute items.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="whitespace-nowrap">Issue from:</Label>
-                <Select value={residenceId} onValueChange={setResidenceId}>
-                  <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select residence" /></SelectTrigger>
-                    <SelectContent>
-                      {filteredResidences.map(r => (<SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>))}
-                    </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h3 className="font-semibold text-sm">Location Type</h3>
-                <RadioGroup value={locationType} onValueChange={(value) => setLocationType(value as 'unit' | 'facility')} className="flex gap-4" disabled={!residenceId}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="unit" id="r_unit" />
-                    <Label htmlFor="r_unit" className="flex items-center gap-2"><BuildingIcon className="h-4 w-4" /> Unit</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="facility" id="r_facility" />
-                    <Label htmlFor="r_facility" className="flex items-center gap-2"><ConciergeBell className="h-4 w-4" /> Facility</Label>
-                  </div>
-                </RadioGroup>
-                <div className="flex items-center gap-2 pt-1">
-                  <Switch id="multi-locations" checked={multiMode} onCheckedChange={(v) => { setMultiMode(Boolean(v)); setSelectedTargets([]); }} disabled={!residenceId} />
-                  <Label htmlFor="multi-locations" className="text-sm">Select multiple locations</Label>
-                  {multiMode && selectedTargets.length > 0 && (
-                    <span className="text-xs text-muted-foreground">• Selected: {selectedTargets.length}</span>
-                  )}
-                  {multiMode && selectedTargets.length > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedTargets([])}>Clear</Button>
-                  )}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Panel: Selection & Catalog */}
+        <div className="flex-1 flex flex-row min-w-0 border-r bg-muted/10" style={{}}>
+          
+          {/* Location Selector Section - Left Column */}
+          <div style={{ width: leftColWidth }} className="flex flex-col border-r bg-card shrink-0">
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  Target Location
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="multi-mode" className="text-xs cursor-pointer">Multi-select</Label>
+                  <Switch id="multi-mode" checked={multiMode} onCheckedChange={(v) => { setMultiMode(Boolean(v)); setSelectedTargets([]); }} disabled={!residenceId} className="scale-75" />
                 </div>
-                
-                {/* Selected Location Display */}
-                {(currentLocation || (multiMode && selectedTargets.length > 0)) && (
-                  <div className="p-3 bg-muted/50 rounded-md border-l-4 border-l-primary">
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      <span className="font-medium">Selected Location:</span>
-                    </div>
-                    {!multiMode ? (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        <PathDisplay path={currentLocation?.name} />
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mt-1">{selectedTargets.length} selected</p>
-                    )}
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              </div>
+
+              <Tabs value={locationType} onValueChange={(v) => setLocationType(v as any)} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="unit" className="text-xs">Unit / Room</TabsTrigger>
+                  <TabsTrigger value="facility" className="text-xs">Facility / Common Area</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <div className="flex-1 overflow-hidden p-4 space-y-4 flex flex-col">
+              {locationType === 'unit' ? (
+                <>
                   {/* Building Selection */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Building</Label>
-                    {!residenceId ? (
-                      <div className="text-xs text-muted-foreground mb-2">Select a residence first.</div>
-          ) : visibleBuildings.length === 0 ? (
-                      <div className="text-xs text-muted-foreground mb-2">No buildings available.</div>
-                    ) : (
-                      <div className="space-y-2 max-h-[480px] overflow-y-auto">
-            {visibleBuildings.map(b => (
-                          <div
-                            key={b.id}
-                            onClick={() => setBuildingId(buildingId === b.id ? '' : b.id)}
-                            className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                              buildingId === b.id 
-                                ? 'bg-primary text-primary-foreground border-primary' 
-                                : 'bg-background hover:bg-muted/50 border-border'
-                            } ${!residenceId ? 'opacity-50 pointer-events-none' : ''}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <BuildingIcon className="h-4 w-4" />
-                              <span className="text-sm font-medium">{b.name}</span>
+                  <div className={`flex flex-col min-h-0 transition-all duration-300 ease-in-out ${buildingId ? 'h-24 flex-none' : 'flex-1'}`}>
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Building</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
+                        {!residenceId ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select residence</div>
+                        ) : visibleBuildings.length === 0 ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">No buildings</div>
+                        ) : (
+                          visibleBuildings.map(b => (
+                            <div
+                              key={b.id}
+                              onClick={() => setBuildingId(buildingId === b.id ? '' : b.id)}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors flex items-center gap-2 ${
+                                buildingId === b.id 
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              <BuildingIcon className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{b.name}</span>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
-                    )}
+                    </ScrollArea>
                   </div>
 
                   {/* Floor Selection */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Floor</Label>
-                    {!buildingId ? (
-                      <div className="text-xs text-muted-foreground mb-2">Select a building first.</div>
-          ) : visibleFloors.length === 0 ? (
-                      <div className="text-xs text-muted-foreground mb-2">No floors available.</div>
-                    ) : (
-                      <div className="space-y-2 max-h-[480px] overflow-y-auto">
-            {visibleFloors.map(f => (
-                          <div
-                            key={f.id}
-                            onClick={() => setFloorId(floorId === f.id ? '' : f.id)}
-                            className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                              floorId === f.id 
-                                ? 'bg-primary text-primary-foreground border-primary' 
-                                : 'bg-background hover:bg-muted/50 border-border'
-                            } ${!buildingId ? 'opacity-50 pointer-events-none' : ''}`}
-                          >
-                            <div className="text-center">
-                              <span className="text-sm font-medium">{f.name}</span>
+                  <div className={`flex flex-col min-h-0 transition-all duration-300 ease-in-out ${floorId ? 'h-24 flex-none' : 'flex-1'}`}>
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Floor</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
+                        {!buildingId ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select building</div>
+                        ) : visibleFloors.length === 0 ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">No floors</div>
+                        ) : (
+                          visibleFloors.map(f => (
+                            <div
+                              key={f.id}
+                              onClick={() => setFloorId(floorId === f.id ? '' : f.id)}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors text-center ${
+                                floorId === f.id 
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              {f.name}
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
-                    )}
+                    </ScrollArea>
                   </div>
 
-                  {/* Room/Facility Selection */}
-                  <div>
-                    {locationType === 'unit' ? (
-                      <>
-                        <Label className="text-sm font-medium mb-2 block">Room</Label>
+                  {/* Room Selection */}
+                  <div className="flex flex-col flex-1 min-h-0 transition-all duration-300 ease-in-out">
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Room</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
                         {!floorId ? (
-                          <div className="text-xs text-muted-foreground mb-2">Select a floor first.</div>
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select floor</div>
                         ) : rooms.length === 0 ? (
-                          <div className="text-xs text-muted-foreground mb-2">No rooms available.</div>
+                          <div className="text-xs text-muted-foreground p-2 text-center">No rooms</div>
                         ) : (
-                          <div className="space-y-2 max-h-[480px] overflow-y-auto">
-                            {rooms.map(r => (
-                              <div
-                                key={r.id}
-                                onClick={() => {
-                                  if (!multiMode) { setRoomId(roomId === r.id ? '' : r.id); return; }
-                                  const id = r.id;
-                                  const name = `${selectedResidence?.name || ''} -> ${buildings.find(b=>b.id===buildingId)?.name || ''} -> ${floors.find(f=>f.id===floorId)?.name || ''} -> ${r.name}`;
-                                  setSelectedTargets(prev => prev.some(t => t.id === id) ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: false }]);
-                                }}
-                                className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                                  (!multiMode && roomId === r.id) || (multiMode && selectedTargets.some(t => t.id === r.id))
-                                    ? 'bg-primary text-primary-foreground border-primary' 
-                                    : 'bg-background hover:bg-muted/50 border-border'
-                                } ${!floorId ? 'opacity-50 pointer-events-none' : ''}`}
-                              >
-                                <div className="text-center">
-                                  <span className="text-sm font-medium">{r.name}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Label className="text-sm font-medium mb-2 block">Facility</Label>
-                        {!residenceId ? (
-                          <div className="text-xs text-muted-foreground mb-2">Select a residence first.</div>
-            ) : visibleFacilities.length === 0 ? (
-                          <div className="text-xs text-muted-foreground mb-2">No facilities available.</div>
-                        ) : (
-                          <div className="space-y-2 max-h-[480px] overflow-y-auto">
-              {visibleFacilities.map(f => (
-                              <div
-                                key={f.id}
-                                onClick={() => {
-                                  if (!multiMode) { setFacilityId(facilityId === f.id ? '' : f.id); return; }
-                                  const id = f.id;
-                                  const parts = [selectedResidence?.name];
-                                  const b = buildings.find(b => b.id === buildingId); if (b) parts?.push(b.name);
-                                  const fl = floors.find(fl => fl.id === floorId); if (fl) parts?.push(fl.name);
-                                  parts?.push(f.name);
-                                  const name = parts?.filter(Boolean).join(' -> ') || f.name;
-                                  setSelectedTargets(prev => {
-                                    const exists = prev.some(t => t.id === id);
-                                    let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
-                                    // If facility is being added, remove its components from targets to avoid duplication
-                                    if (!exists) {
-                                      const compIds = (availableComponents || []).map(c => c.id);
-                                      next = next.filter(t => !compIds.includes(t.id));
-                                    }
-                                    return next;
-                                  });
-                                  // Also toggle facilityId for filtering and component visibility in multi-mode
-                                  setFacilityId(prev => prev === f.id ? '' : f.id);
-                                }}
-                                className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                                  (!multiMode && facilityId === f.id) || (multiMode && selectedTargets.some(t => t.id === f.id))
-                                    ? 'bg-primary text-primary-foreground border-primary' 
-                                    : 'bg-background hover:bg-muted/50 border-border'
-                                } ${!residenceId ? 'opacity-50 pointer-events-none' : ''}`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <ConciergeBell className="h-4 w-4" />
-                                  <span className="text-sm font-medium"><span dir="ltr">{f.name}</span></span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Moved: Component Selection below the grid for clearer placement */}
-                {locationType === 'facility' && facilityId && availableComponents.length > 0 && (
-                  <div className="mt-4">
-                    <Label className="text-sm font-medium mb-1 block">Select Component (Optional)</Label>
-                    <div className="max-h-[300px] overflow-y-auto">
-                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
-                        {availableComponents.map((component: FacilityComponent) => (
-                          <div
-                            key={component.id}
-                            onClick={() => {
-                              if (!multiMode) {
-                                setComponentId(componentId === component.id ? '' : component.id);
-                                return;
-                              }
-                              // Multi-mode: toggle component as a separate target
-                              const id = component.id;
-                              const parts = [selectedResidence?.name];
-                              const b = buildings.find(b => b.id === buildingId); if (b) (parts as any)?.push(b.name);
-                              const fl = floors.find(fl => fl.id === floorId); if (fl) (parts as any)?.push(fl.name);
-                              const fac = availableFacilities.find(f => f.id === facilityId); if (fac) (parts as any)?.push(fac.name);
-                              (parts as any)?.push(component.name);
-                              const name = (parts as any)?.filter(Boolean).join(' -> ') || component.name;
-                              setSelectedTargets(prev => {
-                                const exists = prev.some(t => t.id === id);
-                                let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
-                                // If any component under current facility is selected, remove the base facility target to avoid duplication
-                                if (facilityId) {
-                                  next = next.filter(t => t.id !== facilityId);
-                                }
-                                return next;
-                              });
-                            }}
-                            className={`p-2 rounded-md border cursor-pointer text-xs transition-colors flex items-center gap-2 ${
-                              (!multiMode && componentId === component.id) || (multiMode && selectedTargets.some(t => t.id === component.id))
-                                ? 'bg-primary text-primary-foreground border-primary' 
-                                : 'bg-background hover:bg-muted/50 border-border'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-sm flex-shrink-0">
-                                {component.type === 'light' ? '💡' : 
-                                 component.type === 'outlet' ? '🔌' : 
-                                 component.type === 'switch' ? '⚡' : 
-                                 component.type === 'fan' ? '🌀' : '⚙️'}
-                              </span>
-                              <span className="font-medium truncate" title={component.name}>{component.name}</span>
+                          rooms.map(r => (
+                            <div
+                              key={r.id}
+                              onClick={() => {
+                                if (!multiMode) { setRoomId(roomId === r.id ? '' : r.id); return; }
+                                const id = r.id;
+                                const name = `${selectedResidence?.name || ''} -> ${buildings.find(b=>b.id===buildingId)?.name || ''} -> ${floors.find(f=>f.id===floorId)?.name || ''} -> ${r.name}`;
+                                setSelectedTargets(prev => prev.some(t => t.id === id) ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: false }]);
+                              }}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors text-center ${
+                                (!multiMode && roomId === r.id) || (multiMode && selectedTargets.some(t => t.id === r.id))
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              {r.name}
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
-                    </div>
+                    </ScrollArea>
                   </div>
+                </>
+              ) : (
+                <>
+                  {/* Building Selection (Facility) */}
+                  <div className={`flex flex-col min-h-0 transition-all duration-300 ease-in-out ${buildingId ? 'h-24 flex-none' : 'flex-1'}`}>
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Building (Optional)</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
+                        {!residenceId ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select residence</div>
+                        ) : visibleBuildings.length === 0 ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">No buildings</div>
+                        ) : (
+                          visibleBuildings.map(b => (
+                            <div
+                              key={b.id}
+                              onClick={() => setBuildingId(buildingId === b.id ? '' : b.id)}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors flex items-center gap-2 ${
+                                buildingId === b.id 
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              <BuildingIcon className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{b.name}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Floor Selection (Facility) */}
+                  <div className={`flex flex-col min-h-0 transition-all duration-300 ease-in-out ${floorId ? 'h-24 flex-none' : 'flex-1'}`}>
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Floor (Optional)</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
+                        {!buildingId ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select building first</div>
+                        ) : visibleFloors.length === 0 ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">No floors</div>
+                        ) : (
+                          visibleFloors.map(f => (
+                            <div
+                              key={f.id}
+                              onClick={() => setFloorId(floorId === f.id ? '' : f.id)}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors text-center ${
+                                floorId === f.id 
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              {f.name}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Facility Selection */}
+                  <div className={`flex flex-col min-h-0 transition-all duration-300 ease-in-out ${facilityId ? 'h-24 flex-none' : 'flex-1'}`}>
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Facility</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 space-y-1">
+                        {!residenceId ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">Select residence</div>
+                        ) : visibleFacilities.length === 0 ? (
+                          <div className="text-xs text-muted-foreground p-2 text-center">No facilities</div>
+                        ) : (
+                          visibleFacilities.map(f => (
+                            <div
+                              key={f.id}
+                              onClick={() => {
+                                if (!multiMode) { setFacilityId(facilityId === f.id ? '' : f.id); return; }
+                                const id = f.id;
+                                const parts = [selectedResidence?.name];
+                                const b = buildings.find(b => b.id === buildingId); if (b) parts?.push(b.name);
+                                const fl = floors.find(fl => fl.id === floorId); if (fl) parts?.push(fl.name);
+                                parts?.push(f.name);
+                                const name = parts?.filter(Boolean).join(' -> ') || f.name;
+                                setSelectedTargets(prev => {
+                                  const exists = prev.some(t => t.id === id);
+                                  let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
+                                  if (!exists) {
+                                    const compIds = (availableComponents || []).map(c => c.id);
+                                    next = next.filter(t => !compIds.includes(t.id));
+                                  }
+                                  return next;
+                                });
+                                setFacilityId(prev => prev === f.id ? '' : f.id);
+                              }}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors flex items-center gap-2 ${
+                                (!multiMode && facilityId === f.id) || (multiMode && selectedTargets.some(t => t.id === f.id))
+                                  ? 'bg-primary text-primary-foreground font-medium' 
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              <ConciergeBell className="h-3 w-3 shrink-0" />
+                              <span className="truncate" dir="auto">{f.name}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Component Selection */}
+                  <div className="flex flex-col flex-1 min-h-0 transition-all duration-300 ease-in-out">
+                    <Label className="text-xs font-medium mb-2 text-muted-foreground">Component (Optional)</Label>
+                    <ScrollArea className="flex-1 border rounded-md bg-background">
+                      <div className="p-1 grid grid-cols-2 gap-1">
+                        {!facilityId ? (
+                          <div className="col-span-2 text-xs text-muted-foreground p-2 text-center">Select facility</div>
+                        ) : availableComponents.length === 0 ? (
+                          <div className="col-span-2 text-xs text-muted-foreground p-2 text-center">No components</div>
+                        ) : (
+                          availableComponents.map(c => (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                if (!multiMode) {
+                                  setComponentId(componentId === c.id ? '' : c.id);
+                                  return;
+                                }
+                                const id = c.id;
+                                const parts = [selectedResidence?.name];
+                                const b = buildings.find(b => b.id === buildingId); if (b) (parts as any)?.push(b.name);
+                                const fl = floors.find(fl => fl.id === floorId); if (fl) (parts as any)?.push(fl.name);
+                                const fac = availableFacilities.find(f => f.id === facilityId); if (fac) (parts as any)?.push(fac.name);
+                                (parts as any)?.push(c.name);
+                                const name = (parts as any)?.filter(Boolean).join(' -> ') || c.name;
+                                setSelectedTargets(prev => {
+                                  const exists = prev.some(t => t.id === id);
+                                  let next = exists ? prev.filter(t => t.id !== id) : [...prev, { id, name, isFacility: true }];
+                                  if (facilityId) {
+                                    next = next.filter(t => t.id !== facilityId);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors flex items-center gap-1 border ${
+                                (!multiMode && componentId === c.id) || (multiMode && selectedTargets.some(t => t.id === c.id))
+                                  ? 'bg-primary text-primary-foreground border-primary font-medium' 
+                                  : 'hover:bg-muted border-transparent'
+                              }`}
+                            >
+                              <span className="shrink-0">
+                                {c.type === 'light' ? '💡' : 
+                                 c.type === 'outlet' ? '🔌' : 
+                                 c.type === 'switch' ? '⚡' : 
+                                 c.type === 'fan' ? '🌀' : '⚙️'}
+                              </span>
+                              <span className="truncate">{c.name}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </>
+              )}
+              
+              {/* Selected Location Indicator */}
+              <div className="mt-auto p-2 bg-primary/5 rounded border border-primary/20 flex items-center justify-between min-h-[2.5rem]">
+                <div className="flex items-center gap-2 text-sm overflow-hidden">
+                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                  {multiMode ? (
+                    <span className="font-medium truncate">{selectedTargets.length} locations selected</span>
+                  ) : (
+                    <span className="font-medium truncate text-primary">
+                      {currentLocation ? <PathDisplay path={currentLocation.name} /> : <span className="text-muted-foreground italic">No location selected</span>}
+                    </span>
+                  )}
+                </div>
+                {multiMode && selectedTargets.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setSelectedTargets([])}>Clear</Button>
                 )}
               </div>
+            </div>
+          </div>
 
-              <div className="space-y-4">
-                <h3 className="font-semibold text-sm">Available Inventory</h3>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Search items..."
-                    className="pl-8 w-full"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value)}>
-                  <SelectTrigger><SelectValue placeholder="Filter by category" /></SelectTrigger>
-                  <SelectContent className="z-50" position="popper" side="bottom" sideOffset={4}>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {allItems && allItems.length > 0 ? (
-                      categories.map(cat => (
-                        <SelectItem key={cat} value={cat!} className="capitalize">{cat}</SelectItem>
-                      ))
-                    ) : (
-                      <>
-                        <SelectItem value="electrical">Electrical</SelectItem>
-                        <SelectItem value="plumbing">Plumbing</SelectItem>
-                        <SelectItem value="hvac">HVAC</SelectItem>
-                        <SelectItem value="cleaning">Cleaning</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                <ScrollArea className="h-[300px] border rounded-md">
-                  {residenceId ? (
-                    <div className="p-2 space-y-2">
-                      {recentItems.length > 0 && !searchQuery && selectedCategory === 'all' && (
-                        <div className="border-b pb-2 mb-2">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <h4 className="text-sm font-medium text-muted-foreground">Recently Used Items</h4>
-                          </div>
-                          <div className="space-y-2">
-                            {recentItems.map(item => {
-                              const stock = getStockForResidence(item, residenceId);
-                              const allocated = getAggregateIssuedQty(item.id);
-                              const remaining = Math.max(0, stock - allocated);
-                              return (
-                                <div key={`recent-${item.id}`} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                                  <div>
-                                    <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
-                                    <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <AddItemButton item={item} disabled={!isLocationSelected} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+          {/* Drag Handle Left */}
+          <div
+            className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-50 bg-border/30"
+            onMouseDown={(e) => {
+              setIsResizingLeft(true);
+              resizeStateRef.current = { startX: e.clientX, startWidth: leftColWidth };
+            }}
+          />
 
-                      {availableInventory.length > 0 ? availableInventory.map(item => {
-                        const stock = getStockForResidence(item, residenceId);
-                        const allocated = getAggregateIssuedQty(item.id);
-                        const remaining = Math.max(0, stock - allocated);
-                        return (
-                          <div key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-muted/50 border">
-                            <div>
-                              <p className="font-medium text-sm">{item.nameAr} / {item.nameEn}</p>
-                              <p className="text-xs text-muted-foreground">{item.category} - Stock: {remaining} / {stock} {item.unit}</p>
+          {/* Item Catalog Section - Middle Column */}
+          <div className="flex-1 flex flex-col min-w-0 bg-background">
+            <div className="p-3 border-b flex items-center gap-3 bg-card">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search items..." 
+                  className="pl-9 h-9" 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 overflow-auto p-0">
+              <Table>
+                <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                  <TableRow>
+                    <TableHead className="w-[40%] min-w-[200px]">Item Name</TableHead>
+                    <TableHead className="w-[20%] min-w-[100px]">Category</TableHead>
+                    <TableHead className="w-[15%] min-w-[80px] text-center">Unit</TableHead>
+                    <TableHead className="w-[15%] min-w-[80px] text-right">Stock</TableHead>
+                    <TableHead className="w-[10%] min-w-[60px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!residenceId ? (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">Select a residence to view inventory</TableCell></TableRow>
+                  ) : availableInventory.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No items found</TableCell></TableRow>
+                  ) : (
+                    availableInventory.map(item => {
+                      const stock = getStockForResidence(item, residenceId);
+                      const allocated = getAggregateIssuedQty(item.id);
+                      const remaining = Math.max(0, stock - allocated);
+                      return (
+                        <TableRow key={item.id} className="group h-12">
+                          <TableCell className="font-medium align-middle">
+                            <div className="flex flex-col justify-center">
+                              <span className="leading-tight">{item.nameEn}</span>
+                              <span className="text-[10px] text-muted-foreground leading-tight">{item.nameAr}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}
-                              >
-                                <Edit className="h-4 w-4" />
+                          </TableCell>
+                          <TableCell className="align-middle"><Badge variant="outline" className="font-normal text-xs">{item.category}</Badge></TableCell>
+                          <TableCell className="align-middle text-center text-xs text-muted-foreground">{item.unit || '-'}</TableCell>
+                          <TableCell className="text-right font-mono align-middle">
+                            <div className="flex flex-col items-end justify-center">
+                              <span className={`text-sm font-bold ${remaining === 0 ? "text-destructive" : "text-foreground"}`}>{remaining}</span>
+                              <span className="text-[10px] text-muted-foreground">of {stock}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-middle">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}>
+                                <Edit className="h-3.5 w-3.5" />
                               </Button>
                               <AddItemButton item={item} disabled={!isLocationSelected} />
                             </div>
-                          </div>
-                        );
-                      }) : (
-                        searchQuery || selectedCategory !== 'all' ? (
-                          <div className="text-center text-muted-foreground py-10">
-                            <p className="mb-4">No items found matching your criteria.</p>
-                            {searchQuery && <Button onClick={() => setAddDialogVisible(true)}><PlusCircle className="mr-2 h-4 w-4" /> Add "{searchQuery}"</Button>}
-                          </div>
-                        ) : (
-                          <div className="text-center text-muted-foreground py-10">Start typing to search for items.</div>
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                      Select a residence to see items.
-                    </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
-                </ScrollArea>
-
-                {/* Per-line justification captured during add; no global field needed. */}
-              </div>
+                </TableBody>
+              </Table>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Right: Voucher Items (like MR/Issue) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Voucher items</CardTitle>
-            <CardDescription>Review items per location before submitting.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Drag Handle Right */}
+        <div
+          className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-50 bg-border/30"
+          onMouseDown={(e) => {
+            setIsResizingRight(true);
+            resizeStateRef.current = { startX: e.clientX, startWidth: rightColWidth };
+          }}
+        />
+
+        {/* Right Panel: Voucher / Cart */}
+        <div style={{ width: rightColWidth }} className="border-l bg-card flex flex-col shadow-xl z-20 shrink-0">
+          <div className="p-4 border-b bg-muted/10">
+            <h3 className="font-semibold flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Request Voucher
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {voucherLocations.reduce((acc, loc) => acc + loc.items.length, 0)} items across {voucherLocations.length} locations
+            </p>
+          </div>
+          
+          <ScrollArea className="flex-1 p-4">
             {voucherLocations.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No items added yet.</div>
+              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground border-2 border-dashed rounded-lg m-2">
+                <Package className="h-8 w-8 mb-2 opacity-20" />
+                <p className="text-sm">Voucher is empty</p>
+                <p className="text-xs">Select location & add items</p>
+              </div>
             ) : (
-              <div className="space-y-4">
-                {voucherLocations.map(loc => (
-                  <div key={loc.locationId} className="rounded-md border">
-                    <div className="flex items-center justify-between border-b p-3">
-                      <div className="font-medium"><PathDisplay path={loc.locationName} /></div>
+              <div className="space-y-6">
+                {voucherLocations.map((loc, i) => (
+                  <div key={loc.locationId} className="relative pl-4 border-l-2 border-primary/20">
+                    <div className="absolute -left-[5px] top-0 h-2.5 w-2.5 rounded-full bg-primary" />
+                    <div className="mb-2">
+                      <h4 className="text-sm font-semibold text-primary leading-tight">
+                        <PathDisplay path={loc.locationName} />
+                      </h4>
                     </div>
-                    <div className="divide-y">
+                    <div className="space-y-2">
                       {loc.items.map(line => (
-                        <div key={`${loc.locationId}:${line.id}:${line.nameEn || line.nameAr || ''}`} className="flex items-center justify-between p-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate font-medium">{line.nameEn || line.nameAr || line.id}</div>
-                            {!!line.overrideReason && <div className="text-xs text-amber-700">Override: {line.overrideReason}</div>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <QuantityStepper value={line.issueQuantity} min={1} onValueChange={(v) => updateLineQty(loc.locationId, line.id, v)} />
-                            <Button variant="destructive" size="icon" onClick={() => removeLine(loc.locationId, line.id)}>
-                              <Trash2 className="h-4 w-4" />
+                        <div key={`${loc.locationId}-${line.id}`} className="bg-muted/30 p-2 rounded-md text-sm group hover:bg-muted/50 transition-colors">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{line.nameEn || line.nameAr}</p>
+                              {line.overrideReason && (
+                                <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-0.5">
+                                  <AlertCircle className="h-3 w-3" /> {line.overrideReason}
+                                </p>
+                              )}
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive -mr-1"
+                              onClick={() => removeLine(loc.locationId, line.id)}
+                            >
+                              <X className="h-3 w-3" />
                             </Button>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-muted-foreground">Qty:</span>
+                            <QuantityStepper 
+                              value={line.issueQuantity} 
+                              min={1} 
+                              onValueChange={(v) => updateLineQty(loc.locationId, line.id, v)} 
+                            />
                           </div>
                         </div>
                       ))}
@@ -967,34 +1084,43 @@ export default function RequestIssuePage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </ScrollArea>
+          
+          <div className="p-4 border-t bg-muted/10">
+             <Button className="w-full" onClick={() => submit()} disabled={isSubmitting || voucherLocations.length === 0}>
+               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+               Proceed to Approval
+             </Button>
+          </div>
+        </div>
       </div>
-  <AddItemDialog
-    isOpen={isAddDialogVisible}
-    onOpenChange={setAddDialogVisible}
-    onItemAdded={addItem}
-    onItemAddedAndOrdered={handleNewItemAdded}
-    initialName={searchQuery}
-  />
-  <EditItemDialog isOpen={editDialogOpen} onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }} onItemUpdated={handleItemUpdated} item={itemToEdit} />
-  {/* Justification dialog */}
-  <Dialog open={justOpen} onOpenChange={(v) => { setJustOpen(v); if (!v && justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Justification required</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-2">
-        <Label htmlFor="just-text">Provide a clear justification for this item.</Label>
-        <Input id="just-text" value={justText} onChange={(e) => setJustText(e.target.value)} placeholder="Enter justification..." />
-        <p className="text-xs text-muted-foreground">Required when stock exists in residence and/or lifespan not reached.</p>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={() => { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>Cancel</Button>
-        <Button onClick={() => { if (justText.trim().length >= 3) { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(justText.trim()); justificationResolver.current = null; } } }} disabled={justText.trim().length < 3}>Confirm</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+
+      {/* Dialogs */}
+      <AddItemDialog
+        isOpen={isAddDialogVisible}
+        onOpenChange={setAddDialogVisible}
+        onItemAdded={addItem}
+        onItemAddedAndOrdered={handleNewItemAdded}
+        initialName={searchQuery}
+      />
+      <EditItemDialog isOpen={editDialogOpen} onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }} onItemUpdated={handleItemUpdated} item={itemToEdit} />
+      
+      <Dialog open={justOpen} onOpenChange={(v) => { setJustOpen(v); if (!v && justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Justification required</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="just-text">Provide a clear justification for this item.</Label>
+            <Input id="just-text" value={justText} onChange={(e) => setJustText(e.target.value)} placeholder="Enter justification..." />
+            <p className="text-xs text-muted-foreground">Required when stock exists in residence and/or lifespan not reached.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(null); justificationResolver.current = null; } }}>Cancel</Button>
+            <Button onClick={() => { if (justText.trim().length >= 3) { setJustOpen(false); if (justificationResolver.current) { justificationResolver.current(justText.trim()); justificationResolver.current = null; } } }} disabled={justText.trim().length < 3}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

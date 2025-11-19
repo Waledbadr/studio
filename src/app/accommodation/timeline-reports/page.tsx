@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,14 @@ export default function TimelineReportsPage() {
     workers,
     residences,
   } = useAccommodation();
+  const { currentUser } = useUsers();
+  
+  // Filter residences based on user role
+  const filteredResidences = useMemo(() => {
+    if (!currentUser) return residences;
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
 
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
@@ -221,7 +230,7 @@ export default function TimelineReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">جميع السكنات</SelectItem>
-                  {residences.map(r => (
+                  {filteredResidences.map(r => (
                     <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                   ))}
                 </SelectContent>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Package, PackageOpen, ListOrdered, ClipboardMinus, GitBranch, Move, ArrowDownRight } from 'lucide-react';
+import { ArrowUpRight, Activity, Wrench, CheckCircle2, Loader2, Package, PackageOpen, ListOrdered, ClipboardMinus, GitBranch, Move, ArrowDownRight, PlusCircle, Download, Truck, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { useMaintenance } from "@/context/maintenance-context";
 import { useOrders, type Order } from "@/context/orders-context";
@@ -198,7 +198,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* Pair: Recent Service Orders + Recent Maintenance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <Card className="border-t-4 border-blue-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">

@@ -12,6 +12,7 @@ import { Building, DoorOpen, MapPin, Pencil, Users, ChevronDown, Search, Layers,
 import { useLanguage } from '@/context/language-context';
 import { useResidences, type Room, type Complex, type Floor, type Building as BuildingType } from '@/context/residences-context';
 import { useAccommodation } from '@/context/accommodation-context';
+import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 
@@ -22,6 +23,7 @@ export default function AccommodationResidencesView() {
   const { dict } = useLanguage();
   const { residences, updateComplex, loading } = useResidences();
   const { occupants } = useAccommodation();
+  const { currentUser } = useUsers();
   const { toast } = useToast();
 
   const [viewMode, setViewMode] = useState<'cards' | 'tree' | 'board'>('cards');
@@ -89,9 +91,16 @@ export default function AccommodationResidencesView() {
     return Array.from(citySet).sort();
   }, [residences]);
 
+  // Filter residences based on user role and assigned residences
+  const userResidences = useMemo(() => {
+    if (!currentUser) return residences;
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
+
   // Filter residences based on search and city
   const filteredResidences = useMemo(() => {
-    let filtered = residences;
+    let filtered = userResidences;
     
     // Apply city filter
     if (cityFilter !== 'all') {
@@ -121,7 +130,7 @@ export default function AccommodationResidencesView() {
       
       return false;
     });
-  }, [residences, deferredSearch, cityFilter]);
+  }, [userResidences, deferredSearch, cityFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {

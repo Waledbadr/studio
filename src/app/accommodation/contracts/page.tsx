@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAccommodation, type Contract } from '@/context/accommodation-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,14 @@ export default function ContractsPage() {
   const companyFilter = searchParams?.get('company');
   
   const { contracts, companies, residences, occupants, workers, saveContract, deleteContract, getInvoicesByContract } = useAccommodation();
+  const { currentUser } = useUsers();
+  
+  // Filter residences based on user role
+  const filteredResidences = useMemo(() => {
+    if (!currentUser) return residences;
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+  }, [currentUser, residences]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -199,7 +208,7 @@ export default function ContractsPage() {
                         <SelectValue placeholder="Select residence" />
                       </SelectTrigger>
                       <SelectContent>
-                        {residences.map(residence => (
+                        {filteredResidences.map(residence => (
                           <SelectItem key={residence.id} value={residence.id}>
                             {residence.name}
                           </SelectItem>

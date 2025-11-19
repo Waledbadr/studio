@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, AlertTriangle, AlertCircle, Users, Building2, FileText, Download } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ReportsPage() {
   const { 
@@ -189,6 +190,60 @@ export default function ReportsPage() {
           <Download className="h-4 w-4 mr-2" />
           Export All Reports
         </Button>
+      </div>
+
+      {/* Printable Reports Quick Access */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Link href="/accommodation/reports/vacancy">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-indigo-600" />
+                Vacancy Report
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/accommodation/reports/nationality-distribution">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4 text-purple-600" />
+                Nationality Dist.
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/accommodation/reports/overcrowding">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+                Overcrowding
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/accommodation/reports/workers-by-company">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4 text-cyan-600" />
+                Workers by Company
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/accommodation/reports/unassigned-workers">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-slate-600" />
+                Unassigned Workers
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
 
       <Tabs defaultValue="occupancy" className="space-y-4">
