@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, query, limit, Unsubscribe } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
@@ -36,6 +36,7 @@ export type Residence = {
   name: string;
   address?: string;
   location?: Location;
+  managerId?: string; // Added managerId
   buildings?: Building[]; // optional — some APIs return nested buildings/floors
   rooms?: Room[]; // fallback when buildings are not present
 };
@@ -52,6 +53,7 @@ export type Worker = {
 };
 
 export type Occupant = {
+  id?: string; // Firestore Document ID
   workerId: string;
   residenceId: string;
   buildingId?: string;
@@ -198,6 +200,28 @@ type AccommodationContextValue = {
   getRoomHistory: (residenceId: string, roomId: string) => AccommodationHistory[];
   getHistoryByDateRange: (startDate: string, endDate: string) => AccommodationHistory[];
   
+  // ⚡ Optimized Async Operations (Direct Firestore)
+  findWorkerAsync: (queryStr: string) => Promise<Worker[]>;
+  getWorkersByIds: (ids: string[]) => Promise<Worker[]>; // NEW
+  checkWorkerOccupancy: (workerId: string) => Promise<Occupant | null>; // NEW
+  checkInWorkerAsync: (params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    checkInDate?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  checkOutWorkerAsync: (params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    checkOutDate?: string;
+    performedBy: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  getRoomOccupantsAsync: (residenceId: string, roomId: string) => Promise<Occupant[]>;
+  importWorkersBatch: (workersList: Worker[]) => Promise<{ ok: boolean; count?: number; error?: string }>;
+  deleteAllWorkers: () => Promise<{ ok: boolean; count?: number; error?: string }>;
+
   // 🚨 EMERGENCY: Manual sync function to replace real-time listeners
   manualSyncFromFirestore: () => Promise<{ ok: boolean; totalReads: number; error?: string }>;
   
@@ -216,6 +240,7 @@ type AccommodationContextValue = {
     checkInDate?: string;
     notes?: string;
     performedBy: string;
+    silent?: boolean;
   }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
   
   checkOutWorkerEnhanced: (params: {
@@ -333,6 +358,7 @@ type AccommodationContextValue = {
   getContractsByCompany: (companyId: string) => Contract[];
   getInvoicesByContract: (contractId: string) => Invoice[];
   getActiveContractsForResidence: (residenceId: string) => Contract[];
+  fetchOccupantsForFloor: (residenceId: string, floorId: string) => Promise<void>;
 };
 
 export const AccommodationContext = createContext<AccommodationContextValue | undefined>(undefined);
@@ -429,63 +455,56 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       });
 
       // Fetch with limits to minimize reads
-      const [workersSnap, occupantsSnap, companiesSnap, contractsSnap, invoicesSnap, historySnap] = await Promise.all([
-        getDocs(query(collection(db, 'workers'), limit(500))),
-        getDocs(query(collection(db, 'occupants'), limit(1000))),
+      // DISABLED: Workers and Occupants fetch disabled to prevent large reads. Only metadata is synced.
+      const [companiesSnap, contractsSnap, invoicesSnap, residencesSnap] = await Promise.all([
+        // getDocs(query(collection(db, 'workers'), limit(2000))),
+        // getDocs(query(collection(db, 'occupants'), limit(2000))),
         getDocs(query(collection(db, 'companies'), limit(100))),
         getDocs(query(collection(db, 'contracts'), limit(200))),
         getDocs(query(collection(db, 'invoices'), limit(300))),
-        getDocs(query(collection(db, 'accommodationHistory'), limit(500))),
+        getDocs(query(collection(db, 'residences'))), // Fetch all residences (usually small collection)
+        // getDocs(query(collection(db, 'accommodationHistory'), limit(500))),
       ]);
 
-      const totalReads = workersSnap.size + occupantsSnap.size + companiesSnap.size + 
-                        contractsSnap.size + invoicesSnap.size + historySnap.size;
+      const totalReads = companiesSnap.size + contractsSnap.size + invoicesSnap.size + residencesSnap.size;
 
       console.log(`📊 [Manual Sync] Total reads: ${totalReads}`);
 
-      const newWorkers = workersSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Worker[];
-      const newOccupants = occupantsSnap.docs.map(d => {
-        const data = d.data();
-        return {
-          workerId: data.workerId || '',
-          residenceId: data.residenceId || '',
-          roomId: data.roomId || '',
-          since: data.since || new Date().toISOString(),
-          buildingId: data.buildingId,
-          floorId: data.floorId,
-          until: data.until,
-          checkInBy: data.checkInBy,
-          checkOutBy: data.checkOutBy,
-          notes: data.notes,
-        } as Occupant;
-      });
+      // const newWorkers = workersSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Worker[];
+      // const newOccupants = occupantsSnap.docs.map(d => { ... }) as Occupant[];
       const newCompanies = companiesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Company[];
       const newContracts = contractsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Contract[];
       const newInvoices = invoicesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Invoice[];
-      const newHistory = historySnap.docs.map(d => ({ id: d.id, ...d.data() })) as AccommodationHistory[];
+      const newResidences = residencesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[]; // Cast to any to avoid type mismatch with Residence vs Complex
 
-      setWorkers(newWorkers);
-      setOccupants(newOccupants);
+      // setWorkers(newWorkers);
+      // setOccupants(newOccupants);
       setCompanies(newCompanies);
       setContracts(newContracts);
       setInvoices(newInvoices);
-      setAccommodationHistory(newHistory);
+      // setAccommodationHistory(newHistory);
+      
+      // Update residences in local storage so ResidencesContext can pick it up on reload
+      localStorage.setItem('estatecare_residences', JSON.stringify(newResidences));
+      
+      // Also update local state if we are using it
+      setResidences(newResidences.map(mapComplexToResidence));
 
       // Save to localStorage
-      localStorage.setItem('ac_workers', JSON.stringify(newWorkers));
-      localStorage.setItem('ac_occupants', JSON.stringify(newOccupants));
+      // localStorage.setItem('ac_workers', JSON.stringify(newWorkers));
+      // localStorage.setItem('ac_occupants', JSON.stringify(newOccupants));
       localStorage.setItem('ac_companies', JSON.stringify(newCompanies));
       localStorage.setItem('ac_contracts', JSON.stringify(newContracts));
       localStorage.setItem('ac_invoices', JSON.stringify(newInvoices));
-      localStorage.setItem('ac_history', JSON.stringify(newHistory));
+      // localStorage.setItem('ac_history', JSON.stringify(newHistory));
 
       console.log('✅ [Manual Sync] Complete:', {
-        workers: newWorkers.length,
-        occupants: newOccupants.length,
+        // workers: newWorkers.length,
+        // occupants: newOccupants.length,
         companies: newCompanies.length,
         contracts: newContracts.length,
         invoices: newInvoices.length,
-        history: newHistory.length,
+        // history: newHistory.length,
         totalReads,
       });
 
@@ -666,12 +685,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // Initialize additional domain data from localStorage if present.
   useEffect(() => {
     try {
-      const w = typeof window !== "undefined" ? localStorage.getItem("ac_workers") : null;
-      const o = typeof window !== "undefined" ? localStorage.getItem("ac_occupants") : null;
+      // DISABLED: Local storage for workers/occupants disabled per user request
+      // const w = typeof window !== "undefined" ? localStorage.getItem("ac_workers") : null;
+      // const o = typeof window !== "undefined" ? localStorage.getItem("ac_occupants") : null;
       const t = typeof window !== "undefined" ? localStorage.getItem("ac_transfers") : null;
       const n = typeof window !== "undefined" ? localStorage.getItem("ac_notifications") : null;
-      if (w) setWorkers(JSON.parse(w));
-      if (o) setOccupants(JSON.parse(o));
+      // if (w) setWorkers(JSON.parse(w));
+      // if (o) setOccupants(JSON.parse(o));
       if (t) setTransferRequests(JSON.parse(t));
       if (n) setNotifications(JSON.parse(n));
     } catch (e) {
@@ -689,7 +709,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     console.log('� [EMERGENCY MODE] Workers Firestore listener DISABLED - loading from localStorage only');
     
     // Load from localStorage instead of real-time Firestore listener
-    loadWorkersFromLocalStorage();
+    // loadWorkersFromLocalStorage(); // DISABLED per user request to stop local storage reliance
 
     // ❌ DISABLED: All Firestore listeners removed to prevent 12K reads per operation
     // Previously this code would call startWorkersListener() and set up onAuthStateChanged
@@ -735,7 +755,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     console.log('ℹ️ [EMERGENCY MODE] Use manual sync button to update from Firestore');
     
     // Load from localStorage on mount
-    loadAllFromLocalStorage();
+    // loadAllFromLocalStorage(); // DISABLED per user request to stop local storage reliance
     
     // NO FIRESTORE LISTENERS - They were causing 12K reads per operation!
     /*
@@ -795,8 +815,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
-      localStorage.setItem("ac_workers", JSON.stringify(workers));
-      localStorage.setItem("ac_occupants", JSON.stringify(occupants));
+      // DISABLED: Local storage for workers/occupants disabled per user request
+      // localStorage.setItem("ac_workers", JSON.stringify(workers));
+      // localStorage.setItem("ac_occupants", JSON.stringify(occupants));
       localStorage.setItem("ac_history", JSON.stringify(accommodationHistory)); // NEW
       localStorage.setItem("ac_transfers", JSON.stringify(transferRequests));
       localStorage.setItem("ac_notifications", JSON.stringify(notifications));
@@ -893,18 +914,22 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       if (db) {
         await deleteDoc(doc(db, 'workers', id));
-        return;
+        // Continue to update local state manually since listeners are disabled
       }
     } catch (e) {
       console.error('deleteWorker (firestore) failed', e);
     }
 
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('ac_workers') : null;
-      const list: Worker[] = raw ? JSON.parse(raw) : [];
-      const updated = list.filter(w => w.id !== id);
-      if (typeof window !== 'undefined') localStorage.setItem('ac_workers', JSON.stringify(updated));
-      setWorkers(updated);
+      // Update state directly first for responsiveness
+      setWorkers(prev => {
+        const updated = prev.filter(w => w.id !== id);
+        // Also update localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ac_workers', JSON.stringify(updated));
+        }
+        return updated;
+      });
     } catch (e) {
       console.error('deleteWorker (local) failed', e);
     }
@@ -1134,6 +1159,281 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
     return { perResidence, perOccupant };
   }
+
+  // ⚡ Optimized Async Operations
+  const findWorkerAsync = useCallback(async (queryStr: string) => {
+    if (!db || !queryStr.trim()) return [];
+    const term = queryStr.trim();
+    
+    // 1. Try ID Number (Exact)
+    const qId = query(collection(db, 'workers'), where('idNumber', '==', term), limit(5));
+    const snapId = await getDocs(qId);
+    if (!snapId.empty) return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+
+    // 2. Try Employee ID (Exact)
+    const qEmp = query(collection(db, 'workers'), where('employeeId', '==', term), limit(5));
+    const snapEmp = await getDocs(qEmp);
+    if (!snapEmp.empty) return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+
+    // 3. Try Name (Prefix) - efficient range query
+    const qName = query(collection(db, 'workers'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'), limit(5));
+    const snapName = await getDocs(qName);
+    if (!snapName.empty) return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+
+    return [];
+  }, [db]);
+
+  // Fetch multiple workers by ID (for display)
+  const getWorkersByIds = useCallback(async (ids: string[]) => {
+    if (!db || ids.length === 0) return [];
+    
+    // Filter out IDs we already have in state
+    const missingIds = ids.filter(id => !workers.find(w => w.id === id));
+    if (missingIds.length === 0) return [];
+
+    // Fetch missing
+    // Firestore 'in' query is limited to 10 (or 30). We'll do parallel getDoc for simplicity and robustness
+    // or chunks of 10 if we expect many. Parallel getDoc is fine for < 20.
+    
+    const fetchedWorkers: Worker[] = [];
+    const chunks = [];
+    const chunkSize = 10;
+    for (let i = 0; i < missingIds.length; i += chunkSize) {
+      chunks.push(missingIds.slice(i, i + chunkSize));
+    }
+
+    for (const chunk of chunks) {
+      // Use 'in' query for efficiency if possible, but IDs are document keys usually.
+      // If IDs are document keys, we can use documentId().
+      // But let's stick to parallel getDoc for now as it's simplest for mixed ID types (though we assume doc ID here)
+      
+      const promises = chunk.map(id => getDoc(doc(db!, 'workers', id)));
+      const snaps = await Promise.all(promises);
+      
+      snaps.forEach(snap => {
+        if (snap.exists()) {
+          fetchedWorkers.push({ id: snap.id, ...snap.data() } as Worker);
+        }
+      });
+    }
+
+    if (fetchedWorkers.length > 0) {
+      setWorkers(prev => {
+        // Merge and deduplicate
+        const existingIds = new Set(prev.map(w => w.id));
+        const newOnes = fetchedWorkers.filter(w => !existingIds.has(w.id));
+        return [...prev, ...newOnes];
+      });
+    }
+    
+    return fetchedWorkers;
+  }, [db, workers]);
+
+  const checkWorkerOccupancy = useCallback(async (workerId: string) => {
+    if (!db) return null;
+    if (!workerId || typeof workerId !== 'string') {
+      console.warn('checkWorkerOccupancy: invalid workerId', workerId);
+      return null;
+    }
+    try {
+      const q = query(
+        collection(db, 'occupants'),
+        where('workerId', '==', workerId),
+        where('until', '==', null),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as Occupant;
+    } catch (e) {
+      console.error("checkWorkerOccupancy failed", e);
+      return null;
+    }
+  }, [db]);
+
+  const getRoomOccupantsAsync = useCallback(async (residenceId: string, roomId: string) => {
+    if (!db || !residenceId || !roomId) return [];
+    try {
+      const q = query(
+        collection(db, 'occupants'), 
+        where('residenceId', '==', residenceId),
+        where('roomId', '==', roomId),
+        where('until', '==', null)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Occupant[];
+    } catch (e) {
+      console.error("getRoomOccupantsAsync failed", e);
+      return [];
+    }
+  }, [db]);
+
+  const fetchOccupantsForFloor = useCallback(async (residenceId: string, floorId: string) => {
+    if (!db || !residenceId || !floorId) return;
+    try {
+      const q = query(
+        collection(db, 'occupants'),
+        where('residenceId', '==', residenceId),
+        where('floorId', '==', floorId),
+        where('until', '==', null)
+      );
+      const snap = await getDocs(q);
+      const floorOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Occupant[];
+      
+      setOccupants(prev => {
+        // Remove existing occupants for this floor to avoid duplicates/stale data
+        const otherOccupants = prev.filter(o => o.floorId !== floorId);
+        return [...otherOccupants, ...floorOccupants];
+      });
+    } catch (e) {
+      console.error("Failed to fetch floor occupants", e);
+    }
+  }, [db]);
+
+  const checkInWorkerAsync = useCallback(async (params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    checkInDate?: string;
+    performedBy: string;
+  }) => {
+    if (!db) return { ok: false, error: 'DB not available' };
+    
+    // 1. Fetch Worker (to check nationality and role)
+    // Use getDoc for direct ID lookup instead of query
+    const workerRef = doc(db, 'workers', params.workerId);
+    const workerSnap = await getDoc(workerRef);
+    
+    let worker: Worker;
+    if (workerSnap.exists()) {
+      worker = { id: workerSnap.id, ...workerSnap.data() } as Worker;
+    } else {
+      // Fallback: Try query if ID is not the document key (legacy support)
+      const q = query(collection(db, 'workers'), where('id', '==', params.workerId), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) return { ok: false, error: 'worker-not-found' };
+      worker = { id: snap.docs[0].id, ...snap.docs[0].data() } as Worker;
+    }
+
+    // 2. Fetch Room Occupants (to check capacity & nationality)
+    const occupants = await getRoomOccupantsAsync(params.residenceId, params.roomId);
+    
+    // 3. Validate Room
+    const room = findRoom(params.residenceId, params.roomId);
+    if (!room) {
+      console.error(`Room not found: ${params.residenceId} / ${params.roomId}. Residences loaded: ${residences.length}`);
+      return { ok: false, error: 'room-not-found' };
+    }
+    
+    // 4. Dynamic Rules Check (Nationality & Role/Capacity)
+    let effectiveRole = worker.role || 'Worker';
+    
+    if (occupants.length > 0) {
+      const firstOcc = occupants[0];
+      
+      // Fetch first occupant details to determine room's current "state"
+      const firstWorkerRef = doc(db, 'workers', firstOcc.workerId);
+      const firstWorkerSnap = await getDoc(firstWorkerRef);
+      
+      if (firstWorkerSnap.exists()) {
+        const firstWorker = firstWorkerSnap.data() as Worker;
+        
+        // Rule 1: Nationality Mismatch
+        // If room has occupants, new worker must match their nationality
+        if (firstWorker.nationaliy && worker.nationaliy && firstWorker.nationaliy !== worker.nationaliy) {
+          return { ok: false, error: 'nationality-mismatch' };
+        }
+        
+        // Rule 2: Role Mismatch (implied by dynamic capacity)
+        // If room is occupied by Supervisor, only Supervisor can enter (to maintain capacity logic)
+        const currentRoomRole = firstWorker.role || 'Worker';
+        if (currentRoomRole !== effectiveRole) {
+           return { ok: false, error: 'role-mismatch' };
+        }
+        
+        effectiveRole = currentRoomRole;
+      }
+    }
+
+    // Calculate Dynamic Capacity based on Effective Role
+    // Worker: 4 sqm/person, Supervisor: 8 sqm/person, Engineer: 16 sqm/person
+    // Default to 4 if spaceSqm is missing
+    const spaceSqm = room.spaceSqm || 16; 
+    const sqmPerPerson = effectiveRole === 'Engineer' ? 16 : effectiveRole === 'Supervisor' ? 8 : 4;
+    const cap = Math.floor(spaceSqm / sqmPerPerson);
+    
+    if (occupants.length >= cap) return { ok: false, error: 'room-full' };
+
+    // 5. Create Occupant
+    const newOcc: any = {
+      workerId: params.workerId,
+      residenceId: params.residenceId,
+      roomId: params.roomId,
+      since: params.checkInDate || new Date().toISOString(),
+      checkInBy: params.performedBy,
+      until: null
+    };
+    
+    const docRef = await addDoc(collection(db, 'occupants'), newOcc);
+    newOcc.id = docRef.id;
+    
+    // Update local state: Sync this room's occupants
+    setOccupants(prev => {
+      // Keep occupants from other rooms
+      const otherRooms = prev.filter(o => o.roomId !== params.roomId);
+      
+      // Get existing occupants for this room from state
+      const currentRoomOccupants = prev.filter(o => o.roomId === params.roomId);
+      
+      // Merge with fetched occupants (deduplicate by ID or workerId)
+      const mergedMap = new Map();
+      
+      // 1. Add fetched occupants (might be stale)
+      occupants.forEach(o => mergedMap.set(o.workerId, o));
+      
+      // 2. Add existing local occupants (might have recent additions)
+      currentRoomOccupants.forEach(o => mergedMap.set(o.workerId, o));
+      
+      // 3. Add the new one
+      mergedMap.set(newOcc.workerId, newOcc);
+      
+      return [...otherRooms, ...Array.from(mergedMap.values())];
+    });
+    
+    return { ok: true };
+  }, [db, getRoomOccupantsAsync, residences]);
+
+  const checkOutWorkerAsync = useCallback(async (params: {
+    workerId: string;
+    residenceId: string;
+    roomId: string;
+    checkOutDate?: string;
+    performedBy: string;
+  }) => {
+    if (!db) return { ok: false, error: 'DB not available' };
+    
+    const q = query(
+      collection(db, 'occupants'),
+      where('workerId', '==', params.workerId),
+      where('residenceId', '==', params.residenceId),
+      where('roomId', '==', params.roomId),
+      where('until', '==', null)
+    );
+    const snap = await getDocs(q);
+    
+    if (snap.empty) return { ok: false, error: 'occupant-not-found' };
+    
+    const docRef = snap.docs[0].ref;
+    await updateDoc(docRef, {
+      until: params.checkOutDate || new Date().toISOString(),
+      checkOutBy: params.performedBy
+    });
+    
+    // Update local state immediately
+    setOccupants(prev => prev.filter(o => o.workerId !== params.workerId));
+    
+    return { ok: true };
+  }, [db]);
 
   // ============ COMPANY CRUD ============
   async function saveCompany(company: Company | Omit<Company, 'id' | 'createdAt'>) {
@@ -1400,7 +1700,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   
   // Helper: Create history record
   async function createHistoryRecord(historyData: Omit<AccommodationHistory, 'id'>): Promise<string> {
-    const id = `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+       const id = `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const history: AccommodationHistory = {
       ...historyData,
       id,
@@ -1442,212 +1742,56 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     checkInDate?: string;
     notes?: string;
     performedBy: string;
+    silent?: boolean;
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
-      console.log('🔵 [checkInWorker] Starting with params:', params);
-      console.log('📊 [checkInWorker] Current state:', {
-        workersCount: workers.length,
-        residencesCount: residences.length,
-        occupantsCount: occupants.length,
-        hasDb: !!db,
-        hasAuth: !!auth?.currentUser
-      });
+      console.log('🔵 [checkInWorker] Starting optimized check-in:', params);
       
-      // Re-validate residences if empty
-      if (residences.length === 0) {
-        console.warn('⚠️ [checkInWorker] Residences list is empty, attempting to reload from localStorage...');
-        try {
-          const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
-          if (stored) {
-            const parsed = JSON.parse(stored || "[]");
-            const freshResidences = (parsed || []).map(mapComplexToResidence);
-            setResidences(freshResidences);
-            console.log('✅ [checkInWorker] Reloaded residences from localStorage:', freshResidences.length);
-          }
-        } catch (reloadErr) {
-          console.error('❌ [checkInWorker] Failed to reload residences:', reloadErr);
-        }
-      }
-      
-      // Re-validate workers list from Firestore if empty or not found
-      if (workers.length === 0 && db) {
-        console.warn('⚠️ [checkInWorker] Workers list is empty, attempting to reload from Firestore...');
-        try {
-          const workersSnapshot = await getDocs(collection(db, 'workers'));
-          const freshWorkers = workersSnapshot.docs.map((d) => {
-            const data = d.data();
-            const role = data?.role;
-            const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
-            return {
-              id: d.id,
-              name: typeof data?.name === "string" ? data.name : "",
-              employeeId: typeof data?.employeeId === "string" ? data.employeeId : undefined,
-              idNumber: typeof data?.idNumber === "string" ? data.idNumber : undefined,
-              nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
-              company: typeof data?.company === "string" ? data.company : undefined,
-              role: normalizedRole,
-            } satisfies Worker;
-          });
-          setWorkers(freshWorkers);
-          console.log('✅ [checkInWorker] Reloaded workers from Firestore:', freshWorkers.length);
-        } catch (reloadErr) {
-          console.error('❌ [checkInWorker] Failed to reload workers:', reloadErr);
-        }
-      }
-      
-      const w = workers.find(x => x.id === params.workerId);
-      if (!w) {
-        console.error('❌ [checkInWorker] Worker not found:', params.workerId);
-        console.error('Available workers:', workers.map(w => ({ id: w.id, name: w.name })));
-        toast({
-          title: "خطأ: العامل غير موجود",
-          description: `لم يتم العثور على العامل (ID: ${params.workerId}). الرجاء التحقق من قاعدة البيانات والمحاولة مرة أخرى.`,
-          variant: "destructive",
-        });
-        return { ok: false, error: "worker-not-found" };
-      }
-
-      // Check if worker is already assigned
-      const existing = occupants.find(o => o.workerId === params.workerId && !o.until);
-      if (existing) {
-        console.warn('⚠️ [checkInWorker] Worker already assigned:', existing);
-        toast({
-          title: "خطأ: العامل مسكّن بالفعل",
-          description: `العامل ${w.name} مسكّن حالياً في غرفة أخرى. يجب إخراجه أولاً.`,
-          variant: "destructive",
-        });
-        return { ok: false, error: "worker-already-assigned" };
-      }
-
-      // Re-validate residences if empty
-      if (residences.length === 0) {
-        console.warn('⚠️ [checkInWorker] Residences list is empty, attempting to reload from localStorage...');
-        try {
-          const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
-          if (stored) {
-            const parsed = JSON.parse(stored || "[]");
-            const freshResidences = (parsed || []).map(mapComplexToResidence);
-            setResidences(freshResidences);
-            console.log('✅ [checkInWorker] Reloaded residences from localStorage:', freshResidences.length);
-          }
-        } catch (reloadErr) {
-          console.error('❌ [checkInWorker] Failed to reload residences:', reloadErr);
-        }
-      }
-
-      const room = findRoom(params.residenceId, params.roomId);
-      if (!room) {
-        console.error('❌ [checkInWorker] Room not found:', { residenceId: params.residenceId, roomId: params.roomId });
-        console.error('Available residences:', residences.map(r => ({ id: r.id, name: r.name, buildings: r.buildings?.length })));
-        
-        // Detailed debugging: show building/floor structure
-        const res = residences.find(r => r.id === params.residenceId);
-        if (res) {
-          console.error('Target residence found:', res.name);
-          console.error('Buildings:', res.buildings?.map(b => ({ id: b.id, name: b.name, floorsCount: b.floors?.length })));
-          if (params.buildingId) {
-            const bld = res.buildings?.find(b => b.id === params.buildingId);
-            if (bld) {
-              console.error('Target building found:', bld.name);
-              console.error('Floors:', bld.floors?.map(f => ({ id: f.id, name: f.name, roomsCount: f.rooms?.length, roomIds: f.rooms?.map(r => r.id) })));
-            } else {
-              console.error('Building NOT found in residence!');
-            }
-          }
-        } else {
-          console.error('Residence ID not found in context!');
-        }
-        
-        toast({
-          title: "خطأ: الغرفة غير موجودة",
-          description: `لم يتم العثور على الغرفة (ID: ${params.roomId}) في المبنى (ID: ${params.residenceId}). الرجاء التحقق من البيانات.`,
-          variant: "destructive",
-        });
-        return { ok: false, error: "room-not-found" };
-      }
-      
-      // More lenient check - allow operation even if metadata is missing
-      const spaceSqm = room.spaceSqm || 20; // Default 20 sqm
-      const roomType = room.roomType || 'Worker'; // Default to Worker
-      
-      console.log('✅ [checkInWorker] Room found:', { roomId: room.id, spaceSqm, roomType });
-
-      // Nationality check
-      const roomOccupants = occupants.filter(o => 
-        o.roomId === params.roomId && 
-        o.residenceId === params.residenceId && 
-        !o.until
-      );
-      
-      console.log('👥 [checkInWorker] Current room occupants:', roomOccupants.length);
-      
-      if (roomOccupants.length > 0) {
-        const firstWorker = workers.find(x => x.id === roomOccupants[0].workerId);
-        if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
-          console.warn('⚠️ [checkInWorker] Nationality mismatch:', { 
-            roomNationality: firstWorker.nationaliy, 
-            workerNationality: w.nationaliy 
-          });
-          return { ok: false, error: "nationality-mismatch" };
-        }
-      }
-
-      // Capacity check
-      const cap = calcCapacityFromSpace(spaceSqm, roomType);
-      console.log('📊 [checkInWorker] Capacity check:', { capacity: cap, occupied: roomOccupants.length });
-      
-      if (roomOccupants.length >= cap) {
-        console.warn('⚠️ [checkInWorker] Room is full');
-        return { ok: false, error: "room-full" };
-      }
-
-      const checkInDate = params.checkInDate || new Date().toISOString();
-
-      // Create occupant record
-      const occupant: Occupant = {
+      // Use optimized async check-in (no massive reads)
+      const result = await checkInWorkerAsync({
         workerId: params.workerId,
         residenceId: params.residenceId,
         roomId: params.roomId,
-        buildingId: params.buildingId,
-        floorId: params.floorId,
-        since: checkInDate,
-        checkInBy: params.performedBy,
-        notes: params.notes,
-      };
+        checkInDate: params.checkInDate,
+        performedBy: params.performedBy
+      });
 
-      console.log('💾 [checkInWorker] Creating occupant record:', occupant);
-
-      // Save occupant to Firestore first (if available)
-      let occupantId = `occ_${params.workerId}_${Date.now()}`;
-      
-      try {
-        if (db) {
-          console.log('📤 [checkInWorker] Saving to Firestore...');
-          await setDoc(doc(db, 'occupants', occupantId), occupant);
-          console.log('✅ [checkInWorker] Saved to Firestore');
-        } else {
-          console.log('⏭️ [checkInWorker] Firestore not available, using local only');
+      if (!result.ok) {
+        if (!params.silent) {
+          toast({
+            title: "فشل التسكين",
+            description: result.error || 'حدث خطأ غير متوقع',
+            variant: "destructive",
+          });
         }
-      } catch (firestoreError) {
-        console.error('⚠️ [checkInWorker] Firestore save failed, continuing with local:', firestoreError);
+        return { ok: false, error: result.error };
       }
 
-      // Update local state
-      setOccupants(prev => [...prev, occupant]);
-      console.log('✅ [checkInWorker] Updated local state');
-
-      // Get residence name for history (optional - don't let it fail the operation)
+      // Create history record (best effort)
       let historyId: string | undefined;
       try {
-        const residence = residences.find(r => r.id === params.residenceId);
+        // Fetch worker details for history if not in local cache
+        let workerName = workers.find(w => w.id === params.workerId)?.name;
+        let workerNat = workers.find(w => w.id === params.workerId)?.nationaliy;
         
-        // Create history record (don't fail if this errors)
+        if (!workerName && db) {
+           const snap = await getDocs(query(collection(db, 'workers'), where('id', '==', params.workerId), limit(1)));
+           if (!snap.empty) {
+             const d = snap.docs[0].data();
+             workerName = d.name;
+             workerNat = d.nationaliy;
+           }
+        }
+
+        const residence = residences.find(r => r.id === params.residenceId);
+        const room = findRoom(params.residenceId, params.roomId);
+
         historyId = await createHistoryRecord({
           workerId: params.workerId,
-          workerName: w.name,
-          workerNationality: w.nationaliy,
+          workerName: workerName || 'Unknown',
+          workerNationality: workerNat,
           actionType: 'CHECK_IN',
-          actionDate: checkInDate,
+          actionDate: params.checkInDate || new Date().toISOString(),
           actionBy: params.performedBy,
           residenceId: params.residenceId,
           residenceName: residence?.name,
@@ -1658,27 +1802,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           notes: params.notes,
           createdAt: new Date().toISOString(),
         });
-        console.log('✅ [checkInWorker] History record created:', historyId);
       } catch (historyError) {
         console.warn('⚠️ [checkInWorker] History record failed (non-critical):', historyError);
       }
 
-      toast({
-        title: "تم التسكين بنجاح ✅",
-        description: `تم تسكين ${w.name} في ${room?.name || 'الغرفة ' + params.roomId}`,
-      });
+      if (!params.silent) {
+        toast({
+          title: "تم التسكين بنجاح ✅",
+          description: `تم تسكين العامل بنجاح`,
+        });
+      }
 
-      console.log('🎉 [checkInWorker] Check-in completed successfully');
       return { ok: true, historyId };
     } catch (e: any) {
       console.error('❌ [checkInWorker] Failed with error:', e);
-      
-      toast({
-        title: "فشل التسكين",
-        description: e.message || 'حدث خطأ غير متوقع',
-        variant: "destructive",
-      });
-      
       return { ok: false, error: e.message || 'unknown-error' };
     }
   }
@@ -1692,135 +1829,72 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     performedBy: string;
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
-      console.log('🔵 [checkOutWorker] Starting with params:', params);
-      console.log('📊 [checkOutWorker] Current state:', {
-        workersCount: workers.length,
-        occupantsCount: occupants.length,
-        hasDb: !!db,
-        hasAuth: !!auth?.currentUser
+      console.log('🔵 [checkOutWorker] Starting optimized check-out:', params);
+      
+      // Find active occupant record (local or remote)
+      let occ = occupants.find(o => o.workerId === params.workerId && !o.until);
+      
+      if (!occ && db) {
+         const q = query(collection(db, 'occupants'), where('workerId', '==', params.workerId), where('until', '==', null));
+         const snap = await getDocs(q);
+         if (!snap.empty) {
+             occ = { id: snap.docs[0].id, ...snap.docs[0].data() } as any;
+         }
+      }
+
+      if (!occ) {
+          return { ok: false, error: 'occupant-not-found' };
+      }
+
+      // Use optimized async check-out
+      const result = await checkOutWorkerAsync({
+        workerId: params.workerId,
+        residenceId: occ.residenceId,
+        roomId: occ.roomId,
+        checkOutDate: params.checkOutDate,
+        performedBy: params.performedBy
       });
-      
-      // Re-validate workers list if empty
-      if (workers.length === 0 && db) {
-        console.warn('⚠️ [checkOutWorker] Workers list is empty, attempting to reload from Firestore...');
-        try {
-          const workersSnapshot = await getDocs(collection(db, 'workers'));
-          const freshWorkers = workersSnapshot.docs.map((d) => {
-            const data = d.data();
-            const role = data?.role;
-            const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
-            return {
-              id: d.id,
-              name: typeof data?.name === "string" ? data.name : "",
-              employeeId: typeof data?.employeeId === "string" ? data.employeeId : undefined,
-              idNumber: typeof data?.idNumber === "string" ? data.idNumber : undefined,
-              nationaliy: typeof data?.nationaliy === "string" ? data.nationaliy : "",
-              company: typeof data?.company === "string" ? data.company : undefined,
-              role: normalizedRole,
-            } satisfies Worker;
-          });
-          setWorkers(freshWorkers);
-          console.log('✅ [checkOutWorker] Reloaded workers from Firestore:', freshWorkers.length);
-        } catch (reloadErr) {
-          console.error('❌ [checkOutWorker] Failed to reload workers:', reloadErr);
-        }
-      }
-      
-      const w = workers.find(x => x.id === params.workerId);
-      if (!w) {
-        console.error('❌ [checkOutWorker] Worker not found:', params.workerId);
-        console.error('Available workers:', workers.map(w => ({ id: w.id, name: w.name })));
-        toast({
-          title: "خطأ: العامل غير موجود",
-          description: `لم يتم العثور على العامل (ID: ${params.workerId}). الرجاء التحقق من قاعدة البيانات.`,
-          variant: "destructive",
-        });
-        return { ok: false, error: "worker-not-found" };
-      }
 
-      // Re-load occupants if needed
-      if (occupants.length === 0 && db) {
-        console.warn('⚠️ [checkOutWorker] Occupants list is empty, attempting to reload from Firestore...');
-        try {
-          const occupantsSnapshot = await getDocs(collection(db, 'occupants'));
-          const freshOccupants = occupantsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
-          setOccupants(freshOccupants);
-          console.log('✅ [checkOutWorker] Reloaded occupants from Firestore:', freshOccupants.length);
-        } catch (reloadErr) {
-          console.error('❌ [checkOutWorker] Failed to reload occupants:', reloadErr);
-        }
+      if (!result.ok) {
+        return { ok: false, error: result.error };
       }
-
-      const occupant = occupants.find(o => o.workerId === params.workerId && !o.until);
-      if (!occupant) {
-        console.error('❌ [checkOutWorker] Worker is not currently assigned');
-        console.error('Current occupants:', occupants.filter(o => !o.until).map(o => ({ workerId: o.workerId, roomId: o.roomId })));
-        toast({
-          title: "خطأ: العامل غير مسكّن",
-          description: `العامل ${w.name} غير مسكّن حالياً في أي غرفة.`,
-          variant: "destructive",
-        });
-        return { ok: false, error: "worker-not-assigned" };
-      }
-
-      const checkOutDate = params.checkOutDate || new Date().toISOString();
-      const checkInDate = new Date(occupant.since);
-      const checkOutDateObj = new Date(checkOutDate);
-      const duration = Math.ceil((checkOutDateObj.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      const room = findRoom(occupant.residenceId, occupant.roomId);
-      const residence = residences.find(r => r.id === occupant.residenceId);
 
       // Create history record
-      const historyId = await createHistoryRecord({
-        workerId: params.workerId,
-        workerName: w.name,
-        workerNationality: w.nationaliy,
-        actionType: 'CHECK_OUT',
-        actionDate: checkOutDate,
-        actionBy: params.performedBy,
-        residenceId: occupant.residenceId,
-        residenceName: residence?.name,
-        buildingId: occupant.buildingId,
-        floorId: occupant.floorId,
-        roomId: occupant.roomId,
-        roomName: room?.name,
-        reason: params.reason,
-        notes: params.notes,
-        duration,
-        createdAt: new Date().toISOString(),
-      });
-
-      // Update occupant record
-      const updatedOccupant: Occupant = {
-        ...occupant,
-        until: checkOutDate,
-        checkOutBy: params.performedBy,
-        notes: params.notes ? `${occupant.notes || ''}\nCheck-out: ${params.notes}` : occupant.notes,
-      };
-
-      if (db) {
-        // Find and update the occupant document
-        const occupantsRef = collection(db, 'occupants');
-        const q = query(occupantsRef);
-        const snapshot = await getDocs(q);
-        const occupantDoc = snapshot.docs.find(d => {
-          const data = d.data();
-          return data.workerId === params.workerId && !data.until;
-        });
-        
-        if (occupantDoc) {
-          await setDoc(doc(db, 'occupants', occupantDoc.id), updatedOccupant);
+      let historyId: string | undefined;
+      try {
+        let workerName = workers.find(w => w.id === params.workerId)?.name;
+        if (!workerName && db) {
+           const snap = await getDocs(query(collection(db, 'workers'), where('id', '==', params.workerId), limit(1)));
+           if (!snap.empty) workerName = snap.docs[0].data().name;
         }
+
+        const residence = residences.find(r => r.id === occ!.residenceId);
+        const room = findRoom(occ!.residenceId, occ!.roomId);
+
+        historyId = await createHistoryRecord({
+          workerId: params.workerId,
+          workerName: workerName || 'Unknown',
+          actionType: 'CHECK_OUT',
+          actionDate: params.checkOutDate || new Date().toISOString(),
+          actionBy: params.performedBy,
+          residenceId: occ!.residenceId,
+          residenceName: residence?.name,
+          buildingId: occ!.buildingId,
+          floorId: occ!.floorId,
+          roomId: occ!.roomId,
+          roomName: room?.name || occ!.roomId,
+          notes: params.notes,
+          reason: params.reason,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (historyError) {
+        console.warn('History record failed', historyError);
       }
 
-      setOccupants(prev => prev.map(o => 
-        o.workerId === params.workerId && !o.until ? updatedOccupant : o
-      ));
-
       toast({
-        title: "تم الإخراج بنجاح",
-        description: `تم إخراج ${w.name} بعد ${duration} يوم`,
+
+        title: "تم الإخراج بنجاح ✅",
+        description: `تم إخراج العامل بنجاح`,
       });
 
       return { ok: true, historyId };
@@ -1923,29 +1997,23 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         notes: params.notes,
       };
 
-      if (db) {
-        // Update old occupant
-        const occupantsRef = collection(db, 'occupants');
-        const q = query(occupantsRef);
-        const snapshot = await getDocs(q);
-        const occupantDoc = snapshot.docs.find(d => {
-          const data = d.data();
-          return data.workerId === params.workerId && !data.until;
-        });
-        
-        if (occupantDoc) {
-          await setDoc(doc(db, 'occupants', occupantDoc.id), updatedCurrentOccupant);
-        }
+      // Perform Check-Out
+      await checkOutWorkerAsync({
+        workerId: params.workerId,
+        residenceId: currentOccupant.residenceId,
+        roomId: currentOccupant.roomId,
+        checkOutDate: transferDate,
+        performedBy: params.performedBy
+      });
 
-        // Create new occupant
-        const newOccupantId = `occ_${params.workerId}_${Date.now()}`;
-        await setDoc(doc(db, 'occupants', newOccupantId), newOccupant);
-      }
-
-      setOccupants(prev => [
-        ...prev.map(o => o.workerId === params.workerId && !o.until ? updatedCurrentOccupant : o),
-        newOccupant,
-      ]);
+      // Perform Check-In
+      await checkInWorkerAsync({
+        workerId: params.workerId,
+        residenceId: params.toResidenceId,
+        roomId: params.toRoomId,
+        checkInDate: transferDate,
+        performedBy: params.performedBy
+      });
 
       toast({
         title: "تم النقل بنجاح",
@@ -1954,6 +2022,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       return { ok: true, historyId };
     } catch (e: any) {
+
       console.error('transferWorker failed:', e);
       return { ok: false, error: e.message || 'unknown-error' };
     }
@@ -1985,7 +2054,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const room1 = findRoom(occ1.residenceId, occ1.roomId);
       const room2 = findRoom(occ2.residenceId, occ2.roomId);
 
-      // Create history records for both workers
       const history1Id = await createHistoryRecord({
         workerId: params.worker1Id,
         workerName: w1.name,
@@ -2034,10 +2102,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         createdAt: new Date().toISOString(),
       });
 
-      // Close old occupancies
-      const updatedOcc1: Occupant = { ...occ1, until: swapDate, checkOutBy: params.performedBy };
-      const updatedOcc2: Occupant = { ...occ2, until: swapDate, checkOutBy: params.performedBy };
-
       // Create new occupancies (swapped)
       const newOcc1: Occupant = {
         workerId: params.worker1Id,
@@ -2063,36 +2127,30 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       if (db) {
         const occupantsRef = collection(db, 'occupants');
-        const q = query(occupantsRef);
-        const snapshot = await getDocs(q);
         
-        // Update old occupancies
-        const occ1Doc = snapshot.docs.find(d => {
-          const data = d.data();
-          return data.workerId === params.worker1Id && !data.until;
-        });
-        const occ2Doc = snapshot.docs.find(d => {
-          const data = d.data();
-          return data.workerId === params.worker2Id && !data.until;
-        });
+        // Optimize: Query specific documents instead of all
+        const q1 = query(occupantsRef, where('workerId', '==', params.worker1Id), where('until', '==', null));
+        const snap1 = await getDocs(q1);
+        
+        const q2 = query(occupantsRef, where('workerId', '==', params.worker2Id), where('until', '==', null));
+        const snap2 = await getDocs(q2);
 
-        if (occ1Doc) await setDoc(doc(db, 'occupants', occ1Doc.id), updatedOcc1);
-        if (occ2Doc) await setDoc(doc(db, 'occupants', occ2Doc.id), updatedOcc2);
+        if (!snap1.empty) await updateDoc(snap1.docs[0].ref, { until: swapDate, checkOutBy: params.performedBy });
+        if (!snap2.empty) await updateDoc(snap2.docs[0].ref, { until: swapDate, checkOutBy: params.performedBy });
 
         // Create new occupancies
-        await setDoc(doc(db, 'occupants', `occ_${params.worker1Id}_${Date.now()}`), newOcc1);
-        await setDoc(doc(db, 'occupants', `occ_${params.worker2Id}_${Date.now() + 1}`), newOcc2);
+        await addDoc(occupantsRef, newOcc1);
+        await addDoc(occupantsRef, newOcc2);
       }
 
-      setOccupants(prev => [
-        ...prev.map(o => {
-          if (o.workerId === params.worker1Id && !o.until) return updatedOcc1;
-          if (o.workerId === params.worker2Id && !o.until) return updatedOcc2;
-          return o;
-        }),
-        newOcc1,
-        newOcc2,
-      ]);
+      // Update local state: Remove old active records and add new ones
+      setOccupants(prev => {
+        const filtered = prev.filter(o => 
+          !(o.workerId === params.worker1Id && !o.until) && 
+          !(o.workerId === params.worker2Id && !o.until)
+        );
+        return [...filtered, newOcc1, newOcc2];
+      });
 
       toast({
         title: "تم التبديل بنجاح",
@@ -2106,7 +2164,96 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
   }
 
-  // Bulk Check-In
+  // Batch import workers
+  async function importWorkersBatch(workersList: Worker[]) {
+    if (!db) return { ok: false, error: 'DB not available' };
+    
+    try {
+      const batchSize = 450; // Firestore limit is 500
+      const chunks = [];
+      
+      for (let i = 0; i < workersList.length; i += batchSize) {
+        chunks.push(workersList.slice(i, i + batchSize));
+      }
+
+      let totalSuccess = 0;
+      let totalErrors = 0;
+
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        
+        for (const worker of chunk) {
+          const id = worker.id || `w_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const ref = doc(db, 'workers', id);
+          batch.set(ref, {
+            name: worker.name,
+            employeeId: worker.employeeId || '',
+            idNumber: worker.idNumber || '',
+            nationaliy: worker.nationaliy || '',
+            company: worker.company || '',
+            role: worker.role || 'Worker'
+          }, { merge: true });
+        }
+
+        await batch.commit();
+        totalSuccess += chunk.length;
+      }
+
+      return { ok: true, count: totalSuccess };
+    } catch (e: any) {
+      console.error('Batch import failed', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Delete All Workers (Danger Zone)
+  async function deleteAllWorkers() {
+    if (!db) return { ok: false, error: 'DB not available' };
+    
+    try {
+      // Check if user is admin (client-side check, server rules still apply)
+      if (auth?.currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists() && userDoc.data().role !== 'Admin') {
+          return { ok: false, error: 'Permission denied: Only Admins can delete all workers.' };
+        }
+      }
+
+      const q = query(collection(db, 'workers'));
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) return { ok: true, count: 0 };
+
+      const batchSize = 450;
+      const docs = snapshot.docs;
+      const chunks = [];
+
+      for (let i = 0; i < docs.length; i += batchSize) {
+        chunks.push(docs.slice(i, i + batchSize));
+      }
+
+      let deletedCount = 0;
+
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+      }
+      
+      // Clear local state
+      setWorkers([]);
+
+      return { ok: true, count: deletedCount };
+    } catch (e: any) {
+      console.error('Delete all failed', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Batch Check-In (Optimized with Batch Writes)
   async function bulkCheckIn(params: {
     workerIds: string[];
     residenceId: string;
@@ -2117,37 +2264,182 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     notes?: string;
     performedBy: string;
   }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    if (!db) return { ok: false, results: {} };
+    
     const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
+    const successIds: string[] = [];
+    const newOccupants: Occupant[] = [];
+    const newHistory: AccommodationHistory[] = [];
 
-    for (const workerId of params.workerIds) {
-      const result = await checkInWorker({
-        workerId,
-        residenceId: params.residenceId,
-        roomId: params.roomId,
-        buildingId: params.buildingId,
-        floorId: params.floorId,
-        checkInDate: params.checkInDate,
-        notes: params.notes,
-        performedBy: params.performedBy,
+    try {
+      // 1. Fetch Room & Existing Occupants (Once)
+      const room = findRoom(params.residenceId, params.roomId);
+      if (!room) {
+        params.workerIds.forEach(id => results[id] = { success: false, error: 'room-not-found' });
+        return { ok: false, results };
+      }
+
+      const existingOccupants = await getRoomOccupantsAsync(params.residenceId, params.roomId);
+      
+      // 2. Determine Room State (Nationality & Role)
+      let currentNationality: string | undefined;
+      let currentRole: string | undefined;
+
+      if (existingOccupants.length > 0) {
+        const firstOcc = existingOccupants[0];
+        const firstWorkerRef = doc(db, 'workers', firstOcc.workerId);
+        const firstWorkerSnap = await getDoc(firstWorkerRef);
+        if (firstWorkerSnap.exists()) {
+          const d = firstWorkerSnap.data() as Worker;
+          currentNationality = d.nationaliy;
+          currentRole = d.role || 'Worker';
+        }
+      }
+
+      // 3. Process Workers
+      // Fetch all workers in parallel (or use cache if available)
+      // Since we need to check rules, we must have worker details.
+      const workersToProcess: Worker[] = [];
+      
+      // Optimization: Check local cache first
+      const missingWorkerIds: string[] = [];
+      for (const wid of params.workerIds) {
+        const cached = workers.find(w => w.id === wid);
+        if (cached) workersToProcess.push(cached);
+        else missingWorkerIds.push(wid);
+      }
+
+      // Fetch missing workers
+      if (missingWorkerIds.length > 0) {
+        // Fetch individually to be safe (or use 'in' query if < 30)
+        // For robustness, we'll fetch individually in parallel
+        const promises = missingWorkerIds.map(id => getDoc(doc(db!, 'workers', id)));
+        const snapshots = await Promise.all(promises);
+        snapshots.forEach(snap => {
+          if (snap.exists()) workersToProcess.push({ id: snap.id, ...snap.data() } as Worker);
+          else results[snap.id] = { success: false, error: 'worker-not-found' };
+        });
+      }
+
+      // 4. Validate & Prepare Batch
+      const batch = writeBatch(db);
+      let currentCount = existingOccupants.length;
+      
+      // Calculate capacity based on role
+      // If room is empty, first valid worker sets the role
+      // If room is occupied, role is fixed
+      
+      for (const worker of workersToProcess) {
+        // Rule 1: Nationality
+        if (currentNationality && worker.nationaliy && currentNationality !== worker.nationaliy) {
+          results[worker.id] = { success: false, error: 'nationality-mismatch' };
+          continue;
+        }
+
+        // Rule 2: Role
+        const workerRole = worker.role || 'Worker';
+        if (currentRole && currentRole !== workerRole) {
+          results[worker.id] = { success: false, error: 'role-mismatch' };
+          continue;
+        }
+
+        // If room was empty and this is first valid worker, set state
+        if (!currentNationality && !currentRole) {
+          currentNationality = worker.nationaliy;
+          currentRole = workerRole;
+        }
+
+        // Rule 3: Capacity
+        const spaceSqm = room.spaceSqm || 16;
+        const sqmPerPerson = (currentRole === 'Engineer') ? 16 : (currentRole === 'Supervisor' ? 8 : 4);
+        const cap = Math.floor(spaceSqm / sqmPerPerson);
+
+        if (currentCount >= cap) {
+          results[worker.id] = { success: false, error: 'room-full' };
+          continue;
+        }
+
+        // Valid! Prepare writes
+        const occId = `occ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const histId = `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const checkInDate = params.checkInDate || new Date().toISOString();
+
+        // Occupant Doc
+        const newOcc: Occupant = {
+          id: occId,
+          workerId: worker.id,
+          residenceId: params.residenceId,
+          roomId: params.roomId,
+          buildingId: params.buildingId,
+          floorId: params.floorId,
+          since: checkInDate,
+          checkInBy: params.performedBy,
+          notes: params.notes,
+        };
+        batch.set(doc(db, 'occupants', occId), newOcc);
+
+        // History Doc
+        const newHist: AccommodationHistory = {
+          id: histId,
+          workerId: worker.id,
+          workerName: worker.name,
+          workerNationality: worker.nationaliy,
+          actionType: 'CHECK_IN',
+          actionDate: checkInDate,
+          actionBy: params.performedBy,
+          residenceId: params.residenceId,
+          residenceName: residences.find(r => r.id === params.residenceId)?.name,
+          buildingId: params.buildingId,
+          floorId: params.floorId,
+          roomId: params.roomId,
+          roomName: room.name || params.roomId,
+          notes: params.notes,
+          createdAt: new Date().toISOString(),
+        };
+        batch.set(doc(db, 'accommodationHistory', histId), newHist);
+
+        // Track success
+        results[worker.id] = { success: true, historyId: histId };
+        successIds.push(worker.id);
+        newOccupants.push(newOcc);
+        newHistory.push(newHist);
+        currentCount++;
+      }
+
+      // 5. Commit Batch
+      if (successIds.length > 0) {
+        await batch.commit();
+        
+        // 6. Update Local State (Once)
+        setOccupants(prev => {
+          // Remove any stale entries for these workers if they exist (unlikely for check-in but safe)
+          const filtered = prev.filter(o => !successIds.includes(o.workerId));
+          return [...filtered, ...newOccupants];
+        });
+        
+        setAccommodationHistory(prev => [...newHistory, ...prev]);
+      }
+
+    } catch (e: any) {
+      console.error('Bulk Check-In Failed:', e);
+      // Mark all pending as failed
+      params.workerIds.forEach(id => {
+        if (!results[id]) results[id] = { success: false, error: e.message || 'batch-error' };
       });
-
-      results[workerId] = {
-        success: result.ok,
-        error: result.error,
-        historyId: result.historyId,
-      };
+      return { ok: false, results };
     }
 
-    const successCount = Object.values(results).filter(r => r.success).length;
+    const successCount = successIds.length;
     toast({
       title: "عملية التسكين الجماعي",
       description: `تم تسكين ${successCount} من ${params.workerIds.length} عامل بنجاح`,
+      variant: successCount === params.workerIds.length ? "default" : "destructive",
     });
 
     return { ok: true, results };
   }
 
-  // Bulk Check-Out
+  // Batch Check-Out
   async function bulkCheckOut(params: {
     workerIds: string[];
     checkOutDate?: string;
@@ -2182,7 +2474,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { ok: true, results };
   }
 
-  // Bulk Transfer
+  // Batch Transfer
   async function bulkTransfer(params: {
     workerIds: string[];
     toResidenceId: string;
@@ -2244,6 +2536,16 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     getHistoryByDateRange,
     // 🚨 EMERGENCY: Manual sync function to replace real-time listeners
     manualSyncFromFirestore,
+    // ⚡ Optimized Async Operations
+    findWorkerAsync,
+    getWorkersByIds,
+    checkWorkerOccupancy,
+    checkInWorkerAsync,
+    checkOutWorkerAsync,
+    getRoomOccupantsAsync,
+    fetchOccupantsForFloor,
+    importWorkersBatch,
+    deleteAllWorkers,
     // Enhanced operations - NEW
     checkInWorker,
     checkOutWorkerEnhanced,

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 type ImportRow = {
@@ -16,7 +16,7 @@ type ImportRow = {
 };
 
 export default function ImportWorkersPage() {
-  const { saveWorker, workers } = useAccommodation();
+  const { saveWorker, workers, importWorkersBatch, deleteAllWorkers } = useAccommodation();
   const { toast } = useToast();
   const [fileContent, setFileContent] = useState('');
   const [parsedData, setParsedData] = useState<ImportRow[]>([]);
@@ -73,7 +73,7 @@ export default function ImportWorkersPage() {
   };
 
   const importWorkers = async () => {
-    if (!saveWorker) {
+    if (!importWorkersBatch) {
       toast({ title: 'خطأ', description: 'Firebase غير مهيأ', variant: 'destructive' });
       return;
     }
@@ -82,42 +82,62 @@ export default function ImportWorkersPage() {
     let success = 0;
     let failed = 0;
     const errors: string[] = [];
+    const workersToImport: any[] = [];
 
+    // 1. Prepare data and check duplicates locally (fast)
     for (const row of parsedData) {
       try {
-        // Generate unique ID
-        const workerId = `w${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
         // Check if worker already exists by idNumber or employeeId
-        const existingByIqama = workers.find((w: any) => w.idNumber === row.Iqama_No && row.Iqama_No);
-        const existingByEmpId = workers.find((w: any) => w.employeeId === row.C_Number && w.company === row.Company);
+        // Note: This relies on local workers list. If list is empty (due to optimization), 
+        // we might skip this check or accept that duplicates might happen if not checked against server.
+        // For bulk import, server-side check for each is too slow. 
+        // Best practice: Use Firestore rules or unique indexes, or just overwrite.
+        // Here we will overwrite/merge based on ID if we can generate deterministic ID, 
+        // otherwise we generate new ID.
+        
+        // Let's try to generate deterministic ID based on Iqama or EmployeeID to prevent duplicates
+        let workerId = '';
+        const iqama = row.Iqama_No ? row.Iqama_No.trim() : '';
+        const empId = row.C_Number ? row.C_Number.trim() : '';
+        const company = row.Company ? row.Company.trim() : '';
 
-        if (existingByIqama) {
-          errors.push(`${row['Employee Name']} - موجود مسبقاً (رقم هوية: ${row.Iqama_No})`);
-          failed++;
-          continue;
+        if (iqama) {
+          workerId = `w_iq_${iqama}`;
+        } else if (empId) {
+          workerId = `w_emp_${empId}_${company.replace(/\s+/g, '_')}`;
+        } else {
+          workerId = `w_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
 
-        if (existingByEmpId) {
-          errors.push(`${row['Employee Name']} - موجود مسبقاً (رقم موظف: ${row.C_Number} في ${row.Company})`);
-          failed++;
-          continue;
-        }
-
-        await saveWorker({
+        workersToImport.push({
           id: workerId,
-          name: row['Employee Name'],
-          employeeId: row.C_Number,
-          idNumber: row.Iqama_No,
-          nationaliy: row.Nationality,
-          company: row.Company,
+          name: row['Employee Name']?.trim(),
+          employeeId: empId,
+          idNumber: iqama,
+          nationaliy: row.Nationality?.trim(),
+          company: company,
           role: row['W Type'] === 'Supervisor' ? 'Supervisor' : row['W Type'] === 'Engineer' ? 'Engineer' : 'Worker'
         });
 
-        success++;
       } catch (error: any) {
         failed++;
         errors.push(`${row['Employee Name']} - ${error.message}`);
+      }
+    }
+
+    // 2. Send batch to Firestore
+    if (workersToImport.length > 0) {
+      try {
+        const result = await importWorkersBatch(workersToImport);
+        if (result.ok) {
+          success = result.count || 0;
+        } else {
+          failed += workersToImport.length;
+          errors.push(`Batch failed: ${result.error}`);
+        }
+      } catch (e: any) {
+        failed += workersToImport.length;
+        errors.push(`Batch error: ${e.message}`);
       }
     }
 
@@ -145,6 +165,27 @@ export default function ImportWorkersPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm('هل أنت متأكد من حذف جميع العمال؟ لا يمكن التراجع عن هذا الإجراء!')) return;
+    if (!confirm('تأكيد نهائي: سيتم حذف قاعدة بيانات العمال بالكامل!')) return;
+    
+    setImporting(true);
+    try {
+      const result = await deleteAllWorkers();
+      if (result.ok) {
+        toast({ title: 'تم الحذف', description: `تم حذف ${result.count} عامل بنجاح` });
+        setParsedData([]);
+        setResults({ success: 0, failed: 0, errors: [] });
+      } else {
+        toast({ title: 'خطأ', description: result.error, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -153,9 +194,19 @@ export default function ImportWorkersPage() {
           <h1 className="text-3xl font-bold text-foreground">استيراد العمال</h1>
           <p className="text-muted-foreground mt-1">Import Workers from Excel/CSV</p>
         </div>
-        <Link href="/accommodation/workers" className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
-          رجوع للقائمة
-        </Link>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleDeleteAll}
+            disabled={importing}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            حذف جميع العمال
+          </button>
+          <Link href="/accommodation/workers" className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
+            رجوع للقائمة
+          </Link>
+        </div>
       </div>
 
       {/* Instructions */}
