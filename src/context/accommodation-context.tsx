@@ -1399,11 +1399,19 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // Calculate Dynamic Capacity based on Effective Role
       // Worker: 4 sqm/person, Supervisor: 8 sqm/person, Engineer: 16 sqm/person
       // Default to 4 if spaceSqm is missing
-      const spaceSqm = room.spaceSqm || 16; 
+      const spaceSqm = Number(room.spaceSqm) || 16; 
       const sqmPerPerson = effectiveRole === 'Engineer' ? 16 : effectiveRole === 'Supervisor' ? 8 : 4;
-      const cap = Math.floor(spaceSqm / sqmPerPerson);
       
-      if (occupants.length >= cap) return { ok: false, error: 'room-full' };
+      // Calculate used Sqm based on current occupants count and the effective role
+      const usedSqm = occupants.length * sqmPerPerson;
+      const requiredSqm = sqmPerPerson;
+
+      if (usedSqm + requiredSqm > spaceSqm) {
+         return { 
+           ok: false, 
+           error: `room-full (Used: ${usedSqm}, Req: ${requiredSqm}, Space: ${spaceSqm}, Occ: ${occupants.length})` 
+         };
+      }
     }
 
     // 5. Create Occupant
@@ -1792,6 +1800,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     notes?: string;
     performedBy: string;
     silent?: boolean;
+    emergencyMode?: boolean;
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
       console.log('🔵 [checkInWorker] Starting optimized check-in:', params);
@@ -1977,7 +1986,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // Check target room
       const toRoom = findRoom(params.toResidenceId, params.toRoomId);
       if (!toRoom) return { ok: false, error: "target-room-not-found" };
-      if (!toRoom.spaceSqm || !toRoom.roomType) return { ok: false, error: "target-room-metadata-missing" };
+      
+      // Relaxed metadata check (use defaults if missing, similar to checkInWorkerAsync)
+      const spaceSqm = toRoom.spaceSqm || 16;
+      const roomType = toRoom.roomType || 'Worker';
+      // if (!toRoom.spaceSqm || !toRoom.roomType) return { ok: false, error: "target-room-metadata-missing" };
 
       // Nationality check
       const targetRoomOccupants = occupants.filter(o => 
@@ -1993,10 +2006,18 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         }
       }
 
-      // Capacity check
-      const cap = calcCapacityFromSpace(toRoom.spaceSqm, toRoom.roomType);
-      if (targetRoomOccupants.length >= cap) {
-        return { ok: false, error: "target-room-full" };
+      // Capacity check (Dynamic based on roles)
+      const usedSqm = targetRoomOccupants.reduce((sum, o) => {
+        const occWorker = workers.find(wk => wk.id === o.workerId);
+        const role = occWorker?.role || 'Worker';
+        return sum + (role === 'Engineer' ? 16 : role === 'Supervisor' ? 8 : 4);
+      }, 0);
+
+      const incomingWorkerRole = w.role || 'Worker';
+      const requiredSqm = incomingWorkerRole === 'Engineer' ? 16 : incomingWorkerRole === 'Supervisor' ? 8 : 4;
+
+      if (usedSqm + requiredSqm > Number(spaceSqm)) {
+        return { ok: false, error: `target-room-full (Used: ${usedSqm}, Req: ${requiredSqm}, Space: ${spaceSqm})` };
       }
 
       const transferDate = params.transferDate || new Date().toISOString();
@@ -2050,7 +2071,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       };
 
       // Perform Check-Out
-      await checkOutWorkerAsync({
+      const outResult = await checkOutWorkerAsync({
         workerId: params.workerId,
         residenceId: currentOccupant.residenceId,
         roomId: currentOccupant.roomId,
@@ -2058,14 +2079,24 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         performedBy: params.performedBy
       });
 
+      if (!outResult.ok) {
+        throw new Error(`Check-out failed: ${outResult.error}`);
+      }
+
       // Perform Check-In
-      await checkInWorkerAsync({
+      const inResult = await checkInWorkerAsync({
         workerId: params.workerId,
         residenceId: params.toResidenceId,
         roomId: params.toRoomId,
         checkInDate: transferDate,
         performedBy: params.performedBy
       });
+
+      if (!inResult.ok) {
+        // Rollback check-out if possible? Or just report error.
+        // For now, throw error.
+        throw new Error(`Check-in failed: ${inResult.error}`);
+      }
 
       toast({
         title: "تم النقل بنجاح",
@@ -2317,6 +2348,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     checkInDate?: string;
     notes?: string;
     performedBy: string;
+    emergencyMode?: boolean;
   }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
     if (!db) return { ok: false, results: {} };
     
@@ -2369,9 +2401,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // Optimization: Check local cache first
       const missingWorkerIds: string[] = [];
       for (const wid of params.workerIds) {
-        const cached = workers.find(w => w.id === wid);
-        if (cached) workersToProcess.push(cached);
-        else missingWorkerIds.push(wid);
+        // ALWAYS fetch fresh data for critical operations to avoid stale role/nationality issues
+        // const cached = workers.find(w => w.id === wid);
+        // if (cached) workersToProcess.push(cached);
+        // else missingWorkerIds.push(wid);
+        missingWorkerIds.push(wid);
       }
 
       // Fetch missing workers
@@ -2421,7 +2455,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           }
 
           // Rule 3: Capacity
-          const spaceSqm = room.spaceSqm || 16;
+          // Use spaceSqm if available, otherwise fallback to capacity * 4 (standard worker space), or default 16
+          const spaceSqm = room.spaceSqm || ((room.capacity || 4) * 4);
           const sqmPerPerson = (currentRole === 'Engineer') ? 16 : (currentRole === 'Supervisor' ? 8 : 4);
           const cap = Math.floor(spaceSqm / sqmPerPerson);
 
@@ -2587,10 +2622,21 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     const successCount = Object.values(results).filter(r => r.success).length;
-    toast({
-      title: "عملية النقل الجماعي",
-      description: `تم نقل ${successCount} من ${params.workerIds.length} عامل بنجاح`,
-    });
+    const failures = Object.values(results).filter(r => !r.success);
+    
+    if (successCount === params.workerIds.length) {
+      toast({
+        title: "عملية النقل الجماعي",
+        description: `تم نقل ${successCount} من ${params.workerIds.length} عامل بنجاح`,
+      });
+    } else {
+      const uniqueErrors = Array.from(new Set(failures.map(f => f.error).filter(Boolean)));
+      toast({
+        title: "تنبيه في عملية النقل",
+        description: `تم نقل ${successCount} وفشل ${failures.length}. الأسباب: ${uniqueErrors.join(", ")}`,
+        variant: "destructive"
+      });
+    }
 
     return { ok: true, results };
   }
