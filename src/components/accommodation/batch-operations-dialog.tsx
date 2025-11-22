@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
-import { auth } from '@/lib/firebase';
+import { useUsers } from '@/context/users-context';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,7 @@ export function BatchOperationsDialog({
     bulkTransfer,
   } = useAccommodation();
   
-  const currentUser = auth?.currentUser;
+  const { currentUser } = useUsers();
 
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>(preSelectedWorkers);
   const [selectedResidenceId, setSelectedResidenceId] = useState(targetResidenceId || '');
@@ -63,6 +63,13 @@ export function BatchOperationsDialog({
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<Record<string, { success: boolean; error?: string }> | null>(null);
+
+  // Filter Residences based on permissions
+  const accessibleResidences = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return residences;
+    return residences.filter(r => currentUser.assignedResidences?.includes(r.id));
+  }, [residences, currentUser]);
 
   const getTitle = () => {
     switch (operationType) {
@@ -122,6 +129,7 @@ export function BatchOperationsDialog({
 
     try {
       let result;
+      const performedBy = currentUser.id || 'Admin';
 
       if (operationType === 'CHECK_IN') {
         result = await bulkCheckIn({
@@ -130,7 +138,7 @@ export function BatchOperationsDialog({
           roomId: selectedRoomId,
           checkInDate: date + 'T00:00:00.000Z',
           notes,
-          performedBy: currentUser?.uid || 'system',
+          performedBy,
         });
       } else if (operationType === 'CHECK_OUT') {
         result = await bulkCheckOut({
@@ -138,7 +146,7 @@ export function BatchOperationsDialog({
           checkOutDate: date + 'T00:00:00.000Z',
           reason,
           notes,
-          performedBy: currentUser?.uid || 'system',
+          performedBy,
         });
       } else if (operationType === 'TRANSFER') {
         result = await bulkTransfer({
@@ -148,7 +156,7 @@ export function BatchOperationsDialog({
           transferDate: date + 'T00:00:00.000Z',
           reason,
           notes,
-          performedBy: currentUser?.uid || 'system',
+          performedBy,
         });
       }
 
@@ -232,7 +240,7 @@ export function BatchOperationsDialog({
                     className="w-full mt-1 border rounded-md px-3 py-2 bg-background"
                   >
                     <option value="">اختر المسكن</option>
-                    {residences.map(r => (
+                    {accessibleResidences.map(r => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>

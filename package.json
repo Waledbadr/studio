@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev:base": "next dev --turbopack -p 9002",
-    "dev": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
+    "dev": "npm run dev:base",
+    "dev:prod": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",

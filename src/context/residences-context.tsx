@@ -68,6 +68,7 @@ export interface Complex {
   buildings: Building[];
   facilities?: Facility[];
   disabled?: boolean; // mark residence as disabled (hidden from active lists)
+  isEmergencyMode?: boolean; // Emergency mode for bypassing validation rules
   // Legacy/alternate fields sometimes present in older documents or APIs
   title?: string;
   address?: string;
@@ -76,7 +77,7 @@ export interface Complex {
   rooms?: Room[];
 }
 
-export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
+export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'> & { isEmergencyMode?: boolean };
 
 
 // Define the shape of our context

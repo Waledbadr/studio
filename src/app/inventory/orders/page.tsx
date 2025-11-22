@@ -139,11 +139,12 @@ export default function PurchaseOrdersPage() {
                             <div className="flex items-center gap-2">
                                 <span className="cursor-pointer" onClick={() => router.push(`/inventory/orders/${order.id}`)}>{formatOrderId(order.id)}</span>
                                 {order.approvalAttachmentUrl && (
+                                <span title="View approval attachment">
                                     <Paperclip 
                                         className="h-4 w-4 text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors" 
-                                        title="View approval attachment"
                                         onClick={(e) => handleViewAttachment(e, order.approvalAttachmentUrl!)}
                                     />
+                                </span>
                                 )}
                             </div>
                         </TableCell>

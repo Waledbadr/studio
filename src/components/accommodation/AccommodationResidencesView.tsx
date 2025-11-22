@@ -3,30 +3,40 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building, DoorOpen, MapPin, Pencil, Users, ChevronDown, Search, Layers, Grid3x3, List, LayoutGrid, Trash2 } from "lucide-react";
+import { Building, DoorOpen, MapPin, Pencil, Users, ChevronDown, Search, Layers, Grid3x3, List, LayoutGrid, Trash2, Table as TableIcon, Siren } from "lucide-react";
 import { useLanguage } from '@/context/language-context';
 import { useResidences, type Room, type Complex, type Floor, type Building as BuildingType } from '@/context/residences-context';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // Normalize arrays from possible object maps
 const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
 
 export default function AccommodationResidencesView() {
-  const { dict } = useLanguage();
+  const { dict, language } = useLanguage();
   const { residences, updateComplex, loading } = useResidences();
   const { occupants } = useAccommodation();
   const { currentUser } = useUsers();
   const { toast } = useToast();
 
-  const [viewMode, setViewMode] = useState<'cards' | 'tree' | 'board'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'tree' | 'board' | 'table'>('cards');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [cityFilter, setCityFilter] = useState<string>('all');
@@ -314,6 +324,40 @@ export default function AccommodationResidencesView() {
     }
   };
 
+  // Delete room
+  const handleDeleteRoom = async (complexId: string, buildingId: string | undefined, floorId: string | undefined, roomId: string) => {
+    try {
+      const complex = residences.find(r => r.id === complexId);
+      if (!complex) throw new Error('Residence not found');
+
+      const updatedComplex: Complex = JSON.parse(JSON.stringify(complex));
+
+      if (buildingId && floorId) {
+        const building = updatedComplex.buildings.find(b => b.id === buildingId);
+        if (!building) throw new Error('Building not found');
+        const floor = building.floors.find(f => f.id === floorId);
+        if (!floor) throw new Error('Floor not found');
+        floor.rooms = floor.rooms.filter(r => r.id !== roomId);
+      } else if (updatedComplex.rooms) {
+        updatedComplex.rooms = updatedComplex.rooms.filter(r => r.id !== roomId);
+      }
+
+      await updateFirestore(complexId, updatedComplex);
+
+      toast({
+        title: 'Success',
+        description: 'Room deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Error deleting room:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to delete room',
+      });
+    }
+  };
+
   // Update building name
   const handleUpdateBuildingName = async (complexId: string, buildingId: string, newName: string) => {
     try {
@@ -503,9 +547,151 @@ export default function AccommodationResidencesView() {
     }
   };
 
+  const handleToggleEmergencyMode = async (complex: Complex) => {
+    try {
+      await updateComplex(complex.id, { isEmergencyMode: !complex.isEmergencyMode });
+      toast({
+        title: !complex.isEmergencyMode ? "Emergency Mode Activated" : "Emergency Mode Deactivated",
+        description: !complex.isEmergencyMode 
+          ? "Validation rules will be bypassed for this residence." 
+          : "Validation rules are now active.",
+        variant: !complex.isEmergencyMode ? "destructive" : "default"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update emergency mode",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (loading) {
     return <div className="p-4">{dict.loading || 'Loading...'}</div>;
   }
+
+  const renderTableView = () => {
+    const rows: {
+      residence: Complex;
+      building?: BuildingType;
+      floor?: Floor;
+      room: Room;
+    }[] = [];
+
+    filteredResidences.forEach(residence => {
+      // Flat rooms
+      if (residence.rooms) {
+        residence.rooms.forEach(room => {
+          rows.push({ residence, room });
+        });
+      }
+      
+      // Nested rooms
+      if (residence.buildings) {
+        residence.buildings.forEach(building => {
+          if (building.floors) {
+            building.floors.forEach(floor => {
+              if (floor.rooms) {
+                floor.rooms.forEach(room => {
+                  rows.push({ residence, building, floor, room });
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    return (
+      <div className="rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Residence</TableHead>
+              <TableHead>Building</TableHead>
+              <TableHead>Floor</TableHead>
+              <TableHead>Room</TableHead>
+              <TableHead>Capacity</TableHead>
+              <TableHead>Occupancy</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
+                  No rooms found
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map(({ residence, building, floor, room }) => {
+                const occupancy = getOccupantCount(room.id);
+                const isFull = room.capacity ? occupancy >= room.capacity : false;
+                const isOvercrowded = room.capacity ? occupancy > room.capacity : false;
+                
+                return (
+                  <TableRow key={room.id}>
+                    <TableCell className="font-medium">
+                      {language === 'ar' ? residence.nameAr || residence.name : residence.nameEn || residence.name}
+                    </TableCell>
+                    <TableCell>
+                      {building ? (language === 'ar' ? building.nameAr || building.name : building.nameEn || building.name) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {floor ? (language === 'ar' ? floor.nameAr || floor.name : floor.nameEn || floor.name) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <DoorOpen className="h-4 w-4 text-muted-foreground" />
+                        <span>{language === 'ar' ? room.nameAr || room.name : room.nameEn || room.name}</span>
+                        {room.gender && <span className="text-xs text-muted-foreground">({room.gender === 'male' ? 'M' : 'F'})</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>{room.capacity || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span>{occupancy}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={isOvercrowded ? "destructive" : isFull ? "secondary" : "outline"}>
+                        {isOvercrowded ? "Overcrowded" : isFull ? "Full" : "Available"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditRoom(residence.id, room, building?.id, floor?.id)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (confirm(`Delete room "${room.name}"?`)) {
+                              handleDeleteRoom(residence.id, building?.id, floor?.id, room.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -596,10 +782,19 @@ export default function AccommodationResidencesView() {
                 variant={viewMode === 'board' ? 'default' : 'outline'} 
                 size="sm" 
                 onClick={() => setViewMode('board')}
-                title="Board view"
+                title={dict.boardView}
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
-                Board
+                {dict.board}
+              </Button>
+              <Button 
+                variant={viewMode === 'table' ? 'default' : 'outline'} 
+                size="sm" 
+                onClick={() => setViewMode('table')}
+                title="Table View"
+              >
+                <TableIcon className="h-4 w-4 mr-2" />
+                Table
               </Button>
             </div>
           </div>
@@ -628,17 +823,27 @@ export default function AccommodationResidencesView() {
       )}
 
       {/* Cards View */}
-      {viewMode === 'cards' && filteredResidences.map((complex) => (
-        <Card key={complex.id}>
+      {viewMode === 'cards' && filteredResidences.map((complex) => {
+        const canManageEmergency = currentUser?.role === 'Admin' || currentUser?.id === complex.managerId;
+        
+        return (
+        <Card key={complex.id} className={complex.isEmergencyMode ? "border-red-500 border-2" : ""}>
           <CardHeader className="cursor-pointer" onClick={() => toggleComplexOpen(complex.id)}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <ChevronDown 
                   className={`h-5 w-5 transition-transform ${(openComplexIds[complex.id] ?? true) ? '' : '-rotate-90'}`}
                 />
-                <Building className="h-5 w-5 text-primary" />
+                <Building className={`h-5 w-5 ${complex.isEmergencyMode ? "text-red-600" : "text-primary"}`} />
                 <div>
-                  <CardTitle>{complex.name}</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    {complex.name}
+                    {complex.isEmergencyMode && (
+                      <Badge variant="destructive" className="text-xs animate-pulse">
+                        <Siren className="h-3 w-3 mr-1" /> Emergency Mode
+                      </Badge>
+                    )}
+                  </CardTitle>
                   {complex.city && (
                     <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                       <MapPin className="h-3 w-3" />
@@ -647,6 +852,19 @@ export default function AccommodationResidencesView() {
                   )}
                 </div>
               </div>
+              
+              {canManageEmergency && (
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Label htmlFor={`emergency-${complex.id}`} className={`text-xs font-medium ${complex.isEmergencyMode ? "text-red-600" : "text-muted-foreground"}`}>
+                    {complex.isEmergencyMode ? "Emergency ON" : "Emergency OFF"}
+                  </Label>
+                  <Switch
+                    id={`emergency-${complex.id}`}
+                    checked={complex.isEmergencyMode || false}
+                    onCheckedChange={() => handleToggleEmergencyMode(complex)}
+                  />
+                </div>
+              )}
             </div>
           </CardHeader>
 
@@ -926,7 +1144,7 @@ export default function AccommodationResidencesView() {
             </CardContent>
           )}
         </Card>
-      ))}
+      ); })}
 
       {/* Tree View */}
       {viewMode === 'tree' && (
@@ -1058,7 +1276,7 @@ export default function AccommodationResidencesView() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${
                                       isFull ? 'bg-red-100 dark:bg-red-900/30' :
                                       occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
                                       'bg-muted'
@@ -1103,7 +1321,10 @@ export default function AccommodationResidencesView() {
               <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-primary" /> {city}
               </h2>
-              {complexes.map((complex) => (
+              {complexes.map((complex) => {
+                const canManageEmergency = currentUser?.role === 'Admin' || currentUser?.id === complex.managerId;
+                
+                return (
                 <div key={complex.id} className="mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -1119,8 +1340,25 @@ export default function AccommodationResidencesView() {
                           }`} 
                         />
                       </Button>
-                      <div className="font-semibold text-lg">{complex.name}</div>
+                      <div className="font-semibold text-lg flex items-center gap-2">
+                        {complex.name}
+                        {complex.isEmergencyMode && (
+                          <Badge variant="destructive" className="text-xs h-5">
+                            <Siren className="h-3 w-3 mr-1" /> Emergency
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                    
+                    {canManageEmergency && (
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={complex.isEmergencyMode || false}
+                          onCheckedChange={() => handleToggleEmergencyMode(complex)}
+                          className="data-[state=checked]:bg-red-600"
+                        />
+                      </div>
+                    )}
                   </div>
                   
                   {(openComplexIds[complex.id] ?? true) && (
@@ -1183,10 +1421,8 @@ export default function AccommodationResidencesView() {
                                                 occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
                                                 'bg-muted'
                                               }`}>
-                                                <Users className="h-2.5 w-2.5" />
-                                                <span className="font-medium">
-                                                  {occupantCount}/{room.capacity || '-'}
-                                                </span>
+                                                <Users className="h-3 w-3" />
+                                                <span>{occupantCount}/{room.capacity || '-'}</span>
                                               </div>
                                             </div>
                                           );
@@ -1203,11 +1439,14 @@ export default function AccommodationResidencesView() {
                     </div>
                   )}
                 </div>
-              ))}
+              ); })}
             </div>
           ))}
         </div>
       )}
+
+      {/* Table View */}
+      {viewMode === 'table' && renderTableView()}
 
       {/* Edit Room Dialog */}
       <Dialog open={!!editingRoom} onOpenChange={(open) => !open && setEditingRoom(null)}>

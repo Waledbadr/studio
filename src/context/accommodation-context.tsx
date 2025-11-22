@@ -37,6 +37,7 @@ export type Residence = {
   address?: string;
   location?: Location;
   managerId?: string; // Added managerId
+  isEmergencyMode?: boolean; // Added isEmergencyMode
   buildings?: Building[]; // optional — some APIs return nested buildings/floors
   rooms?: Room[]; // fallback when buildings are not present
 };
@@ -60,10 +61,11 @@ export type Occupant = {
   floorId?: string;
   roomId: string;
   since: string; // ISO date - Check-in date
-  until?: string; // ISO date - Check-out date (null = still active)
+  until?: string | null; // ISO date - Check-out date (null = still active)
   checkInBy?: string; // User ID who performed check-in
   checkOutBy?: string; // User ID who performed check-out
   notes?: string; // Optional notes about this occupancy
+  isEmergency?: boolean; // Flag for emergency/override check-ins
 };
 
 // Historical record of all accommodation movements (immutable)
@@ -105,6 +107,7 @@ export type AccommodationHistory = {
   // Metadata
   reason?: string; // Reason for action (optional)
   notes?: string; // Additional notes
+  isEmergency?: boolean; // Flag for emergency actions
   duration?: number; // Days stayed (calculated for CHECK_OUT)
   relatedTransferRequestId?: string; // Link to TransferRequest if applicable
   
@@ -210,6 +213,7 @@ type AccommodationContextValue = {
     roomId: string;
     checkInDate?: string;
     performedBy: string;
+    emergencyMode?: boolean;
   }) => Promise<{ ok: boolean; error?: string }>;
   checkOutWorkerAsync: (params: {
     workerId: string;
@@ -241,6 +245,7 @@ type AccommodationContextValue = {
     notes?: string;
     performedBy: string;
     silent?: boolean;
+    emergencyMode?: boolean;
   }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
   
   checkOutWorkerEnhanced: (params: {
@@ -282,6 +287,7 @@ type AccommodationContextValue = {
     checkInDate?: string;
     notes?: string;
     performedBy: string;
+    emergencyMode?: boolean;
   }) => Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }>;
   
   bulkCheckOut: (params: {
@@ -358,7 +364,7 @@ type AccommodationContextValue = {
   getContractsByCompany: (companyId: string) => Contract[];
   getInvoicesByContract: (contractId: string) => Invoice[];
   getActiveContractsForResidence: (residenceId: string) => Contract[];
-  fetchOccupantsForFloor: (residenceId: string, floorId: string) => Promise<void>;
+  fetchOccupantsForFloor: (residenceId: string, floorId?: string) => Promise<void>;
 };
 
 export const AccommodationContext = createContext<AccommodationContextValue | undefined>(undefined);
@@ -384,6 +390,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const companiesUnsubRef = useRef<Unsubscribe | null>(null);
   const contractsUnsubRef = useRef<Unsubscribe | null>(null);
   const invoicesUnsubRef = useRef<Unsubscribe | null>(null);
+  const lastMutationTimeRef = useRef<number>(0); // Track last mutation time to prevent stale fetches
 
   const loadWorkersFromLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -635,6 +642,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       name: complex.name || complex.title || "Unnamed",
       address: complex.city || complex.address || "",
       location: complex.location || null,
+      managerId: complex.managerId,
+      isEmergencyMode: complex.isEmergencyMode,
       buildings: Array.isArray(complex.buildings)
         ? complex.buildings.map((b: any) => ({ id: b.id, name: b.name, floors: b.floors }))
         : undefined,
@@ -1268,25 +1277,51 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
   }, [db]);
 
-  const fetchOccupantsForFloor = useCallback(async (residenceId: string, floorId: string) => {
-    if (!db || !residenceId || !floorId) return;
+  const fetchOccupantsForFloor = useCallback(async (residenceId: string, floorId?: string) => {
+    if (!db || !residenceId) return;
+    const startTime = Date.now();
     try {
-      const q = query(
-        collection(db, 'occupants'),
-        where('residenceId', '==', residenceId),
-        where('floorId', '==', floorId),
-        where('until', '==', null)
-      );
+      let q;
+      if (floorId) {
+        q = query(
+          collection(db, 'occupants'),
+          where('residenceId', '==', residenceId),
+          where('floorId', '==', floorId),
+          where('until', '==', null)
+        );
+      } else {
+        // Fetch all for residence (useful for residences without floors)
+        q = query(
+          collection(db, 'occupants'),
+          where('residenceId', '==', residenceId),
+          where('until', '==', null)
+        );
+      }
+
       const snap = await getDocs(q);
+      
+      // Race condition check: If a mutation happened after we started fetching, ignore this result
+      // to prevent overwriting the optimistic update with stale data.
+      if (lastMutationTimeRef.current > startTime) {
+        console.log('⚠️ [fetchOccupantsForFloor] Skipping stale fetch result due to recent mutation');
+        return;
+      }
+
       const floorOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Occupant[];
       
       setOccupants(prev => {
-        // Remove existing occupants for this floor to avoid duplicates/stale data
-        const otherOccupants = prev.filter(o => o.floorId !== floorId);
+        // Remove existing occupants for this scope to avoid duplicates/stale data
+        let otherOccupants;
+        if (floorId) {
+            otherOccupants = prev.filter(o => o.floorId !== floorId);
+        } else {
+            // If fetching by residence, replace all occupants for this residence
+            otherOccupants = prev.filter(o => o.residenceId !== residenceId);
+        }
         return [...otherOccupants, ...floorOccupants];
       });
     } catch (e) {
-      console.error("Failed to fetch floor occupants", e);
+      console.error("Failed to fetch occupants", e);
     }
   }, [db]);
 
@@ -1296,6 +1331,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     roomId: string;
     checkInDate?: string;
     performedBy: string;
+    emergencyMode?: boolean;
   }) => {
     if (!db) return { ok: false, error: 'DB not available' };
     
@@ -1326,43 +1362,49 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
     
     // 4. Dynamic Rules Check (Nationality & Role/Capacity)
-    let effectiveRole = worker.role || 'Worker';
-    
-    if (occupants.length > 0) {
-      const firstOcc = occupants[0];
-      
-      // Fetch first occupant details to determine room's current "state"
-      const firstWorkerRef = doc(db, 'workers', firstOcc.workerId);
-      const firstWorkerSnap = await getDoc(firstWorkerRef);
-      
-      if (firstWorkerSnap.exists()) {
-        const firstWorker = firstWorkerSnap.data() as Worker;
-        
-        // Rule 1: Nationality Mismatch
-        // If room has occupants, new worker must match their nationality
-        if (firstWorker.nationaliy && worker.nationaliy && firstWorker.nationaliy !== worker.nationaliy) {
-          return { ok: false, error: 'nationality-mismatch' };
-        }
-        
-        // Rule 2: Role Mismatch (implied by dynamic capacity)
-        // If room is occupied by Supervisor, only Supervisor can enter (to maintain capacity logic)
-        const currentRoomRole = firstWorker.role || 'Worker';
-        if (currentRoomRole !== effectiveRole) {
-           return { ok: false, error: 'role-mismatch' };
-        }
-        
-        effectiveRole = currentRoomRole;
-      }
-    }
+    // SKIP ALL CHECKS IF EMERGENCY MODE IS ON (Global Residence Mode OR Operation Mode)
+    const residence = residences.find(r => r.id === params.residenceId);
+    const isEmergency = params.emergencyMode || residence?.isEmergencyMode;
 
-    // Calculate Dynamic Capacity based on Effective Role
-    // Worker: 4 sqm/person, Supervisor: 8 sqm/person, Engineer: 16 sqm/person
-    // Default to 4 if spaceSqm is missing
-    const spaceSqm = room.spaceSqm || 16; 
-    const sqmPerPerson = effectiveRole === 'Engineer' ? 16 : effectiveRole === 'Supervisor' ? 8 : 4;
-    const cap = Math.floor(spaceSqm / sqmPerPerson);
-    
-    if (occupants.length >= cap) return { ok: false, error: 'room-full' };
+    if (!isEmergency) {
+      let effectiveRole = worker.role || 'Worker';
+      
+      if (occupants.length > 0) {
+        const firstOcc = occupants[0];
+        
+        // Fetch first occupant details to determine room's current "state"
+        const firstWorkerRef = doc(db, 'workers', firstOcc.workerId);
+        const firstWorkerSnap = await getDoc(firstWorkerRef);
+        
+        if (firstWorkerSnap.exists()) {
+          const firstWorker = firstWorkerSnap.data() as Worker;
+          
+          // Rule 1: Nationality Mismatch
+          // If room has occupants, new worker must match their nationality
+          if (firstWorker.nationaliy && worker.nationaliy && firstWorker.nationaliy !== worker.nationaliy) {
+            return { ok: false, error: 'nationality-mismatch' };
+          }
+          
+          // Rule 2: Role Mismatch (implied by dynamic capacity)
+          // If room is occupied by Supervisor, only Supervisor can enter (to maintain capacity logic)
+          const currentRoomRole = firstWorker.role || 'Worker';
+          if (currentRoomRole !== effectiveRole) {
+             return { ok: false, error: 'role-mismatch' };
+          }
+          
+          effectiveRole = currentRoomRole;
+        }
+      }
+
+      // Calculate Dynamic Capacity based on Effective Role
+      // Worker: 4 sqm/person, Supervisor: 8 sqm/person, Engineer: 16 sqm/person
+      // Default to 4 if spaceSqm is missing
+      const spaceSqm = room.spaceSqm || 16; 
+      const sqmPerPerson = effectiveRole === 'Engineer' ? 16 : effectiveRole === 'Supervisor' ? 8 : 4;
+      const cap = Math.floor(spaceSqm / sqmPerPerson);
+      
+      if (occupants.length >= cap) return { ok: false, error: 'room-full' };
+    }
 
     // 5. Create Occupant
     const newOcc: any = {
@@ -1371,12 +1413,16 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       roomId: params.roomId,
       since: params.checkInDate || new Date().toISOString(),
       checkInBy: params.performedBy,
-      until: null
+      until: null,
+      isEmergency: params.emergencyMode || false
     };
     
     const docRef = await addDoc(collection(db, 'occupants'), newOcc);
     newOcc.id = docRef.id;
     
+    // Update mutation timestamp
+    lastMutationTimeRef.current = Date.now();
+
     // Update local state: Sync this room's occupants
     setOccupants(prev => {
       // Keep occupants from other rooms
@@ -1429,6 +1475,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       checkOutBy: params.performedBy
     });
     
+    // Update mutation timestamp
+    lastMutationTimeRef.current = Date.now();
+
     // Update local state immediately
     setOccupants(prev => prev.filter(o => o.workerId !== params.workerId));
     
@@ -1753,7 +1802,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         residenceId: params.residenceId,
         roomId: params.roomId,
         checkInDate: params.checkInDate,
-        performedBy: params.performedBy
+        performedBy: params.performedBy,
+        emergencyMode: params.emergencyMode
       });
 
       if (!result.ok) {
@@ -1800,6 +1850,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           roomId: params.roomId,
           roomName: room?.name || params.roomId,
           notes: params.notes,
+          isEmergency: params.emergencyMode,
           createdAt: new Date().toISOString(),
         });
       } catch (historyError) {
@@ -1993,6 +2044,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         buildingId: params.toBuildingId,
         floorId: params.toFloorId,
         since: transferDate,
+        until: null,
         checkInBy: params.performedBy,
         notes: params.notes,
       };
@@ -2110,6 +2162,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         buildingId: occ2.buildingId,
         floorId: occ2.floorId,
         since: swapDate,
+        until: null,
         checkInBy: params.performedBy,
         notes: params.notes,
       };
@@ -2121,6 +2174,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         buildingId: occ1.buildingId,
         floorId: occ1.floorId,
         since: swapDate,
+        until: null,
         checkInBy: params.performedBy,
         notes: params.notes,
       };
@@ -2286,13 +2340,24 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       let currentRole: string | undefined;
 
       if (existingOccupants.length > 0) {
-        const firstOcc = existingOccupants[0];
-        const firstWorkerRef = doc(db, 'workers', firstOcc.workerId);
-        const firstWorkerSnap = await getDoc(firstWorkerRef);
-        if (firstWorkerSnap.exists()) {
-          const d = firstWorkerSnap.data() as Worker;
-          currentNationality = d.nationaliy;
-          currentRole = d.role || 'Worker';
+        // Check all occupants to find the room's nationality/role
+        // We need to fetch details for existing occupants to be sure
+        const occupantWorkerIds = existingOccupants.map(o => o.workerId);
+        
+        // Fetch details for up to 5 occupants to determine room state
+        const checkIds = occupantWorkerIds.slice(0, 5);
+        const promises = checkIds.map(id => getDoc(doc(db!, 'workers', id)));
+        const snaps = await Promise.all(promises);
+        
+        for (const snap of snaps) {
+          if (snap.exists()) {
+            const d = snap.data() as Worker;
+            if (d.nationaliy && !currentNationality) currentNationality = d.nationaliy;
+            if (d.role && !currentRole) currentRole = d.role;
+            
+            // If we found both, break
+            if (currentNationality && currentRole) break;
+          }
         }
       }
 
@@ -2330,33 +2395,40 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // If room is occupied, role is fixed
       
       for (const worker of workersToProcess) {
-        // Rule 1: Nationality
-        if (currentNationality && worker.nationaliy && currentNationality !== worker.nationaliy) {
-          results[worker.id] = { success: false, error: 'nationality-mismatch' };
-          continue;
-        }
+        // SKIP CHECKS IF EMERGENCY MODE
+        if (!params.emergencyMode) {
+          // Rule 1: Nationality
+          if (currentNationality && worker.nationaliy) {
+            const rNat = currentNationality.trim().toLowerCase();
+            const wNat = worker.nationaliy.trim().toLowerCase();
+            if (rNat !== wNat) {
+              results[worker.id] = { success: false, error: 'nationality-mismatch' };
+              continue;
+            }
+          }
 
-        // Rule 2: Role
-        const workerRole = worker.role || 'Worker';
-        if (currentRole && currentRole !== workerRole) {
-          results[worker.id] = { success: false, error: 'role-mismatch' };
-          continue;
-        }
+          // Rule 2: Role
+          const workerRole = worker.role || 'Worker';
+          if (currentRole && currentRole !== workerRole) {
+            results[worker.id] = { success: false, error: 'role-mismatch' };
+            continue;
+          }
 
-        // If room was empty and this is first valid worker, set state
-        if (!currentNationality && !currentRole) {
-          currentNationality = worker.nationaliy;
-          currentRole = workerRole;
-        }
+          // If room was empty and this is first valid worker, set state
+          if (!currentNationality && !currentRole) {
+            currentNationality = worker.nationaliy;
+            currentRole = workerRole;
+          }
 
-        // Rule 3: Capacity
-        const spaceSqm = room.spaceSqm || 16;
-        const sqmPerPerson = (currentRole === 'Engineer') ? 16 : (currentRole === 'Supervisor' ? 8 : 4);
-        const cap = Math.floor(spaceSqm / sqmPerPerson);
+          // Rule 3: Capacity
+          const spaceSqm = room.spaceSqm || 16;
+          const sqmPerPerson = (currentRole === 'Engineer') ? 16 : (currentRole === 'Supervisor' ? 8 : 4);
+          const cap = Math.floor(spaceSqm / sqmPerPerson);
 
-        if (currentCount >= cap) {
-          results[worker.id] = { success: false, error: 'room-full' };
-          continue;
+          if (currentCount >= cap) {
+            results[worker.id] = { success: false, error: 'room-full' };
+            continue;
+          }
         }
 
         // Valid! Prepare writes
@@ -2373,8 +2445,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           buildingId: params.buildingId,
           floorId: params.floorId,
           since: checkInDate,
+          until: null,
           checkInBy: params.performedBy,
           notes: params.notes,
+          isEmergency: params.emergencyMode
         };
         batch.set(doc(db, 'occupants', occId), newOcc);
 
@@ -2394,6 +2468,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           roomId: params.roomId,
           roomName: room.name || params.roomId,
           notes: params.notes,
+          isEmergency: params.emergencyMode,
           createdAt: new Date().toISOString(),
         };
         batch.set(doc(db, 'accommodationHistory', histId), newHist);
@@ -2410,6 +2485,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (successIds.length > 0) {
         await batch.commit();
         
+        // Update mutation timestamp
+        lastMutationTimeRef.current = Date.now();
+
         // 6. Update Local State (Once)
         setOccupants(prev => {
           // Remove any stale entries for these workers if they exist (unlikely for check-in but safe)

@@ -41,7 +41,7 @@ interface Residence {
 
 interface ResidenceRoomSelectorProps {
   residences: Residence[];
-  occupants?: Array<{ roomId: string; residenceId: string; until?: string }>;
+  occupants?: Array<{ roomId: string; residenceId: string; until?: string | null }>;
   value: {
     residenceId: string;
     buildingId?: string;
