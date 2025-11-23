@@ -2,10 +2,11 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
+import { useUsers } from '@/context/users-context';
 
 export type Location = { lat: number; lng: number } | null;
 
@@ -182,6 +183,20 @@ export type Invoice = {
   notes?: string;
 };
 
+export type DashboardStats = {
+  totalWorkers: number;
+  assignedWorkers: number;
+  unassignedWorkers: number;
+  occupancyRate: number;
+  activeContracts: number;
+  totalCompanies: number;
+  pendingTransfers: number;
+  unpaidInvoices: number;
+  overdueInvoices: number; // NEW
+  residenceOccupancy: Record<string, number>; // residenceId -> count
+  lastUpdated: number;
+};
+
 type AccommodationContextValue = {
   residences: Residence[];
   loading: boolean;
@@ -189,6 +204,9 @@ type AccommodationContextValue = {
   // new exports
   workers: Worker[];
   occupants: Occupant[];
+  dashboardStats: DashboardStats | null; // NEW: Lightweight stats
+  refreshDashboardStats: () => Promise<DashboardStats>; // NEW: Fetch stats efficiently
+  autoArchiveOccupants: () => Promise<void>; // NEW: Auto cleanup
   accommodationHistory: AccommodationHistory[]; // NEW: Complete history of all movements
   transferRequests: TransferRequest[];
   notifications: Notification[];
@@ -202,6 +220,10 @@ type AccommodationContextValue = {
   getWorkerHistory: (workerId: string) => AccommodationHistory[];
   getRoomHistory: (residenceId: string, roomId: string) => AccommodationHistory[];
   getHistoryByDateRange: (startDate: string, endDate: string) => AccommodationHistory[];
+  
+  // Async History Fetching
+  fetchWorkerHistory: (workerId: string) => Promise<AccommodationHistory[]>;
+  fetchRoomHistory: (roomId: string) => Promise<AccommodationHistory[]>;
   
   // ⚡ Optimized Async Operations (Direct Firestore)
   findWorkerAsync: (queryStr: string) => Promise<Worker[]>;
@@ -316,7 +338,7 @@ type AccommodationContextValue = {
     residenceId: string,
     roomId: string,
     checkInDate?: string
-  ) => { ok: boolean; error?: string };
+  ) => { ok: boolean; error: string };
   bulkAssign: (
     workerIds: string[],
     residenceId: string,
@@ -374,6 +396,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [occupants, setOccupants] = useState<Occupant[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null); // NEW
   const [accommodationHistory, setAccommodationHistory] = useState<AccommodationHistory[]>([]); // NEW
   const [transferRequests, setTransferRequests] = useState<TransferRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -461,7 +484,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         description: "يتم تحديث البيانات من قاعدة البيانات",
       });
 
-      // Fetch with limits to minimize reads
       // DISABLED: Workers and Occupants fetch disabled to prevent large reads. Only metadata is synced.
       const [companiesSnap, contractsSnap, invoicesSnap, residencesSnap] = await Promise.all([
         // getDocs(query(collection(db, 'workers'), limit(2000))),
@@ -651,30 +673,41 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     };
   }
 
-  // Load residences snapshot from localStorage (the canonical residences provider persists there)
+  // Load residences from Firestore directly to ensure data availability across devices
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
-        if (stored) {
-          const parsed = JSON.parse(stored || "[]");
-          if (!mounted) return;
-          setResidences((parsed || []).map(mapComplexToResidence));
-        } else {
-          if (mounted) setResidences([]);
+    const _auth = auth;
+    const _db = db;
+
+    if (!_auth || !_db) return;
+
+    let unsubscribeSnapshot: Unsubscribe | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(_auth, (user) => {
+      if (user) {
+        setLoading(true);
+        unsubscribeSnapshot = onSnapshot(collection(_db, "residences"), (snapshot) => {
+          const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          setResidences(docs.map(mapComplexToResidence));
+          setLoading(false);
+        }, (error) => {
+          console.error("Accommodation: failed to load residences from Firestore", error);
+          setLoading(false);
+        });
+      } else {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
         }
-      } catch (e) {
-        console.error("Accommodation: failed to load residences from provider", e);
-        if (mounted) setResidences([]);
-      } finally {
-        if (mounted) setLoading(false);
+        setResidences([]);
+        setLoading(false);
       }
-    };
-    load();
+    });
+
     return () => {
-      mounted = false;
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
     };
   }, []);
 
@@ -755,9 +788,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // 🚨 EMERGENCY FIX: ALL onSnapshot listeners DISABLED
   // Problem: Single check-in operation = 12,000 reads!
   // Solution: Use localStorage ONLY, manual sync when needed
-  
-  // Setup Firestore listeners for companies, contracts, invoices, and occupants
-  // ❌ DISABLED TO PREVENT QUOTA EXHAUSTION
   useEffect(() => {
     console.log('🚨 [EMERGENCY MODE] All Firestore listeners DISABLED');
     console.log('💾 [EMERGENCY MODE] Using localStorage ONLY');
@@ -1753,6 +1783,42 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
   }
 
+  // Async History Fetching
+  async function fetchWorkerHistory(workerId: string): Promise<AccommodationHistory[]> {
+    if (!db) return [];
+    try {
+      const q = query(collection(db, 'accommodationHistory'), where('workerId', '==', workerId));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+        .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+    } catch (e) {
+      console.error("Failed to fetch worker history", e);
+      return [];
+    }
+  }
+
+  async function fetchRoomHistory(roomId: string): Promise<AccommodationHistory[]> {
+    if (!db) return [];
+    try {
+      // Fetch history where room is involved as main room, from room, or to room
+      const q1 = query(collection(db, 'accommodationHistory'), where('roomId', '==', roomId));
+      const q2 = query(collection(db, 'accommodationHistory'), where('toRoomId', '==', roomId));
+      const q3 = query(collection(db, 'accommodationHistory'), where('fromRoomId', '==', roomId));
+      
+      const [s1, s2, s3] = await Promise.all([getDocs(q1), getDocs(q2), getDocs(q3)]);
+      
+      const allDocs = [...s1.docs, ...s2.docs, ...s3.docs];
+      // Deduplicate by ID
+      const uniqueDocs = Array.from(new Map(allDocs.map(d => [d.id, d])).values());
+      
+      return uniqueDocs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+        .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+    } catch (e) {
+      console.error("Failed to fetch room history", e);
+      return [];
+    }
+  }
+
   // ============ NEW: ENHANCED OPERATIONS WITH HISTORY ============
   
   // Helper: Create history record
@@ -2641,12 +2707,181 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { ok: true, results };
   }
 
+  // 🆕 Efficient Dashboard Stats Fetching
+  const refreshDashboardStats = useCallback(async () => {
+    if (!db) {
+      console.warn('⚠️ [Dashboard] DB not available');
+      return {
+        totalWorkers: 0,
+        assignedWorkers: 0,
+        unassignedWorkers: 0,
+        occupancyRate: 0,
+        activeContracts: 0,
+        totalCompanies: 0,
+        pendingTransfers: 0,
+        unpaidInvoices: 0,
+        overdueInvoices: 0, // NEW
+        residenceOccupancy: {},
+        lastUpdated: Date.now()
+      };
+    }
+    
+    try {
+      console.log('📊 [Dashboard] Refreshing stats...');
+      
+      // 1. Global counts
+      const workersCount = (await getCountFromServer(collection(db, 'workers'))).data().count;
+      // Only count ACTIVE occupants (where until is null)
+      const occupantsCount = (await getCountFromServer(
+        query(collection(db, 'occupants'), where('until', '==', null))
+      )).data().count;
+      const companiesCount = (await getCountFromServer(collection(db, 'companies'))).data().count;
+      
+      // 2. Active Contracts (status = Active)
+      const activeContractsCount = (await getCountFromServer(
+        query(collection(db, 'contracts'), where('status', '==', 'Active'))
+      )).data().count;
+
+      // 3. Pending Transfers (status = Pending)
+      const pendingTransfersCount = (await getCountFromServer(
+        query(collection(db, 'transferRequests'), where('status', '==', 'Pending'))
+      )).data().count;
+
+      // 4. Unpaid Invoices (status = Pending or Overdue)
+      const unpaidInvoicesCount = (await getCountFromServer(
+        query(collection(db, 'invoices'), where('status', 'in', ['Pending', 'Overdue']))
+      )).data().count;
+
+      // 5. Overdue Invoices (status = Overdue)
+      const overdueInvoicesCount = (await getCountFromServer(
+        query(collection(db, 'invoices'), where('status', '==', 'Overdue'))
+      )).data().count;
+
+      // 6. Occupancy by Residence
+      const residenceOccupancy: Record<string, number> = {};
+      const targetResidences = residences.length > 0 ? residences : [];
+      
+      await Promise.all(targetResidences.map(async (res) => {
+        const count = (await getCountFromServer(
+          query(collection(db, 'occupants'), where('residenceId', '==', res.id), where('until', '==', null))
+        )).data().count;
+        residenceOccupancy[res.id] = count;
+      }));
+
+      // Calculate total capacity for occupancy rate
+      let totalCapacity = 0;
+      targetResidences.forEach(res => {
+        if (res.rooms) {
+           res.rooms.forEach(room => {
+             if (room.spaceSqm && room.roomType) {
+                const per = room.roomType === "Worker" ? 4 : room.roomType === "Supervisor" ? 8 : 16;
+                totalCapacity += Math.floor(room.spaceSqm / per);
+             } else if (room.capacity) {
+                totalCapacity += room.capacity;
+             }
+           });
+        }
+        if (res.buildings) {
+           res.buildings.forEach(b => b.floors?.forEach(f => f.rooms?.forEach(r => {
+              if (r.spaceSqm && r.roomType) {
+                const per = r.roomType === "Worker" ? 4 : r.roomType === "Supervisor" ? 8 : 16;
+                totalCapacity += Math.floor(r.spaceSqm / per);
+             } else if (r.capacity) {
+                totalCapacity += r.capacity;
+             }
+           })));
+        }
+      });
+
+      const stats: DashboardStats = {
+        totalWorkers: workersCount,
+        assignedWorkers: occupantsCount,
+        unassignedWorkers: Math.max(0, workersCount - occupantsCount),
+        occupancyRate: totalCapacity > 0 ? Math.round((occupantsCount / totalCapacity) * 100) : 0,
+        activeContracts: activeContractsCount,
+        totalCompanies: companiesCount,
+        pendingTransfers: pendingTransfersCount,
+        unpaidInvoices: unpaidInvoicesCount,
+        overdueInvoices: overdueInvoicesCount,
+        residenceOccupancy,
+        lastUpdated: Date.now()
+      };
+
+      setDashboardStats(stats);
+      return stats;
+
+    } catch (error) {
+      console.error('❌ [Dashboard] Failed to refresh stats:', error);
+      throw error;
+    }
+  }, [db, residences]);
+
+  // 🆕 Automatic Archiving of Checked-out Occupants
+  const autoArchiveOccupants = useCallback(async () => {
+    if (!db) return;
+    
+    try {
+      // Find occupants who are checked out (until is set)
+      // Note: != null query works in Firestore
+      const q = query(collection(db, 'occupants'), where('until', '!=', null), limit(20));
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) return;
+
+      console.log(`🧹 [Auto Archive] Found ${snapshot.size} checked-out occupants. Archiving...`);
+      
+      const batch = writeBatch(db);
+      let archivedCount = 0;
+
+      for (const docSnap of snapshot.docs) {
+        const occ = docSnap.data() as Occupant;
+        
+        // Create history record
+        const historyRef = doc(collection(db, 'accommodationHistory'));
+        batch.set(historyRef, {
+          id: historyRef.id,
+          workerId: occ.workerId,
+          actionType: 'CHECK_OUT',
+          actionDate: occ.until,
+          actionBy: occ.checkOutBy || 'system',
+          residenceId: occ.residenceId,
+          roomId: occ.roomId,
+          buildingId: occ.buildingId,
+          floorId: occ.floorId,
+          notes: 'Auto-archived from occupants collection',
+          createdAt: new Date().toISOString()
+        });
+
+        // Delete from occupants
+        batch.delete(docSnap.ref);
+        archivedCount++;
+      }
+
+      await batch.commit();
+      
+      if (archivedCount > 0) {
+        toast({
+          title: "أرشفة تلقائية",
+          description: `تم أرشفة ${archivedCount} سجل خروج قديم`,
+        });
+        // Refresh stats after cleanup
+        refreshDashboardStats();
+      }
+
+    } catch (error) {
+      console.error('❌ [Auto Archive] Failed:', error);
+    }
+  }, [db, toast, refreshDashboardStats]);
+
   const value: AccommodationContextValue = {
     residences,
     loading,
     refresh,
     workers,
     occupants,
+    dashboardStats, // NEW
+    refreshDashboardStats, // NEW
+    autoArchiveOccupants, // NEW
     accommodationHistory, // NEW
     transferRequests,
     notifications,
@@ -2658,8 +2893,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     getWorkerHistory,
     getRoomHistory,
     getHistoryByDateRange,
+    // Async History Fetching
+    fetchWorkerHistory,
+    fetchRoomHistory,
     // 🚨 EMERGENCY: Manual sync function to replace real-time listeners
     manualSyncFromFirestore,
+    // 🧹 Auto Archive
+    autoArchiveOccupants, // NEW
     // ⚡ Optimized Async Operations
     findWorkerAsync,
     getWorkersByIds,

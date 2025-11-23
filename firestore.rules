@@ -105,6 +105,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Transfer Requests (Accommodation)
+    match /transferRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || isSupervisor() || (isSignedIn() && resource.data.requestedBy == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
     // Accommodation History (immutable log of all check-in/out/transfer operations)
     match /accommodationHistory/{historyId} {
       // All signed-in users can read history for reporting and auditing

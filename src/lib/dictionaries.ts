@@ -1,5 +1,7 @@
 const en = {
     // General
+    boardView: 'Board View',
+    board: 'Board',
     viewAll: 'View All',
     location: 'Location',
     status: 'Status',
@@ -440,6 +442,8 @@ const en = {
 
 const ar = {
     // General
+    boardView: 'عرض اللوحة',
+    board: 'اللوحة',
     viewAll: 'عرض الكل',
     location: 'الموقع',
     status: 'الحالة',

@@ -1,18 +1,35 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { ManualSyncButton } from '@/components/accommodation/manual-sync-button';
+import { Button } from '@/components/ui/button';
 
 export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
-  const { workers, occupants, residences, contracts, invoices, transferRequests, companies } = ctx;
+  const { workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, refreshDashboardStats, autoArchiveOccupants } = ctx;
   const { currentUser } = useUsers();
+  
+  useEffect(() => {
+    const init = async () => {
+        // Refresh if no stats, or stale (older than 30s), OR if we have stats but residence occupancy is empty while we have residences
+        const isStale = !dashboardStats || (Date.now() - dashboardStats.lastUpdated > 30000);
+        const missingResidenceData = dashboardStats && residences.length > 0 && Object.keys(dashboardStats.residenceOccupancy).length === 0;
+        
+        if (isStale || missingResidenceData) {
+            await refreshDashboardStats();
+        }
+        
+        // Run auto-archive cleanup in background
+        autoArchiveOccupants();
+    };
+    init();
+  }, [refreshDashboardStats, dashboardStats, residences.length, autoArchiveOccupants]);
   
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
@@ -23,14 +40,42 @@ export default function AccommodationOverviewPage() {
 
   // Calculate metrics
   const metrics = useMemo(() => {
-    // Total workers
-    const totalWorkers = workers.length;
-    const assignedWorkers = occupants.length;
-    const unassignedWorkers = totalWorkers - assignedWorkers;
-
-    // Occupancy by residence
-    const occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
+    // 1. Determine source of truth
+    // If we have full data (workers loaded), use it for most accurate real-time client-side analysis
+    // If not, use dashboardStats which are fetched efficiently
+    const hasFullData = workers.length > 0 && occupants.length > 0;
     
+    let totalWorkers = 0;
+    let assignedWorkers = 0;
+    let unassignedWorkers = 0;
+    let activeContractsCount = 0;
+    let totalCompaniesCount = 0;
+    let pendingTransfersCount = 0;
+    let unpaidInvoicesCount = 0;
+    let overdueInvoicesCount = 0;
+    let occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
+
+    if (hasFullData) {
+        totalWorkers = workers.length;
+        assignedWorkers = occupants.length;
+        unassignedWorkers = totalWorkers - assignedWorkers;
+        activeContractsCount = contracts.filter(c => c.status === 'Active').length;
+        totalCompaniesCount = companies.length;
+        pendingTransfersCount = transferRequests.filter(t => t.status === 'Pending').length;
+        unpaidInvoicesCount = invoices.filter(i => i.status === 'Pending' || i.status === 'Overdue').length;
+        overdueInvoicesCount = invoices.filter(i => i.status === 'Overdue').length;
+    } else if (dashboardStats) {
+        totalWorkers = dashboardStats.totalWorkers;
+        assignedWorkers = dashboardStats.assignedWorkers;
+        unassignedWorkers = dashboardStats.unassignedWorkers;
+        activeContractsCount = dashboardStats.activeContracts;
+        totalCompaniesCount = dashboardStats.totalCompanies;
+        pendingTransfersCount = dashboardStats.pendingTransfers;
+        unpaidInvoicesCount = dashboardStats.unpaidInvoices;
+        overdueInvoicesCount = dashboardStats.overdueInvoices || 0;
+    }
+
+    // Calculate Capacity & Occupancy per Residence
     for (const res of filteredResidences) {
       let totalCapacity = 0;
       let totalRooms = 0;
@@ -41,6 +86,8 @@ export default function AccommodationOverviewPage() {
           if (room.spaceSqm && room.roomType) {
             const per = room.roomType === "Worker" ? 4 : room.roomType === "Supervisor" ? 8 : 16;
             totalCapacity += Math.floor(room.spaceSqm / per);
+          } else if (room.capacity) {
+             totalCapacity += room.capacity;
           }
         }
       };
@@ -56,7 +103,13 @@ export default function AccommodationOverviewPage() {
         }
       }
 
-      const occupied = occupants.filter(occ => occ.residenceId === res.id).length;
+      let occupied = 0;
+      if (hasFullData) {
+          occupied = occupants.filter(occ => occ.residenceId === res.id).length;
+      } else if (dashboardStats?.residenceOccupancy) {
+          occupied = dashboardStats.residenceOccupancy[res.id] || 0;
+      }
+
       occupancyByResidence[res.id] = { occupied, capacity: totalCapacity, rooms: totalRooms };
     }
 
@@ -85,57 +138,47 @@ export default function AccommodationOverviewPage() {
 
     // Nationality conflicts - rooms with multiple nationalities
     const nationalityConflicts: Array<{ residenceId: string; roomId: string; nationalities: string[] }> = [];
-    const roomNationalities: Record<string, Set<string>> = {};
     
-    for (const occ of occupants) {
-      const worker = workers.find(w => w.id === occ.workerId);
-      if (worker?.nationaliy) {
-        const key = `${occ.residenceId}_${occ.roomId}`;
-        if (!roomNationalities[key]) roomNationalities[key] = new Set();
-        roomNationalities[key].add(worker.nationaliy);
-      }
+    if (hasFullData) {
+        const roomNationalities: Record<string, Set<string>> = {};
+        for (const occ of occupants) {
+          const worker = workers.find(w => w.id === occ.workerId);
+          if (worker?.nationaliy) {
+            const key = `${occ.residenceId}_${occ.roomId}`;
+            if (!roomNationalities[key]) roomNationalities[key] = new Set();
+            roomNationalities[key].add(worker.nationaliy);
+          }
+        }
+        for (const [key, nats] of Object.entries(roomNationalities)) {
+          if (nats.size > 1) {
+             const [resId, roomId] = key.split('_');
+             nationalityConflicts.push({
+                residenceId: resId,
+                roomId,
+                nationalities: Array.from(nats)
+             });
+          }
+        }
     }
-
-    for (const [key, nats] of Object.entries(roomNationalities)) {
-      if (nats.size > 1) {
-        const [residenceId, roomId] = key.split('_');
-        nationalityConflicts.push({
-          residenceId,
-          roomId,
-          nationalities: Array.from(nats),
-        });
-      }
-    }
-
-    // Active contracts
-    const activeContracts = contracts.filter(c => c.status === 'Active').length;
-    const totalContracts = contracts.length;
-
-    // Pending transfers
-    const pendingTransfers = transferRequests.filter(t => t.status === 'Pending').length;
-
-    // Unpaid invoices
-    const unpaidInvoices = invoices.filter(inv => inv.status === 'Pending' || inv.status === 'Overdue').length;
-    const overdueInvoices = invoices.filter(inv => inv.status === 'Overdue').length;
 
     return {
-      totalWorkers,
-      assignedWorkers,
-      unassignedWorkers,
-      occupancyRate,
-      totalCapacity,
-      totalOccupied,
-      capacityWarnings,
-      nationalityConflicts,
-      activeContracts,
-      totalContracts,
-      pendingTransfers,
-      unpaidInvoices,
-      overdueInvoices,
-      totalCompanies: companies.length,
-      occupancyByResidence,
+        totalWorkers,
+        assignedWorkers,
+        unassignedWorkers,
+        occupancyRate,
+        totalOccupied,
+        totalCapacity,
+        activeContracts: activeContractsCount,
+        companies: totalCompaniesCount,
+        pendingTransfers: pendingTransfersCount,
+        unpaidInvoices: unpaidInvoicesCount,
+        overdueInvoices: overdueInvoicesCount,
+        occupancyByResidence,
+        capacityWarnings,
+        nationalityConflicts,
+        hasFullData
     };
-  }, [workers, occupants, residences, contracts, invoices, transferRequests, companies]);
+  }, [workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, filteredResidences]);
 
   return (
     <div className="p-6 space-y-6">
@@ -145,11 +188,17 @@ export default function AccommodationOverviewPage() {
           <p className="text-muted-foreground mt-2">Dashboard and key metrics for accommodation management</p>
         </div>
         <div className="flex items-center gap-3">
+          {!metrics.hasFullData && (
+             <Button variant="outline" size="sm" onClick={() => refreshDashboardStats()} className="gap-2">
+               <RefreshCw className="h-4 w-4" />
+               تحديث القراءات
+             </Button>
+          )}
           {/* 🚨 EMERGENCY MODE: Manual sync button (replaces real-time listeners) */}
           <Alert className="py-2 px-3">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              البيانات من ذاكرة التخزين المحلية - اضغط لتحديث من قاعدة البيانات
+              {metrics.hasFullData ? 'بيانات كاملة' : 'قراءات سريعة'}
             </AlertDescription>
           </Alert>
           <ManualSyncButton />
@@ -192,7 +241,7 @@ export default function AccommodationOverviewPage() {
           <CardContent>
             <div className="text-2xl font-bold">{metrics.activeContracts}</div>
             <p className="text-xs text-muted-foreground">
-              {metrics.totalContracts} total contracts
+              Active contracts
             </p>
           </CardContent>
         </Card>
@@ -203,7 +252,7 @@ export default function AccommodationOverviewPage() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalCompanies}</div>
+            <div className="text-2xl font-bold">{metrics.companies}</div>
             <p className="text-xs text-muted-foreground">
               Registered companies
             </p>

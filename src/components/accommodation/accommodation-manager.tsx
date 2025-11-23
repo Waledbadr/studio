@@ -33,6 +33,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { AddWorkerDialog } from "./add-worker-dialog";
+import { WorkerHistoryDialog } from "./worker-history-dialog";
+import { RoomHistoryDialog } from "./room-history-dialog";
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -121,13 +123,25 @@ export function AccommodationManager() {
 
   // Derived State
   const selectedResidence = accessibleResidences.find(r => r.id === selectedResidenceId);
-  const buildings = selectedResidence?.buildings || [];
+  
+  const buildings = React.useMemo(() => 
+    [...(selectedResidence?.buildings || [])].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' })),
+  [selectedResidence]);
+
   const selectedBuilding = buildings.find(b => b.id === selectedBuildingId);
-  const floors = selectedBuilding?.floors || [];
+  
+  const floors = React.useMemo(() => 
+    [...(selectedBuilding?.floors || [])].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' })),
+  [selectedBuilding]);
+
   const selectedFloor = floors.find(f => f.id === selectedFloorId);
   
   // Handle direct rooms (no buildings/floors)
-  const rooms = selectedFloor?.rooms || (buildings.length === 0 ? selectedResidence?.rooms || [] : []);
+  const rooms = React.useMemo(() => {
+    const raw = selectedFloor?.rooms || (buildings.length === 0 ? selectedResidence?.rooms || [] : []);
+    return [...raw].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [selectedFloor, buildings.length, selectedResidence]);
+
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
 
   // Initialize selection
@@ -291,9 +305,9 @@ export function AccommodationManager() {
         // Add - Prevent duplicates
         setSelectedWorkers(curr => {
           if (curr.some(w => w.id === workerId)) return curr;
-          return [...curr, worker];
+          return [worker, ...curr];
         });
-        return [...prev, workerId];
+        return [workerId, ...prev];
       }
     });
   };
@@ -751,28 +765,127 @@ export function AccommodationManager() {
                       <span className="text-[10px] opacity-50">Drag to room</span>
                     </div>
                     <div className="space-y-1">
-                      {selectedWorkers.map(worker => (
+                      {selectedWorkers.map(worker => {
+                        const occupancy = searchOccupancies[worker.id] || occupants.find(o => o.workerId === worker.id);
+                        const isOccupied = !!occupancy;
+
+                        // Resolve Names
+                        let residenceName = occupancy?.residenceName || 'Unknown';
+                        let buildingName = occupancy?.buildingName || occupancy?.buildingId || '?';
+                        let floorName = occupancy?.floorName || occupancy?.floorId || '?';
+                        let roomName = occupancy?.roomName || occupancy?.roomId || '?';
+
+                        if (isOccupied && residences.length > 0) {
+                          const res = residences.find(r => r.id === occupancy.residenceId);
+                          if (res) {
+                            residenceName = res.name;
+                            
+                            if (occupancy.buildingId) {
+                              const b = res.buildings?.find(b => b.id === occupancy.buildingId);
+                              if (b) {
+                                buildingName = b.name || b.id;
+                                if (occupancy.floorId) {
+                                  const f = b.floors?.find(f => f.id === occupancy.floorId);
+                                  if (f) {
+                                    floorName = f.name || f.id;
+                                    if (occupancy.roomId) {
+                                       const r = f.rooms?.find(r => r.id === occupancy.roomId);
+                                       if (r) roomName = r.name || r.id;
+                                    }
+                                  }
+                                }
+                              }
+                            } else if (occupancy.roomId) {
+                               const r = res.rooms?.find(r => r.id === occupancy.roomId);
+                               if (r) roomName = r.name || r.id;
+                            }
+                          }
+                        }
+
+                        return (
                         <div 
                           key={worker.id} 
-                          className="flex items-start gap-2 p-2 rounded border bg-primary/10 border-primary text-sm"
+                          className={`flex flex-col p-2 rounded border cursor-pointer transition-colors text-sm hover:bg-muted ${isOccupied ? 'bg-amber-50/50 border-amber-200' : 'bg-primary/10 border-primary'}`}
                         >
-                          <Checkbox 
-                            checked={true}
-                            onCheckedChange={() => toggleWorkerSelection(worker)}
-                            className="mt-0.5 h-3 w-3"
-                          />
-                          <div className="overflow-hidden flex-1">
-                            <div className="font-medium truncate">{worker.name}</div>
-                            <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                              <span className="truncate">{worker.role || 'Worker'}</span>
-                              <span>•</span>
-                              <span className="truncate">{worker.nationaliy || 'Unknown'}</span>
-                              <span>•</span>
-                              <span className="truncate">{worker.company || '-'}</span>
+                          {isOccupied ? (
+                            // Occupied Worker Card Layout
+                            <div className="flex justify-between items-start w-full">
+                              <div className="flex items-start gap-2 flex-1">
+                                <Checkbox 
+                                  checked={true}
+                                  onCheckedChange={() => toggleWorkerSelection(worker)}
+                                  className="mt-1 h-3 w-3"
+                                />
+                                <div className="flex-1">
+                                  {/* Line 1: Name */}
+                                  <div className="font-bold text-sm text-amber-950 mb-1">
+                                    {worker.name} <span className="font-normal text-amber-900/70 text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                  </div>
+                                  
+                                  {/* Line 2: Role . Nationality . Company */}
+                                  <div className="text-amber-800 mb-1 flex flex-wrap gap-1 items-center text-xs">
+                                    <span className="font-medium">{worker.role || 'Worker'}</span>
+                                    <span className="text-amber-400">•</span>
+                                    <span>{worker.nationaliy || 'Unknown'}</span>
+                                    <span className="text-amber-400">•</span>
+                                    <span>{worker.company || 'No Company'}</span>
+                                  </div>
+
+                                  {/* Line 3: Residence . Building-Floor-Room . Date . Type */}
+                                  <div className="text-amber-700/80 flex flex-wrap gap-1 items-center text-[10px]">
+                                    <span className="font-medium">{residenceName}</span>
+                                    <span className="text-amber-300">•</span>
+                                    <span>
+                                      {buildingName}-{floorName}-{roomName}
+                                    </span>
+                                    {occupancy.checkInDate && (
+                                        <>
+                                            <span className="text-amber-300">•</span>
+                                            <span>{new Date(occupancy.checkInDate).toLocaleDateString()}</span>
+                                        </>
+                                    )}
+                                    {occupancy.notes && (
+                                        <>
+                                            <span className="text-amber-300">•</span>
+                                            <span className="font-medium">{occupancy.notes}</span>
+                                        </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            // Unoccupied Worker Card Layout
+                            <div className="flex justify-between items-start w-full">
+                              <div className="flex items-start gap-2 flex-1">
+                                <Checkbox 
+                                  checked={true}
+                                  onCheckedChange={() => toggleWorkerSelection(worker)}
+                                  className="mt-1 h-3 w-3"
+                                />
+                                <div className="flex-1">
+                                  <div className="font-bold text-sm mb-1">
+                                    {worker.name} <span className="font-normal text-muted-foreground text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                  </div>
+                                  <div className="text-muted-foreground flex flex-wrap gap-1 items-center text-xs">
+                                    <span className="font-medium text-primary">{worker.role || 'Worker'}</span>
+                                    <span>•</span>
+                                    <span>{worker.nationaliy || 'Unknown'}</span>
+                                    <span>•</span>
+                                    <span>{worker.company || 'No Company'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div onClick={e => e.stopPropagation()}>
+                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 )}
@@ -892,15 +1005,17 @@ export function AccommodationManager() {
                               </div>
                             </div>
 
-                            {/* Right Side: Check Out Button */}
-                            {canManageOccupancy && (
-                              <div onClick={e => e.stopPropagation()}>
+                            {/* Right Side: Actions */}
+                            <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                              <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                              
+                              {canManageOccupancy && (
                                 <Dialog>
                                   <DialogTrigger asChild>
                                     <Button 
                                       size="icon" 
                                       variant="ghost" 
-                                      className="h-7 w-7 text-amber-700 hover:text-red-600 hover:bg-red-50 -mt-1 -mr-1"
+                                      className="h-6 w-6 text-amber-700 hover:text-red-600 hover:bg-red-50"
                                       title="Check Out"
                                     >
                                       <LogOut className="h-3.5 w-3.5" />
@@ -964,28 +1079,33 @@ export function AccommodationManager() {
                                     </DialogFooter>
                                   </DialogContent>
                                 </Dialog>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         ) : (
                           // Standard Unassigned Worker Card Layout
-                          <div className="flex items-start gap-2">
-                            <Checkbox 
-                              checked={false}
-                              onCheckedChange={() => toggleWorkerSelection(worker)}
-                              className="mt-0.5 h-3 w-3"
-                            />
-                            <div className="overflow-hidden flex-1">
-                              <div className="font-medium truncate">
-                                {worker.name} <span className="text-muted-foreground text-xs font-normal">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                          <div className="flex items-start gap-2 justify-between">
+                            <div className="flex items-start gap-2 flex-1">
+                              <Checkbox 
+                                checked={false}
+                                onCheckedChange={() => toggleWorkerSelection(worker)}
+                                className="mt-0.5 h-3 w-3"
+                              />
+                              <div className="overflow-hidden flex-1">
+                                <div className="font-medium truncate">
+                                  {worker.name} <span className="text-muted-foreground text-xs font-normal">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                                  <span className="truncate">{worker.company || 'No Company'}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{worker.nationaliy || 'Unknown'}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{worker.role || 'Worker'}</span>
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                                <span className="truncate">{worker.company || 'No Company'}</span>
-                                <span>•</span>
-                                <span className="truncate">{worker.nationaliy || 'Unknown'}</span>
-                                <span>•</span>
-                                <span className="truncate">{worker.role || 'Worker'}</span>
-                              </div>
+                            </div>
+                            <div onClick={e => e.stopPropagation()}>
+                              <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
                             </div>
                           </div>
                         )}
@@ -1202,9 +1322,14 @@ export function AccommodationManager() {
                                 </Badge>
                               )}
                             </div>
-                            <Badge variant={isFull ? "destructive" : "secondary"} className="text-[10px] h-4 px-1 shrink-0 ml-1">
-                              {roomOccupants.length}/{capacity}
-                            </Badge>
+                            <div className="flex items-center gap-1 shrink-0 ml-1">
+                              <div onClick={e => e.stopPropagation()}>
+                                <RoomHistoryDialog roomId={room.id} roomName={room.name || room.id} />
+                              </div>
+                              <Badge variant={isFull ? "destructive" : "secondary"} className="text-[10px] h-4 px-1">
+                                {roomOccupants.length}/{capacity}
+                              </Badge>
+                            </div>
                           </div>
                           
                           {/* Occupants Visualization */}
@@ -1272,52 +1397,64 @@ export function AccommodationManager() {
                                     currentRoomId: selectedRoomId
                                   }));
                                 }}
-                                className="flex justify-between items-center p-2 rounded border bg-card text-sm group cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                                className={`flex items-start gap-2 p-2 rounded border text-sm group cursor-grab active:cursor-grabbing transition-colors ${selectedWorkerIds.includes(occ.workerId) ? 'bg-primary/10 border-primary' : 'bg-card hover:border-primary/50'}`}
                               >
-                                <div className="overflow-hidden">
-                                  <div className="font-medium truncate">
-                                    {worker?.name || 'Loading...'} <span className="text-muted-foreground text-xs font-normal">{worker?.employeeId ? `(${worker.employeeId})` : ''}</span>
-                                  </div>
-                                  <div className="flex gap-2 text-[10px] text-muted-foreground">
-                                    <span className="truncate">{worker?.role || 'Worker'}</span>
-                                    <span>•</span>
-                                    <span className="truncate">{worker?.nationaliy || 'Unknown'}</span>
-                                    {worker?.company && (
-                                      <>
-                                        <span>•</span>
-                                        <span className="truncate">{worker.company}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                  <div className="flex gap-2 text-[10px] text-muted-foreground mt-1">
-                                    <span>{new Date(occ.since).toLocaleDateString()}</span>
-                                    {occ.notes && (
+                                <Checkbox 
+                                  checked={selectedWorkerIds.includes(occ.workerId)}
+                                  onCheckedChange={() => worker && toggleWorkerSelection(worker)}
+                                  className="mt-1 h-3 w-3"
+                                />
+                                <div className="flex-1 overflow-hidden flex justify-between items-center">
+                                  <div className="overflow-hidden">
+                                    <div className="font-medium truncate">
+                                      {worker?.name || 'Loading...'} <span className="text-muted-foreground text-xs font-normal">{worker?.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                    </div>
+                                    <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                      <span className="truncate">{worker?.role || 'Worker'}</span>
+                                      <span>•</span>
+                                      <span className="truncate">{worker?.nationaliy || 'Unknown'}</span>
+                                      {worker?.company && (
                                         <>
-                                            <span>•</span>
-                                            <span className="truncate max-w-[100px]" title={occ.notes}>{occ.notes}</span>
+                                          <span>•</span>
+                                          <span className="truncate">{worker.company}</span>
                                         </>
-                                    )}
+                                      )}
+                                    </div>
+                                    <div className="flex gap-2 text-[10px] text-muted-foreground mt-1">
+                                      <span>{new Date(occ.since).toLocaleDateString()}</span>
+                                      {occ.notes && (
+                                          <>
+                                              <span>•</span>
+                                              <span className="truncate max-w-[100px]" title={occ.notes}>{occ.notes}</span>
+                                          </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <WorkerHistoryDialog workerId={occ.workerId} workerName={worker?.name || 'Unknown'} />
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Check Out"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if(confirm('Check out this worker?')) {
+                                          await bulkCheckOut({
+                                            workerIds: [occ.workerId],
+                                            performedBy: currentUser?.id || 'Admin',
+                                            checkOutDate: new Date().toISOString()
+                                          });
+                                          toast({ title: "Checked Out", description: "Worker removed" });
+                                        }
+                                      }}
+                                    >
+                                      <LogOut className="h-3 w-3" />
+                                    </Button>
                                   </div>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Check Out"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if(confirm('Check out this worker?')) {
-                                      await bulkCheckOut({
-                                        workerIds: [occ.workerId],
-                                        performedBy: currentUser?.id || 'Admin',
-                                        checkOutDate: new Date().toISOString()
-                                      });
-                                      toast({ title: "Checked Out", description: "Worker removed" });
-                                    }
-                                  }}
-                                >
-                                  <LogOut className="h-3 w-3" />
-                                </Button>
                               </div>
                             );
                           })}
@@ -1334,40 +1471,94 @@ export function AccommodationManager() {
               </div>
                   
               <div className="p-4 border-t bg-background mt-auto space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-medium text-muted-foreground">Check-in Date</label>
-                    <Input 
-                      type="date" 
-                      className="h-7 text-xs" 
-                      value={checkInDate}
-                      onChange={(e) => setCheckInDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-medium text-muted-foreground">Type</label>
-                    <Select value={checkInType} onValueChange={setCheckInType}>
-                      <SelectTrigger className="h-7 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="New Recruitment">New Recruitment</SelectItem>
-                        <SelectItem value="Return from Leave">Return from Leave</SelectItem>
-                        <SelectItem value="Another Accommodation">Another Accommodation</SelectItem>
-                        <SelectItem value="Outside Accommodation">Outside Accommodation</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                {(() => {
+                  const selectedAreAssigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => occupants.some(o => o.workerId === id));
+                  const selectedAreUnassigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => !occupants.some(o => o.workerId === id));
+                  const isMixed = selectedWorkerIds.length > 0 && !selectedAreAssigned && !selectedAreUnassigned;
 
-                <Button 
-                  className="w-full"
-                  onClick={handleAssign} 
-                  disabled={!selectedRoom || selectedWorkerIds.length === 0}
-                >
-                  Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                  return (
+                    <>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted-foreground">
+                                {selectedAreAssigned ? 'Check-out Date' : 'Check-in Date'}
+                            </label>
+                            <Input 
+                              type="date" 
+                              className="h-7 text-xs" 
+                              value={checkInDate}
+                              onChange={(e) => setCheckInDate(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted-foreground">
+                                {selectedAreAssigned ? 'Reason' : 'Type'}
+                            </label>
+                            <Select value={checkInType} onValueChange={setCheckInType}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {selectedAreAssigned ? (
+                                    <>
+                                        <SelectItem value="End of Contract">End of Contract</SelectItem>
+                                        <SelectItem value="Transfer">Transfer</SelectItem>
+                                        <SelectItem value="Vacation">Vacation</SelectItem>
+                                        <SelectItem value="Termination">Termination</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                    </>
+                                ) : (
+                                    <>
+                                        <SelectItem value="New Recruitment">New Recruitment</SelectItem>
+                                        <SelectItem value="Return from Leave">Return from Leave</SelectItem>
+                                        <SelectItem value="Another Accommodation">Another Accommodation</SelectItem>
+                                        <SelectItem value="Outside Accommodation">Outside Accommodation</SelectItem>
+                                    </>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <Button 
+                          className={`w-full ${selectedAreAssigned ? 'bg-destructive hover:bg-destructive/90' : ''}`}
+                          onClick={async () => {
+                            if (selectedAreAssigned) {
+                               if (!confirm(`Check out ${selectedWorkerIds.length} workers?`)) return;
+                               const result = await bulkCheckOut({
+                                    workerIds: selectedWorkerIds,
+                                    performedBy: currentUser?.id || 'Admin',
+                                    checkOutDate: new Date(checkInDate).toISOString(),
+                                    reason: checkInType
+                               });
+                               if (result.ok) {
+                                    toast({ title: "Checked Out", description: `Successfully checked out ${selectedWorkerIds.length} workers` });
+                                    setSelectedWorkerIds([]);
+                                    setSelectedWorkers([]);
+                               } else {
+                                    toast({ title: "Error", description: "Failed to check out workers", variant: "destructive" });
+                               }
+                            } else {
+                               handleAssign();
+                            }
+                          }} 
+                          disabled={(!selectedRoom && !selectedAreAssigned) || selectedWorkerIds.length === 0 || isMixed}
+                        >
+                          {selectedAreAssigned ? (
+                              <>
+                                Check Out {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
+                                <LogOut className="ml-2 h-4 w-4" />
+                              </>
+                          ) : (
+                              <>
+                                Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </>
+                          )}
+                        </Button>
+                    </>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>

@@ -30,7 +30,7 @@ import {
 const asArray = <T,>(val: any): T[] => Array.isArray(val) ? (val as T[]) : (val && typeof val === 'object' ? Object.values(val) as T[] : []);
 
 export default function AccommodationResidencesView() {
-  const { dict, language } = useLanguage();
+  const { dict, locale: language } = useLanguage();
   const { residences, updateComplex, loading } = useResidences();
   const { occupants } = useAccommodation();
   const { currentUser } = useUsers();
