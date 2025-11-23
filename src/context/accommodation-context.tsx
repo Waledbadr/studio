@@ -7,6 +7,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
 import { useUsers } from '@/context/users-context';
+import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
+import { differenceInDays, isWithinInterval, max, min, parseISO, startOfDay, endOfDay } from 'date-fns';
 
 export type Location = { lat: number; lng: number } | null;
 
@@ -381,7 +383,7 @@ type AccommodationContextValue = {
   // Invoice CRUD & generation
   saveInvoice: (invoice: Invoice | Omit<Invoice, 'id'>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
-  generateMonthlyInvoices: (month: string) => Promise<{ generated: number; errors: number }>;
+  generateMonthlyInvoices: (month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }) => Promise<{ generated: number; errors: number }>;
   // Utility
   getContractsByCompany: (companyId: string) => Contract[];
   getInvoicesByContract: (contractId: string) => Invoice[];
@@ -1663,23 +1665,35 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // ============ INVOICE GENERATION ============
-  async function generateMonthlyInvoices(month: string): Promise<{ generated: number; errors: number }> {
+  async function generateMonthlyInvoices(month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }): Promise<{ generated: number; errors: number }> {
     // month format: YYYY-MM
     const result = { generated: 0, errors: 0 };
     try {
       if (!db) throw new Error('Firestore not configured');
       
-      const [year, monthNum] = month.split('-').map(Number);
-      const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
-      const endDate = new Date(Date.UTC(year, monthNum, 0)); // last day of month
-      const daysInMonth = endDate.getDate();
+      // 1. Get Fiscal Period
+      let startDate: Date;
+      let endDate: Date;
+
+      if (customRange) {
+        startDate = customRange.startDate;
+        endDate = customRange.endDate;
+      } else {
+        const period = getFiscalMonthPeriod(month, customStartDay);
+        startDate = period.startDate;
+        endDate = period.endDate;
+      }
+      
+      // 2. Get History for the period
+      const periodHistory = getHistoryByDateRange(startDate.toISOString(), endDate.toISOString());
 
       // Find all active contracts for this month
       const activeContracts = contracts.filter(c => {
         if (c.status !== 'Active') return false;
         const contractStart = new Date(c.startDate);
         const contractEnd = new Date(c.endDate);
-        return contractStart <= endDate && contractEnd >= startDate;
+        // Contract must overlap with fiscal period
+        return contractStart < endDate && contractEnd > startDate;
       });
 
       for (const contract of activeContracts) {
@@ -1693,19 +1707,99 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
             continue;
           }
 
-          // Count workers for this residence during this month
-          const workersInResidence = occupants.filter(occ => {
-            const occStart = new Date(occ.since);
-            return occ.residenceId === contract.residenceId && occStart <= endDate;
-          }).length;
-
-          if (workersInResidence === 0) {
-            console.log(`No workers found for contract ${contract.id} in month ${month}`);
-            continue;
+          // Resolve Company
+          const company = companies.find(c => c.id === contract.companyId);
+          if (!company) {
+             console.warn(`Company not found for contract ${contract.id}`);
+             continue;
           }
 
-          // Calculate total amount: (workers × rate × days) / 30
-          const totalAmount = (workersInResidence * contract.ratePerPersonPerMonth * daysInMonth) / 30;
+          // Find Workers for this Company
+          // Match by name (if worker.company is name) or ID.
+          const companyWorkers = workers.filter(w => 
+            w.company === company.name || w.company === company.id
+          );
+
+          // Calculate Days for each worker
+          const workerBreakdown: any[] = [];
+          let totalBillableDays = 0;
+
+          for (const worker of companyWorkers) {
+             // Filter movements for this worker in this residence
+             const workerMovements = periodHistory.filter(h => 
+               h.workerId === worker.id && 
+               h.residenceId === contract.residenceId
+             ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+
+             // Check if currently occupying
+             const currentOccupancy = occupants.find(o => 
+               o.workerId === worker.id && o.residenceId === contract.residenceId
+             );
+
+             // Determine initial state at startDate
+             let isInside = false;
+             
+             if (workerMovements.length > 0) {
+                const firstType = workerMovements[0].actionType;
+                if (firstType === 'CHECK_OUT' || firstType === 'TRANSFER_OUT') {
+                   isInside = true;
+                }
+             } else {
+                // No movements in period.
+                if (currentOccupancy) {
+                   // If currently occupied and no movements, check if they were there before start
+                   if (new Date(currentOccupancy.since) < startDate) {
+                      isInside = true;
+                   }
+                }
+             }
+
+             // Calculate active days
+             let days = 0;
+             let currentStatus = isInside;
+             let lastDate = startDate;
+
+             for (const event of workerMovements) {
+                const eventDate = new Date(event.actionDate);
+                if (eventDate < startDate) continue; 
+                if (eventDate > endDate) break; 
+
+                if (currentStatus) {
+                   const diff = differenceInDays(eventDate, lastDate);
+                   days += diff;
+                }
+                
+                if (event.actionType === 'CHECK_IN' || event.actionType === 'TRANSFER_IN') {
+                   currentStatus = true;
+                } else {
+                   currentStatus = false;
+                }
+                lastDate = eventDate;
+             }
+
+             // After last event, if still inside, add days until endDate
+             if (currentStatus) {
+                const diff = differenceInDays(endDate, lastDate);
+                days += diff;
+             }
+
+             if (days > 0) {
+                workerBreakdown.push({
+                   workerId: worker.id,
+                   name: worker.name,
+                   days,
+                   amount: (contract.ratePerPersonPerMonth / 30) * days
+                });
+                totalBillableDays += days;
+             }
+          }
+
+          if (totalBillableDays === 0) {
+             console.log(`No billable days for contract ${contract.id}`);
+             continue;
+          }
+
+          const totalAmount = workerBreakdown.reduce((sum, w) => sum + w.amount, 0);
 
           const invoice: Invoice = {
             id: `inv_${contract.id}_${month.replace('-', '')}`,
@@ -1715,12 +1809,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
             month,
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString(),
-            numberOfWorkers: workersInResidence,
-            numberOfDays: daysInMonth,
+            numberOfWorkers: workerBreakdown.length,
+            numberOfDays: totalBillableDays,
             ratePerPerson: contract.ratePerPersonPerMonth,
             totalAmount: Math.round(totalAmount * 100) / 100,
             status: 'Pending',
             generatedAt: new Date().toISOString(),
+            notes: JSON.stringify(workerBreakdown),
           };
 
           await saveInvoice(invoice);

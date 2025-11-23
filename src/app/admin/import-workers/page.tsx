@@ -7,6 +7,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileJson, CheckCircle, XCircle, AlertCircle, Loader2, FileText, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 interface ImportResult {
   success: boolean;
@@ -219,8 +223,24 @@ export default function ImportWorkersPage() {
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [parsedData, setParsedData] = useState<any[] | null>(null);
   const [isTextFile, setIsTextFile] = useState(false);
+  const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
+  const [defaultCompany, setDefaultCompany] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        if (!db) return;
+        const q = query(collection(db, 'companies'), orderBy('name'));
+        const snap = await getDocs(q);
+        setCompanies(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+      } catch (e) {
+        console.error("Failed to fetch companies", e);
+      }
+    };
+    fetchCompanies();
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -300,12 +320,18 @@ export default function ImportWorkersPage() {
     setResult(null);
 
     try {
+      // Apply default company
+      const dataToImport = parsedData.map(w => ({
+        ...w,
+        company: w.company || defaultCompany || ''
+      }));
+
       const response = await fetch('/api/workers/import', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(parsedData),
+        body: JSON.stringify(dataToImport),
       });
 
       const result: ImportResult = await response.json();
@@ -531,6 +557,31 @@ export default function ImportWorkersPage() {
         </Card>
       )}
 
+      {/* Default Company Selection */}
+      {parsedData && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>إعدادات إضافية</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-md">
+              <Label>الشركة الافتراضية (للعمال الذين ليس لديهم شركة)</Label>
+              <Select value={defaultCompany} onValueChange={(val) => setDefaultCompany(val === 'none' ? '' : val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر شركة..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- بدون --</SelectItem>
+                  {companies.map(c => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Preview */}
       {previewData && previewData.length > 0 && (
         <Card className="mb-6">
@@ -568,7 +619,7 @@ export default function ImportWorkersPage() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
-                      <td className="p-2">{worker.company || '-'}</td>
+                      <td className="p-2">{worker.company || defaultCompany || '-'}</td>
                       <td className="p-2">{worker.nationality || worker.nationaliy || '-'}</td>
                       <td className="p-2">{worker.role || 'Worker'}</td>
                     </tr>

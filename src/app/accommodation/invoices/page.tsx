@@ -10,8 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar, Plus } from 'lucide-react';
+import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getFiscalMonthPeriod, formatFiscalDate, FISCAL_START_DAY } from '@/lib/fiscal-month-utils';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 export default function InvoicesPage() {
   const { invoices, contracts, companies, residences, generateMonthlyInvoices, saveInvoice } = useAccommodation();
@@ -20,6 +25,11 @@ export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [fiscalStartDay, setFiscalStartDay] = useState(FISCAL_START_DAY);
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
@@ -59,9 +69,17 @@ export default function InvoicesPage() {
       toast({ title: 'Error', description: 'Please select a month', variant: 'destructive' });
       return;
     }
+
+    if (!dateRange.from || !dateRange.to) {
+      toast({ title: 'Error', description: 'Please select a date range', variant: 'destructive' });
+      return;
+    }
     
     try {
-      const result = await generateMonthlyInvoices(selectedMonth);
+      const result = await generateMonthlyInvoices(selectedMonth, undefined, {
+        startDate: dateRange.from,
+        endDate: dateRange.to
+      });
       setGenerateDialogOpen(false);
       toast({
         title: 'Success',
@@ -71,6 +89,24 @@ export default function InvoicesPage() {
       console.error('Failed to generate invoices:', error);
     }
   };
+
+  const handleMonthSelect = (monthStr: string) => {
+    setSelectedMonth(monthStr);
+    const period = getFiscalMonthPeriod(monthStr, fiscalStartDay);
+    setDateRange({ from: period.startDate, to: period.endDate });
+  };
+
+  const months = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 12 }, (_, i) => {
+      const monthNum = i + 1;
+      const monthStr = `${currentYear}-${String(monthNum).padStart(2, '0')}`;
+      return {
+        value: monthStr,
+        label: new Date(currentYear, i).toLocaleString('default', { month: 'long' })
+      };
+    });
+  }, []);
 
   const handleMarkAsPaid = async (invoice: Invoice) => {
     try {
@@ -140,14 +176,65 @@ export default function InvoicesPage() {
             
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="month">Select Month</Label>
-                <Input
-                  id="month"
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  max={currentMonth}
-                />
+                <Label>Quick Select Month</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {months.map((m) => (
+                    <Button
+                      key={m.value}
+                      variant={selectedMonth === m.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleMonthSelect(m.value)}
+                      className="w-full"
+                    >
+                      {m.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Fiscal Period Range</Label>
+                <div className="flex flex-col gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateRange.from && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                              {format(dateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(dateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange.from}
+                        selected={dateRange}
+                        onSelect={(range) => setDateRange(range || { from: undefined, to: undefined })}
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">
+                    Start date is inclusive, End date is exclusive for calculation purposes.
+                  </p>
+                </div>
               </div>
               <div className="text-sm text-muted-foreground">
                 <p>This will create invoices for:</p>
@@ -296,11 +383,11 @@ export default function InvoicesPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm">
-                            <Calendar className="h-3 w-3" />
+                            <CalendarIcon className="h-3 w-3" />
                             {invoice.month}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {invoice.numberOfDays} days
+                            {formatFiscalDate(invoice.startDate)} - {formatFiscalDate(invoice.endDate)}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -412,7 +499,7 @@ export default function InvoicesPage() {
                     <div className="text-2xl font-bold">{selectedInvoice.totalAmount.toFixed(2)} SAR</div>
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    Calculation: {selectedInvoice.numberOfWorkers} workers × {selectedInvoice.ratePerPerson} SAR × {selectedInvoice.numberOfDays} days ÷ 30
+                    Total calculated based on individual worker occupancy days (Rate ÷ 30 × Days).
                   </div>
                 </div>
 
@@ -440,8 +527,39 @@ export default function InvoicesPage() {
 
                 {selectedInvoice.notes && (
                   <div>
-                    <Label className="text-muted-foreground">Notes</Label>
-                    <div className="text-sm">{selectedInvoice.notes}</div>
+                    <Label className="text-muted-foreground mb-2 block">Worker Breakdown</Label>
+                    {(() => {
+                      try {
+                        const breakdown = JSON.parse(selectedInvoice.notes);
+                        if (Array.isArray(breakdown)) {
+                          return (
+                            <div className="rounded-md border max-h-[200px] overflow-y-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="h-8">Worker</TableHead>
+                                    <TableHead className="h-8 text-right">Days</TableHead>
+                                    <TableHead className="h-8 text-right">Amount</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {breakdown.map((w: any) => (
+                                    <TableRow key={w.workerId}>
+                                      <TableCell className="py-2">{w.name}</TableCell>
+                                      <TableCell className="py-2 text-right">{w.days}</TableCell>
+                                      <TableCell className="py-2 text-right">{Number(w.amount).toFixed(2)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          );
+                        }
+                        return <div className="text-sm">{selectedInvoice.notes}</div>;
+                      } catch (e) {
+                        return <div className="text-sm">{selectedInvoice.notes}</div>;
+                      }
+                    })()}
                   </div>
                 )}
               </div>

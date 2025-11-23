@@ -22,7 +22,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, UserPlus } from "lucide-react";
+import { Plus, Loader2, UserPlus, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface AddWorkerDialogProps {
   trigger?: React.ReactNode;
@@ -31,9 +45,10 @@ interface AddWorkerDialogProps {
 }
 
 export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: AddWorkerDialogProps) {
-  const { saveWorker } = useAccommodation();
+  const { saveWorker, companies } = useAccommodation();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -172,13 +187,49 @@ export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: Ad
             <Label htmlFor="company" className="text-right">
               Company
             </Label>
-            <Input
-              id="company"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-              className="col-span-3"
-              placeholder="Employer Name"
-            />
+            <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={companyOpen}
+                  className="col-span-3 justify-between font-normal"
+                >
+                  {formData.company
+                    ? companies.find((c) => c.name === formData.company)?.name || formData.company
+                    : "Select company..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search company..." />
+                  <CommandList>
+                    <CommandEmpty>No company found.</CommandEmpty>
+                    <CommandGroup>
+                      {companies.map((company) => (
+                        <CommandItem
+                          key={company.id}
+                          value={company.name}
+                          onSelect={(currentValue) => {
+                            setFormData({ ...formData, company: currentValue });
+                            setCompanyOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.company === company.name ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {company.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="role" className="text-right">
