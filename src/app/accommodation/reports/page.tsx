@@ -39,11 +39,15 @@ export default function ReportsPage() {
       let totalCapacity = 0;
 
       const processRooms = (rooms: any[]) => {
+        if (!Array.isArray(rooms)) return;
         for (const room of rooms) {
           totalRooms++;
           if (room.spaceSqm && room.roomType) {
+            const space = Number(room.spaceSqm);
             const per = room.roomType === "Worker" ? 4 : room.roomType === "Supervisor" ? 8 : 16;
-            totalCapacity += Math.floor(room.spaceSqm / per);
+            totalCapacity += Math.floor(space / per);
+          } else if (room.capacity) {
+            totalCapacity += Number(room.capacity);
           }
         }
       };

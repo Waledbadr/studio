@@ -226,7 +226,7 @@ export default function InvoicesPage() {
                         mode="range"
                         defaultMonth={dateRange.from}
                         selected={dateRange}
-                        onSelect={(range) => setDateRange(range || { from: undefined, to: undefined })}
+                        onSelect={(range) => setDateRange(range ? { from: range.from, to: range.to } : { from: undefined, to: undefined })}
                         numberOfMonths={2}
                       />
                     </PopoverContent>

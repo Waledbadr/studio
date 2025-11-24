@@ -225,7 +225,9 @@ export default function OrderDetailPage() {
         // Some legacy orders may store itemId instead of id
         const rawId = (item as any).id ?? (item as any).itemId;
         if (!rawId) return 0;
-        const baseItemId = String(rawId).split('-')[0]; 
+        // Order items may append a variant after '::', keep the base document id
+        const raw = String(rawId);
+        const baseItemId = raw.includes('::') ? raw.split('::')[0] : raw;
         const baseItem = allItems.find(i => i.id === baseItemId);
         if (!baseItem) return 0;
         return getStockForResidence(baseItem, order.residenceId);

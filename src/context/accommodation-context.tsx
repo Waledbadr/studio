@@ -37,6 +37,7 @@ export type Building = {
 export type Residence = {
   id: string;
   name: string;
+  city?: string; // City name from Complex
   address?: string;
   location?: Location;
   managerId?: string; // Added managerId
@@ -118,7 +119,7 @@ export type AccommodationHistory = {
   duration?: number; // Days stayed (calculated for CHECK_OUT)
   relatedTransferRequestId?: string; // Link to TransferRequest if applicable
   
-  createdAt: string; // Timestamp when record was created
+  createdAt?: string; // Timestamp when record was created
 };
 
 export type TransferRequest = {
@@ -348,7 +349,7 @@ type AccommodationContextValue = {
     residenceId: string,
     roomId: string,
     checkInDate?: string
-  ) => { ok: boolean; error: string };
+  ) => Promise<{ ok: boolean; error: string }>;
   bulkAssign: (
     workerIds: string[],
     residenceId: string,
@@ -672,6 +673,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return {
       id: complex.id,
       name: complex.name || complex.title || "Unnamed",
+      city: complex.city || "",
       address: complex.city || complex.address || "",
       location: complex.location || null,
       managerId: complex.managerId,
@@ -751,125 +753,140 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
-  // 🚨 EMERGENCY: Workers listener DISABLED (was causing 12K reads per operation)
+  // ⚡ OPTIMIZED: Workers - Load on demand instead of real-time listener
+  // This prevents loading 4000+ workers on every page load
+  // Workers are loaded only when needed (search, specific queries)
   useEffect(() => {
-    if (!db) {
+    if (!db || !auth) {
       console.log('🔴 [Accommodation Context] Firestore DB not initialized');
       return;
     }
 
-    console.log('� [EMERGENCY MODE] Workers Firestore listener DISABLED - loading from localStorage only');
-    
-    // Load from localStorage instead of real-time Firestore listener
-    // loadWorkersFromLocalStorage(); // DISABLED per user request to stop local storage reliance
-
-    // ❌ DISABLED: All Firestore listeners removed to prevent 12K reads per operation
-    // Previously this code would call startWorkersListener() and set up onAuthStateChanged
-    // Now we only use localStorage and manual sync when needed
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ [Workers] Auth ready - Workers loaded on demand (not real-time)');
+        // Workers array stays empty until explicitly loaded via search/query
+        // This saves ~4000 reads per page load
+      } else {
+        console.log('🔓 [Workers] User logged out');
+        setWorkers([]);
+      }
+    });
 
     return () => {
-      // No cleanup needed - no active listeners
+      unsubscribeAuth();
     };
-  }, [loadWorkersFromLocalStorage]);
+  }, [db, auth]);
 
-  // Listen to storage events so changes made by other tabs / pages (legacy localStorage writes) reflect in context.
+  // Re-enable Firestore listeners for real-time data
   useEffect(() => {
-    const onStorage = (ev: StorageEvent) => {
-      if (ev.key === 'ac_workers' && typeof ev.newValue === 'string') {
-        try {
-          const parsed = JSON.parse(ev.newValue || '[]');
-          setWorkers(parsed);
-        } catch {}
+    if (!db || !auth) return;
+
+    let unsubscribeAuth: (() => void) | null = null;
+    let companiesUnsub: Unsubscribe | null = null;
+    let contractsUnsub: Unsubscribe | null = null;
+    let invoicesUnsub: Unsubscribe | null = null;
+    let occupantsUnsub: Unsubscribe | null = null;
+    let historyUnsub: Unsubscribe | null = null;
+    let transfersUnsub: Unsubscribe | null = null;
+
+    unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ [Firestore Listeners] Starting real-time listeners...');
+
+        // Companies listener
+        companiesUnsub = onSnapshot(
+          collection(db!, 'companies'),
+          (snap) => {
+            const list: Company[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
+            setCompanies(list);
+          },
+          (err) => console.error('Companies snapshot error:', err)
+        );
+
+        // Contracts listener
+        contractsUnsub = onSnapshot(
+          collection(db!, 'contracts'),
+          (snap) => {
+            const list: Contract[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contract));
+            setContracts(list);
+          },
+          (err) => console.error('Contracts snapshot error:', err)
+        );
+
+        // Invoices listener
+        invoicesUnsub = onSnapshot(
+          collection(db!, 'invoices'),
+          (snap) => {
+            const list: Invoice[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+            setInvoices(list);
+          },
+          (err) => console.error('Invoices snapshot error:', err)
+        );
+
+        // Occupants listener
+        occupantsUnsub = onSnapshot(
+          collection(db!, 'occupants'),
+          (snap) => {
+            const list: Occupant[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            setOccupants(list);
+          },
+          (err) => console.error('Occupants snapshot error:', err)
+        );
+
+        // Accommodation History listener
+        historyUnsub = onSnapshot(
+          collection(db!, 'accommodationHistory'),
+          (snap) => {
+            const list: AccommodationHistory[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory));
+            setAccommodationHistory(list);
+          },
+          (err) => console.error('History snapshot error:', err)
+        );
+
+        // Transfer Requests listener
+        transfersUnsub = onSnapshot(
+          collection(db!, 'transferRequests'),
+          (snap) => {
+            const list: TransferRequest[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as TransferRequest));
+            setTransferRequests(list);
+          },
+          (err) => console.error('Transfers snapshot error:', err)
+        );
+
+      } else {
+        console.log('🔓 [Firestore Listeners] User logged out, cleaning up...');
+        if (companiesUnsub) companiesUnsub();
+        if (contractsUnsub) contractsUnsub();
+        if (invoicesUnsub) invoicesUnsub();
+        if (occupantsUnsub) occupantsUnsub();
+        if (historyUnsub) historyUnsub();
+        if (transfersUnsub) transfersUnsub();
+        
+        setCompanies([]);
+        setContracts([]);
+        setInvoices([]);
+        setOccupants([]);
+        setAccommodationHistory([]);
+        setTransferRequests([]);
       }
-      if (ev.key === 'ac_companies' && typeof ev.newValue === 'string') {
-        try { setCompanies(JSON.parse(ev.newValue || '[]')); } catch {}
-      }
-      if (ev.key === 'ac_contracts' && typeof ev.newValue === 'string') {
-        try { setContracts(JSON.parse(ev.newValue || '[]')); } catch {}
-      }
-      if (ev.key === 'ac_invoices' && typeof ev.newValue === 'string') {
-        try { setInvoices(JSON.parse(ev.newValue || '[]')); } catch {}
-      }
-    };
-    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage);
-    return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage); };
-  }, []);
-
-  // 🚨 EMERGENCY FIX: ALL onSnapshot listeners DISABLED
-  // Problem: Single check-in operation = 12,000 reads!
-  // Solution: Use localStorage ONLY, manual sync when needed
-  useEffect(() => {
-    console.log('🚨 [EMERGENCY MODE] All Firestore listeners DISABLED');
-    console.log('💾 [EMERGENCY MODE] Using localStorage ONLY');
-    console.log('ℹ️ [EMERGENCY MODE] Use manual sync button to update from Firestore');
-    
-    // Load from localStorage on mount
-    // loadAllFromLocalStorage(); // DISABLED per user request to stop local storage reliance
-    
-    // NO FIRESTORE LISTENERS - They were causing 12K reads per operation!
-    /*
-    if (!db || !auth?.currentUser) return;
-
-    // Companies listener - DISABLED
-    const companiesCol = collection(db, 'companies');
-    companiesUnsubRef.current = onSnapshot(companiesCol, (snap) => {
-      const list: Company[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
-      setCompanies(list);
-      try { localStorage.setItem('ac_companies', JSON.stringify(list)); } catch {}
-    }, (err) => { console.error('Companies snapshot error:', err); });
-
-    // Contracts listener - DISABLED
-    const contractsCol = collection(db, 'contracts');
-    contractsUnsubRef.current = onSnapshot(contractsCol, (snap) => {
-      const list: Contract[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contract));
-      setContracts(list);
-      try { localStorage.setItem('ac_contracts', JSON.stringify(list)); } catch {}
-    }, (err) => { console.error('Contracts snapshot error:', err); });
-
-    // Invoices listener - DISABLED
-    const invoicesCol = collection(db, 'invoices');
-    invoicesUnsubRef.current = onSnapshot(invoicesCol, (snap) => {
-      const list: Invoice[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
-      setInvoices(list);
-      try { localStorage.setItem('ac_invoices', JSON.stringify(list)); } catch {}
-    }, (err) => { console.error('Invoices snapshot error:', err); });
-
-    // Occupants listener - DISABLED
-    const occupantsCol = collection(db, 'occupants');
-    const occupantsUnsub = onSnapshot(occupantsCol, (snap) => {
-      const list: Occupant[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      setOccupants(list);
-      try { localStorage.setItem('ac_occupants', JSON.stringify(list)); } catch {}
-    }, (err) => { console.error('Occupants snapshot error:', err); });
-    
-    // Accommodation History listener - DISABLED
-    const historyCol = collection(db, 'accommodationHistory');
-    historyUnsubRef.current = onSnapshot(historyCol, (snap) => {
-      const list: AccommodationHistory[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory));
-      setAccommodationHistory(list);
-      try { localStorage.setItem('ac_history', JSON.stringify(list)); } catch {}
-    }, (err) => { console.error('Accommodation History snapshot error:', err); });
+    });
 
     return () => {
-      if (companiesUnsubRef.current) { try { companiesUnsubRef.current(); } catch {} }
-      if (contractsUnsubRef.current) { try { contractsUnsubRef.current(); } catch {} }
-      if (invoicesUnsubRef.current) { try { invoicesUnsubRef.current(); } catch {} }
-      if (historyUnsubRef.current) { try { historyUnsubRef.current(); } catch {} }
-      if (occupantsUnsub) { try { occupantsUnsub(); } catch {} }
+      if (unsubscribeAuth) unsubscribeAuth();
+      if (companiesUnsub) companiesUnsub();
+      if (contractsUnsub) contractsUnsub();
+      if (invoicesUnsub) invoicesUnsub();
+      if (occupantsUnsub) occupantsUnsub();
+      if (historyUnsub) historyUnsub();
+      if (transfersUnsub) transfersUnsub();
     };
-    */
-  }, [loadWorkersFromLocalStorage]);
+  }, [db, auth]);
 
-  // Helpers: persist domain data
+  // Helpers: persist some data to localStorage (optional backup only)
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
-      // DISABLED: Local storage for workers/occupants disabled per user request
-      // localStorage.setItem("ac_workers", JSON.stringify(workers));
-      // localStorage.setItem("ac_occupants", JSON.stringify(occupants));
-      localStorage.setItem("ac_history", JSON.stringify(accommodationHistory)); // NEW
-      localStorage.setItem("ac_transfers", JSON.stringify(transferRequests));
-      localStorage.setItem("ac_notifications", JSON.stringify(notifications));
       localStorage.setItem("ac_companies", JSON.stringify(companies));
       localStorage.setItem("ac_contracts", JSON.stringify(contracts));
       localStorage.setItem("ac_invoices", JSON.stringify(invoices));
@@ -1214,21 +1231,34 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (!db || !queryStr.trim()) return [];
     const term = queryStr.trim();
     
+    console.log('🔍 [Search] Looking for:', term);
+    const startTime = Date.now();
+    
     // 1. Try ID Number (Prefix/Range)
     const qId = query(collection(db, 'workers'), where('idNumber', '>=', term), where('idNumber', '<=', term + '\uf8ff'), limit(5));
     const snapId = await getDocs(qId);
-    if (!snapId.empty) return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    if (!snapId.empty) {
+      console.log(`✅ [Search] Found ${snapId.size} by ID in ${Date.now() - startTime}ms (${snapId.size} reads)`);
+      return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    }
 
     // 2. Try Employee ID (Prefix/Range)
     const qEmp = query(collection(db, 'workers'), where('employeeId', '>=', term), where('employeeId', '<=', term + '\uf8ff'), limit(5));
     const snapEmp = await getDocs(qEmp);
-    if (!snapEmp.empty) return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    if (!snapEmp.empty) {
+      console.log(`✅ [Search] Found ${snapEmp.size} by EmployeeID in ${Date.now() - startTime}ms (${snapEmp.size} reads)`);
+      return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    }
 
     // 3. Try Name (Prefix) - efficient range query
     const qName = query(collection(db, 'workers'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'), limit(5));
     const snapName = await getDocs(qName);
-    if (!snapName.empty) return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    if (!snapName.empty) {
+      console.log(`✅ [Search] Found ${snapName.size} by Name in ${Date.now() - startTime}ms (${snapName.size} reads)`);
+      return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    }
 
+    console.log(`❌ [Search] No results in ${Date.now() - startTime}ms (${snapId.size + snapEmp.size + snapName.size} reads total)`);
     return [];
   }, [db]);
 
@@ -1806,8 +1836,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
              let isInside = false;
              
              if (workerMovements.length > 0) {
-                const firstType = workerMovements[0].actionType;
-                if (firstType === 'CHECK_OUT' || firstType === 'TRANSFER_OUT') {
+                const firstEvent = workerMovements[0];
+                const firstType = firstEvent.actionType;
+                // If first event is leaving, they must have been inside
+                // For TRANSFER, check if it's outgoing from this residence
+                const isTransferOut = firstType === 'TRANSFER' && firstEvent.fromResidenceId === contract.residenceId;
+                
+                if (firstType === 'CHECK_OUT' || isTransferOut) {
                    isInside = true;
                 }
              } else {
@@ -1835,7 +1870,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
                    days += diff;
                 }
                 
-                if (event.actionType === 'CHECK_IN' || event.actionType === 'TRANSFER_IN') {
+                const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === contract.residenceId;
+                
+                if (event.actionType === 'CHECK_IN' || isTransferIn) {
                    currentStatus = true;
                 } else {
                    currentStatus = false;
@@ -2146,7 +2183,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           residenceId: asyncOcc.residenceId,
           roomId: asyncOcc.roomId,
           reason: params.reason,
-          notes: params.notes
+          notes: params.notes,
+          createdAt: new Date().toISOString()
         });
 
         return { ok: true, historyId };
@@ -2173,11 +2211,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         residenceId: occ.residenceId,
         roomId: occ.roomId,
         reason: params.reason,
-        notes: params.notes
+        notes: params.notes,
+        createdAt: new Date().toISOString()
       });
 
       return { ok: true, historyId };
-    } catch (e) {
+    } catch (e: any) {
       console.error('checkOutWorkerEnhanced failed', e);
       return { ok: false, error: e.message || 'unknown-error' };
     }
@@ -2907,6 +2946,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const targetResidences = residences.length > 0 ? residences : [];
       
       await Promise.all(targetResidences.map(async (res) => {
+        if (!db) return;
         const count = (await getCountFromServer(
           query(collection(db, 'occupants'), where('residenceId', '==', res.id), where('until', '==', null))
         )).data().count;
@@ -2957,7 +2997,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     } catch (error) {
       console.error('❌ [Dashboard] Failed to refresh stats:', error);
-      throw error;
+      // Do not throw, just return null to prevent UI crash
+      return null;
     }
   }, [db, residences]);
 
@@ -3044,7 +3085,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // 🚨 EMERGENCY: Manual sync function to replace real-time listeners
     manualSyncFromFirestore,
     // 🧹 Auto Archive
-    autoArchiveOccupants, // NEW
+    // autoArchiveOccupants, // NEW (Removed duplicate)
     // ⚡ Optimized Async Operations
     findWorkerAsync,
     getWorkersByIds,
@@ -3066,7 +3107,16 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // Legacy operations
     saveWorker,
     deleteWorker,
-    assignWorkerToRoom,
+    assignWorkerToRoom: async (workerId: string, residenceId: string, roomId: string, checkInDate?: string) => {
+      const result = await checkInWorkerAsync({
+        workerId,
+        residenceId,
+        roomId,
+        checkInDate,
+        performedBy: 'legacy-assign'
+      });
+      return { ok: result.ok, error: result.error || '' };
+    },
     bulkAssign,
     checkOutWorker,
     quickTransfer,

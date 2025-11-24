@@ -7,7 +7,7 @@ import { useUsers } from "@/context/users-context";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, Users, Building, Home, ArrowRight, CheckCircle2, 
-  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles
+  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,15 +96,13 @@ export function AccommodationManager() {
   const [checkoutReason, setCheckoutReason] = useState<string>("End of Contract");
   const [checkoutCity, setCheckoutCity] = useState<string>("");
   
-  // Extract Unique Cities
+  // Extract Unique Cities from ALL residences (for transfer destinations)
   const uniqueCities = React.useMemo(() => {
     const cities = new Set<string>();
     residences.forEach(r => {
-      if (r.address) cities.add(r.address);
+      if (r.city) cities.add(r.city);
     });
-    // Add some default major cities if not present
-    ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Mecca', 'Medina'].forEach(c => cities.add(c));
-    return Array.from(cities).sort();
+    return Array.from(cities).filter(Boolean).sort();
   }, [residences]);
   
   // Selection State
@@ -279,17 +277,20 @@ export function AccommodationManager() {
       setSearchResults(results);
 
       // Check occupancy for results
+      console.log('[Search] Checking occupancy for', results.length, 'workers');
       const occs: Record<string, any> = {};
       // Use sequential loop to avoid potential race conditions or overload
       for (const w of results) {
         if (!w.id) continue;
         try {
           const occ = await checkWorkerOccupancy(w.id);
+          console.log('[Search] Worker', w.id, w.name, 'occupancy:', occ);
           if (occ) occs[w.id] = occ;
         } catch (e) { 
           console.error(`Failed to check occupancy for ${w.id}`, e); 
         }
       }
+      console.log('[Search] Final occupancies:', occs);
       setSearchOccupancies(occs);
 
     } catch (error) {
@@ -791,8 +792,24 @@ export function AccommodationManager() {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchResults.length > 0) {
-                      // If multiple results found (bulk search), select all
-                      const toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
+                      // If exact match exists for the query, prefer it
+                      const exactMatch = searchResults.find(w => 
+                        w.id === searchQuery.trim() || 
+                        w.employeeId === searchQuery.trim() || 
+                        w.idNumber === searchQuery.trim()
+                      );
+
+                      let toSelect = [];
+                      if (exactMatch) {
+                        // If exact match found, ONLY select that one (unless already selected)
+                        if (!selectedWorkerIds.includes(exactMatch.id)) {
+                          toSelect = [exactMatch];
+                        }
+                      } else {
+                        // Otherwise select all results (bulk behavior)
+                        toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
+                      }
+
                       if (toSelect.length > 0) {
                           setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
                           setSelectedWorkers(prev => {
@@ -804,8 +821,19 @@ export function AccommodationManager() {
                       }
                     }
                   }}
-                  className="pl-8 h-8 text-sm"
+                  className="pl-8 pr-8 h-8 text-sm"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSearchResults([]);
+                    }}
+                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0 flex flex-col">
@@ -1501,8 +1529,20 @@ export function AccommodationManager() {
                   
               <div className="p-4 border-t bg-background mt-auto space-y-3">
                 {(() => {
-                  const selectedAreAssigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => occupants.some(o => o.workerId === id));
-                  const selectedAreUnassigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => !occupants.some(o => o.workerId === id));
+                  // Fix: Check both global occupants list AND local search results for occupancy status
+                  // This handles cases where the global list is partial/paginated but we know the worker is occupied from the search check
+                  const selectedAreAssigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => {
+                    const inGlobal = occupants.some(o => o.workerId === id);
+                    const inLocal = !!searchOccupancies[id];
+                    return inGlobal || inLocal;
+                  });
+                  
+                  const selectedAreUnassigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => {
+                    const inGlobal = occupants.some(o => o.workerId === id);
+                    const inLocal = !!searchOccupancies[id];
+                    return !inGlobal && !inLocal;
+                  });
+
                   const isMixed = selectedWorkerIds.length > 0 && !selectedAreAssigned && !selectedAreUnassigned;
 
                   return (

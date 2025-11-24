@@ -25,11 +25,13 @@ export default function AccommodationOverviewPage() {
             await refreshDashboardStats();
         }
         
-        // Run auto-archive cleanup in background
-        autoArchiveOccupants();
+        // Run auto-archive cleanup in background (Admins only)
+        if (currentUser?.role === 'Admin') {
+          autoArchiveOccupants().catch(e => console.error("Auto-archive failed:", e));
+        }
     };
     init();
-  }, [refreshDashboardStats, dashboardStats, residences.length, autoArchiveOccupants]);
+  }, [refreshDashboardStats, dashboardStats, residences.length, autoArchiveOccupants, currentUser]);
   
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
@@ -81,13 +83,15 @@ export default function AccommodationOverviewPage() {
       let totalRooms = 0;
 
       const processRooms = (rooms: any[]) => {
+        if (!Array.isArray(rooms)) return;
         for (const room of rooms) {
           totalRooms++;
           if (room.spaceSqm && room.roomType) {
+            const space = Number(room.spaceSqm);
             const per = room.roomType === "Worker" ? 4 : room.roomType === "Supervisor" ? 8 : 16;
-            totalCapacity += Math.floor(room.spaceSqm / per);
+            totalCapacity += Math.floor(space / per);
           } else if (room.capacity) {
-             totalCapacity += room.capacity;
+             totalCapacity += Number(room.capacity);
           }
         }
       };
@@ -108,6 +112,11 @@ export default function AccommodationOverviewPage() {
           occupied = occupants.filter(occ => occ.residenceId === res.id).length;
       } else if (dashboardStats?.residenceOccupancy) {
           occupied = dashboardStats.residenceOccupancy[res.id] || 0;
+      }
+
+      // Debug log for capacity issues
+      if (totalCapacity < 10 && totalRooms > 5) {
+         console.warn(`[Capacity Warning] Residence ${res.name}: Found ${totalRooms} rooms but only ${totalCapacity} capacity. Check room data types.`);
       }
 
       occupancyByResidence[res.id] = { occupied, capacity: totalCapacity, rooms: totalRooms };
@@ -137,24 +146,61 @@ export default function AccommodationOverviewPage() {
     }
 
     // Nationality conflicts - rooms with multiple nationalities
-    const nationalityConflicts: Array<{ residenceId: string; roomId: string; nationalities: string[] }> = [];
+    const nationalityConflicts: Array<{ 
+      residenceId: string; 
+      roomId: string; 
+      roomName?: string;
+      buildingName?: string;
+      floorName?: string;
+      nationalities: string[] 
+    }> = [];
     
     if (hasFullData) {
         const roomNationalities: Record<string, Set<string>> = {};
         for (const occ of occupants) {
           const worker = workers.find(w => w.id === occ.workerId);
           if (worker?.nationaliy) {
-            const key = `${occ.residenceId}_${occ.roomId}`;
+            const key = `${occ.residenceId}_${occ.buildingId || ''}_${occ.floorId || ''}_${occ.roomId}`;
             if (!roomNationalities[key]) roomNationalities[key] = new Set();
             roomNationalities[key].add(worker.nationaliy);
           }
         }
         for (const [key, nats] of Object.entries(roomNationalities)) {
           if (nats.size > 1) {
-             const [resId, roomId] = key.split('_');
+             const [resId, buildingId, floorId, roomId] = key.split('_');
+             
+             // Find room name
+             let roomName = roomId;
+             let buildingName = buildingId;
+             let floorName = floorId;
+             
+             const residence = residences.find(r => r.id === resId);
+             if (residence) {
+               if (buildingId) {
+                 const building = residence.buildings?.find(b => b.id === buildingId);
+                 if (building) {
+                   buildingName = building.name || buildingId;
+                   if (floorId) {
+                     const floor = building.floors?.find(f => f.id === floorId);
+                     if (floor) {
+                       floorName = floor.name || floorId;
+                       const room = floor.rooms?.find(r => r.id === roomId);
+                       if (room) roomName = room.name || roomId;
+                     }
+                   }
+                 }
+               } else {
+                 const room = residence.rooms?.find(r => r.id === roomId);
+                 if (room) roomName = room.name || roomId;
+               }
+             }
+             
              nationalityConflicts.push({
                 residenceId: resId,
                 roomId,
+                roomName,
+                buildingName,
+                floorName,
                 nationalities: Array.from(nats)
              });
           }
@@ -310,17 +356,23 @@ export default function AccommodationOverviewPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {metrics.nationalityConflicts.map((conflict, idx) => (
-                  <Alert key={idx} variant="destructive" className="border-red-200 bg-red-50">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle className="text-sm">
-                      {residences.find(r => r.id === conflict.residenceId)?.name || conflict.residenceId}
-                    </AlertTitle>
-                    <AlertDescription className="text-xs">
-                      Room {conflict.roomId}: {conflict.nationalities.join(', ')}
-                    </AlertDescription>
-                  </Alert>
-                ))}
+                {metrics.nationalityConflicts.map((conflict, idx) => {
+                  const roomLabel = conflict.buildingName && conflict.floorName 
+                    ? `${conflict.buildingName} - ${conflict.floorName} - ${conflict.roomName || conflict.roomId}`
+                    : conflict.roomName || conflict.roomId;
+                    
+                  return (
+                    <Alert key={idx} variant="destructive" className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">
+                        {residences.find(r => r.id === conflict.residenceId)?.name || conflict.residenceId}
+                      </AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {roomLabel}: {conflict.nationalities.join(', ')}
+                      </AlertDescription>
+                    </Alert>
+                  );
+                })}
               </div>
             )}
           </CardContent>

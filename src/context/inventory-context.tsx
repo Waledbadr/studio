@@ -116,6 +116,8 @@ export interface MRV {
   attachmentRef?: string | null;
   // Optional link back to an originating Material Request (order)
   orderId?: string | null;
+  receivedBy?: string;
+  receivedByName?: string;
 }
 
 export interface MRVDetails {
@@ -134,6 +136,8 @@ export interface MRVDetails {
   attachmentPath?: string | null;
   codeShort?: string | null;
   orderId?: string | null;
+  receivedBy?: string;
+  receivedByName?: string;
 }
 
 // MRV Request (needs admin approval before posting)
@@ -904,11 +908,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         attachmentUrl: payload.meta?.attachmentUrl || null,
         attachmentPath: payload.meta?.attachmentPath || null,
         codeShort: mrvShort || null,
-  orderId: payload.meta?.orderId || null,
+        orderId: payload.meta?.orderId || null,
+        receivedBy: currentUser.id,
+        receivedByName: currentUser.name,
       } as any);
-    });
-
-    toast({ title: 'Success', description: 'Materials received and added to stock.' });
+    });    toast({ title: 'Success', description: 'Materials received and added to stock.' });
     return mrvId;
   };
 
@@ -1144,6 +1148,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         codeShort: meta?.codeShort || null,
   attachmentRef: meta?.attachmentRef || null,
   orderId: meta?.orderId || null,
+  receivedBy: meta?.receivedBy || undefined,
+  receivedByName: meta?.receivedByName || undefined,
       } as MRVDetails;
     } catch (e) {
       console.error('Error fetching MRV details:', e);
