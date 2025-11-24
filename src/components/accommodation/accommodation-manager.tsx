@@ -570,41 +570,44 @@ export function AccommodationManager() {
           }, 0);
           const requiredSqm = worker.role === 'Engineer' ? 16 : worker.role === 'Supervisor' ? 8 : 4;
           
-          if (usedSqm + requiredSqm > totalSqm) continue;
+          // Skip checks if Emergency Mode is ON
+          if (!selectedResidence?.isEmergencyMode) {
+            if (usedSqm + requiredSqm > totalSqm) continue;
 
-          // Nationality Check
-          let isNatMatch = true;
-          if (allOccs.length > 0) {
-            // Find the first occupant with a nationality to compare against
-            const firstWithNat = allOccs.find((o: any) => o.nationaliy);
-            if (firstWithNat && firstWithNat.nationaliy && worker.nationaliy) {
-              const roomNat = firstWithNat.nationaliy.trim().toLowerCase();
-              const workerNat = worker.nationaliy.trim().toLowerCase();
-              if (roomNat !== workerNat) {
-                isNatMatch = false;
+            // Nationality Check
+            let isNatMatch = true;
+            if (allOccs.length > 0) {
+              // Find the first occupant with a nationality to compare against
+              const firstWithNat = allOccs.find((o: any) => o.nationaliy);
+              if (firstWithNat && firstWithNat.nationaliy && worker.nationaliy) {
+                const roomNat = firstWithNat.nationaliy.trim().toLowerCase();
+                const workerNat = worker.nationaliy.trim().toLowerCase();
+                if (roomNat !== workerNat) {
+                  isNatMatch = false;
+                }
               }
             }
-          }
-          if (!isNatMatch) continue;
+            if (!isNatMatch) continue;
 
-          // Role Check (Strict for Supervisors/Engineers if room is mixed?)
-          // Actually, bulkCheckIn enforces: if room has role X, new worker must be X?
-          // Let's check bulkCheckIn logic:
-          // "Rule 2: Role ... If room was empty and this is first valid worker, set state ... if currentRole && currentRole !== workerRole ... error"
-          // So if room is occupied, role must match exactly?
-          // Let's replicate that strictness.
-          let isRoleMatch = true;
-          if (allOccs.length > 0) {
-             const firstWithRole = allOccs.find((o: any) => o.role);
-             if (firstWithRole) {
-                const roomRole = firstWithRole.role || 'Worker';
-                const workerRole = worker.role || 'Worker';
-                if (roomRole !== workerRole) {
-                   isRoleMatch = false;
-                }
-             }
+            // Role Check (Strict for Supervisors/Engineers if room is mixed?)
+            // Actually, bulkCheckIn enforces: if room has role X, new worker must be X?
+            // Let's check bulkCheckIn logic:
+            // "Rule 2: Role ... If room was empty and this is first valid worker, set state ... if currentRole && currentRole !== workerRole ... error"
+            // So if room is occupied, role must match exactly?
+            // Let's replicate that strictness.
+            let isRoleMatch = true;
+            if (allOccs.length > 0) {
+              const firstWithRole = allOccs.find((o: any) => o.role);
+              if (firstWithRole) {
+                  const roomRole = firstWithRole.role || 'Worker';
+                  const workerRole = worker.role || 'Worker';
+                  if (roomRole !== workerRole) {
+                    isRoleMatch = false;
+                  }
+              }
+            }
+            if (!isRoleMatch) continue;
           }
-          if (!isRoleMatch) continue;
 
 
           // Scoring

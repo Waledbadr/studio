@@ -8,7 +8,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, ArrowRight, LogIn, LogOut, ArrowRightLeft, User } from "lucide-react";
 import { useAccommodation, AccommodationHistory } from "@/context/accommodation-context";
 import { useUsers } from "@/context/users-context";
@@ -67,7 +66,7 @@ export function RoomHistoryDialog({ roomId, roomName, trigger }: RoomHistoryDial
           </DialogDescription>
         </DialogHeader>
         
-        <ScrollArea className="flex-1 pr-4">
+        <div className="flex-1 overflow-y-auto pr-4 min-h-0">
           {loading ? (
             <div className="flex justify-center p-8">Loading history...</div>
           ) : history.length === 0 ? (
@@ -137,7 +136,7 @@ export function RoomHistoryDialog({ roomId, roomName, trigger }: RoomHistoryDial
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

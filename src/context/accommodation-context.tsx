@@ -2123,7 +2123,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           roomId: params.roomId,
           roomName: room?.name || params.roomId,
           notes: params.notes,
-          isEmergency: params.emergencyMode,
+          isEmergency: params.emergencyMode || residence?.isEmergencyMode,
           createdAt: new Date().toISOString(),
         });
       } catch (historyError) {
@@ -2245,37 +2245,43 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const toRoom = findRoom(params.toResidenceId, params.toRoomId);
       if (!toRoom) return { ok: false, error: "target-room-not-found" };
       
-      // Relaxed metadata check (use defaults if missing, similar to checkInWorkerAsync)
-      const spaceSqm = toRoom.spaceSqm || 16;
-      const roomType = toRoom.roomType || 'Worker';
-      // if (!toRoom.spaceSqm || !toRoom.roomType) return { ok: false, error: "target-room-metadata-missing" };
+      // Check Emergency Mode
+      const toResidence = residences.find(r => r.id === params.toResidenceId);
+      const isEmergency = toResidence?.isEmergencyMode;
 
-      // Nationality check
-      const targetRoomOccupants = occupants.filter(o => 
-        o.roomId === params.toRoomId && 
-        o.residenceId === params.toResidenceId && 
-        !o.until
-      );
-      
-      if (targetRoomOccupants.length > 0) {
-        const firstWorker = workers.find(x => x.id === targetRoomOccupants[0].workerId);
-        if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
-          return { ok: false, error: "nationality-mismatch" };
+      if (!isEmergency) {
+        // Relaxed metadata check (use defaults if missing, similar to checkInWorkerAsync)
+        const spaceSqm = toRoom.spaceSqm || 16;
+        const roomType = toRoom.roomType || 'Worker';
+        // if (!toRoom.spaceSqm || !toRoom.roomType) return { ok: false, error: "target-room-metadata-missing" };
+
+        // Nationality check
+        const targetRoomOccupants = occupants.filter(o => 
+          o.roomId === params.toRoomId && 
+          o.residenceId === params.toResidenceId && 
+          !o.until
+        );
+        
+        if (targetRoomOccupants.length > 0) {
+          const firstWorker = workers.find(x => x.id === targetRoomOccupants[0].workerId);
+          if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
+            return { ok: false, error: "nationality-mismatch" };
+          }
         }
-      }
 
-      // Capacity check (Dynamic based on roles)
-      const usedSqm = targetRoomOccupants.reduce((sum, o) => {
-        const occWorker = workers.find(wk => wk.id === o.workerId);
-        const role = occWorker?.role || 'Worker';
-        return sum + (role === 'Engineer' ? 16 : role === 'Supervisor' ? 8 : 4);
-      }, 0);
+        // Capacity check (Dynamic based on roles)
+        const usedSqm = targetRoomOccupants.reduce((sum, o) => {
+          const occWorker = workers.find(wk => wk.id === o.workerId);
+          const role = occWorker?.role || 'Worker';
+          return sum + (role === 'Engineer' ? 16 : role === 'Supervisor' ? 8 : 4);
+        }, 0);
 
-      const incomingWorkerRole = w.role || 'Worker';
-      const requiredSqm = incomingWorkerRole === 'Engineer' ? 16 : incomingWorkerRole === 'Supervisor' ? 8 : 4;
+        const incomingWorkerRole = w.role || 'Worker';
+        const requiredSqm = incomingWorkerRole === 'Engineer' ? 16 : incomingWorkerRole === 'Supervisor' ? 8 : 4;
 
-      if (usedSqm + requiredSqm > Number(spaceSqm)) {
-        return { ok: false, error: `target-room-full (Used: ${usedSqm}, Req: ${requiredSqm}, Space: ${spaceSqm})` };
+        if (usedSqm + requiredSqm > Number(spaceSqm)) {
+          return { ok: false, error: `target-room-full (Used: ${usedSqm}, Req: ${requiredSqm}, Space: ${spaceSqm})` };
+        }
       }
 
       const transferDate = params.transferDate || new Date().toISOString();
@@ -2283,7 +2289,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // Get names for history
       const fromResidence = residences.find(r => r.id === currentOccupant.residenceId);
       const fromRoom = findRoom(currentOccupant.residenceId, currentOccupant.roomId);
-      const toResidence = residences.find(r => r.id === params.toResidenceId);
+      // const toResidence = residences.find(r => r.id === params.toResidenceId); // Already fetched above
 
       // Create history record
       const historyId = await createHistoryRecord({
@@ -2686,9 +2692,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // If room is empty, first valid worker sets the role
       // If room is occupied, role is fixed
       
+      // Check for Residence Emergency Mode
+      const residence = residences.find(r => r.id === params.residenceId);
+      const isEmergency = params.emergencyMode || residence?.isEmergencyMode;
+
       for (const worker of workersToProcess) {
         // SKIP CHECKS IF EMERGENCY MODE
-        if (!params.emergencyMode) {
+        if (!isEmergency) {
           // Rule 1: Nationality
           if (currentNationality && worker.nationaliy) {
             const rNat = currentNationality.trim().toLowerCase();
@@ -2741,7 +2751,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           until: null,
           checkInBy: params.performedBy,
           notes: params.notes,
-          isEmergency: params.emergencyMode
+          isEmergency: isEmergency || false
         };
         batch.set(doc(db, 'occupants', occId), newOcc);
 
@@ -2761,7 +2771,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           roomId: params.roomId,
           roomName: room.name || params.roomId,
           notes: params.notes,
-          isEmergency: params.emergencyMode,
+          isEmergency: isEmergency || false,
           createdAt: new Date().toISOString(),
         };
         batch.set(doc(db, 'accommodationHistory', histId), newHist);
