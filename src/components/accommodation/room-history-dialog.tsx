@@ -112,9 +112,17 @@ export function RoomHistoryDialog({ roomId, roomName, trigger }: RoomHistoryDial
                       
                       {item.actionType === 'TRANSFER' && (
                         <div className="text-blue-600 text-xs">
-                          {item.roomId === roomId ? 'Transferred OUT' : 'Transferred IN'}
-                          {item.roomId === roomId && item.toRoomName && ` to ${item.toRoomName}`}
-                          {item.toRoomId === roomId && item.fromRoomName && ` from ${item.fromRoomName}`}
+                          {item.toRoomId === roomId ? (
+                             <>
+                               Transferred IN
+                               {item.fromRoomName && <span className="text-muted-foreground"> from {item.fromRoomName}</span>}
+                             </>
+                          ) : (
+                             <>
+                               Transferred OUT
+                               {item.toRoomName && <span className="text-muted-foreground"> to {item.toRoomName}</span>}
+                             </>
+                          )}
                         </div>
                       )}
 

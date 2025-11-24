@@ -54,6 +54,8 @@ export type Worker = {
   nationaliy?: string; // الجنسية
   company?: string; // الشركة - لتمييز العمال بنفس الرقم الوظيفي
   role?: "Worker" | "Supervisor" | "Engineer";
+  status?: "Active" | "Transferring" | "Vacation" | "Exit"; // NEW
+  transferDestination?: string; // NEW: City or Location name when status is Transferring
 };
 
 export type Occupant = {
@@ -67,6 +69,8 @@ export type Occupant = {
   until?: string | null; // ISO date - Check-out date (null = still active)
   checkInBy?: string; // User ID who performed check-in
   checkOutBy?: string; // User ID who performed check-out
+  checkoutType?: 'Transfer' | 'Exit' | 'Vacation' | 'Other'; // NEW
+  transferCity?: string; // NEW
   notes?: string; // Optional notes about this occupancy
   isEmergency?: boolean; // Flag for emergency/override check-ins
 };
@@ -245,6 +249,8 @@ type AccommodationContextValue = {
     roomId: string;
     checkOutDate?: string;
     performedBy: string;
+    checkoutType?: 'Transfer' | 'Exit' | 'Vacation' | 'Other'; // NEW
+    transferCity?: string; // NEW
   }) => Promise<{ ok: boolean; error?: string }>;
   getRoomOccupantsAsync: (residenceId: string, roomId: string) => Promise<Occupant[]>;
   importWorkersBatch: (workersList: Worker[]) => Promise<{ ok: boolean; count?: number; error?: string }>;
@@ -278,6 +284,7 @@ type AccommodationContextValue = {
     reason?: string;
     notes?: string;
     performedBy: string;
+    transferCity?: string; // NEW
   }) => Promise<{ ok: boolean; error?: string; historyId?: string }>;
   
   transferWorker: (params: {
@@ -320,6 +327,7 @@ type AccommodationContextValue = {
     reason?: string;
     notes?: string;
     performedBy: string;
+    transferCity?: string; // NEW
   }) => Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }>;
   
   bulkTransfer: (params: {
@@ -850,7 +858,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (occupantsUnsub) { try { occupantsUnsub(); } catch {} }
     };
     */
-  }, []);
+  }, [loadWorkersFromLocalStorage]);
 
   // Helpers: persist domain data
   useEffect(() => {
@@ -1206,13 +1214,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (!db || !queryStr.trim()) return [];
     const term = queryStr.trim();
     
-    // 1. Try ID Number (Exact)
-    const qId = query(collection(db, 'workers'), where('idNumber', '==', term), limit(5));
+    // 1. Try ID Number (Prefix/Range)
+    const qId = query(collection(db, 'workers'), where('idNumber', '>=', term), where('idNumber', '<=', term + '\uf8ff'), limit(5));
     const snapId = await getDocs(qId);
     if (!snapId.empty) return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
 
-    // 2. Try Employee ID (Exact)
-    const qEmp = query(collection(db, 'workers'), where('employeeId', '==', term), limit(5));
+    // 2. Try Employee ID (Prefix/Range)
+    const qEmp = query(collection(db, 'workers'), where('employeeId', '>=', term), where('employeeId', '<=', term + '\uf8ff'), limit(5));
     const snapEmp = await getDocs(qEmp);
     if (!snapEmp.empty) return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
 
@@ -1463,6 +1471,24 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // Update mutation timestamp
     lastMutationTimeRef.current = Date.now();
 
+    // NEW: Update Worker Status to Active
+    try {
+        await updateDoc(doc(db, 'workers', params.workerId), {
+            status: 'Active',
+            transferDestination: null
+        });
+        
+        // Update local workers state
+        setWorkers(prev => prev.map(w => {
+            if (w.id === params.workerId) {
+                return { ...w, status: 'Active', transferDestination: undefined };
+            }
+            return w;
+        }));
+    } catch (e) {
+        console.warn('Failed to update worker status on check-in', e);
+    }
+
     // Update local state: Sync this room's occupants
     setOccupants(prev => {
       // Keep occupants from other rooms
@@ -1495,6 +1521,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     roomId: string;
     checkOutDate?: string;
     performedBy: string;
+    checkoutType?: 'Transfer' | 'Exit' | 'Vacation' | 'Other'; // NEW
+    transferCity?: string; // NEW
   }) => {
     if (!db) return { ok: false, error: 'DB not available' };
     
@@ -1510,13 +1538,51 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (snap.empty) return { ok: false, error: 'occupant-not-found' };
     
     const docRef = snap.docs[0].ref;
-    await updateDoc(docRef, {
+    const updatePayload: any = {
       until: params.checkOutDate || new Date().toISOString(),
       checkOutBy: params.performedBy
-    });
+    };
+
+    if (params.checkoutType) updatePayload.checkoutType = params.checkoutType;
+    if (params.transferCity) updatePayload.transferCity = params.transferCity;
+
+    await updateDoc(docRef, updatePayload);
     
     // Update mutation timestamp
     lastMutationTimeRef.current = Date.now();
+
+    // NEW: Update Worker Status based on checkout type
+    try {
+        const workerUpdate: any = {};
+        if (params.checkoutType === 'Transfer') {
+            workerUpdate.status = 'Transferring';
+            if (params.transferCity) workerUpdate.transferDestination = params.transferCity;
+        } else if (params.checkoutType === 'Exit') {
+            workerUpdate.status = 'Exit';
+        } else if (params.checkoutType === 'Vacation') {
+            workerUpdate.status = 'Vacation';
+        } else {
+            // Default or Other
+            workerUpdate.status = 'Active'; // Or keep as is? Maybe 'Unassigned'?
+            // If they are checked out without specific reason, they are just unassigned but still in system?
+            // Let's assume 'Active' means "In System" but if not in occupant list, they are unassigned.
+            // But 'Transferring' is a special state.
+        }
+
+        if (Object.keys(workerUpdate).length > 0) {
+            await updateDoc(doc(db, 'workers', params.workerId), workerUpdate);
+            
+            // Update local workers state
+            setWorkers(prev => prev.map(w => {
+                if (w.id === params.workerId) {
+                    return { ...w, ...workerUpdate };
+                }
+                return w;
+            }));
+        }
+    } catch (e) {
+        console.warn('Failed to update worker status on check-out', e);
+    }
 
     // Update local state immediately
     setOccupants(prev => prev.filter(o => o.workerId !== params.workerId));
@@ -2048,79 +2114,71 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     reason?: string;
     notes?: string;
     performedBy: string;
+    transferCity?: string; // NEW
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
-      console.log('🔵 [checkOutWorker] Starting optimized check-out:', params);
-      
-      // Find active occupant record (local or remote)
-      let occ = occupants.find(o => o.workerId === params.workerId && !o.until);
-      
-      if (!occ && db) {
-         const q = query(collection(db, 'occupants'), where('workerId', '==', params.workerId), where('until', '==', null));
-         const snap = await getDocs(q);
-         if (!snap.empty) {
-             occ = { id: snap.docs[0].id, ...snap.docs[0].data() } as any;
-         }
-      }
-
+      // Find current occupancy
+      const occ = occupants.find(o => o.workerId === params.workerId && !o.until);
       if (!occ) {
-          return { ok: false, error: 'occupant-not-found' };
+        // Try async check if not in local state
+        const asyncOcc = await checkWorkerOccupancy(params.workerId);
+        if (!asyncOcc) return { ok: false, error: 'occupant-not-found' };
+        
+        // Use async result
+        const result = await checkOutWorkerAsync({
+          workerId: params.workerId,
+          residenceId: asyncOcc.residenceId,
+          roomId: asyncOcc.roomId,
+          checkOutDate: params.checkOutDate,
+          performedBy: params.performedBy,
+          checkoutType: params.reason as any, // Pass reason as type
+          transferCity: params.transferCity
+        });
+        
+        if (!result.ok) return { ok: false, error: result.error };
+
+        // Create history
+        const historyId = await createHistoryRecord({
+          workerId: params.workerId,
+          actionType: 'CHECK_OUT',
+          actionDate: params.checkOutDate || new Date().toISOString(),
+          actionBy: params.performedBy,
+          residenceId: asyncOcc.residenceId,
+          roomId: asyncOcc.roomId,
+          reason: params.reason,
+          notes: params.notes
+        });
+
+        return { ok: true, historyId };
       }
 
-      // Use optimized async check-out
+      // Use local occ
       const result = await checkOutWorkerAsync({
         workerId: params.workerId,
         residenceId: occ.residenceId,
         roomId: occ.roomId,
         checkOutDate: params.checkOutDate,
-        performedBy: params.performedBy
+        performedBy: params.performedBy,
+        checkoutType: params.reason as any,
+        transferCity: params.transferCity
       });
 
-      if (!result.ok) {
-        return { ok: false, error: result.error };
-      }
+      if (!result.ok) return { ok: false, error: result.error };
 
-      // Create history record
-      let historyId: string | undefined;
-      try {
-        let workerName = workers.find(w => w.id === params.workerId)?.name;
-        if (!workerName && db) {
-           const snap = await getDocs(query(collection(db, 'workers'), where('id', '==', params.workerId), limit(1)));
-           if (!snap.empty) workerName = snap.docs[0].data().name;
-        }
-
-        const residence = residences.find(r => r.id === occ!.residenceId);
-        const room = findRoom(occ!.residenceId, occ!.roomId);
-
-        historyId = await createHistoryRecord({
-          workerId: params.workerId,
-          workerName: workerName || 'Unknown',
-          actionType: 'CHECK_OUT',
-          actionDate: params.checkOutDate || new Date().toISOString(),
-          actionBy: params.performedBy,
-          residenceId: occ!.residenceId,
-          residenceName: residence?.name,
-          buildingId: occ!.buildingId,
-          floorId: occ!.floorId,
-          roomId: occ!.roomId,
-          roomName: room?.name || occ!.roomId,
-          notes: params.notes,
-          reason: params.reason,
-          createdAt: new Date().toISOString(),
-        });
-      } catch (historyError) {
-        console.warn('History record failed', historyError);
-      }
-
-      toast({
-
-        title: "تم الإخراج بنجاح ✅",
-        description: `تم إخراج العامل بنجاح`,
+      const historyId = await createHistoryRecord({
+        workerId: params.workerId,
+        actionType: 'CHECK_OUT',
+        actionDate: params.checkOutDate || new Date().toISOString(),
+        actionBy: params.performedBy,
+        residenceId: occ.residenceId,
+        roomId: occ.roomId,
+        reason: params.reason,
+        notes: params.notes
       });
 
       return { ok: true, historyId };
-    } catch (e: any) {
-      console.error('checkOutWorkerEnhanced failed:', e);
+    } catch (e) {
+      console.error('checkOutWorkerEnhanced failed', e);
       return { ok: false, error: e.message || 'unknown-error' };
     }
   }
@@ -2720,31 +2778,23 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     reason?: string;
     notes?: string;
     performedBy: string;
-  }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    transferCity?: string; // NEW
+  }) {
     const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
-
-    for (const workerId of params.workerIds) {
-      const result = await checkOutWorkerEnhanced({
-        workerId,
+    
+    // Process sequentially to avoid race conditions/overload
+    for (const wid of params.workerIds) {
+      const res = await checkOutWorkerEnhanced({
+        workerId: wid,
         checkOutDate: params.checkOutDate,
         reason: params.reason,
         notes: params.notes,
         performedBy: params.performedBy,
+        transferCity: params.transferCity
       });
-
-      results[workerId] = {
-        success: result.ok,
-        error: result.error,
-        historyId: result.historyId,
-      };
+      results[wid] = { success: res.ok, error: res.error, historyId: res.historyId };
     }
-
-    const successCount = Object.values(results).filter(r => r.success).length;
-    toast({
-      title: "عملية الإخراج الجماعي",
-      description: `تم إخراج ${successCount} من ${params.workerIds.length} عامل بنجاح`,
-    });
-
+    
     return { ok: true, results };
   }
 

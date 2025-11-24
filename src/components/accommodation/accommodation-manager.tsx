@@ -89,6 +89,23 @@ export function AccommodationManager() {
   // Sticky Fields for Check-in
   const [checkInDate, setCheckInDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [checkInType, setCheckInType] = useState<string>("New Recruitment");
+  const [bulkTransferCity, setBulkTransferCity] = useState<string>(""); // NEW: For bulk checkout transfer
+
+  // Checkout Dialog State
+  const [checkoutWorker, setCheckoutWorker] = useState<any>(null);
+  const [checkoutReason, setCheckoutReason] = useState<string>("End of Contract");
+  const [checkoutCity, setCheckoutCity] = useState<string>("");
+  
+  // Extract Unique Cities
+  const uniqueCities = React.useMemo(() => {
+    const cities = new Set<string>();
+    residences.forEach(r => {
+      if (r.address) cities.add(r.address);
+    });
+    // Add some default major cities if not present
+    ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Mecca', 'Medina'].forEach(c => cities.add(c));
+    return Array.from(cities).sort();
+  }, [residences]);
   
   // Selection State
   const [selectedResidenceId, setSelectedResidenceId] = useState<string>("");
@@ -216,7 +233,7 @@ export function AccommodationManager() {
 
   // Search Logic
   const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
+    // setSearchQuery(query); // Managed by input
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -225,8 +242,40 @@ export function AccommodationManager() {
     setIsSearching(true);
     setSearchOccupancies({});
     try {
-      // Always use Async search to avoid loading all workers
-      const results = await findWorkerAsync(query);
+      // Detect multiple terms (space, comma, newline)
+      const spaceTerms = query.split(/[\s,]+/).map(t => t.trim()).filter(t => t.length > 0);
+      
+      let results: any[] = [];
+
+      // Heuristic: If multiple terms and they look like IDs (numbers), treat as bulk search
+      const isNumberList = spaceTerms.length > 1 && spaceTerms.every(t => /^\d+$/.test(t));
+
+      if (isNumberList) {
+        // Bulk Search for IDs
+        // Use Promise.allSettled to avoid one failure breaking all
+        const promises = spaceTerms.map(term => findWorkerAsync(term));
+        const resultsArrays = await Promise.all(promises);
+        // Flatten and deduplicate
+        const allResults = resultsArrays.flat();
+        const uniqueMap = new Map();
+        allResults.forEach(w => uniqueMap.set(w.id, w));
+        results = Array.from(uniqueMap.values());
+      } else {
+        // Standard Search (try full query first)
+        results = await findWorkerAsync(query);
+        
+        // Fallback: If no results and multiple terms, try searching each term
+        // This helps if user pastes "ID1 ID2" but they are alphanumeric or mixed
+        if (results.length === 0 && spaceTerms.length > 1) {
+             const promises = spaceTerms.map(term => findWorkerAsync(term));
+             const resultsArrays = await Promise.all(promises);
+             const allResults = resultsArrays.flat();
+             const uniqueMap = new Map();
+             allResults.forEach(w => uniqueMap.set(w.id, w));
+             results = Array.from(uniqueMap.values());
+        }
+      }
+
       setSearchResults(results);
 
       // Check occupancy for results
@@ -730,18 +779,29 @@ export function AccommodationManager() {
               <div className="relative mt-2">
                 <Search className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
                 <Input
-                  placeholder="Search..."
+                  placeholder="Search (ID, Name, or paste list)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text');
+                    // Replace newlines, tabs, commas with space and trim
+                    const processed = text.replace(/[\n\r\t,]+/g, ' ').replace(/\s+/g, ' ').trim();
+                    setSearchQuery(processed);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchResults.length > 0) {
-                      const topResult = searchResults[0];
-                      // Only add if not already selected
-                      if (!selectedWorkerIds.includes(topResult.id)) {
-                        toggleWorkerSelection(topResult);
+                      // If multiple results found (bulk search), select all
+                      const toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
+                      if (toSelect.length > 0) {
+                          setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
+                          setSelectedWorkers(prev => {
+                              const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
+                              return [...newWorkers, ...prev];
+                          });
+                          setSearchQuery('');
+                          setSearchResults([]);
                       }
-                      setSearchQuery('');
-                      setSearchResults([]);
                     }
                   }}
                   className="pl-8 h-8 text-sm"
@@ -918,6 +978,30 @@ export function AccommodationManager() {
                   </div>
                 ) : (
                   <div className="space-y-1">
+                    {searchResults.filter(w => !selectedWorkerIds.includes(w.id)).length > 1 && (
+                        <div className="flex justify-between items-center px-2 pb-2 border-b mb-2">
+                            <span className="text-[10px] text-muted-foreground">Found {searchResults.length} workers</span>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 text-[10px] hover:bg-primary/10 hover:text-primary"
+                                onClick={() => {
+                                    const toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
+                                    if (toSelect.length > 0) {
+                                        setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
+                                        setSelectedWorkers(prev => {
+                                            const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
+                                            return [...newWorkers, ...prev];
+                                        });
+                                    }
+                                    setSearchQuery('');
+                                    setSearchResults([]);
+                                }}
+                            >
+                                Select All
+                            </Button>
+                        </div>
+                    )}
                     {searchResults.filter(w => !selectedWorkerIds.includes(w.id)).map(worker => {
                       const occupancy = searchOccupancies[worker.id];
                       const isOccupied = !!occupancy;
@@ -947,10 +1031,10 @@ export function AccommodationManager() {
                                   }
                                 }
                               }
+                            } else if (occupancy.roomId) {
+                               const r = res.rooms?.find(r => r.id === occupancy.roomId);
+                               if (r) roomName = r.name || r.id;
                             }
-                          } else if (occupancy.roomId) {
-                             const r = res.rooms?.find(r => r.id === occupancy.roomId);
-                             if (r) roomName = r.name || r.id;
                           }
                         }
                       }
@@ -1010,75 +1094,20 @@ export function AccommodationManager() {
                               <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
                               
                               {canManageOccupancy && (
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-6 w-6 text-amber-700 hover:text-red-600 hover:bg-red-50"
-                                      title="Check Out"
-                                    >
-                                      <LogOut className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="sm:max-w-[425px]">
-                                    <DialogHeader>
-                                      <DialogTitle>Check Out Worker</DialogTitle>
-                                      <DialogDescription>
-                                        Confirm check-out for {worker.name} from {roomName}
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                      <div className="grid grid-cols-4 items-center gap-4">
-                                        <label htmlFor="reason" className="text-right text-sm font-medium">
-                                          Reason
-                                        </label>
-                                        <Select onValueChange={(val) => (document.getElementById('checkout-reason') as HTMLInputElement).value = val}>
-                                          <SelectTrigger className="col-span-3">
-                                            <SelectValue placeholder="Select reason" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="End of Contract">End of Contract</SelectItem>
-                                            <SelectItem value="Transfer">Transfer</SelectItem>
-                                            <SelectItem value="Vacation">Vacation</SelectItem>
-                                            <SelectItem value="Termination">Termination</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <input type="hidden" id="checkout-reason" />
-                                      </div>
-                                      <div className="grid grid-cols-4 items-center gap-4">
-                                        <label htmlFor="date" className="text-right text-sm font-medium">
-                                          Date
-                                        </label>
-                                        <Input
-                                          id="checkout-date"
-                                          type="date"
-                                          defaultValue={new Date().toISOString().split('T')[0]}
-                                          className="col-span-3"
-                                        />
-                                      </div>
-                                    </div>
-                                    <DialogFooter>
-                                      <Button variant="outline" onClick={(e) => ((e.target as HTMLElement).closest('div[role="dialog"]')?.querySelector('button[aria-label="Close"]') as HTMLElement)?.click()}>Cancel</Button>
-                                      <Button variant="destructive" onClick={async () => {
-                                        const reason = (document.getElementById('checkout-reason') as HTMLInputElement)?.value || 'Quick Action';
-                                        const date = (document.getElementById('checkout-date') as HTMLInputElement)?.value;
-                                        
-                                        await checkOutWorkerEnhanced({
-                                          workerId: worker.id,
-                                          performedBy: currentUser?.id || 'Admin',
-                                          reason: reason,
-                                          checkOutDate: date ? new Date(date).toISOString() : undefined
-                                        });
-                                        toast({ title: "Checked Out", description: "Worker removed from room" });
-                                        handleSearch(searchQuery);
-                                        // Close dialog hack (since we are inside a map and don't have state for each)
-                                        document.dispatchEvent(new KeyboardEvent('keydown', {'key': 'Escape'}));
-                                      }}>Confirm Check Out</Button>
-                                    </DialogFooter>
-                                  </DialogContent>
-                                </Dialog>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className="h-6 w-6 text-amber-700 hover:text-red-600 hover:bg-red-50"
+                                  title="Check Out"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCheckoutWorker(worker);
+                                    setCheckoutReason("End of Contract");
+                                    setCheckoutCity("");
+                                  }}
+                                >
+                                  <LogOut className="h-3.5 w-3.5" />
+                                </Button>
                               )}
                             </div>
                           </div>
@@ -1520,21 +1549,45 @@ export function AccommodationManager() {
                           </div>
                         </div>
 
+                        {selectedAreAssigned && checkInType === 'Transfer' && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted-foreground">
+                                Transfer to City
+                            </label>
+                            <Select value={bulkTransferCity} onValueChange={setBulkTransferCity}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue placeholder="Select City" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {uniqueCities.map(city => (
+                                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
                         <Button 
                           className={`w-full ${selectedAreAssigned ? 'bg-destructive hover:bg-destructive/90' : ''}`}
                           onClick={async () => {
                             if (selectedAreAssigned) {
+                               if (checkInType === 'Transfer' && !bulkTransferCity) {
+                                 toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
+                                 return;
+                               }
                                if (!confirm(`Check out ${selectedWorkerIds.length} workers?`)) return;
                                const result = await bulkCheckOut({
                                     workerIds: selectedWorkerIds,
                                     performedBy: currentUser?.id || 'Admin',
                                     checkOutDate: new Date(checkInDate).toISOString(),
-                                    reason: checkInType
+                                    reason: checkInType,
+                                    transferCity: checkInType === 'Transfer' ? bulkTransferCity : undefined
                                });
                                if (result.ok) {
                                     toast({ title: "Checked Out", description: `Successfully checked out ${selectedWorkerIds.length} workers` });
                                     setSelectedWorkerIds([]);
                                     setSelectedWorkers([]);
+                                    setBulkTransferCity("");
                                } else {
                                     toast({ title: "Error", description: "Failed to check out workers", variant: "destructive" });
                                }
@@ -1603,6 +1656,88 @@ export function AccommodationManager() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!checkoutWorker} onOpenChange={(open) => !open && setCheckoutWorker(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Check Out Worker</DialogTitle>
+            <DialogDescription>
+              Confirm check-out for {checkoutWorker?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="reason" className="text-right text-sm font-medium">
+                Reason
+              </label>
+              <Select value={checkoutReason} onValueChange={setCheckoutReason}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="End of Contract">End of Contract</SelectItem>
+                  <SelectItem value="Transfer">Transfer</SelectItem>
+                  <SelectItem value="Vacation">Vacation</SelectItem>
+                  <SelectItem value="Termination">Termination</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {checkoutReason === 'Transfer' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="city" className="text-right text-sm font-medium">
+                  City
+                </label>
+                <Select value={checkoutCity} onValueChange={setCheckoutCity}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select City" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueCities.map(city => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="date" className="text-right text-sm font-medium">
+                Date
+              </label>
+              <Input
+                id="checkout-date"
+                type="date"
+                defaultValue={new Date().toISOString().split('T')[0]}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCheckoutWorker(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={async () => {
+              if (checkoutReason === 'Transfer' && !checkoutCity) {
+                toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
+                return;
+              }
+
+              const date = (document.getElementById('checkout-date') as HTMLInputElement)?.value;
+              
+              await checkOutWorkerEnhanced({
+                workerId: checkoutWorker.id,
+                performedBy: currentUser?.id || 'Admin',
+                reason: checkoutReason,
+                checkOutDate: date ? new Date(date).toISOString() : undefined,
+                transferCity: checkoutReason === 'Transfer' ? checkoutCity : undefined
+              });
+              toast({ title: "Checked Out", description: "Worker removed from room" });
+              handleSearch(searchQuery);
+              setCheckoutWorker(null);
+              setCheckoutCity("");
+            }}>Confirm Check Out</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

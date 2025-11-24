@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -108,6 +108,14 @@ export function AppSidebar() {
                   <Link href="/accommodation/transfers" onClick={handleNavigate}>
                     <GitBranch />
                     <span className="group-data-[collapsible=icon]:hidden">Transfers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/pending-transfers'} tooltip="Pending Transfers">
+                  <Link href="/accommodation/pending-transfers" onClick={handleNavigate}>
+                    <Truck />
+                    <span className="group-data-[collapsible=icon]:hidden">Pending Transfers</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
