@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ['@genkit-ai/googleai', 'genkit', '@genkit-ai/core', 'firebase-admin', 'handlebars'],
+  serverExternalPackages: ['@genkit-ai/googleai', 'genkit', '@genkit-ai/core', 'firebase-admin', 'handlebars', '@google-cloud/storage', '@google-cloud/firestore'],
   // Disable source maps in production to avoid fetch errors
   productionBrowserSourceMaps: false,
   images: {
