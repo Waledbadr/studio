@@ -44,6 +44,16 @@ function initAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'RESET_AUTH_DISABLED_IN_PRODUCTION',
+        },
+        { status: 200 }
+      );
+    }
+
     const { keepEmails, password } = await req.json();
     // naive guard so no one hits this by mistake in production
     if (password !== 'RESET123') {
