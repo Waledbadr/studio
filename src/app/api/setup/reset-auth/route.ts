@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from 'firebase-admin';
+
+declare const require: any;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,8 @@ function getProjectIdFallback(): string | undefined {
 }
 
 function initAdmin() {
-  if (admin.apps.length) return admin.app();
+  const admin = require('firebase-admin');
+  if (admin.apps.length) return admin;
   try {
     const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
     const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -27,15 +29,17 @@ function initAdmin() {
         ? Buffer.from(b64, 'base64').toString('utf8')
         : (typeof svc === 'string' ? svc : JSON.stringify(svc));
       const credentials = JSON.parse(jsonStr);
-      return admin.initializeApp({
+      admin.initializeApp({
         credential: admin.credential.cert(credentials as any),
         projectId: (credentials as any).project_id || getProjectIdFallback(),
       });
+      return admin;
     }
-    return admin.initializeApp({
+    admin.initializeApp({
       credential: admin.credential.applicationDefault(),
       projectId: getProjectIdFallback(),
     } as any);
+    return admin;
   } catch (e) {
     console.error('firebase-admin init failed', e);
     throw e;
@@ -44,6 +48,7 @@ function initAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = initAdmin();
     if (process.env.NODE_ENV === 'production') {
       return NextResponse.json(
         {

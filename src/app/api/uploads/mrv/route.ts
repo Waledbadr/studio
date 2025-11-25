@@ -3,6 +3,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { put } from '@vercel/blob';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
