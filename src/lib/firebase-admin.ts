@@ -1,11 +1,9 @@
-import admin from 'firebase-admin';
-import 'firebase-admin/storage';
 import type { Bucket } from '@google-cloud/storage';
 
 declare const require: any;
 
-let adminApp: admin.app.App | null = null;
-let adminDb: admin.firestore.Firestore | null = null;
+let adminApp: any | null = null;
+let adminDb: any | null = null;
 let adminBucket: Bucket | null = null;
 
 function parseServiceAccountFromEnv():
@@ -39,6 +37,13 @@ function parseServiceAccountFromEnv():
 
 function initAdmin() {
 	if (adminApp) return;
+
+	const admin = require('firebase-admin');
+	try {
+		require('firebase-admin/storage');
+	} catch (e) {
+		// storage might be already registered or not needed
+	}
 
 	// Prefer explicit service account inputs
 	const svcParsed = parseServiceAccountFromEnv();
@@ -91,7 +96,7 @@ function initAdmin() {
 	// If still not initialized, leave adminDb null so callers can detect and skip admin-only writes
 }
 
-export function getAdminDb(): admin.firestore.Firestore | null {
+export function getAdminDb(): any | null {
 	if (!adminDb) initAdmin();
 	return adminDb;
 }
