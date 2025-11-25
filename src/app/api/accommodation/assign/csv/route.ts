@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 type CsvRow = Record<string, string>;
 
 // Minimal CSV parser that handles commas and quotes

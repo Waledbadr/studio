@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import admin from 'firebase-admin';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 function getProjectIdFallback(): string | undefined {
   try {
     if (process.env.GOOGLE_CLOUD_PROJECT) return process.env.GOOGLE_CLOUD_PROJECT;
