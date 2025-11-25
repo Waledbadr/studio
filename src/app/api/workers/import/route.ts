@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate Firebase Admin is initialized
+    const adminDb = getAdminDb();
     if (!adminDb) {
       return NextResponse.json(
         { error: 'Firebase Admin not configured' },

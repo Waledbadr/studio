@@ -98,7 +98,4 @@ export function getAdminBucket(): Bucket | null {
 	return adminBucket;
 }
 
-// Initialize admin on import and export for convenience
-initAdmin();
-export { adminDb, adminBucket };
 
