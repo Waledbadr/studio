@@ -9,7 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { Printer } from 'lucide-react';
+import { Printer, Edit } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
   const { residences, loadResidences } = useResidences();
-  const { users, loadUsers } = useUsers();
+  const { users, loadUsers, currentUser } = useUsers();
   const params = useParams();
   const router = useRouter();
   const mrvId = (params?.id as string) || '';
@@ -148,6 +148,11 @@ export default function MRVDetailsPage() {
               }}
             >{uploading ? 'Uploading…' : 'Upload'}</Button>
           </div>
+          {currentUser?.role === 'Admin' && (
+            <Button variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${mrvId}/edit`)}>
+              <Edit className="mr-2 h-4 w-4" /> Edit
+            </Button>
+          )}
           <Button onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" /> Print MRV
           </Button>
