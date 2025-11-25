@@ -1,7 +1,8 @@
 import admin from 'firebase-admin';
 import 'firebase-admin/storage';
 import type { Bucket } from '@google-cloud/storage';
-import fs from 'fs';
+
+declare const require: any;
 
 let adminApp: admin.app.App | null = null;
 let adminDb: admin.firestore.Firestore | null = null;
@@ -69,6 +70,7 @@ function initAdmin() {
 
 	// Fallback: Application Default Credentials ONLY if an explicit, existing path is provided
 	const adcPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+	const fs = require('fs');
 	if (adcPath && typeof adcPath === 'string') {
 		try {
 			if (fs.existsSync(adcPath)) {

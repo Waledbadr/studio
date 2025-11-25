@@ -6,6 +6,12 @@ const BUILD_TIME_ISO = new Date().toISOString();
 
 const nextConfig: NextConfig = {
   /* config options here */
+  experimental: {
+    serverComponentsExternalPackages: [
+      'firebase-admin',
+      '@google-cloud/storage',
+    ],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
