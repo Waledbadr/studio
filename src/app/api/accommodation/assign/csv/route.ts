@@ -85,6 +85,16 @@ function getField(row: Record<string, string>, keys: string[]): string {
 
 export async function POST(request: Request) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'CSV_ASSIGN_DISABLED_IN_PRODUCTION',
+        },
+        { status: 200 }
+      );
+    }
+
     const adminDb = getAdminDb();
     if (!adminDb) {
       return NextResponse.json(
