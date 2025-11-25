@@ -6,6 +6,19 @@ const BUILD_TIME_ISO = new Date().toISOString();
 
 const nextConfig: NextConfig = {
   /* config options here */
+  outputFileTracingIncludes: {
+    '/api/**': ['./node_modules/**'],
+  },
+  experimental: {
+    serverComponentsExternalPackages: [
+      'firebase-admin',
+      '@google-cloud/storage',
+      '@google-cloud/firestore',
+      'google-gax',
+      '@grpc/grpc-js',
+      'protobufjs'
+    ],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
