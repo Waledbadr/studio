@@ -89,7 +89,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: (user.role === 'Admin' || user.role === 'Supervisor' || user.role === 'Technician') ? user.role : 'Technician',
           assignedResidences: user.assignedResidences || [],
           themeSettings: user.themeSettings || { colorTheme: 'blue', mode: 'system' },
         });

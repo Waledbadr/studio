@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, ConciergeBell, Edit, Loader2, MapPin, Search, Trash2, Building as BuildingIcon, Clock, Plus, MessageSquare } from 'lucide-react';
+import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 
@@ -27,7 +28,7 @@ export default function EditPlanPage() {
   const router = useRouter();
   const { getOrderById, updateOrder } = useOrders();
   const { residences } = useResidences();
-  const { items: allItems, getStockForResidence, checkItemLifespanAtLocation } = useInventory();
+  const { items: allItems, getStockForResidence, checkItemLifespanAtLocation, updateItem } = useInventory();
   const { currentUser } = useUsers();
   const { toast } = useToast();
 
@@ -55,6 +56,8 @@ export default function EditPlanPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [recentItems, setRecentItems] = useState<InventoryItem[]>([]);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   // Justification dialog state
   const [justOpen, setJustOpen] = useState(false);
   const [justText, setJustText] = useState('');
@@ -206,6 +209,16 @@ export default function EditPlanPage() {
       }
       return next;
     });
+  };
+
+  const handleItemUpdated = async (updated: InventoryItem) => {
+    try {
+      await updateItem(updated);
+      setEditDialogOpen(false);
+      setItemToEdit(null);
+    } catch (e) {
+      console.error('Failed to update item from edit-plan page', e);
+    }
   };
 
   const updateQty = (locationId: string, itemId: string, nextQty: number, detail?: string) => {
@@ -471,7 +484,7 @@ export default function EditPlanPage() {
                                     <p className="text-xs text-muted-foreground">{item.category} - Stock: {stock} {item.unit}</p>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <Button variant="ghost" size="icon" onClick={() => addToPlan(item)}><Edit className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
                                     <Button variant="outline" size="icon" onClick={() => addToPlan(item)}><Plus className="h-4 w-4" /></Button>
                                   </div>
                                 </div>
@@ -489,7 +502,7 @@ export default function EditPlanPage() {
                               <p className="text-xs text-muted-foreground">{item.category} - Stock: {stock} {item.unit}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => addToPlan(item)}><Edit className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => { setItemToEdit(item); setEditDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
                               <Button variant="outline" size="icon" onClick={() => addToPlan(item)}><Plus className="h-4 w-4" /></Button>
                             </div>
                           </div>
@@ -623,6 +636,13 @@ export default function EditPlanPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Edit item dialog for modifying inventory items inline */}
+      <EditItemDialog
+        isOpen={editDialogOpen}
+        onOpenChange={(v) => { setEditDialogOpen(v); if (!v) setItemToEdit(null); }}
+        onItemUpdated={handleItemUpdated}
+        item={itemToEdit}
+      />
     </div>
   );
 }

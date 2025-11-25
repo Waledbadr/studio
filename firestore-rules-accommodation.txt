@@ -1,0 +1,149 @@
+// ============================================
+// ACCOMMODATION MODULE - Firestore Security Rules
+// ============================================
+// Add these rules to your firestore.rules file
+// to enable the accommodation management features
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    // (Adjust based on your actual role field structure)
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+    
+    // Helper function to check if user is housing officer or admin
+    function canManageAccommodation() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Admin', 'Housing Officer'];
+    }
+    
+    // Helper function to check if user can manage finance
+    function canManageFinance() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Admin', 'Finance'];
+    }
+    
+    // ============================================
+    // COMPANIES COLLECTION
+    // ============================================
+    match /companies/{companyId} {
+      // Anyone authenticated can read companies
+      allow read: if isAuthenticated();
+      
+      // Only admins and finance can create/update companies
+      allow create, update: if canManageFinance();
+      
+      // Only admins can delete companies (additional business logic in app prevents deletion if contracts exist)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // CONTRACTS COLLECTION
+    // ============================================
+    match /contracts/{contractId} {
+      // Anyone authenticated can read contracts
+      allow read: if isAuthenticated();
+      
+      // Only admins and finance can create/update contracts
+      allow create, update: if canManageFinance();
+      
+      // Only admins can delete contracts (app prevents deletion if invoices exist)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // INVOICES COLLECTION
+    // ============================================
+    match /invoices/{invoiceId} {
+      // Anyone authenticated can read invoices
+      allow read: if isAuthenticated();
+      
+      // Only admins and finance can create/update invoices
+      allow create, update: if canManageFinance();
+      
+      // Only admins can delete invoices (app prevents deletion of paid invoices)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WORKERS COLLECTION (already exists)
+    // ============================================
+    match /workers/{workerId} {
+      // Anyone authenticated can read workers
+      allow read: if isAuthenticated();
+      
+      // Admins and housing officers can manage workers
+      allow create, update, delete: if canManageAccommodation();
+    }
+    
+    // ============================================
+    // OCCUPANTS COLLECTION (future - currently localStorage)
+    // ============================================
+    match /occupants/{occupantId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if canManageAccommodation();
+    }
+    
+    // ============================================
+    // TRANSFER REQUESTS COLLECTION (future - currently localStorage)
+    // ============================================
+    match /transferRequests/{transferId} {
+      allow read: if isAuthenticated();
+      allow create: if canManageAccommodation();
+      allow update: if canManageAccommodation(); // Approve/reject
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // NOTES FOR IMPLEMENTATION
+    // ============================================
+    // 1. Adjust role checks based on your users collection structure
+    // 2. Add more granular permissions if needed (e.g., company reps can only see their own data)
+    // 3. Consider adding field-level validation rules
+    // 4. Test rules in Firestore Rules Playground before deploying
+    
+    // Example of more restrictive rule for company representatives:
+    // match /contracts/{contractId} {
+    //   allow read: if isAuthenticated() && (
+    //     canManageFinance() || 
+    //     resource.data.companyId == getUserCompanyId()
+    //   );
+    // }
+    
+    // Helper for company rep access (example - adjust as needed):
+    // function getUserCompanyId() {
+    //   return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    // }
+  }
+}
+
+// ============================================
+// TESTING CHECKLIST
+// ============================================
+// After adding these rules, test:
+// ✓ Authenticated users can read all collections
+// ✓ Only Finance/Admin can create companies
+// ✓ Only Finance/Admin can create contracts
+// ✓ Only Finance/Admin can create invoices
+// ✓ Housing Officers can manage workers
+// ✓ Unauthenticated users are denied access
+// ✓ Role-based restrictions work as expected
+
+// ============================================
+// MIGRATION NOTES
+// ============================================
+// If you're migrating from localStorage to Firestore:
+// 1. Use the migration tool in /accommodation/workers page
+// 2. Verify data integrity after migration
+// 3. Update local development rules for testing
+// 4. Deploy rules to production carefully
+// 5. Monitor Firestore usage and costs

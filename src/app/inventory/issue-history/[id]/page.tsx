@@ -6,16 +6,18 @@ import { useInventory, type MIVDetails } from '@/context/inventory-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, Edit } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
+import { useUsers } from '@/context/users-context';
 
 export default function MIVDetailPage() {
     const { id: mivId } = useParams();
     const router = useRouter();
     const { getMIVById, loading } = useInventory();
     const { residences, loading: residencesLoading } = useResidences();
+    const { currentUser } = useUsers();
     const [miv, setMiv] = useState<MIVDetails | null>(null);
     const [localLoading, setLocalLoading] = useState(true);
     const [triedOnce, setTriedOnce] = useState(false);
@@ -177,10 +179,17 @@ export default function MIVDetailPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to MIV History
                 </Button>
-                <Button onClick={handlePrint}>
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print MIV
-                </Button>
+                <div className="flex gap-2">
+                    {currentUser?.role === 'Admin' && (
+                        <Button variant="outline" onClick={() => router.push(`/inventory/issue-history/${mivId}/edit`)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                        </Button>
+                    )}
+                    <Button onClick={handlePrint}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print MIV
+                    </Button>
+                </div>
             </div>
 
             <Card className="printable-area">

@@ -15,12 +15,17 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "Admin" | "Supervisor" | "Technician";
+  role: "Admin" | "Supervisor" | "Technician" | "Worker";
   assignedResidences: string[];
   themeSettings?: UserThemeSettings;
   // Optional profile fields
   phone?: string;
   language?: 'en' | 'ar';
+  // Worker-specific fields
+  employeeId?: string;
+  idNumber?: string;
+  nationality?: string;
+  company?: string;
 }
 
 interface UsersContextType {

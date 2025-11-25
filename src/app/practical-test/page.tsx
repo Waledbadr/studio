@@ -95,10 +95,11 @@ export default function PracticalTestPage() {
       });
       
     } catch (error) {
-      console.error('Setup error:', error);
+      const e: any = error;
+      console.error('Setup error:', e);
       toast({
         title: "خطأ",
-        description: `فشل في الإعداد: ${error.message}`,
+        description: `فشل في الإعداد: ${e?.message || String(e)}`,
         variant: "destructive"
       });
     } finally {

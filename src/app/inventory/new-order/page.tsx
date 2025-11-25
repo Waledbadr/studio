@@ -306,6 +306,23 @@ export default function NewOrderPage() {
             toast({ title: "Error", description: "User not found. Please log in again.", variant: "destructive" });
             return;
         }
+
+        // Check if items exist in stock and require justification
+        // TODO: Re-enable after system stabilization
+        // for (const it of orderItems) {
+        //     try {
+        //         const stock = handleGetStockForOrderItem(it);
+        //         if (stock > 0 && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
+        //             const itemName = it.nameEn || it.nameAr || it.id;
+        //             toast({ 
+        //                 title: 'Justification required', 
+        //                 description: `Provide a justification for "${itemName}" since it exists in stock (Available: ${stock} ${it.unit || 'units'}).`, 
+        //                 variant: 'destructive' 
+        //             });
+        //             return;
+        //         }
+        //     } catch {}
+        // }
         
         const newOrderData = {
             residence: selectedResidence.name,

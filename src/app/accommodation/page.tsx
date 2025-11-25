@@ -1,9 +1,19 @@
-'use client';
+"use client";
 
-import React from 'react';
-import ResidencesView from '@/components/residences/ResidencesView';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function AccommodationHomePage() {
-  // Reuse the shared ResidencesView but hide facilities/services
-  return <ResidencesView showFacilities={false} />;
+  const router = useRouter();
+  
+  useEffect(() => {
+    // Redirect to overview dashboard
+    router.replace('/accommodation/overview');
+  }, [router]);
+  
+  return (
+    <div className="p-8">
+      <div className="animate-pulse">Loading...</div>
+    </div>
+  );
 }

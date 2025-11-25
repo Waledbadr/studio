@@ -63,6 +63,66 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Accommodation workers
+    match /workers/{workerId} {
+      // Allow signed-in users to view worker roster
+      allow read: if isSignedIn();
+      // Only Admins and Supervisors can create or modify workers
+      allow create, update: if isAdmin() || isSupervisor();
+      // Restrict deletions to Admins
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Companies (sister companies for contracts)
+    match /companies/{companyId} {
+      allow read: if isSignedIn();
+      // Admins and users with Housing Officer or Finance roles can manage companies
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Contracts
+    match /contracts/{contractId} {
+      allow read: if isSignedIn();
+      // Admins and authorized roles can manage contracts
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Invoices
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn();
+      // Admins and Finance roles can manage invoices
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation Occupants (worker assignments to rooms)
+    match /occupants/{occupantId} {
+      allow read: if isSignedIn();
+      // Admins and authorized roles can manage occupancy
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Transfer Requests (Accommodation)
+    match /transferRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || isSupervisor() || (isSignedIn() && resource.data.requestedBy == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Accommodation History (immutable log of all check-in/out/transfer operations)
+    match /accommodationHistory/{historyId} {
+      // All signed-in users can read history for reporting and auditing
+      allow read: if isSignedIn();
+      // Only Admins and Supervisors can create history records (done by accommodation operations)
+      allow create: if isAdmin() || isSupervisor();
+      // History records are immutable - no updates or deletes allowed (except by Admin for corrections)
+      allow update, delete: if isAdmin();
+    }
+
   // Users collection: basic access model
     match /users/{uid} {
       allow read: if isSignedIn();

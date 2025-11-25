@@ -47,7 +47,14 @@ interface AddItemDialogProps {
     onOpenChange: (isOpen: boolean) => void;
     onItemAdded: (item: Omit<InventoryItem, 'id' | 'stock'>) => Promise<InventoryItem | void>;
     triggerButton?: ReactNode;
+    /**
+     * Initial raw name (from search box). If provided, it will be routed
+     * to Arabic or English field based on detected script.
+     */
     initialName?: string;
+    /** Optional explicit initial Arabic / English names (override detection). */
+    initialNameAr?: string;
+    initialNameEn?: string;
     onItemAddedAndOrdered?: (item: InventoryItem) => void;
 }
 
@@ -57,11 +64,13 @@ export function AddItemDialog({
     onItemAdded, 
     triggerButton, 
     initialName = '',
+    initialNameAr,
+    initialNameEn,
     onItemAddedAndOrdered 
 }: AddItemDialogProps) {
     // Names (dual-language)
     const [nameAr, setNameAr] = useState('');
-    const [nameEn, setNameEn] = useState(initialName);
+    const [nameEn, setNameEn] = useState('');
     const nameArRef = useRef<HTMLInputElement | null>(null);
     // Category/Unit (with optional custom)
     const [category, setCategory] = useState('');
@@ -79,6 +88,9 @@ export function AddItemDialog({
     const [keywordsEnInput, setKeywordsEnInput] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [imageError, setImageError] = useState(false);
+    // Track if we already performed auto-translation from each side to avoid loops
+    const [autoTranslatedFromAr, setAutoTranslatedFromAr] = useState(false);
+    const [autoTranslatedFromEn, setAutoTranslatedFromEn] = useState(false);
     const formRef = useRef<HTMLFormElement | null>(null);
     
     const { toast } = useToast();
@@ -130,10 +142,13 @@ export function AddItemDialog({
         });
     }, [items, nameAr, nameEn]);
 
+    const isProbablyArabic = (text: string) => /[\u0600-\u06FF]/.test(text);
+
     useEffect(() => {
         if (isOpen) {
+            // Reset base state
             setNameAr('');
-            setNameEn(initialName || '');
+            setNameEn('');
             setCategory('');
             setCategoryCustom('');
             setUnit('');
@@ -147,8 +162,40 @@ export function AddItemDialog({
             setKeywordsEnList([]);
             setKeywordsEnInput('');
             setImageUrl('');
+            setAutoTranslatedFromAr(false);
+            setAutoTranslatedFromEn(false);
+
+            // Apply initial names if provided
+            const rawAr = (initialNameAr ?? '').trim();
+            const rawEn = (initialNameEn ?? '').trim();
+            if (rawAr || rawEn) {
+                setNameAr(rawAr);
+                setNameEn(rawEn);
+            } else if (initialName) {
+                const trimmed = initialName.trim();
+                if (trimmed) {
+                    if (isProbablyArabic(trimmed)) {
+                        setNameAr(trimmed);
+                    } else {
+                        setNameEn(trimmed);
+                    }
+                }
+            }
         }
-    }, [isOpen, initialName]);
+    }, [isOpen, initialName, initialNameAr, initialNameEn]);
+
+    // Helper to call translation API with graceful handling
+    const translateName = async (source: string) => {
+        const res = await fetch('/api/translate-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: source }),
+        });
+        const data = await res.json();
+        if (data?.error === 'TRANSLATION_DISABLED_NO_KEY') return null;
+        if (!res.ok) throw new Error(data?.error || `Translation API failed: ${res.status}`);
+        return data;
+    };
 
     const addChip = (value: string, listSetter: React.Dispatch<React.SetStateAction<string[]>>) => {
         const v = value.trim();
@@ -159,6 +206,52 @@ export function AddItemDialog({
         listSetter((prev: string[]) => prev.filter((vv: string) => vv !== value));
     };
 
+    // Auto-translate to the other language once when user finishes typing.
+    useEffect(() => {
+        const source = nameAr.trim();
+        if (!isOpen || !source || nameEn.trim() || autoTranslatedFromAr || isTranslating) return;
+
+        // Debounce: wait a short delay after user stops typing
+        const handle = setTimeout(async () => {
+            try {
+                setIsTranslating(true);
+                const result = await translateName(source);
+                if (result && !nameEn.trim()) {
+                    setNameEn(result.englishName || nameEn);
+                    setAutoTranslatedFromAr(true);
+                }
+            } catch {
+                // ignore auto-translate errors silently; user can still edit manually
+            } finally {
+                setIsTranslating(false);
+            }
+        }, 800);
+
+        return () => clearTimeout(handle);
+    }, [nameAr, nameEn, autoTranslatedFromAr, isOpen, isTranslating]);
+
+    useEffect(() => {
+        const source = nameEn.trim();
+        if (!isOpen || !source || nameAr.trim() || autoTranslatedFromEn || isTranslating) return;
+
+        const handle = setTimeout(async () => {
+            try {
+                setIsTranslating(true);
+                const result = await translateName(source);
+                if (result && !nameAr.trim()) {
+                    setNameAr(result.arabicName || nameAr);
+                    setAutoTranslatedFromEn(true);
+                }
+            } catch {
+                // ignore auto-translate errors silently
+            } finally {
+                setIsTranslating(false);
+            }
+        }, 800);
+
+        return () => clearTimeout(handle);
+    }, [nameEn, nameAr, autoTranslatedFromEn, isOpen, isTranslating]);
+
     const handleAutoTranslate = async () => {
         const source = (nameAr || nameEn || '').trim();
         if (!source) {
@@ -167,19 +260,19 @@ export function AddItemDialog({
         }
         setIsTranslating(true);
         try {
-            const res = await fetch('/api/translate-item', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: source }),
-            });
-            const translationResult = await res.json();
-            if (!res.ok) {
-                const msg = translationResult?.error || `Translation API failed: ${res.status}`;
-                toast({ title: 'Translation Error', description: msg, variant: 'destructive' });
-            } else {
-                setNameAr(translationResult.arabicName || nameAr);
-                setNameEn(translationResult.englishName || nameEn);
+            const translationResult = await translateName(source);
+
+            // If backend indicates translation is disabled (no API key), show soft info message
+            if (!translationResult) {
+                toast({
+                    title: 'Auto-translate unavailable',
+                    description: 'خدمة الترجمة الآلية غير مفعّلة حاليًا. يمكنك إدخال الترجمة يدويًا.',
+                });
+                return;
             }
+
+            setNameAr(translationResult.arabicName || nameAr);
+            setNameEn(translationResult.englishName || nameEn);
         } catch (e: any) {
             toast({ title: 'Translation Error', description: e?.message || 'تعذر تنفيذ الترجمة.', variant: 'destructive' });
         } finally {
@@ -209,15 +302,16 @@ export function AddItemDialog({
                 let finalNameAr = nameAr.trim();
                 let finalNameEn = nameEn.trim();
                 if (!finalNameAr || !finalNameEn) {
-                    const res = await fetch('/api/translate-item', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
-                    });
-                    if (!res.ok) throw new Error(`Translation API failed: ${res.status}`);
-                    const t = await res.json();
-                    finalNameAr = finalNameAr || t.arabicName || '';
-                    finalNameEn = finalNameEn || t.englishName || '';
+                    const t = await translateName(finalNameAr || finalNameEn);
+
+                    if (!t) {
+                        // translation disabled, keep whatever is provided
+                        finalNameAr = finalNameAr || '';
+                        finalNameEn = finalNameEn || '';
+                    } else {
+                        finalNameAr = finalNameAr || t.arabicName || '';
+                        finalNameEn = finalNameEn || t.englishName || '';
+                    }
                 }
 
                 let totalLifespanDays: number | undefined = undefined;

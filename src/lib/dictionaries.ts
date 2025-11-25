@@ -1,5 +1,7 @@
 const en = {
     // General
+    boardView: 'Board View',
+    board: 'Board',
     viewAll: 'View All',
     location: 'Location',
     status: 'Status',
@@ -81,6 +83,14 @@ const en = {
     noServiceOrdersFound: 'No service orders found.',
     recentDepreciation: 'Recent Depreciation',
     recentStockTransfers: 'Recent Stock Transfers',
+    },
+    // Quick Actions
+    quickActions: {
+        addNewOrder: 'Add New Order',
+        addMaterialReceipt: 'Add Material Receipt',
+        issueMaterials: 'Issue Materials',
+        serviceOrder: 'Service Order',
+        maintenanceRequest: 'Maintenance Request',
     },
     // Reports
     reportsTitle: 'Reports',
@@ -432,6 +442,8 @@ const en = {
 
 const ar = {
     // General
+    boardView: 'عرض اللوحة',
+    board: 'اللوحة',
     viewAll: 'عرض الكل',
     location: 'الموقع',
     status: 'الحالة',
@@ -502,6 +514,14 @@ const ar = {
     noServiceOrdersFound: 'لا توجد أوامر خدمة.',
     recentDepreciation: 'الاستهلاكات الأخيرة',
     recentStockTransfers: 'تحويلات المخزون الأخيرة',
+    },
+    // Quick Actions
+    quickActions: {
+        addNewOrder: 'اضافة طلب جديد',
+        addMaterialReceipt: 'اضافة استلام مواد',
+        issueMaterials: 'فتح توزيع الطلبات',
+        serviceOrder: 'طلب خدمة',
+        maintenanceRequest: 'طلب صيانة',
     },
     // Reports (AR)
     reportsTitle: 'التقارير',

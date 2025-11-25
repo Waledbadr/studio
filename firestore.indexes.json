@@ -65,6 +65,95 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "workers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "nationaliy", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "occupants",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "workerId", "order": "ASCENDING" },
+        { "fieldPath": "since", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "occupants",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "residenceId", "order": "ASCENDING" },
+        { "fieldPath": "roomId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "occupants",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "residenceId", "order": "ASCENDING" },
+        { "fieldPath": "roomId", "order": "ASCENDING" },
+        { "fieldPath": "until", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accommodationHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "workerId", "order": "ASCENDING" },
+        { "fieldPath": "actionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accommodationHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "residenceId", "order": "ASCENDING" },
+        { "fieldPath": "actionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accommodationHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "actionType", "order": "ASCENDING" },
+        { "fieldPath": "actionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "residenceId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "contractId", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

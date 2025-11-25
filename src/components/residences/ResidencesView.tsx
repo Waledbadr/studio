@@ -1028,9 +1028,16 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   const handleAddRoom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.newRoomName.trim() || !contextIds?.complexId || !contextIds?.buildingId || !contextIds?.floorId) return;
-    const lengthNum = formData.newRoomLength ? Number(formData.newRoomLength) : undefined;
-    const widthNum = formData.newRoomWidth ? Number(formData.newRoomWidth) : undefined;
-    const areaNum = formData.newRoomArea ? Number(formData.newRoomArea) : undefined;
+    let lengthNum = formData.newRoomLength ? Number(formData.newRoomLength) : undefined;
+    let widthNum = formData.newRoomWidth ? Number(formData.newRoomWidth) : undefined;
+    let areaNum = formData.newRoomArea ? Number(formData.newRoomArea) : undefined;
+    
+    // If no dimensions provided, use default 4x4 = 16m²
+    if (!lengthNum && !widthNum && !areaNum) {
+      lengthNum = 4;
+      widthNum = 4;
+    }
+    
     // prefer length/width if provided
     if ((lengthNum && !isNaN(lengthNum) && lengthNum > 0) || (widthNum && !isNaN(widthNum) && widthNum > 0) || (areaNum && !isNaN(areaNum))) {
       addRoom(contextIds.complexId, contextIds.buildingId, contextIds.floorId, formData.newRoomName, lengthNum, widthNum, areaNum);
@@ -2169,7 +2176,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
             <DialogHeader>
               <DialogTitle>Add New Room</DialogTitle>
               <DialogDescription>
-                Enter the name for the new room.
+                Enter the name for the new room. Default size: 4x4m (16m², capacity: 4)
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -2179,15 +2186,15 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="room-length" className="text-right">Length (m)</Label>
-                <Input id="room-length" placeholder="e.g., 5" className="col-span-3" value={formData.newRoomLength} onChange={(e) => setFormData(prev => ({ ...prev, newRoomLength: e.target.value }))} />
+                <Input id="room-length" placeholder="Default: 4" className="col-span-3" value={formData.newRoomLength} onChange={(e) => setFormData(prev => ({ ...prev, newRoomLength: e.target.value }))} />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="room-width" className="text-right">Width (m)</Label>
-                <Input id="room-width" placeholder="e.g., 4" className="col-span-3" value={formData.newRoomWidth} onChange={(e) => setFormData(prev => ({ ...prev, newRoomWidth: e.target.value }))} />
+                <Input id="room-width" placeholder="Default: 4" className="col-span-3" value={formData.newRoomWidth} onChange={(e) => setFormData(prev => ({ ...prev, newRoomWidth: e.target.value }))} />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="room-area" className="text-right">Or Area (m²)</Label>
-                <Input id="room-area" placeholder="e.g., 20" className="col-span-3" value={formData.newRoomArea} onChange={(e) => setFormData(prev => ({ ...prev, newRoomArea: e.target.value }))} />
+                <Input id="room-area" placeholder="Default: 16" className="col-span-3" value={formData.newRoomArea} onChange={(e) => setFormData(prev => ({ ...prev, newRoomArea: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>

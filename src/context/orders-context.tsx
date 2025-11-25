@@ -65,6 +65,12 @@ export interface Order {
   notes?: string;
   // Optional: Saved distribution plan for later issuing steps
   plannedDistribution?: PlannedDistributionLocation[];
+  // Optional: General Manager approval attachment
+  approvalAttachmentUrl?: string | null;
+  approvalAttachmentPath?: string | null;
+  approvalAttachmentName?: string | null;
+  approvalAttachmentUploadedAt?: Timestamp;
+  approvalAttachmentUploadedById?: string | null;
 }
 
 type NewOrderPayload = Omit<Order, 'id' | 'date' | 'status' | 'itemsReceived' | 'approvedById'>;
@@ -80,7 +86,16 @@ interface OrdersContextType {
   loadOrders: () => void;
   createOrder: (orderData: NewOrderPayload) => Promise<string | null>;
   updateOrder: (id: string, orderData: UpdateOrderPayload) => Promise<void>;
-  updateOrderStatus: (id: string, status: OrderStatus, approverId?: string) => Promise<void>;
+  updateOrderStatus: (
+    id: string, 
+    status: OrderStatus, 
+    approverId?: string,
+    attachmentData?: {
+      url: string;
+      path: string;
+      filename: string;
+    } | null
+  ) => Promise<void>;
   getOrderById: (id: string) => Promise<Order | null>;
   deleteOrder: (id: string) => Promise<void>;
   // For receiving, only id and quantity are required; names are optional and resolved from inventory when available
@@ -286,14 +301,32 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateOrderStatus = async (id: string, status: OrderStatus, approverId?: string) => {
+  const updateOrderStatus = async (
+    id: string, 
+    status: OrderStatus, 
+    approverId?: string,
+    attachmentData?: {
+      url: string;
+      path: string;
+      filename: string;
+    } | null
+  ) => {
     if (!db) {
         toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
         return;
     }
     try {
         const orderDocRef = doc(db, "orders", id);
-  const updatePayload: {status: OrderStatus, approvedById?: string, approvedByName?: string} = { status };
+  const updatePayload: {
+    status: OrderStatus;
+    approvedById?: string;
+    approvedByName?: string;
+    approvalAttachmentUrl?: string | null;
+    approvalAttachmentPath?: string | null;
+    approvalAttachmentName?: string | null;
+    approvalAttachmentUploadedAt?: Timestamp;
+    approvalAttachmentUploadedById?: string | null;
+  } = { status };
         
         let requestedById: string | null = null;
     if (status === 'Approved' && approverId) {
@@ -304,6 +337,15 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       updatePayload.approvedById = approverId;
       const approver = (users?.find(u => u.id === approverId)) || (currentUser?.id === approverId ? currentUser : null);
       updatePayload.approvedByName = approver?.name || auth?.currentUser?.displayName || undefined;
+      
+      // Add attachment data if provided
+      if (attachmentData) {
+        updatePayload.approvalAttachmentUrl = attachmentData.url;
+        updatePayload.approvalAttachmentPath = attachmentData.path;
+        updatePayload.approvalAttachmentName = attachmentData.filename;
+        updatePayload.approvalAttachmentUploadedAt = Timestamp.now();
+        updatePayload.approvalAttachmentUploadedById = approverId;
+      }
         }
 
         await updateDoc(orderDocRef, updatePayload);

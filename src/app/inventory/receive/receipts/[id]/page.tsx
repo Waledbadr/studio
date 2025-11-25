@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
-import { Printer } from 'lucide-react';
+import { useUsers } from '@/context/users-context';
+import { Printer, Edit } from 'lucide-react';
 import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
   const { residences, loadResidences } = useResidences();
+  const { users, loadUsers, currentUser } = useUsers();
   const params = useParams();
   const router = useRouter();
   const mrvId = (params?.id as string) || '';
@@ -25,13 +28,32 @@ export default function MRVDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [receivedByNameLocal, setReceivedByNameLocal] = useState<string>('');
   const { toast } = useToast();
   const handlePrint = () => {
     if (typeof window !== 'undefined') window.print();
   };
 
   useEffect(() => {
+    if (data?.receivedByName) {
+      setReceivedByNameLocal(data.receivedByName);
+    } else if (data?.receivedBy) {
+      const u = users.find(u => u.id === data.receivedBy);
+      if (u) {
+        setReceivedByNameLocal(u.name);
+      } else if (db) {
+        getDoc(doc(db, 'users', data.receivedBy)).then(snap => {
+          if (snap.exists()) {
+            setReceivedByNameLocal(snap.data().name);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [data, users]);
+
+  useEffect(() => {
     if (residences.length === 0) loadResidences();
+    if (users.length === 0) loadUsers();
     if (!mrvId) return;
     (async () => {
       setLoading(true);
@@ -42,7 +64,7 @@ export default function MRVDetailsPage() {
         setLoading(false);
       }
     })();
-  }, [mrvId, getMRVById, residences.length, loadResidences]);
+  }, [mrvId, getMRVById, residences.length, loadResidences, users.length, loadUsers]);
 
   const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
 
@@ -126,6 +148,11 @@ export default function MRVDetailsPage() {
               }}
             >{uploading ? 'Uploading…' : 'Upload'}</Button>
           </div>
+          {currentUser?.role === 'Admin' && (
+            <Button variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${mrvId}/edit`)}>
+              <Edit className="mr-2 h-4 w-4" /> Edit
+            </Button>
+          )}
           <Button onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" /> Print MRV
           </Button>
@@ -221,14 +248,6 @@ export default function MRVDetailsPage() {
                 <span className="text-xs text-muted-foreground">({data.attachmentRef})</span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-sm col-span-1 sm:col-span-2">
-              <span className="text-muted-foreground">Attachment • مرفق:</span>
-              {data?.attachmentUrl ? (
-                <a href={data.attachmentUrl} target="_blank" rel="noreferrer" className="text-primary underline">Open</a>
-              ) : (
-                <span className="font-medium">—</span>
-              )}
-            </div>
           </div>
 
           {/* Items table (merged duplicates) */}
@@ -266,6 +285,9 @@ export default function MRVDetailsPage() {
           <div className="grid grid-cols-2 gap-8 w-full">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground label">Received By:</p>
+              {receivedByNameLocal && (
+                <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{receivedByNameLocal}</p>
+              )}
               <div className="mt-2 border-t-2 w-48 line slot"></div>
             </div>
             <div className="space-y-1">

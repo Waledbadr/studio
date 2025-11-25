@@ -116,6 +116,8 @@ export interface MRV {
   attachmentRef?: string | null;
   // Optional link back to an originating Material Request (order)
   orderId?: string | null;
+  receivedBy?: string;
+  receivedByName?: string;
 }
 
 export interface MRVDetails {
@@ -134,6 +136,8 @@ export interface MRVDetails {
   attachmentPath?: string | null;
   codeShort?: string | null;
   orderId?: string | null;
+  receivedBy?: string;
+  receivedByName?: string;
 }
 
 // MRV Request (needs admin approval before posting)
@@ -292,6 +296,8 @@ interface InventoryContextType {
   loadInventory: () => void;
   addCategory: (category: string) => Promise<void>;
   updateCategory: (oldName: string, newName: string) => Promise<void>;
+  updateMRV: (mrvId: string, items: { id: string; nameEn: string; nameAr: string; quantity: number }[], meta: { supplierName?: string; invoiceNo?: string; notes?: string; editReason: string }) => Promise<void>;
+  updateMIV: (mivId: string, locations: { locationId: string; locationName: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[] }[], meta: { editReason: string }) => Promise<void>;
   getStockForResidence: (item: InventoryItem, residenceId: string) => number;
   createTransferRequest: (payload: NewStockTransferPayload, currentUser: User) => Promise<void>;
   approveTransfer: (transferId: string, approverId: string) => Promise<void>;
@@ -753,7 +759,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
             
             const transactionTime = Timestamp.now();
-            let totalItemsCount = 0;
+            const totalItemsCount = totalsByItem.size; // Count distinct items, not quantities
             let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
             
             const mivDocRef = doc(db!, 'mivs', mivId);
@@ -768,7 +774,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       for (const location of voucherLocations) {
         for (const issuedItem of location.items) {
                     if (issuedItem.issueQuantity <= 0) continue;
-                    totalItemsCount += issuedItem.issueQuantity;
 
                     // Log transaction
                     const transactionRef = doc(collection(db!, "inventoryTransactions"));
@@ -859,7 +864,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const now = Timestamp.now();
-      let totalItemCount = 0;
+      const totalItemCount = totalsByItem.size; // Count distinct items, not quantities
 
       // Update stock (stockByResidence and total stock) per item
       for (const [itemId, totalQty] of totalsByItem.entries()) {
@@ -874,7 +879,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }, 0);
         const itemRef = doc(db!, 'inventory', itemId);
         transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
-        totalItemCount += totalQty;
       }
 
       // Log transactions for each line
@@ -906,12 +910,260 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         attachmentUrl: payload.meta?.attachmentUrl || null,
         attachmentPath: payload.meta?.attachmentPath || null,
         codeShort: mrvShort || null,
-  orderId: payload.meta?.orderId || null,
+        orderId: payload.meta?.orderId || null,
+        receivedBy: currentUser.id,
+        receivedByName: currentUser.name,
       } as any);
+    });    toast({ title: 'Success', description: 'Materials received and added to stock.' });
+    return mrvId;
+  };
+
+  // Update MRV (Admin only)
+  const updateMRV = async (
+    mrvId: string,
+    items: { id: string; nameEn: string; nameAr: string; quantity: number }[],
+    meta: { supplierName?: string; invoiceNo?: string; notes?: string; editReason: string }
+  ): Promise<void> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    if (!currentUser || currentUser.role !== 'Admin') {
+      toast({ title: 'Permission Denied', description: 'Only Admins can edit MRVs.', variant: 'destructive' });
+      throw new Error('Forbidden');
+    }
+
+    // 1. Query old transactions (outside transaction)
+    const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
+    const oldTxSnap = await getDocs(txQ);
+    const oldTxs = oldTxSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryTransaction));
+
+    await runTransaction(db, async (transaction) => {
+      // 2. Read MRV to lock it
+      const mrvRef = doc(db!, 'mrvs', mrvId);
+      const mrvSnap = await transaction.get(mrvRef);
+      if (!mrvSnap.exists()) throw new Error('MRV not found');
+
+      // 3. Identify all items (old + new)
+      const oldItemIds = oldTxs.map(t => t.itemId);
+      const newItemIds = items.map(i => i.id);
+      const allItemIds = [...new Set([...oldItemIds, ...newItemIds])];
+      
+      // 4. Read all items
+      const itemRefs = allItemIds.map(id => doc(db!, 'inventory', id));
+      const itemSnaps = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+      const itemMap = new Map<string, DocumentSnapshot>();
+      itemSnaps.forEach(snap => {
+        if (snap.exists()) itemMap.set(snap.id, snap);
+      });
+
+      // 5. Revert old stock (Subtract from stock)
+      // MRV adds to stock, so reverting means subtracting.
+      const stockChanges = new Map<string, number>(); // itemId -> net change for residence
+      
+      // Initialize with 0
+      allItemIds.forEach(id => stockChanges.set(id, 0));
+
+      const residenceId = mrvSnap.data().residenceId;
+
+      for (const tx of oldTxs) {
+        // Only revert IN/RECEIVE types
+        if (tx.type === 'IN' || tx.type === 'RECEIVE') {
+           const currentChange = stockChanges.get(tx.itemId) || 0;
+           stockChanges.set(tx.itemId, currentChange - tx.quantity);
+        }
+      }
+
+      // 6. Apply new stock (Add to stock)
+      for (const item of items) {
+        const currentChange = stockChanges.get(item.id) || 0;
+        stockChanges.set(item.id, currentChange + item.quantity);
+      }
+
+      // 7. Validate and Update Items
+      for (const [itemId, netChange] of stockChanges.entries()) {
+        if (netChange === 0) continue;
+
+        const snap = itemMap.get(itemId);
+        if (!snap) throw new Error(`Item ${itemId} not found`);
+        const data = snap.data() as InventoryItem;
+        
+        const currentResStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
+        const newResStock = currentResStock + netChange;
+        
+        if (newResStock < 0) {
+           throw new Error(`Stock underflow for item ${data.nameEn}. Cannot reduce below 0.`);
+        }
+
+        const newSbr = { ...(data.stockByResidence || {}) };
+        newSbr[residenceId] = newResStock;
+        
+        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+            const n = Number(v);
+            return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+
+        transaction.update(snap.ref, { stockByResidence: newSbr, stock: newTotal });
+      }
+
+      // 8. Update Transactions
+      // Delete old
+      for (const tx of oldTxs) {
+        transaction.delete(doc(db!, 'inventoryTransactions', tx.id));
+      }
+      // Create new
+      const now = Timestamp.now();
+      for (const item of items) {
+        const newTxRef = doc(collection(db!, 'inventoryTransactions'));
+        transaction.set(newTxRef, {
+          itemId: item.id,
+          itemNameEn: item.nameEn,
+          itemNameAr: item.nameAr,
+          residenceId: residenceId,
+          date: mrvSnap.data().date, // Preserve original date
+          type: 'IN',
+          quantity: item.quantity,
+          referenceDocId: mrvId,
+          locationName: 'Receiving (Edited)'
+        } as Omit<InventoryTransaction, 'id'>);
+      }
+
+      // 9. Update MRV Doc
+      transaction.update(mrvRef, {
+        itemCount: items.length,
+        supplierName: meta.supplierName || null,
+        invoiceNo: meta.invoiceNo || null,
+        notes: meta.notes || null,
+        editedBy: currentUser.id,
+        editedAt: now,
+        editReason: meta.editReason
+      });
     });
 
-    toast({ title: 'Success', description: 'Materials received and added to stock.' });
-    return mrvId;
+    toast({ title: 'Success', description: 'MRV updated successfully.' });
+  };
+
+  // Update MIV (Admin only)
+  const updateMIV = async (
+    mivId: string,
+    locations: { locationId: string; locationName: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[] }[],
+    meta: { editReason: string }
+  ): Promise<void> => {
+    if (!db) throw new Error(firebaseErrorMessage);
+    if (!currentUser || currentUser.role !== 'Admin') {
+      toast({ title: 'Permission Denied', description: 'Only Admins can edit MIVs.', variant: 'destructive' });
+      throw new Error('Forbidden');
+    }
+
+    // 1. Query old transactions
+    const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
+    const oldTxSnap = await getDocs(txQ);
+    const oldTxs = oldTxSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryTransaction));
+
+    await runTransaction(db, async (transaction) => {
+      // 2. Read MIV to lock
+      const mivRef = doc(db!, 'mivs', mivId);
+      const mivSnap = await transaction.get(mivRef);
+      if (!mivSnap.exists()) throw new Error('MIV not found');
+      const residenceId = mivSnap.data().residenceId;
+
+      // 3. Identify items
+      const oldItemIds = oldTxs.map(t => t.itemId);
+      const newItemIds = locations.flatMap(l => l.items.map(i => i.id));
+      const allItemIds = [...new Set([...oldItemIds, ...newItemIds])];
+
+      // 4. Read items
+      const itemRefs = allItemIds.map(id => doc(db!, 'inventory', id));
+      const itemSnaps = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+      const itemMap = new Map<string, DocumentSnapshot>();
+      itemSnaps.forEach(snap => {
+        if (snap.exists()) itemMap.set(snap.id, snap);
+      });
+
+      // 5. Calculate Net Change
+      // MIV subtracts from stock.
+      // Revert old (Add back)
+      // Apply new (Subtract)
+      const stockChanges = new Map<string, number>(); // itemId -> net change (positive = add back to stock, negative = remove from stock)
+      
+      allItemIds.forEach(id => stockChanges.set(id, 0));
+
+      for (const tx of oldTxs) {
+        if (tx.type === 'OUT' || tx.type === 'ISSUE') {
+            const cur = stockChanges.get(tx.itemId) || 0;
+            stockChanges.set(tx.itemId, cur + tx.quantity); // Add back
+        }
+      }
+
+      for (const loc of locations) {
+        for (const item of loc.items) {
+            const cur = stockChanges.get(item.id) || 0;
+            stockChanges.set(item.id, cur - item.quantity); // Subtract new
+        }
+      }
+
+      // 6. Validate and Update Items
+      for (const [itemId, netChange] of stockChanges.entries()) {
+        if (netChange === 0) continue;
+
+        const snap = itemMap.get(itemId);
+        if (!snap) throw new Error(`Item ${itemId} not found`);
+        const data = snap.data() as InventoryItem;
+
+        const currentResStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
+        const newResStock = currentResStock + netChange;
+
+        if (newResStock < 0) {
+            throw new Error(`Insufficient stock for item ${data.nameEn}. Available: ${currentResStock}, Net Change: ${netChange}`);
+        }
+
+        const newSbr = { ...(data.stockByResidence || {}) };
+        newSbr[residenceId] = newResStock;
+        
+        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+            const n = Number(v);
+            return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+
+        transaction.update(snap.ref, { stockByResidence: newSbr, stock: newTotal });
+      }
+
+      // 7. Update Transactions
+      for (const tx of oldTxs) {
+        transaction.delete(doc(db!, 'inventoryTransactions', tx.id));
+      }
+
+      const now = Timestamp.now();
+      const originalDate = mivSnap.data().date;
+
+      for (const loc of locations) {
+        for (const item of loc.items) {
+            const newTxRef = doc(collection(db!, 'inventoryTransactions'));
+            transaction.set(newTxRef, {
+                itemId: item.id,
+                itemNameEn: item.nameEn,
+                itemNameAr: item.nameAr,
+                residenceId: residenceId,
+                date: originalDate,
+                type: 'OUT',
+                quantity: item.quantity,
+                referenceDocId: mivId,
+                locationId: loc.locationId,
+                locationName: loc.locationName
+            } as Omit<InventoryTransaction, 'id'>);
+        }
+      }
+
+      // 8. Update MIV Doc
+      const distinctItems = new Set(locations.flatMap(l => l.items.map(i => i.id))).size;
+
+      transaction.update(mivRef, {
+        itemCount: distinctItems,
+        locationName: locations[0]?.locationName || 'Multiple',
+        editedBy: currentUser.id,
+        editedAt: now,
+        editReason: meta.editReason
+      });
+    });
+
+    toast({ title: 'Success', description: 'MIV updated successfully.' });
   };
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
@@ -1146,6 +1398,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         codeShort: meta?.codeShort || null,
   attachmentRef: meta?.attachmentRef || null,
   orderId: meta?.orderId || null,
+  receivedBy: meta?.receivedBy || undefined,
+  receivedByName: meta?.receivedByName || undefined,
       } as MRVDetails;
     } catch (e) {
       console.error('Error fetching MRV details:', e);
@@ -1887,14 +2141,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     const num = Number(stock);
                     return sum + (isNaN(num) ? 0 : Math.max(0, num));
                   }, 0);
-
                   // Queue item update
                   writes.push({ type: 'itemUpdate', ref: itemRef, updates: { stock: newTotalStock, stockByResidence: newStockByResidence } });
 
-                  // Queue adjustment transaction
-                  const adjustmentTransactionRef = doc(collection(db!, 'inventoryTransactions'));
+                  // Queue transaction log
+                  const txRef = doc(collection(db!, 'inventoryTransactions'));
                   const diffAbs = Math.abs(newResidenceStock - currentResidenceStock);
-                  const txData: Omit<InventoryTransaction, 'id'> & { adjustmentDirection?: 'INCREASE' | 'DECREASE' } = {
+                  const txData: Omit<InventoryTransaction, 'id'> & { adjustmentReason?: string; adjustmentDirection?: 'INCREASE' | 'DECREASE' } = {
                     itemId: adjustment.itemId,
                     itemNameEn: (itemData as any).nameEn,
                     itemNameAr: (itemData as any).nameAr,
@@ -1903,17 +2156,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     type: 'ADJUSTMENT',
                     quantity: diffAbs,
                     referenceDocId: auditId,
-                    locationId: adjustment.locationId,
                     locationName: adjustment.locationName,
+                    adjustmentDirection: newResidenceStock >= currentResidenceStock ? 'INCREASE' : 'DECREASE',
                   };
-                  if (diffAbs > 0) {
-                    txData.adjustmentDirection = newResidenceStock >= currentResidenceStock ? 'INCREASE' : 'DECREASE';
+                  if (adjustment.reason && adjustment.reason.trim() !== '') {
+                    txData.adjustmentReason = adjustment.reason.trim();
                   }
-                  writes.push({ type: 'txSet', ref: adjustmentTransactionRef, data: txData });
-
-                  // Queue audit adjustment record storage
-                  const adjustmentRef = doc(collection(db!, 'auditAdjustments'));
-                  writes.push({ type: 'adjSet', ref: adjustmentRef, data: { ...adjustment, id: adjustmentRef.id, adjustedAt: now } });
+                  writes.push({ type: 'txSet', ref: txRef, data: txData });
                 }
 
                 // 3) Execute all queued writes
@@ -1990,9 +2239,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             if (!itemSnap.exists()) continue;
 
             const itemData = itemSnap.data() as InventoryItem;
-            const current = Number(itemData.stockByResidence?.[residenceId] || 0);
-            const next = Math.max(0, Number(adj.newStock) || 0);
-            const diff = next - current;
+            const currentResidenceStock = Math.max(0, Number(itemData.stockByResidence?.[adj.itemId] || 0));
+            const newResidenceStock = Math.max(0, Number(adj.newStock));
+            const diff = newResidenceStock - currentResidenceStock;
             if (diff === 0) continue;
 
             // Track summary
@@ -2001,10 +2250,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
             // Prepare item update
             const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
-            newStockByResidence[residenceId] = next;
+            newStockByResidence[adj.itemId] = newResidenceStock;
             const newTotal = Object.values(newStockByResidence).reduce((sum: number, v: any) => {
               const n = Number(v);
-              return sum + (isNaN(n) ? 0 : n);
+              return sum + (isNaN(n) ? 0 : Math.max(0, n));
             }, 0);
             const itemUpdate = {
               stockByResidence: newStockByResidence,
@@ -2013,11 +2262,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
             // Prepare transaction log
             const txRef = doc(collection(db!, 'inventoryTransactions'));
-            const txData: any = {
+            const txData: Omit<InventoryTransaction, 'id'> & { adjustmentReason?: string; adjustmentDirection?: 'INCREASE' | 'DECREASE' } = {
               itemId: adj.itemId,
               itemNameEn: (itemData as any).nameEn,
               itemNameAr: (itemData as any).nameAr,
-              residenceId,
+              residenceId: residenceId,
               date: now,
               type: 'ADJUSTMENT',
               quantity: Math.abs(diff),
@@ -2028,7 +2277,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             if (adj.reason && adj.reason.trim() !== '') {
               txData.adjustmentReason = adj.reason.trim();
             }
-
             plannedWrites.push({ itemRef, itemUpdate, txRef, txData });
           }
 
@@ -2344,6 +2592,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       loadInventory, 
       addCategory, 
       updateCategory, 
+      updateMRV, 
+      updateMIV, 
       getStockForResidence, 
       issueItemsFromStock, 
       getInventoryTransactions, 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { useUsers } from '@/context/users-context';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query, where, updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, updateDoc, doc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
+const PAGE_STEP = 50;
 
 interface Item {
   id: string;
@@ -36,30 +38,34 @@ export default function AdminFeedbackPage() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'in_progress' | 'resolved' | 'rejected'>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'Bug' | 'Feature Request' | 'UI Issue' | 'Performance' | 'Other'>('all');
-  const [comment, setComment] = useState('');
+  const [comments, setComments] = useState<Record<string, string>>({});
   const [prioritySort, setPrioritySort] = useState<'none' | 'high_first' | 'low_first'>('none');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [closedOpen, setClosedOpen] = useState(false);
   const [ticketEdits, setTicketEdits] = useState<Record<string, string>>({});
+  const [pageLimit, setPageLimit] = useState(PAGE_STEP);
+  const [hasMore, setHasMore] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async (requestedLimit?: number) => {
     setLoading(true);
     try {
       if (!db) return;
-      let qRef: any = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
+  const effectiveLimit = requestedLimit ?? pageLimit;
+  const qRef = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(effectiveLimit + 1));
       // Filters will be applied after fetch for simplicity; Firestore supports where but with indexes
       const snap = await getDocs(qRef);
       const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setItems(all);
+      setHasMore(all.length > effectiveLimit);
+      setItems(all.slice(0, effectiveLimit));
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageLimit]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     const priRank = (p?: string) => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
@@ -115,9 +121,10 @@ export default function AdminFeedbackPage() {
       if (priority) patch.priority = priority;
       if (Object.keys(patch).length) await updateDoc(ref, patch);
 
-      if (comment) {
+      const note = comments[id]?.trim();
+      if (note) {
         await addDoc(collection(ref, 'updates'), {
-          developerComment: comment,
+          developerComment: note,
           updatedBy: currentUser?.id || 'system',
           updatedAt: serverTimestamp(),
         });
@@ -137,7 +144,7 @@ export default function AdminFeedbackPage() {
           createdAt: serverTimestamp(),
         });
       }
-      setComment('');
+      setComments((prev) => ({ ...prev, [id]: '' }));
       await load();
     } catch (e) {
       console.error(e);
@@ -165,6 +172,12 @@ export default function AdminFeedbackPage() {
     }
   };
 
+  const handleLoadMore = () => {
+    const next = pageLimit + PAGE_STEP;
+    setPageLimit(next);
+    load(next);
+  };
+
   return (
     <div className="space-y-4">
       {currentUser?.role !== 'Admin' && (
@@ -174,7 +187,7 @@ export default function AdminFeedbackPage() {
       <>
       <div className="flex items-center justify-between">
   <h1 className="text-2xl font-semibold">Feedback Board</h1>
-  <Button onClick={load} disabled={loading}>Refresh</Button>
+  <Button onClick={() => load()} disabled={loading}>Refresh</Button>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -282,7 +295,7 @@ export default function AdminFeedbackPage() {
               <CardContent className="space-y-3">
                 <div className="grid gap-1">
                   <label className="text-sm text-muted-foreground">Developer comment</label>
-                  <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a note to the user" />
+                  <Textarea value={comments[f.id] ?? ''} onChange={(e) => setComments((prev) => ({ ...prev, [f.id]: e.target.value }))} placeholder="Add a note to the user" />
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
                   <div className="flex items-center gap-2">
@@ -403,6 +416,11 @@ export default function AdminFeedbackPage() {
             )}
           </CollapsibleContent>
         </Collapsible>
+        {hasMore && (
+          <Button variant="outline" onClick={handleLoadMore} disabled={loading}>
+            Load older feedback
+          </Button>
+        )}
       </div>
       </>
       )}

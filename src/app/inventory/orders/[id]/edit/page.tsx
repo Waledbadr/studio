@@ -90,7 +90,7 @@ function AddItemButton({
                                     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                                         <Checkbox
                                             checked={selected}
-                                            onCheckedChange={(v) => {
+                                            onCheckedChange={(v: boolean) => {
                                                 const map = { ...(variantSelectionsRef.current[item.id] || {}) } as Record<string, boolean>;
                                                 if (Boolean(v)) map[variant] = true; else delete map[variant];
                                                 variantSelectionsRef.current = { ...variantSelectionsRef.current, [item.id]: map };
@@ -157,7 +157,7 @@ function AddItemButton({
 
 export default function EditOrderPage() {
     const { dict } = useLanguage();
-    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem, checkItemLifespanAtLocation } = useInventory();
+    const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem, checkItemLifespanAtLocation, getStockForResidence } = useInventory();
     const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
     const { currentUser } = useUsers();
     // Add residences context to resolve/display residence name properly
@@ -176,6 +176,35 @@ export default function EditOrderPage() {
     const [recentItems, setRecentItems] = useState<InventoryItem[]>([]);
     const router = useRouter();
     const { id } = useParams();
+
+    const selectableResidences = useMemo(() => {
+        const collator = new Intl.Collator(['ar', 'en'], { sensitivity: 'base', numeric: true });
+        const assigned = new Set(currentUser?.assignedResidences || []);
+        const filtered = residences.filter((res) => {
+            if (res.id === 'main-warehouse') return false;
+            if (res.disabled) return false;
+            if (!currentUser) return true;
+            if (currentUser.role === 'Admin') return true;
+            return assigned.has(res.id);
+        });
+        return [...filtered].sort((a, b) => collator.compare(a.name || '', b.name || ''));
+    }, [currentUser, residences]);
+
+    const currentResidenceOption = useMemo(() => {
+        if (!residenceId) return null;
+        return residences.find((res) => res.id === residenceId) ?? null;
+    }, [residenceId, residences]);
+
+    const residenceOptions = useMemo(() => {
+        if (!currentResidenceOption) return selectableResidences;
+        if (selectableResidences.some((res) => res.id === currentResidenceOption.id)) return selectableResidences;
+        return [currentResidenceOption, ...selectableResidences];
+    }, [selectableResidences, currentResidenceOption]);
+
+    const residenceSelectValue = useMemo<string | undefined>(() => {
+        if (residenceId) return residenceId;
+        return currentResidenceOption?.id;
+    }, [residenceId, currentResidenceOption]);
 
     // Map of quantity input refs keyed by order item id
     const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -249,6 +278,14 @@ export default function EditOrderPage() {
     useEffect(() => {
         loadInventory();
     }, [loadInventory]);
+
+    useEffect(() => {
+        if (residenceId || !residenceName) return;
+        const match = residences.find((res) => res.name === residenceName);
+        if (match) {
+            setResidenceId(match.id);
+        }
+    }, [residenceId, residenceName, residences]);
 
     // Load recent items from localStorage
     useEffect(() => {
@@ -415,7 +452,25 @@ export default function EditOrderPage() {
 
         // Add to recent items
         addToRecentItems(itemToAdd);
-    }, [addToRecentItems]);
+
+        // Notify user if there is stock available in the selected residence
+        try {
+            if (residenceId) {
+                const available = getStockForResidence(itemToAdd, residenceId);
+                if (available > STOCK_ATTENTION_THRESHOLD) {
+                    const residenceName = residences.find(r => r.id === residenceId)?.name || '';
+                    toast({
+                        title: `Heads up: Stock available`,
+                        description:
+                            `You already have stock for this item. ` +
+                            `Stock: ${available} ${itemToAdd.unit || ''} • ${residenceName}. ` +
+                            `Please consider using available stock before creating a new purchase request.`,
+                        variant: "warning",
+                    });
+                }
+            }
+        } catch {}
+    }, [addToRecentItems, residenceId, getStockForResidence, residences, toast, STOCK_ATTENTION_THRESHOLD]);
     
     const handleRemoveItem = (id: string) => {
         isDraftDirtyRef.current = true;
@@ -438,6 +493,36 @@ export default function EditOrderPage() {
         setGeneralNotes(e.target.value);
     };
 
+    const handleResidenceChange = useCallback((value: string) => {
+        isDraftDirtyRef.current = true;
+        setResidenceId(value);
+        const selected = residences.find((res) => res.id === value);
+        setResidenceName(selected?.name || '');
+    }, [residences]);
+
+    // Helper functions to get stock for residence
+    const getStockForResidenceHelper = (item: InventoryItem) => {
+        if (!residenceId) return 0;
+        return getStockForResidence(item, residenceId);
+    };
+
+    // Compute stock for an order item by mapping variant ids to base item ids
+    const handleGetStockForOrderItem = (item: OrderItem) => {
+        try {
+            if (!residenceId) return 0;
+            const rawId = (item as any).id ?? (item as any).itemId;
+            if (!rawId) return 0;
+            // Order items may append a variant after '::', keep the base document id
+            const raw = String(rawId);
+            const baseItemId = raw.includes('::') ? raw.split('::')[0] : raw;
+            const baseItem = allItems.find(i => i.id === baseItemId);
+            if (!baseItem) return 0;
+            return getStockForResidence(baseItem, residenceId);
+        } catch {
+            return 0;
+        }
+    };
+
     const canEdit = status === 'Pending' ? (currentUser?.role === 'Admin' || currentUser?.id === order?.requestedById) : (currentUser?.role === 'Admin');
 
     const handleUpdateOrder = async () => {
@@ -451,25 +536,32 @@ export default function EditOrderPage() {
         }
 
         // Constraint parity: require justification when item exists in residence stock
-        for (const it of orderItems) {
-            try {
-                const stock = handleGetStockForOrderItem(it);
-                if (stock > 0 && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
-                    toast({ title: 'Justification required', description: `Provide a justification for ${it.nameEn || it.id} since it exists in stock.`, variant: 'destructive' });
-                    return;
-                }
-            } catch {}
-            try {
-                const locId = (it as any).targetLocationId as string | undefined;
-                if (locId) {
-                    const life = await checkItemLifespanAtLocation((it as any).id || '', locId).catch(() => null);
-                    if (life && life.lifespanDays && life.withinLifespan && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
-                        toast({ title: 'Justification required', description: `Provide a justification for ${it.nameEn || it.id} (within lifespan at selected location).`, variant: 'destructive' });
-                        return;
-                    }
-                }
-            } catch {}
-        }
+        // TODO: Re-enable after system stabilization
+        // for (const it of orderItems) {
+        //     try {
+        //         const stock = handleGetStockForOrderItem(it);
+        //         if (stock > 0 && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
+        //             const itemName = it.nameEn || it.nameAr || it.id;
+        //             toast({ 
+        //                 title: 'Justification required', 
+        //                 description: `Provide a justification for "${itemName}" since it exists in stock (Available: ${stock} ${it.unit || 'units'}).`, 
+        //                 variant: 'destructive' 
+        //             });
+        //             return;
+        //         }
+        //     } catch {}
+        //     // TODO: Re-enable lifespan check after system stabilization
+        //     // try {
+        //     //     const locId = (it as any).targetLocationId as string | undefined;
+        //     //     if (locId) {
+        //     //         const life = await checkItemLifespanAtLocation((it as any).id || '', locId).catch(() => null);
+        //     //         if (life && life.lifespanDays && life.withinLifespan && (!it.overrideReason || String(it.overrideReason).trim().length < 3)) {
+        //     //             toast({ title: 'Justification required', description: `Provide a justification for ${it.nameEn || it.id} (within lifespan at selected location).`, variant: 'destructive' });
+        //     //             return;
+        //     //         }
+        //     //     }
+        //     // } catch {}
+        // }
 
         // Resolve residence name correctly using residenceId if name is missing
         const resolvedResidenceName = residenceName || (residences.find(r => r.id === residenceId)?.name ?? '');
@@ -558,15 +650,8 @@ export default function EditOrderPage() {
         }
     };
 
-    const getStockForResidence = (item: InventoryItem) => {
-        // Use a resolved residenceId to show stock even if the stored name was empty
-        const residenceEffectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
-        if (!residenceEffectiveId || !item.stockByResidence) return 0;
-        return item.stockByResidence[residenceEffectiveId] || 0;
-    }
-
     // Derive a display name for residence using id if the name string is empty
-    const residenceDisplayName = residenceName || residences.find(r => r.id === residenceId)?.name || '';
+    const residenceDisplayName = residenceName || currentResidenceOption?.name || '';
 
     // When orderItems change and we have a target to focus, focus and select its quantity input
     useEffect(() => {
@@ -590,20 +675,6 @@ export default function EditOrderPage() {
         const parts = raw.split(' - ');
         if (parts.length <= 1) return { base: raw, detail: '' };
         return { base: parts[0].trim(), detail: parts.slice(1).join(' - ').trim() };
-    };
-
-    // Map order item id (variant possible) to base item stock at current residence
-    const handleGetStockForOrderItem = (item: OrderItem) => {
-        try {
-            const rawId = (item as any).id ?? (item as any).itemId;
-            if (!rawId) return 0;
-            const baseItemId = String(rawId).split('-')[0];
-            const baseItem = allItems.find(i => i.id === baseItemId);
-            if (!baseItem) return 0;
-            const effectiveId = residenceId || (residences.find(r => r.name === residenceDisplayName)?.id ?? '');
-            if (!effectiveId || !baseItem.stockByResidence) return 0;
-            return baseItem.stockByResidence[effectiveId] || 0;
-        } catch { return 0; }
     };
 
     // Group current order items by category for display similar to new-order/details
@@ -725,7 +796,7 @@ export default function EditOrderPage() {
                                                         <div>
                                                             <p className="font-medium text-blue-900 dark:text-blue-100">{item.nameAr} / {item.nameEn}</p>
                                                             {(() => {
-                                                                const stock = getStockForResidence(item);
+                                                                const stock = getStockForResidenceHelper(item);
                                                                 return (
                                                                     <p className="text-sm text-blue-700 dark:text-blue-300">
                                                                         {item.category} - {" "}
@@ -756,7 +827,7 @@ export default function EditOrderPage() {
                                                 <div>
                                                     <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
                                                     {(() => {
-                                                        const stock = getStockForResidence(item);
+                                                        const stock = getStockForResidenceHelper(item);
                                                         return (
                                                             <p className="text-sm text-muted-foreground">
                                                                 {item.category} - {" "}
@@ -796,15 +867,32 @@ export default function EditOrderPage() {
 
                  <Card>
                     <CardHeader>
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center gap-4">
                             <div>
                                 <CardTitle>{dict.ui?.currentRequest || 'Current Request'}</CardTitle>
                                 <CardDescription>Review and adjust the items in your request.</CardDescription>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right min-w-[12rem]">
                                 <Label htmlFor='residence' className="text-xs text-muted-foreground">Residence</Label>
-                                {/* Display resolved residence name even if the stored name is empty */}
-                                <Input id="residence" readOnly value={residenceDisplayName} className="w-48 mt-1 text-sm font-medium" />
+                                {canEdit && residenceOptions.length > 0 ? (
+                                    <Select
+                                        value={residenceSelectValue}
+                                        onValueChange={handleResidenceChange}
+                                    >
+                                        <SelectTrigger id="residence" className="w-48 mt-1 text-sm font-medium">
+                                            <SelectValue placeholder={'Select residence'} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {residenceOptions.map((res) => (
+                                                <SelectItem key={res.id} value={res.id}>
+                                                    {res.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Input id="residence" readOnly value={residenceDisplayName} className="w-48 mt-1 text-sm font-medium" />
+                                )}
                             </div>
                         </div>
                     </CardHeader>

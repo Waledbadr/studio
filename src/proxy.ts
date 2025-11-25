@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Protect app routes by redirecting unauthenticated users to /login on the edge when possible.
 // Note: Firebase Auth session is client-side. For full SSR/edge protection use cookies-based auth.
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   // Skip all RSC/Flight and prefetch requests to avoid interfering with Next's client navigation
   const isRSC = req.headers.get('rsc') !== null
     || req.headers.get('next-router-prefetch') === '1'

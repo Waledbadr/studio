@@ -33,6 +33,12 @@ export default function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  // Which app to open after login
+  const [appChoice, setAppChoice] = useState<"accommodation" | "materials">(() => {
+    if (typeof window === 'undefined') return 'accommodation';
+    const saved = window.localStorage.getItem('preferred-app');
+    return (saved === 'materials' || saved === 'accommodation') ? saved : 'accommodation';
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -65,10 +71,27 @@ export default function LoginForm() {
     setPassword(ascii);
   };
 
+  // Persist preferred app choice for OAuth/MagicLink redirect flows
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem('preferred-app', appChoice); } catch {}
+  }, [appChoice]);
+
+  const redirectAfterLogin = (fallbackChoice?: "accommodation" | "materials") => {
+    const next = search?.get('next');
+    if (next) {
+      router.replace(next);
+      return;
+    }
+    const choice = fallbackChoice || appChoice;
+    const target = choice === 'materials' ? '/inventory' : '/accommodation';
+    router.replace(target);
+  };
+
   useEffect(() => {
     if (!auth) return;
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) router.replace("/");
+      if (u) redirectAfterLogin();
     });
     return () => unsub();
   }, [router]);
@@ -80,7 +103,13 @@ export default function LoginForm() {
       .then(async (res) => {
         if (res && res.user) {
           await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
-          router.replace('/');
+          // Use persisted choice because UI state may be reset after redirect
+          let persisted: "accommodation" | "materials" | null = null;
+          try {
+            const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
+            if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+          } catch {}
+          redirectAfterLogin(persisted || undefined);
         }
       })
       .catch(() => {/* ignore */});
@@ -96,7 +125,12 @@ export default function LoginForm() {
         signInWithEmailLink(auth, savedEmail, window.location.href)
           .then(() => {
             window.localStorage.removeItem('pendingEmailForLink');
-            router.replace('/');
+            let persisted: "accommodation" | "materials" | null = null;
+            try {
+              const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
+              if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+            } catch {}
+            redirectAfterLogin(persisted || undefined);
           })
           .catch((e) => setError(e?.message || 'Magic link failed'));
       }
@@ -174,7 +208,7 @@ export default function LoginForm() {
         }
         await ensureUserProfile(cred.user.uid, { name: name || cred.user.displayName || "User", email: cred.user.email || sanitizedEmail });
       }
-      router.replace("/");
+      redirectAfterLogin();
     } catch (err: any) {
       const code = err?.code || '';
       const map: Record<string, string> = {
@@ -206,7 +240,7 @@ export default function LoginForm() {
       try {
         const res = await signInWithPopup(auth, prov);
         await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
-        router.replace("/");
+        redirectAfterLogin();
       } catch (popupErr: any) {
         const c = popupErr?.code || '';
         const msg = popupErr?.message || '';
@@ -327,7 +361,12 @@ export default function LoginForm() {
       if (verified.verified) {
         setInfo('Passkey verified.');
         toast({ title: 'Passkey', description: 'Passkey verified.' });
-        router.replace('/');
+        let persisted: "accommodation" | "materials" | null = null;
+        try {
+          const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
+          if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+        } catch {}
+        redirectAfterLogin(persisted || undefined);
       } else {
         const msg = 'Passkey authentication failed.';
         setError(msg);
@@ -399,6 +438,31 @@ export default function LoginForm() {
             >
               Create account
             </Button>
+          </div>
+
+          {/* Choose system after login */}
+          <div className="grid gap-2">
+            <Label className="text-xs text-muted-foreground">Open after login</Label>
+            <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'accommodation' ? 'default' : 'ghost'}
+                className="rounded-md"
+                onClick={() => setAppChoice('accommodation')}
+              >
+                Accommodation
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'materials' ? 'default' : 'ghost'}
+                className="rounded-md"
+                onClick={() => setAppChoice('materials')}
+              >
+                Materials
+              </Button>
+            </div>
           </div>
 
           <form onSubmit={handleEmailPassword} className="grid gap-4">

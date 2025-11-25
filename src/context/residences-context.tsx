@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 export interface Room {
   id: string;
   name: string;
+  nameAr?: string;
+  nameEn?: string;
   capacity?: number;
   // dimensions in meters
   length?: number;
@@ -19,6 +21,7 @@ export interface Room {
   // area in square meters (derived: length * width)
   area?: number;
   occupied?: boolean;
+  gender?: 'male' | 'female' | string;
   // optional reference to parent floor
   floorId?: string;
 }
@@ -45,6 +48,8 @@ export interface Facility {
 export interface Floor {
   id: string;
   name: string;
+  nameAr?: string;
+  nameEn?: string;
   rooms: Room[];
   facilities?: Facility[];
   // optional reference to parent building
@@ -54,6 +59,8 @@ export interface Floor {
 export interface Building {
   id: string;
   name: string;
+  nameAr?: string;
+  nameEn?: string;
   floors: Floor[];
   facilities?: Facility[];
   // optional reference to parent complex/residence
@@ -63,11 +70,14 @@ export interface Building {
 export interface Complex {
   id: string;
   name: string;
+  nameAr?: string;
+  nameEn?: string;
   city: string;
   managerId: string;
   buildings: Building[];
   facilities?: Facility[];
   disabled?: boolean; // mark residence as disabled (hidden from active lists)
+  isEmergencyMode?: boolean; // Emergency mode for bypassing validation rules
   // Legacy/alternate fields sometimes present in older documents or APIs
   title?: string;
   address?: string;
@@ -76,7 +86,7 @@ export interface Complex {
   rooms?: Room[];
 }
 
-export type UpdateComplexPayload = Pick<Complex, 'name' | 'city' | 'managerId'>;
+export type UpdateComplexPayload = Partial<Pick<Complex, 'name' | 'city' | 'managerId'>> & { isEmergencyMode?: boolean };
 
 
 // Define the shape of our context
