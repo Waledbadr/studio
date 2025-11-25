@@ -6,37 +6,12 @@ const BUILD_TIME_ISO = new Date().toISOString();
 
 const nextConfig: NextConfig = {
   /* config options here */
-  outputFileTracingIncludes: {
-    '/api/**': ['./node_modules/**'],
-  },
-  experimental: {
-    serverComponentsExternalPackages: [
-      'firebase-admin',
-      '@google-cloud/storage',
-      '@google-cloud/firestore',
-      'google-gax',
-      '@grpc/grpc-js',
-      'protobufjs'
-    ],
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: [
-    '@genkit-ai/googleai',
-    'genkit',
-    '@genkit-ai/core',
-    'firebase-admin',
-    'handlebars',
-    '@google-cloud/storage',
-    '@google-cloud/firestore',
-    'google-gax',
-    '@grpc/grpc-js',
-    'protobufjs'
-  ],
   // Disable source maps in production to avoid fetch errors
   productionBrowserSourceMaps: false,
   images: {
