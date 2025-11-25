@@ -70,9 +70,10 @@ function initAdmin() {
 
 	// Fallback: Application Default Credentials ONLY if an explicit, existing path is provided
 	const adcPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-	const fs = require('fs');
+	
 	if (adcPath && typeof adcPath === 'string') {
 		try {
+			const fs = require('fs');
 			if (fs.existsSync(adcPath)) {
 				adminApp = admin.apps.length ? admin.app() : admin.initializeApp();
 				adminDb = admin.firestore();
