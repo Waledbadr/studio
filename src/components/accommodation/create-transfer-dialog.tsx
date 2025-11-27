@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
+import { useLanguage } from '@/context/language-context';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ interface CreateTransferDialogProps {
 }
 
 export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers = [] }: CreateTransferDialogProps) {
+  const { locale: language, dict } = useLanguage();
   const { workers, occupants, createTransferRequest } = useAccommodation();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
@@ -112,8 +114,8 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
   const handleSubmit = async () => {
     if (selectedWorkers.length === 0) {
       toast({
-        title: 'خطأ',
-        description: 'يجب اختيار عامل واحد على الأقل',
+        title: dict.ui.error,
+        description: dict.transfers.selectWorkerError,
         variant: 'destructive',
       });
       return;
@@ -121,8 +123,8 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
     if (!toResidenceId) {
       toast({
-        title: 'خطأ',
-        description: 'يجب اختيار المسكن المستهدف',
+        title: dict.ui.error,
+        description: dict.transfers.selectTargetResidenceError,
         variant: 'destructive',
       });
       return;
@@ -139,8 +141,8 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
       });
 
       toast({
-        title: 'تم إنشاء الطلب',
-        description: `تم إنشاء طلب نقل #${transferRequest.id.slice(0, 8)} بنجاح`,
+        title: dict.transfers.requestCreated,
+        description: dict.transfers.requestCreatedDesc.replace('{id}', transferRequest.id.slice(0, 8)),
       });
 
       // Reset form
@@ -154,8 +156,8 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
     } catch (error) {
       console.error('Failed to create transfer request:', error);
       toast({
-        title: 'خطأ',
-        description: 'فشل في إنشاء طلب النقل',
+        title: dict.ui.error,
+        description: dict.transfers.createError,
         variant: 'destructive',
       });
     } finally {
@@ -167,19 +169,19 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">إنشاء طلب نقل</DialogTitle>
+          <DialogTitle className="text-2xl">{dict.transfers.createTransferRequest}</DialogTitle>
           <DialogDescription>
-            انقل العمال من مسكن/غرفة إلى مسكن/غرفة أخرى
+            {dict.transfers.createTransferDesc}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           {/* Selected Workers */}
           <div className="space-y-2">
-            <Label>العمال المختارون ({selectedWorkers.length})</Label>
+            <Label>{dict.transfers.selectedWorkers} ({selectedWorkers.length})</Label>
             <div className="flex flex-wrap gap-2 min-h-[40px] p-3 border rounded-md bg-muted/50">
               {selectedWorkers.length === 0 ? (
-                <span className="text-sm text-muted-foreground">لم يتم اختيار عمال بعد</span>
+                <span className="text-sm text-muted-foreground">{dict.transfers.noWorkersSelected}</span>
               ) : (
                 selectedWorkers.map(wid => (
                   <Badge key={wid} variant="secondary" className="gap-1">
@@ -199,14 +201,14 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
           {/* Add Worker */}
           <div className="space-y-2">
-            <Label>إضافة عامل</Label>
+            <Label>{dict.transfers.addWorker}</Label>
             <Select onValueChange={handleAddWorker}>
               <SelectTrigger>
-                <SelectValue placeholder="اختر عامل..." />
+                <SelectValue placeholder={dict.transfers.selectWorkerPlaceholder} />
               </SelectTrigger>
               <SelectContent>
                 {availableWorkers.length === 0 ? (
-                  <SelectItem value="_empty" disabled>لا توجد عمال متاحة</SelectItem>
+                  <SelectItem value="_empty" disabled>{dict.transfers.noAvailableWorkers}</SelectItem>
                 ) : (
                   availableWorkers.map(worker => (
                     <SelectItem key={worker.id} value={worker.id}>
@@ -221,16 +223,16 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
           {/* From Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
             <h3 className="font-semibold flex items-center gap-2">
-              <span className="text-muted-foreground">من:</span>
-              <span className="text-sm text-muted-foreground">(اختياري)</span>
+              <span className="text-muted-foreground">{dict.transfers.from}:</span>
+              <span className="text-sm text-muted-foreground">({dict.ui.optional})</span>
             </h3>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>المسكن الحالي</Label>
+                <Label>{dict.transfers.currentResidence}</Label>
                 <Select value={fromResidenceId} onValueChange={setFromResidenceId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر المسكن..." />
+                    <SelectValue placeholder={dict.ui.selectResidence} />
                   </SelectTrigger>
                   <SelectContent>
                     {residences?.map(residence => (
@@ -243,10 +245,10 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
               </div>
 
               <div className="space-y-2">
-                <Label>الغرفة الحالية</Label>
+                <Label>{dict.transfers.currentRoom}</Label>
                 <Select value={fromRoomId} onValueChange={setFromRoomId} disabled={!fromResidenceId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر الغرفة..." />
+                    <SelectValue placeholder={dict.ui.selectRoom} />
                   </SelectTrigger>
                   <SelectContent>
                     {fromRooms.map(room => (
@@ -268,16 +270,16 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
           {/* To Section */}
           <div className="space-y-4 p-4 border-2 border-primary/50 rounded-lg bg-primary/5">
             <h3 className="font-semibold flex items-center gap-2">
-              <span className="text-primary">إلى:</span>
-              <span className="text-sm text-destructive">*مطلوب</span>
+              <span className="text-primary">{dict.transfers.to}:</span>
+              <span className="text-sm text-destructive">*{dict.ui.required}</span>
             </h3>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>المسكن الجديد *</Label>
+                <Label>{dict.transfers.newResidence}</Label>
                 <Select value={toResidenceId} onValueChange={setToResidenceId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر المسكن..." />
+                    <SelectValue placeholder={dict.ui.selectResidence} />
                   </SelectTrigger>
                   <SelectContent>
                     {residences?.map(residence => (
@@ -290,10 +292,10 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
               </div>
 
               <div className="space-y-2">
-                <Label>الغرفة الجديدة</Label>
+                <Label>{dict.transfers.newRoom}</Label>
                 <Select value={toRoomId} onValueChange={setToRoomId} disabled={!toResidenceId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر الغرفة (اختياري)..." />
+                    <SelectValue placeholder={dict.ui.selectRoomOptional} />
                   </SelectTrigger>
                   <SelectContent>
                     {toRooms.map(room => (
@@ -309,9 +311,9 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
           {/* Reason */}
           <div className="space-y-2">
-            <Label>سبب النقل (اختياري)</Label>
+            <Label>{dict.transfers.transferReasonOptional}</Label>
             <Textarea
-              placeholder="مثال: نقل للقرب من مكان العمل..."
+              placeholder={dict.transfers.transferReasonPlaceholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
@@ -321,13 +323,13 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
           {/* Summary */}
           {selectedWorkers.length > 0 && toResidenceId && (
             <div className="p-4 bg-primary/10 border border-primary/30 rounded-md">
-              <p className="text-sm font-medium mb-2">ملخص الطلب:</p>
+              <p className="text-sm font-medium mb-2">{dict.transfers.requestSummary}</p>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>• عدد العمال: {selectedWorkers.length}</li>
+                <li>• {dict.transfers.workersCount} {selectedWorkers.length}</li>
                 {fromResidenceId && (
-                  <li>• من: {getResidenceName(fromResidenceId)} {fromRoomId ? `- ${getRoomName(fromRoomId, fromResidenceId)}` : ''}</li>
+                  <li>• {dict.transfers.from}: {getResidenceName(fromResidenceId)} {fromRoomId ? `- ${getRoomName(fromRoomId, fromResidenceId)}` : ''}</li>
                 )}
-                <li>• إلى: {getResidenceName(toResidenceId)} {toRoomId ? `- ${getRoomName(toRoomId, toResidenceId)}` : ''}</li>
+                <li>• {dict.transfers.to}: {getResidenceName(toResidenceId)} {toRoomId ? `- ${getRoomName(toRoomId, toResidenceId)}` : ''}</li>
               </ul>
             </div>
           )}
@@ -335,10 +337,10 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            إلغاء
+            {dict.ui.cancel}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || selectedWorkers.length === 0 || !toResidenceId}>
-            {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء طلب النقل'}
+            {isSubmitting ? dict.transfers.creating : dict.transfers.createTransferRequest}
           </Button>
         </DialogFooter>
       </DialogContent>

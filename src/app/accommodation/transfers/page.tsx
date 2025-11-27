@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useResidences } from '@/context/residences-context';
+import { useLanguage } from '@/context/language-context';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { CheckCircle2, XCircle, Clock, ArrowRight, Users, Home, Plus } from 'luc
 import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
 
 export default function TransfersPage() {
+  const { locale: language, dict } = useLanguage();
   const { transferRequests, reviewTransferRequest, workers, occupants } = useAccommodation();
   const { residences } = useResidences();
   const { toast } = useToast();
@@ -51,16 +53,16 @@ export default function TransfersPage() {
     try {
       await reviewTransferRequest(id, approve, 'current-user-id');
       toast({
-        title: approve ? 'تمت الموافقة' : 'تم الرفض',
+        title: approve ? dict.transfers.approved : dict.transfers.rejected,
         description: approve 
-          ? 'تمت الموافقة على طلب النقل بنجاح' 
-          : 'تم رفض طلب النقل',
+          ? dict.transfers.approveSuccess 
+          : dict.transfers.rejectSuccess,
         variant: approve ? 'default' : 'destructive',
       });
     } catch (error) {
       toast({
-        title: 'خطأ',
-        description: 'فشل في معالجة الطلب',
+        title: dict.transfers.error,
+        description: dict.transfers.error,
         variant: 'destructive',
       });
     }
@@ -69,13 +71,13 @@ export default function TransfersPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Pending':
-        return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> قيد الانتظار</Badge>;
+        return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {dict.transfers.pending}</Badge>;
       case 'Approved':
-        return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" /> موافق عليه</Badge>;
+        return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" /> {dict.transfers.approved}</Badge>;
       case 'Rejected':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> مرفوض</Badge>;
+        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> {dict.transfers.rejected}</Badge>;
       case 'Cancelled':
-        return <Badge variant="secondary" className="gap-1">ملغي</Badge>;
+        return <Badge variant="secondary" className="gap-1">{dict.transfers.cancelled}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -88,16 +90,16 @@ export default function TransfersPage() {
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">طلبات النقل</h1>
-          <p className="text-muted-foreground mt-1">إدارة طلبات نقل العمال بين المساكن</p>
+          <h1 className="text-3xl font-bold">{dict.transfers.title}</h1>
+          <p className="text-muted-foreground mt-1">{dict.transfers.subtitle}</p>
         </div>
         <div className="flex gap-3 items-center">
           <Button onClick={() => setTransferDialogOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
-            طلب نقل جديد
+            {dict.transfers.newTransfer}
           </Button>
           <Badge variant="secondary" className="text-lg px-4 py-2">
-            {pendingRequests.length} قيد الانتظار
+            {pendingRequests.length} {dict.transfers.pending}
           </Badge>
         </div>
       </div>
@@ -112,7 +114,7 @@ export default function TransfersPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            طلبات قيد المراجعة
+            {dict.transfers.pendingRequests}
           </h2>
           <div className="grid gap-4">
             {pendingRequests.map(request => (
@@ -120,9 +122,9 @@ export default function TransfersPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
-                      <CardTitle className="text-lg">طلب نقل #{request.id.slice(0, 8)}</CardTitle>
+                      <CardTitle className="text-lg">{dict.transfers.requestTitle} #{request.id.slice(0, 8)}</CardTitle>
                       <CardDescription>
-                        تاريخ الطلب: {new Date(request.requestedAt).toLocaleDateString('ar-EG')}
+                        {dict.transfers.date}: {new Date(request.requestedAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                       </CardDescription>
                     </div>
                     {getStatusBadge(request.status)}
@@ -134,11 +136,11 @@ export default function TransfersPage() {
                     <div className="flex items-center gap-2 flex-1">
                       <Home className="h-4 w-4 text-muted-foreground" />
                       <div>
-                        <p className="font-medium">من:</p>
+                        <p className="font-medium">{dict.transfers.from}:</p>
                         <p className="text-muted-foreground">
                           {request.from?.residenceId 
                             ? `${getResidenceName(request.from.residenceId)}${request.from.roomId ? ` - ${getRoomInfo(request.from.residenceId, request.from.roomId)}` : ''}`
-                            : 'غير محدد'}
+                            : dict.ui.notSpecified}
                         </p>
                       </div>
                     </div>
@@ -148,7 +150,7 @@ export default function TransfersPage() {
                     <div className="flex items-center gap-2 flex-1">
                       <Home className="h-4 w-4 text-primary" />
                       <div>
-                        <p className="font-medium">إلى:</p>
+                        <p className="font-medium">{dict.transfers.to}:</p>
                         <p className="text-primary">
                           {getResidenceName(request.to.residenceId)}
                           {request.to.roomId && ` - ${getRoomInfo(request.to.residenceId, request.to.roomId)}`}
@@ -161,7 +163,7 @@ export default function TransfersPage() {
                   <div className="flex items-start gap-2">
                     <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium text-sm mb-1">العمال ({request.workerIds.length}):</p>
+                      <p className="font-medium text-sm mb-1">{dict.transfers.worker} ({request.workerIds.length}):</p>
                       <div className="flex flex-wrap gap-2">
                         {request.workerIds.map(wid => (
                           <Badge key={wid} variant="secondary">
@@ -175,7 +177,7 @@ export default function TransfersPage() {
                   {/* Reason */}
                   {request.reason && (
                     <div className="bg-muted p-3 rounded-md">
-                      <p className="text-sm"><span className="font-medium">السبب:</span> {request.reason}</p>
+                      <p className="text-sm"><span className="font-medium">{dict.transfers.reason}:</span> {request.reason}</p>
                     </div>
                   )}
 
@@ -187,7 +189,7 @@ export default function TransfersPage() {
                       variant="default"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      موافقة
+                      {dict.transfers.approve}
                     </Button>
                     <Button 
                       onClick={() => handleReview(request.id, false)}
@@ -195,7 +197,7 @@ export default function TransfersPage() {
                       variant="destructive"
                     >
                       <XCircle className="h-4 w-4 mr-2" />
-                      رفض
+                      {dict.transfers.reject}
                     </Button>
                   </div>
                 </CardContent>
@@ -208,7 +210,7 @@ export default function TransfersPage() {
       {/* Reviewed Requests */}
       {reviewedRequests.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">الطلبات السابقة</h2>
+          <h2 className="text-xl font-semibold">{dict.transfers.history}</h2>
           <div className="grid gap-3">
             {reviewedRequests.map(request => (
               <Card key={request.id} className="bg-muted/50">
@@ -222,11 +224,11 @@ export default function TransfersPage() {
                       <div className="text-sm text-muted-foreground flex items-center gap-2">
                         <span>{getResidenceName(request.to.residenceId)}</span>
                         <ArrowRight className="h-3 w-3" />
-                        <span>{request.workerIds.length} عامل</span>
+                        <span>{request.workerIds.length} {dict.transfers.worker}</span>
                       </div>
                       {request.reviewedAt && (
                         <p className="text-xs text-muted-foreground">
-                          تمت المراجعة: {new Date(request.reviewedAt).toLocaleDateString('ar-EG')}
+                          {dict.transfers.date}: {new Date(request.reviewedAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                         </p>
                       )}
                     </div>
@@ -243,9 +245,9 @@ export default function TransfersPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ArrowRight className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">لا توجد طلبات نقل</h3>
+            <h3 className="text-lg font-semibold mb-2">{dict.transfers.noPendingRequests}</h3>
             <p className="text-muted-foreground text-center">
-              لم يتم إنشاء أي طلبات نقل بعد
+              {dict.transfers.noHistory}
             </p>
           </CardContent>
         </Card>

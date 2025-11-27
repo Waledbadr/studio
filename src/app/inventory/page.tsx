@@ -198,12 +198,12 @@ export default function InventoryPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="h-10 px-3">Arabic Name</TableHead>
-            <TableHead className="h-10 px-3">English Name</TableHead>
-            <TableHead className="h-10 px-3">Category</TableHead>
-            <TableHead className="h-10 px-3">Unit</TableHead>
-            <TableHead className="h-10 px-3">Stock</TableHead>
-            <TableHead className="h-10 px-3 text-right">Actions</TableHead>
+            <TableHead className="h-10 px-3">{dict.itemNameArLabel || 'Arabic Name'}</TableHead>
+            <TableHead className="h-10 px-3">{dict.itemNameEnLabel || 'English Name'}</TableHead>
+            <TableHead className="h-10 px-3">{dict.categoryLabel || 'Category'}</TableHead>
+            <TableHead className="h-10 px-3">{dict.unitLabel || 'Unit'}</TableHead>
+            <TableHead className="h-10 px-3">{dict.stockLabel || 'Stock'}</TableHead>
+            <TableHead className="h-10 px-3 text-right">{dict.actionsLabel || 'Actions'}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -227,7 +227,7 @@ export default function InventoryPage() {
             </TableRow>
           )) : (
             <TableRow>
-              <TableCell colSpan={6} className="text-center h-48 text-muted-foreground">No items with stock in this residence.</TableCell>
+              <TableCell colSpan={6} className="text-center h-48 text-muted-foreground">{dict.noItemsWithStock || 'No items with stock in this residence.'}</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -256,22 +256,22 @@ export default function InventoryPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{dict.ui?.availableInventory || 'Inventory Management'}</h1>
+          <h1 className="text-2xl font-bold">{dict.sidebar?.inventory || 'Inventory'}</h1>
           <p className="text-muted-foreground">{dict.manageMaterialsSubtitle || 'Manage your materials and supplies for each residence.'}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportExcel}>
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={handleExportExcel} className="flex-1 md:flex-none">
             {dict.exportToExcel || 'Export items to Excel'}
           </Button>
-          <Button variant="secondary" onClick={() => router.push('/inventory/transfer')}>
+          <Button variant="secondary" onClick={() => router.push('/inventory/transfer')} className="flex-1 md:flex-none">
             <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
           </Button>
           {isAdmin && (
             <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
+                <Button variant="outline" className="flex-1 md:flex-none"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
               </DialogTrigger>
               <DialogContent>
                 <form onSubmit={handleAddCategory}>
@@ -296,7 +296,7 @@ export default function InventoryPage() {
             onOpenChange={setIsAddItemDialogOpen} 
             onItemAdded={handleItemAdded}
             triggerButton={
-              <Button>
+              <Button className="flex-1 md:flex-none">
                 <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || 'Add Item'}
               </Button>
             }
@@ -309,16 +309,18 @@ export default function InventoryPage() {
       <Card>
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
-        <TabsList>
-          <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
-                    {userResidences.map((res) => (
-                      <TabsTrigger key={res.id} value={res.id}>
-                        {res.name}
-                      </TabsTrigger>
-                    ))}
-                </TabsList>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="border-b p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                    <TabsList className="w-full md:w-auto justify-start">
+                      <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
+                        {userResidences.map((res) => (
+                          <TabsTrigger key={res.id} value={res.id}>
+                            {res.name}
+                          </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
                   <div className="w-full sm:w-64">
                     <Input
                       value={search}
@@ -327,7 +329,7 @@ export default function InventoryPage() {
                       aria-label="Search items"
                     />
                   </div>
-                  <div className="w-48">
+                  <div className="w-full sm:w-48">
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                       <SelectTrigger>
                         <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
@@ -342,12 +344,16 @@ export default function InventoryPage() {
                   </div>
                 </div>
             </div>
-            <TabsContent value="all" className="p-6 pt-4">
-                {renderItemsTable('all')}
+            <TabsContent value="all" className="p-0">
+                <div className="overflow-x-auto">
+                    {renderItemsTable('all')}
+                </div>
             </TabsContent>
              {userResidences.map((res) => (
-                <TabsContent key={res.id} value={res.id} className="p-6 pt-4">
-                    {renderItemsTable(res.id)}
+                <TabsContent key={res.id} value={res.id} className="p-0">
+                    <div className="overflow-x-auto">
+                        {renderItemsTable(res.id)}
+                    </div>
                 </TabsContent>
             ))}
           </Tabs>
@@ -366,22 +372,22 @@ export default function InventoryPage() {
           <DialogContent>
               <form onSubmit={handleUpdateCategory}>
                   <DialogHeader>
-                      <DialogTitle>Edit Category Name</DialogTitle>
+                      <DialogTitle>{dict.editCategoryTitle || 'Edit Category Name'}</DialogTitle>
                       <DialogDescription>
-                          Renaming a category will update it for all associated items.
+                          {dict.editCategoryDescription || 'Renaming a category will update it for all associated items.'}
                       </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                      <Label htmlFor="edit-category-name">New Category Name</Label>
+                      <Label htmlFor="edit-category-name">{dict.newCategoryNameLabel || 'New Category Name'}</Label>
                       <Input 
                         id="edit-category-name" 
                         value={editingCategory?.newName || ''} 
                         onChange={(e) => setEditingCategory(prev => prev ? ({...prev, newName: e.target.value}) : prev)}
-                        placeholder="e.g., General Maintenance"
+                        placeholder={dict.exampleCategoryPlaceholder || 'e.g., General Maintenance'}
                       />
                   </div>
                   <DialogFooter>
-                      <Button type="submit" disabled={!editingCategory || editingCategory?.oldName === editingCategory?.newName}>Save Changes</Button>
+                      <Button type="submit" disabled={!editingCategory || editingCategory?.oldName === editingCategory?.newName}>{dict.ui?.save || 'Save Changes'}</Button>
                   </DialogFooter>
               </form>
           </DialogContent>

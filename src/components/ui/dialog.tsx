@@ -30,30 +30,45 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+
+interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  direction?: "ltr" | "rtl"
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  DialogContentProps
+>(({ className, children, direction, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
-  <DialogPrimitive.Content
+    <DialogPrimitive.Content
       ref={ref}
       className={cn(
-    // Glass dialog container
-    "fixed left-[50%] top-[50%] z-[110] grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border p-6 pr-8 pt-6 shadow-lg duration-200 sm:rounded-xl max-h-[90vh]",
-  // Translucent backgrounds with blur (match Card)
-  "bg-white/40 border-white/20 backdrop-blur-xl dark:bg-white/5 dark:border-white/5",
-    // Animations
-    "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+        // Responsive: full width on mobile, max-w-3xl on desktop
+        "fixed left-1/2 top-1/2 z-[110] grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border p-4 sm:p-6 sm:pr-8 sm:pt-6 shadow-lg duration-200 sm:rounded-xl max-h-[90vh]",
+        // Mobile full width
+        "sm:max-w-3xl max-w-full w-screen sm:w-full",
+        // RTL support
+        direction === "rtl" ? "rtl" : "ltr",
+        // Glassmorphism backgrounds
+        "bg-white/40 border-white/20 backdrop-blur-xl dark:bg-white/5 dark:border-white/5",
+        // Animations
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
         className
       )}
+      dir={direction}
       {...props}
     >
       {/* Make the inner area scrollable so dialogs never overflow the viewport */}
       <div className="flex flex-col overflow-y-auto max-h-[80vh] w-full custom-scrollbar">
         {children}
       </div>
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      <DialogPrimitive.Close
+        className={cn(
+          "absolute top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
+          direction === "rtl" ? "left-4" : "right-4"
+        )}
+      >
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

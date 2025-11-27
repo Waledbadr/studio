@@ -72,16 +72,16 @@ export default function MaintenancePage() {
     const renderRequestsTable = (requestsToRender: MaintenanceRequest[], emptyMessage: string) => {
         if (loading) {
             return (
-            <Table>
+                <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead>{dict.requestId || 'Request ID'}</TableHead>
-                        <TableHead>{dict.location || 'Location'}</TableHead>
-                        <TableHead>{dict.issue || 'Issue'}</TableHead>
-                        <TableHead>{dict.status || 'Status'}</TableHead>
-                        <TableHead>{dict.priority || 'Priority'}</TableHead>
-                        <TableHead>{dict.date || 'Date'}</TableHead>
-                        <TableHead>{dict.actions || 'Actions'}</TableHead>
+                            <TableHead>{dict.requestId || 'Request ID'}</TableHead>
+                            <TableHead>{dict.location || 'Location'}</TableHead>
+                            <TableHead>{dict.issue || 'Issue'}</TableHead>
+                            <TableHead>{dict.status || 'Status'}</TableHead>
+                            <TableHead>{dict.priority || 'Priority'}</TableHead>
+                            <TableHead>{dict.date || 'Date'}</TableHead>
+                            <TableHead>{dict.actions || 'Actions'}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -92,7 +92,7 @@ export default function MaintenancePage() {
         }
 
         return (
-             <Table>
+            <Table>
                 <TableHeader>
                     <TableRow>
                         <TableHead>{dict.requestId || 'Request ID'}</TableHead>
@@ -108,19 +108,19 @@ export default function MaintenancePage() {
                     {requestsToRender.length > 0 ? requestsToRender.map((request) => (
                         <TableRow key={request.id}>
                             <TableCell className="font-medium font-mono">{request.id}</TableCell>
-                            <TableCell>{`${request.complexName}, ${request.buildingName}, ${request.roomName}`}</TableCell>
+                            <TableCell>{[request.complexName, request.buildingName, request.roomName].filter(Boolean).join(dict.commaSeparator || ', ')}</TableCell>
                             <TableCell>{request.issueTitle}</TableCell>
                             <TableCell>
                                 <Badge variant={
-                                    request.status === 'Completed' ? 'default' : request.status === 'In Progress' ? 'secondary' : 'outline'
+                                    request.status === (dict.completed || 'Completed') ? 'default' : request.status === (dict.inProgress || 'In Progress') ? 'secondary' : 'outline'
                                 }>
-                                    {request.status}
+                                    {dict[request.status.toLowerCase()] || request.status}
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <Badge variant={request.priority === 'High' ? 'destructive' : request.priority === 'Medium' ? 'secondary' : 'outline'}>{request.priority}</Badge>
+                                <Badge variant={request.priority === (dict.high || 'High') ? 'destructive' : request.priority === (dict.medium || 'Medium') ? 'secondary' : 'outline'}>{dict[request.priority.toLowerCase()] || request.priority}</Badge>
                             </TableCell>
-                            <TableCell>{format(request.date.toDate(), 'PPP')}</TableCell>
+                            <TableCell>{format(request.date.toDate(), dict.dateFormat || 'PPP')}</TableCell>
                             <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -152,21 +152,21 @@ export default function MaintenancePage() {
 
     return (
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4 h-full">
-            <div className="flex items-center">
-                <TabsList>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0">
+                <TabsList className="w-full sm:w-auto flex flex-row overflow-x-auto">
                     <TabsTrigger value="all">{dict.all || 'All'}</TabsTrigger>
                     <TabsTrigger value="Pending">{dict.pending || 'Pending'}</TabsTrigger>
                     <TabsTrigger value="In Progress">{dict.inProgress || 'In Progress'}</TabsTrigger>
                     <TabsTrigger value="Completed">{dict.completed || 'Completed'}</TabsTrigger>
                 </TabsList>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="flex flex-row gap-2 mt-2 sm:mt-0 sm:ml-auto w-full sm:w-auto">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-8 gap-1">
-                                    <ListFilter className="h-3.5 w-3.5" />
-                                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">{dict.filter || 'Filter'}</span>
-                                </Button>
-                            </DropdownMenuTrigger>
+                            <Button variant="outline" size="sm" className="h-8 gap-1 w-full sm:w-auto">
+                                <ListFilter className="h-3.5 w-3.5" />
+                                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">{dict.filter || 'Filter'}</span>
+                            </Button>
+                        </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>{dict.filterByPriority || 'Filter by Priority'}</DropdownMenuLabel>
                             <DropdownMenuSeparator />
@@ -175,7 +175,7 @@ export default function MaintenancePage() {
                             <DropdownMenuCheckboxItem>{dict.low || 'Low'}</DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button asChild size="sm" className="h-8 gap-1">
+                    <Button asChild size="sm" className="h-8 gap-1 w-full sm:w-auto">
                         <Link href="/maintenance/new">
                             <PlusCircle className="h-3.5 w-3.5" />
                             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">{dict.newRequest || 'New Request'}</span>
@@ -183,23 +183,31 @@ export default function MaintenancePage() {
                     </Button>
                 </div>
             </div>
-            <Card className="h-full flex flex-col">
+            <Card className="h-full flex flex-col overflow-x-auto">
                 <CardHeader>
                     <CardTitle>{dict.maintenanceRequestsTitle || 'Maintenance Requests'}</CardTitle>
                     <CardDescription>{dict.maintenanceRequestsDescription || 'An overview of all maintenance requests.'}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col">
+                <CardContent className="flex-1 flex flex-col p-0 sm:p-6">
                     <TabsContent value="all" className="flex-1">
-                        {renderRequestsTable(filteredRequests('all'), dict.noMaintenanceRequestsFound || "No maintenance requests found.")}
+                        <div className="overflow-x-auto w-full">
+                            {renderRequestsTable(filteredRequests('all'), dict.noMaintenanceRequestsFound || "No maintenance requests found.")}
+                        </div>
                     </TabsContent>
-                     <TabsContent value="Pending" className="flex-1">
-                        {renderRequestsTable(filteredRequests('Pending'), dict.noPendingRequests || "No pending requests.")}
+                    <TabsContent value="Pending" className="flex-1">
+                        <div className="overflow-x-auto w-full">
+                            {renderRequestsTable(filteredRequests('Pending'), dict.noPendingRequests || "No pending requests.")}
+                        </div>
                     </TabsContent>
-                     <TabsContent value="In Progress" className="flex-1">
-                        {renderRequestsTable(filteredRequests('In Progress'), dict.noInProgressRequests || "No requests in progress.")}
+                    <TabsContent value="In Progress" className="flex-1">
+                        <div className="overflow-x-auto w-full">
+                            {renderRequestsTable(filteredRequests('In Progress'), dict.noInProgressRequests || "No requests in progress.")}
+                        </div>
                     </TabsContent>
-                     <TabsContent value="Completed" className="flex-1">
-                        {renderRequestsTable(filteredRequests('Completed'), dict.noCompletedRequests || "No completed requests.")}
+                    <TabsContent value="Completed" className="flex-1">
+                        <div className="overflow-x-auto w-full">
+                            {renderRequestsTable(filteredRequests('Completed'), dict.noCompletedRequests || "No completed requests.")}
+                        </div>
                     </TabsContent>
                 </CardContent>
             </Card>

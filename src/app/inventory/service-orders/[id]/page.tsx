@@ -12,8 +12,9 @@ import { format } from "date-fns";
 import { useUsers } from "@/context/users-context";
 import { Printer, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useDict } from "@/lib/dict-context";
 
-export default function ServiceOrderDetailsPage() {
+  const dict = useDict();
   const params = useParams();
   const id = params?.id as string;
   const { getServiceOrderById, getServiceOrderByCode, receiveServiceOrder } = useServiceOrders();
@@ -74,11 +75,11 @@ export default function ServiceOrderDetailsPage() {
   const createdByName = order?.createdById ? getUserById(order.createdById)?.name : '';
   const receivedByName = order?.receivedById ? getUserById(order.receivedById)?.name : '';
 
-  if (loading) return <div>Loading...</div>;
-  if (!order) return <div className="text-center text-muted-foreground">Service Order not found.</div>;
+  if (loading) return <div>{dict.loading || 'Loading...'}</div>;
+  if (!order) return <div className="text-center text-muted-foreground">{dict.serviceOrderNotFound || 'Service Order not found.'}</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2 sm:px-0">
       <style jsx global>{`
         @page {
             size: A4 portrait;
@@ -154,46 +155,46 @@ export default function ServiceOrderDetailsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print mb-6">
         <Button variant="outline" onClick={() => router.push('/inventory/service-orders')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Service Orders
+            {dict.backToServiceOrders || 'Back to Service Orders'}
         </Button>
         <Button onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" />
-            Print Service Order
+            {dict.printServiceOrder || 'Print Service Order'}
         </Button>
       </div>
 
       <Card className="printable-area">
         <CardHeader className="border-b print:border-b-2">
-            <div className="flex justify-between items-start">
-                <div>
-                    <CardTitle className="text-3xl print-title print-header-title">Service Order</CardTitle>
-                    <CardDescription className="text-lg print-id">ID: #{order.codeShort}</CardDescription>
-                </div>
-                <div className="text-right">
-                    <p className="font-semibold print-residence-title" style={{ fontWeight: 700 }}>{order.residenceName}</p>
-                    <p className="text-sm text-muted-foreground print-date">
-                        {order.dateCreated ? format(order.dateCreated.toDate(), "PPP") : "—"}
-                    </p>
-                    <p className="text-sm text-muted-foreground print-date">
-                        To: {order.destination?.name}
-                    </p>
-                    <Badge className="mt-2 print-badge status-badge" variant="outline">
-                        {order.status}
-                    </Badge>
-                </div>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-3xl print-title print-header-title">{dict.quickActions.serviceOrder || 'Service Order'}</CardTitle>
+              <CardDescription className="text-lg print-id">{dict.orderId || 'ID'}: #{order.codeShort}</CardDescription>
             </div>
+            <div className="text-right">
+              <p className="font-semibold print-residence-title" style={{ fontWeight: 700 }}>{order.residenceName}</p>
+              <p className="text-sm text-muted-foreground print-date">
+                {order.dateCreated ? format(order.dateCreated.toDate(), "PPP") : "—"}
+              </p>
+              <p className="text-sm text-muted-foreground print-date">
+                {dict.destination || 'To'}: {order.destination?.name}
+              </p>
+              <Badge className="mt-2 print-badge status-badge" variant="outline">
+                {dict[order.status?.toLowerCase()] || order.status}
+              </Badge>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="pt-6">
           <Table className="print-compact-table">
             <TableHeader>
               <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead className="text-right">Sent</TableHead>
-                <TableHead className="text-right">Returned</TableHead>
-                <TableHead className="text-right">Scrapped</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
-                <TableHead className="text-right no-print">Receive Return</TableHead>
-                <TableHead className="text-right no-print">Record Scrap</TableHead>
+                <TableHead>{dict.itemLabel || 'Item'}</TableHead>
+                <TableHead className="text-right">{dict.qtySent || 'Sent'}</TableHead>
+                <TableHead className="text-right">{dict.qtyReturned || 'Returned'}</TableHead>
+                <TableHead className="text-right">{dict.qtyScrapped || 'Scrapped'}</TableHead>
+                <TableHead className="text-right">{dict.outstanding || 'Outstanding'}</TableHead>
+                <TableHead className="text-right no-print">{dict.receiveReturn || 'Receive Return'}</TableHead>
+                <TableHead className="text-right no-print">{dict.recordScrap || 'Record Scrap'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -241,24 +242,26 @@ export default function ServiceOrderDetailsPage() {
             </TableBody>
           </Table>
 
-          <div className="flex justify-end mt-4 no-print">
-            <Button onClick={submitReceive} disabled={order.status === "COMPLETED" || Object.values(deltas).every((d) => (d.addReturned || 0) + (d.addScrapped || 0) === 0)}>Post Receipt</Button>
+          <div className="flex flex-col-reverse gap-2 mt-4 no-print sm:flex-row sm:justify-end">
+            <Button onClick={submitReceive} disabled={order.status === "COMPLETED" || Object.values(deltas).every((d) => (d.addReturned || 0) + (d.addScrapped || 0) === 0)}>
+              {dict.postReceipt || 'Post Receipt'}
+            </Button>
           </div>
 
-          <CardFooter className="mt-8 pt-4 border-t print-signatures hidden print:flex">
+            <CardFooter className="mt-8 pt-4 border-t print-signatures hidden print:flex">
             <div className="grid grid-cols-2 gap-8 w-full">
-                <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground label">Created By:</p>
-                    <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{createdByName}</p>
-                    <div className="mt-2 border-t-2 w-48 line slot"></div>
-                </div>
-                <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground label">Received By:</p>
-                    <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{receivedByName}</p>
-                    <div className="mt-2 border-t-2 w-48 line slot"></div>
-                </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground label">{dict.createdBy || 'Created By:'}</p>
+                <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{createdByName}</p>
+                <div className="mt-2 border-t-2 w-48 line slot"></div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground label">{dict.receivedBy || 'Received By:'}</p>
+                <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{receivedByName}</p>
+                <div className="mt-2 border-t-2 w-48 line slot"></div>
+              </div>
             </div>
-          </CardFooter>
+            </CardFooter>
         </CardContent>
       </Card>
     </div>

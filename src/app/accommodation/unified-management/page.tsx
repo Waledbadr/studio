@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { useLanguage } from '@/context/language-context';
+import { dictionaries } from '@/lib/dictionaries';
 import {
   Building2,
   Users,
@@ -72,6 +74,8 @@ interface WorkerWithStatus {
 }
 
 export default function UnifiedManagementPage() {
+  const { language } = useLanguage();
+  const dict = dictionaries[language];
   const { residences } = useResidences();
   const { 
     workers, 
@@ -501,8 +505,8 @@ export default function UnifiedManagementPage() {
         case 'CHECK_IN':
           if (!actionForm.residenceId || !actionForm.roomId) {
             toast({
-              title: "خطأ",
-              description: "الرجاء اختيار المسكن والغرفة",
+              title: dict.ui.error,
+              description: dict.unified.selectResidenceRoomError,
               variant: "destructive",
             });
             return;
@@ -532,8 +536,8 @@ export default function UnifiedManagementPage() {
         case 'TRANSFER':
           if (!actionForm.targetResidenceId || !actionForm.targetRoomId) {
             toast({
-              title: "خطأ",
-              description: "الرجاء اختيار المسكن والغرفة الجديدة",
+              title: dict.ui.error,
+              description: dict.unified.selectNewResidenceRoomError,
               variant: "destructive",
             });
             return;
@@ -554,8 +558,8 @@ export default function UnifiedManagementPage() {
         case 'SWAP':
           if (!actionForm.swapTargetWorkerId) {
             toast({
-              title: "خطأ",
-              description: "الرجاء اختيار العامل للمبادلة",
+              title: dict.ui.error,
+              description: dict.unified.selectSwapWorkerError,
               variant: "destructive",
             });
             return;
@@ -576,22 +580,22 @@ export default function UnifiedManagementPage() {
 
       if (result.ok) {
         toast({
-          title: "نجحت العملية ✅",
-          description: `تمت ${getActionLabel(actionDialog.type)} بنجاح`,
+          title: dict.ui.success,
+          description: `${getActionLabel(actionDialog.type)} ${dict.ui.success}`,
         });
         handleCloseAction();
       } else {
         toast({
-          title: "فشلت العملية",
-          description: result.error || "حدث خطأ غير متوقع",
+          title: dict.ui.error,
+          description: result.error || dict.transfers.error,
           variant: "destructive",
         });
       }
     } catch (error: any) {
       console.error('Action error:', error);
       toast({
-        title: "خطأ",
-        description: error.message || "حدث خطأ أثناء تنفيذ العملية",
+        title: dict.ui.error,
+        description: error.message || dict.transfers.error,
         variant: "destructive",
       });
     }
@@ -599,10 +603,10 @@ export default function UnifiedManagementPage() {
 
   const getActionLabel = (type: ActionType) => {
     switch (type) {
-      case 'CHECK_IN': return 'التسكين';
-      case 'CHECK_OUT': return 'الإخراج';
-      case 'TRANSFER': return 'النقل';
-      case 'SWAP': return 'المبادلة';
+      case 'CHECK_IN': return dict.unified.checkIn;
+      case 'CHECK_OUT': return dict.unified.checkOut;
+      case 'TRANSFER': return dict.unified.transfer;
+      case 'SWAP': return dict.unified.swap;
       default: return '';
     }
   };
@@ -633,10 +637,10 @@ export default function UnifiedManagementPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertCircle className="h-6 w-6 text-destructive" />
-              يتطلب تسجيل الدخول
+              {dict.ui.loginRequired}
             </CardTitle>
             <CardDescription>
-              الرجاء تسجيل الدخول للوصول إلى نظام إدارة التسكين
+              {dict.ui.loginRequiredDesc}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -644,7 +648,7 @@ export default function UnifiedManagementPage() {
               onClick={() => window.location.href = '/login'}
               className="w-full"
             >
-              تسجيل الدخول
+              {dict.ui.login}
             </Button>
           </CardContent>
         </Card>
@@ -659,10 +663,10 @@ export default function UnifiedManagementPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <Home className="h-8 w-8" />
-            إدارة التسكين الموحدة
+            {dict.unified.title}
           </h1>
           <p className="text-muted-foreground mt-1">
-            نظام شامل لإدارة تسكين العمالة بسهولة وفعالية
+            {dict.unified.subtitle}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -681,7 +685,7 @@ export default function UnifiedManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              إجمالي العمال
+              {dict.unified.totalWorkers}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -689,7 +693,7 @@ export default function UnifiedManagementPage() {
               <div>
                 <div className="text-3xl font-bold">{stats.totalWorkers}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {stats.assignedWorkers} مسكّن • {stats.unassignedWorkers} غير مسكّن
+                  {stats.assignedWorkers} {dict.unified.assigned} • {stats.unassignedWorkers} {dict.unified.unassigned}
                 </p>
               </div>
               <Users className="h-8 w-8 text-blue-500" />
@@ -700,7 +704,7 @@ export default function UnifiedManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              الغرف المتاحة
+              {dict.unified.availableBeds}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -708,7 +712,7 @@ export default function UnifiedManagementPage() {
               <div>
                 <div className="text-3xl font-bold">{stats.availableRooms}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  من أصل {stats.totalRooms} غرفة
+                  {dict.reportsPage.from} {stats.totalRooms} {dict.reportsPage.rooms}
                 </p>
               </div>
               <DoorOpen className="h-8 w-8 text-green-500" />
@@ -719,7 +723,7 @@ export default function UnifiedManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              السعة الكلية
+              {dict.reportsPage.capacity}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -727,7 +731,7 @@ export default function UnifiedManagementPage() {
               <div>
                 <div className="text-3xl font-bold">{stats.totalCapacity}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {stats.assignedWorkers} / {stats.totalCapacity} مشغول
+                  {stats.assignedWorkers} / {stats.totalCapacity} {dict.reportsPage.occupied}
                 </p>
               </div>
               <Building2 className="h-8 w-8 text-purple-500" />
@@ -738,7 +742,7 @@ export default function UnifiedManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              نسبة الإشغال
+              {dict.unified.occupancyRate}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -760,15 +764,15 @@ export default function UnifiedManagementPage() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="dashboard">
             <Users className="h-4 w-4 mr-2" />
-            لوحة العمال
+            {dict.unified.workersDashboard}
           </TabsTrigger>
           <TabsTrigger value="residences">
             <Building2 className="h-4 w-4 mr-2" />
-            المساكن والغرف
+            {dict.unified.residencesRooms}
           </TabsTrigger>
           <TabsTrigger value="batch">
             <RefreshCw className="h-4 w-4 mr-2" />
-            العمليات الجماعية
+            {dict.unified.batchOperations}
           </TabsTrigger>
         </TabsList>
 
@@ -776,9 +780,9 @@ export default function UnifiedManagementPage() {
         <TabsContent value="dashboard" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>إدارة العمال</CardTitle>
+              <CardTitle>{dict.unified.manageWorkers}</CardTitle>
               <CardDescription>
-                ابحث عن العمال وقم بعمليات التسكين والإخراج والنقل بسهولة
+                {dict.unified.manageWorkersDesc}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -787,7 +791,7 @@ export default function UnifiedManagementPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="ابحث بالاسم، الرقم الوظيفي..."
+                    placeholder={dict.unified.searchPlaceholder}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
@@ -796,10 +800,10 @@ export default function UnifiedManagementPage() {
 
                 <Select value={nationalityFilter} onValueChange={setNationalityFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="كل الجنسيات" />
+                    <SelectValue placeholder={dict.unified.allNationalities} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">كل الجنسيات</SelectItem>
+                    <SelectItem value="all">{dict.unified.allNationalities}</SelectItem>
                     {nationalities.map(nat => (
                       <SelectItem key={nat} value={nat}>{nat}</SelectItem>
                     ))}
@@ -808,21 +812,21 @@ export default function UnifiedManagementPage() {
 
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="الحالة" />
+                    <SelectValue placeholder={dict.unified.filterByStatus} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="assigned">مسكّن</SelectItem>
-                    <SelectItem value="unassigned">غير مسكّن</SelectItem>
+                    <SelectItem value="all">{dict.unified.allStatuses}</SelectItem>
+                    <SelectItem value="assigned">{dict.unified.assigned}</SelectItem>
+                    <SelectItem value="unassigned">{dict.unified.unassigned}</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select value={selectedResidence} onValueChange={setSelectedResidence}>
                   <SelectTrigger>
-                    <SelectValue placeholder="كل المساكن" />
+                    <SelectValue placeholder={dict.unified.allResidences} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">كل المساكن</SelectItem>
+                    <SelectItem value="all">{dict.unified.allResidences}</SelectItem>
                     {accessibleResidences.map(r => (
                       <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                     ))}
@@ -841,13 +845,13 @@ export default function UnifiedManagementPage() {
             <div className="flex items-center gap-3 text-yellow-700 dark:text-yellow-300">
               <AlertCircle className="h-6 w-6 flex-shrink-0" />
               <div className="flex-1">
-                <p className="font-semibold text-base mb-2">⚠️ لا توجد بيانات عمال</p>
-                <p className="text-sm mb-2">يرجى التحقق من:</p>
+                <p className="font-semibold text-base mb-2">⚠️ {dict.unified.noWorkersData}</p>
+                <p className="text-sm mb-2">{dict.unified.checkData}</p>
                 <ul className="text-sm space-y-1 list-disc list-inside mr-2">
-                  <li>تسجيل الدخول بحساب صحيح</li>
-                  <li>وجود اتصال بالإنترنت</li>
-                  <li>صلاحيات Firestore (افتح Console واضغط F12)</li>
-                  <li>وجود بيانات عمال في قاعدة البيانات</li>
+                  <li>{dict.unified.checkLogin}</li>
+                  <li>{dict.unified.checkInternet}</li>
+                  <li>{dict.unified.checkPermissions}</li>
+                  <li>{dict.unified.checkDatabase}</li>
                 </ul>
                 <div className="mt-3 flex gap-3">
                   <a
@@ -855,14 +859,14 @@ export default function UnifiedManagementPage() {
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium transition-colors"
                   >
                     <Users className="h-4 w-4" />
-                    إضافة عمال جدد
+                    {dict.unified.addNewWorkers}
                   </a>
                   <button
                     onClick={() => window.location.reload()}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition-colors"
                   >
                     <RefreshCw className="h-4 w-4" />
-                    تحديث الصفحة
+                    {dict.unified.refreshPage}
                   </button>
                 </div>
               </div>
@@ -871,8 +875,8 @@ export default function UnifiedManagementPage() {
         )}                  {filteredWorkers.length === 0 && workers.length > 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                      <p>لا توجد نتائج تطابق البحث</p>
-                      <p className="text-sm mt-2">جرب تغيير الفلاتر أو مسح البحث</p>
+                      <p>{dict.unified.noSearchResults}</p>
+                      <p className="text-sm mt-2">{dict.unified.tryChangingFilters}</p>
                     </div>
                   ) : filteredWorkers.length > 0 ? (
                     filteredWorkers.map((worker) => (
@@ -899,16 +903,16 @@ export default function UnifiedManagementPage() {
         <TabsContent value="residences">
           <Card>
             <CardHeader>
-              <CardTitle>المساكن والغرف</CardTitle>
+              <CardTitle>{dict.unified.residencesRoomsTitle}</CardTitle>
               <CardDescription>
-                عرض تفصيلي للمساكن والغرف مع حالة الإشغال
+                {dict.unified.residencesRoomsDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-center py-12 text-muted-foreground">
                 <Building2 className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg mb-2">قريباً</p>
-                <p className="text-sm">عرض تفصيلي للمساكن والغرف</p>
+                <p className="text-lg mb-2">{dict.unified.comingSoon}</p>
+                <p className="text-sm">{dict.unified.residencesDetailedView}</p>
               </div>
             </CardContent>
           </Card>
@@ -918,16 +922,16 @@ export default function UnifiedManagementPage() {
         <TabsContent value="batch">
           <Card>
             <CardHeader>
-              <CardTitle>العمليات الجماعية</CardTitle>
+              <CardTitle>{dict.unified.batchOperationsTitle}</CardTitle>
               <CardDescription>
-                تنفيذ عمليات التسكين والإخراج والنقل لمجموعة من العمال
+                {dict.unified.batchOperationsDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-center py-12 text-muted-foreground">
                 <RefreshCw className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg mb-2">قريباً</p>
-                <p className="text-sm">عمليات جماعية متقدمة</p>
+                <p className="text-lg mb-2">{dict.unified.comingSoon}</p>
+                <p className="text-sm">{dict.unified.advancedBatchOps}</p>
               </div>
             </CardContent>
           </Card>
@@ -943,14 +947,14 @@ export default function UnifiedManagementPage() {
               {getActionLabel(actionDialog.type)} - {actionDialog.workerName}
             </DialogTitle>
             <DialogDescription>
-              املأ البيانات المطلوبة لإتمام العملية
+              {dict.unified.fillRequiredData}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             {/* Date */}
             <div className="space-y-2">
-              <Label htmlFor="date">التاريخ</Label>
+              <Label htmlFor="date">{dict.unified.dateLabel}</Label>
               <Input
                 id="date"
                 type="date"
@@ -972,7 +976,7 @@ export default function UnifiedManagementPage() {
                 }}
                 onChange={(value) => setActionForm(prev => ({ ...prev, ...value }))}
                 showOnlyAvailable={true}
-                label="اختر المسكن والغرفة للتسكين"
+                label={dict.unified.selectResidenceRoomCheckIn}
               />
             )}
 
@@ -996,14 +1000,14 @@ export default function UnifiedManagementPage() {
                   targetRoomId: value.roomId,
                 }))}
                   showOnlyAvailable={true}
-                  label="اختر المسكن والغرفة الجديدة"
+                  label={dict.unified.selectNewResidenceRoom}
                 />
 
                 <div className="space-y-2">
-                  <Label htmlFor="reason">سبب النقل</Label>
+                  <Label htmlFor="reason">{dict.unified.transferReasonLabel}</Label>
                   <Input
                     id="reason"
-                    placeholder="مثال: طلب العامل، صيانة المسكن..."
+                    placeholder={dict.unified.transferReasonPlaceholder}
                     value={actionForm.reason}
                     onChange={(e) => setActionForm(prev => ({ ...prev, reason: e.target.value }))}
                   />
@@ -1015,13 +1019,13 @@ export default function UnifiedManagementPage() {
             {actionDialog.type === 'SWAP' && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="swapTarget">العامل المراد المبادلة معه *</Label>
+                  <Label htmlFor="swapTarget">{dict.unified.swapWorkerLabel}</Label>
                   <Select
                     value={actionForm.swapTargetWorkerId}
                     onValueChange={(value: string) => setActionForm(prev => ({ ...prev, swapTargetWorkerId: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر العامل" />
+                      <SelectValue placeholder={dict.unified.selectWorkerPlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
                       {workersWithStatus
@@ -1036,10 +1040,10 @@ export default function UnifiedManagementPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="reason">سبب المبادلة</Label>
+                  <Label htmlFor="reason">{dict.unified.swapReasonLabel}</Label>
                   <Input
                     id="reason"
-                    placeholder="مثال: اتفاق بين العمال..."
+                    placeholder={dict.unified.swapReasonPlaceholder}
                     value={actionForm.reason}
                     onChange={(e) => setActionForm(prev => ({ ...prev, reason: e.target.value }))}
                   />
@@ -1050,10 +1054,10 @@ export default function UnifiedManagementPage() {
             {/* Check-Out Form */}
             {actionDialog.type === 'CHECK_OUT' && (
               <div className="space-y-2">
-                <Label htmlFor="reason">سبب الإخراج</Label>
+                <Label htmlFor="reason">{dict.unified.checkOutReasonLabel}</Label>
                 <Input
                   id="reason"
-                  placeholder="مثال: انتهاء العقد، نقل إلى مشروع آخر..."
+                  placeholder={dict.unified.checkOutReasonPlaceholder}
                   value={actionForm.reason}
                   onChange={(e) => setActionForm(prev => ({ ...prev, reason: e.target.value }))}
                 />
@@ -1062,10 +1066,10 @@ export default function UnifiedManagementPage() {
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes">ملاحظات إضافية</Label>
+              <Label htmlFor="notes">{dict.unified.notesLabel}</Label>
               <Textarea
                 id="notes"
-                placeholder="أي ملاحظات أو تفاصيل إضافية..."
+                placeholder={dict.unified.notesPlaceholder}
                 value={actionForm.notes}
                 onChange={(e) => setActionForm(prev => ({ ...prev, notes: e.target.value }))}
                 rows={3}
@@ -1075,11 +1079,11 @@ export default function UnifiedManagementPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseAction}>
-              إلغاء
+              {dict.unified.cancelButton}
             </Button>
             <Button onClick={handleSubmitAction}>
               {getActionIcon(actionDialog.type)}
-              <span className="mr-2">تأكيد {getActionLabel(actionDialog.type)}</span>
+              <span className="mr-2">{dict.unified.confirmButton} {getActionLabel(actionDialog.type)}</span>
             </Button>
           </DialogFooter>
         </DialogContent>

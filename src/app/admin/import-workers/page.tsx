@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -215,6 +216,7 @@ function validateWorkersData(workers: any[]): ValidationResult {
 }
 
 export default function ImportWorkersPage() {
+  const { dict } = useLanguage();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -722,15 +724,15 @@ export default function ImportWorkersPage() {
       )}
 
       {/* Instructions */}
-      <Card className="mt-6">
+      <Card className="mt-6 overflow-x-auto">
         <CardHeader>
-          <CardTitle>تنسيق الملف المطلوب</CardTitle>
+          <CardTitle>{dict.fileFormatTitle || 'تنسيق الملف المطلوب'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="text-sm">
-            <p className="mb-2 font-semibold">1. ملف JSON:</p>
+            <p className="mb-2 font-semibold">{dict.jsonFileExampleTitle || '1. ملف JSON:'}</p>
             <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs" dir="ltr">
-{`[
+{dict.jsonFileExample || `[
   {
     "name": "أحمد محمد",
     "employeeId": "40097",
@@ -744,25 +746,25 @@ export default function ImportWorkersPage() {
           </div>
 
           <div className="text-sm">
-            <p className="mb-2 font-semibold">2. ملف نصي (CSV/TSV):</p>
+            <p className="mb-2 font-semibold">{dict.textFileExampleTitle || '2. ملف نصي (CSV/TSV):'}</p>
             <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs" dir="ltr">
-{`name,employeeId,idNumber,company,nationality,role
+{dict.textFileExample || `name,employeeId,idNumber,company,nationality,role
 أحمد محمد,40097,2059537999,الشركة الأولى,سعودي,Worker
 محمد علي,40098,2059538000,الشركة الثانية,مصري,Supervisor`}
             </pre>
           </div>
 
           <div className="space-y-2 text-sm">
-            <h4 className="font-semibold">ملاحظات:</h4>
+            <h4 className="font-semibold">{dict.notesTitle || 'ملاحظات:'}</h4>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li><strong>name</strong>: إجباري - اسم العامل</li>
-              <li><strong>employeeId</strong>: اختياري - الرقم الوظيفي (يمكن تكراره في شركات مختلفة)</li>
-              <li><strong>idNumber</strong>: اختياري - رقم الهوية الوطنية (10 أرقام)</li>
-              <li><strong>company</strong>: اختياري - الشركة (لتمييز العمال بنفس الرقم الوظيفي)</li>
-              <li><strong>nationality</strong>: اختياري - الجنسية</li>
-              <li><strong>role</strong>: اختياري - الدور (Worker / Supervisor / Engineer)</li>
-              <li>الملفات النصية يتم تحويلها تلقائيًا إلى JSON مع اكتشاف الحقول</li>
-              <li>سيتم التحقق من صحة البيانات قبل الاستيراد</li>
+              <li><strong>name</strong>: {dict.nameNote || 'إجباري - اسم العامل'}</li>
+              <li><strong>employeeId</strong>: {dict.employeeIdNote || 'اختياري - الرقم الوظيفي (يمكن تكراره في شركات مختلفة)'}</li>
+              <li><strong>idNumber</strong>: {dict.idNumberNote || 'اختياري - رقم الهوية الوطنية (10 أرقام)'}</li>
+              <li><strong>company</strong>: {dict.companyNote || 'اختياري - الشركة (لتمييز العمال بنفس الرقم الوظيفي)'}</li>
+              <li><strong>nationality</strong>: {dict.nationalityNote || 'اختياري - الجنسية'}</li>
+              <li><strong>role</strong>: {dict.roleNote || 'اختياري - الدور (Worker / Supervisor / Engineer)'}</li>
+              <li>{dict.textFilesAutoJson || 'الملفات النصية يتم تحويلها تلقائيًا إلى JSON مع اكتشاف الحقول'}</li>
+              <li>{dict.dataValidationNote || 'سيتم التحقق من صحة البيانات قبل الاستيراد'}</li>
             </ul>
           </div>
         </CardContent>

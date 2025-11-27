@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useEffect } from "react";
+import { useLanguage } from '@/context/language-context';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,6 +59,7 @@ interface UserFormDialogProps {
 }
 
 export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }: UserFormDialogProps) {
+  const { dict } = useLanguage();
   const { toast } = useToast();
   const { residences, loading: residencesLoading, loadResidences } = useResidences();
   
@@ -120,11 +122,11 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-full max-w-xs md:max-w-lg p-2 sm:p-6">
         <DialogHeader>
-          <DialogTitle>{user ? "Edit User" : "Add New User"}</DialogTitle>
+          <DialogTitle>{user ? (dict.editUser || "Edit User") : (dict.addNewUser || "Add New User")}</DialogTitle>
           <DialogDescription>
-            {user ? "Update the user's details and preferences." : "Fill in the details for the new user."}
+            {user ? (dict.updateUserDetails || "Update the user's details and preferences.") : (dict.fillNewUserDetails || "Fill in the details for the new user.")}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -134,9 +136,9 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{dict.name || 'Name'}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Ahmed Al-Farsi" {...field} />
+                    <Input placeholder={dict.namePlaceholder || "e.g., Ahmed Al-Farsi"} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -147,9 +149,9 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>{dict.email || 'Email'}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., ahmed@email.com" {...field} />
+                    <Input placeholder={dict.emailPlaceholder || "e.g., ahmed@email.com"} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -160,17 +162,17 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role</FormLabel>
+                  <FormLabel>{dict.role || 'Role'}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
+                        <SelectValue placeholder={dict.selectRole || "Select a role"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                      <SelectItem value="Supervisor">Supervisor</SelectItem>
-                      <SelectItem value="Technician">Technician</SelectItem>
+                      <SelectItem value="Admin">{dict.admin || 'Admin'}</SelectItem>
+                      <SelectItem value="Supervisor">{dict.supervisor || 'Supervisor'}</SelectItem>
+                      <SelectItem value="Technician">{dict.technician || 'Technician'}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -183,13 +185,13 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                 render={() => (
                     <FormItem>
                     <div className="mb-4">
-                        <FormLabel className="text-base">Assigned Residences</FormLabel>
+                        <FormLabel className="text-base">{dict.assignedResidences || 'Assigned Residences'}</FormLabel>
                         <FormDescription>
-                        Select the residences this user has access to.
+                        {dict.selectResidencesDesc || 'Select the residences this user has access to.'}
                         </FormDescription>
                     </div>
                     <ScrollArea className="h-40 rounded-md border p-4">
-                        {residencesLoading ? <p>Loading residences...</p> : residences.map((residence) => (
+                        {residencesLoading ? <p>{dict.loadingResidences || 'Loading residences...'}</p> : residences.map((residence) => (
                             <FormField
                             key={residence.id}
                             control={form.control}
@@ -230,7 +232,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
 
             <div className="space-y-2 pt-2 border-t">
                 <FormLabel className="flex items-center gap-2 pt-4">
-                    <Palette className="h-4 w-4" /> User Preferences
+                  <Palette className="h-4 w-4" /> {dict.userPreferences || 'User Preferences'}
                 </FormLabel>
                  <div className="grid grid-cols-2 gap-4">
                     <FormField
@@ -238,15 +240,15 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                         name="themeSettings.mode"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Theme Mode</FormLabel>
+                            <FormLabel>{dict.themeMode || 'Theme Mode'}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <SelectItem value="light">Light</SelectItem>
-                                    <SelectItem value="dark">Dark</SelectItem>
-                                    <SelectItem value="system">System</SelectItem>
+                                    <SelectItem value="light">{dict.light || 'Light'}</SelectItem>
+                                    <SelectItem value="dark">{dict.dark || 'Dark'}</SelectItem>
+                                    <SelectItem value="system">{dict.system || 'System'}</SelectItem>
                                 </SelectContent>
                             </Select>
                             <FormMessage />
@@ -259,7 +261,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                     name="themeSettings.colorTheme"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Color Theme</FormLabel>
+                        <FormLabel>{dict.colorTheme || 'Color Theme'}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -277,10 +279,10 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
             </div>
             
             <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{dict.cancel || 'Cancel'}</Button>
+              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save User
+                {dict.saveUser || 'Save User'}
               </Button>
             </DialogFooter>
           </form>

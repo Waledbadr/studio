@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { useInventory, type ReconciliationRequest } from '@/context/inventory-context';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
@@ -25,7 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 
-export default function StockReconciliationPage() {
+function StockReconciliationPage() {
+  const { dict } = useLanguage();
   const { items, categories, loading, getStockForResidence, reconcileStock, getReconciliations, getAllReconciliations, getReconciliationItems, createReconciliationRequest, getReconciliationRequests, approveReconciliationRequest, rejectReconciliationRequest } = useInventory();
   const { residences, loading: residencesLoading } = useResidences();
   const { currentUser, getUserById } = useUsers();
@@ -274,14 +276,14 @@ export default function StockReconciliationPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-6">
+    <div className="space-y-6 max-w-7xl mx-auto p-2 sm:p-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-6 border border-emerald-100 dark:border-emerald-800">
-        <div className="flex items-start justify-between">
+      <div className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-4 sm:p-6 border border-emerald-100 dark:border-emerald-800">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Stock Reconciliation</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{dict.reconciliationTitle || 'Stock Reconciliation'}</h1>
             <p className="text-gray-600 dark:text-gray-300 text-lg">
-              Adjust per-residence stock quickly and log movements automatically
+              {dict.reconciliationDesc || 'Adjust per-residence stock quickly and log movements automatically'}
             </p>
           </div>
           <div className="hidden md:block">
@@ -294,8 +296,8 @@ export default function StockReconciliationPage() {
 
       {/* Controls */}
       <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="p-2 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <Label>Residence / Building</Label>
               <Select value={residenceId} onValueChange={(v) => setResidenceId(v)}>
@@ -304,7 +306,7 @@ export default function StockReconciliationPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {safeResidences.length === 0 ? (
-                    <div className="px-2 py-1 text-sm text-muted-foreground">No assigned residences</div>
+                    <div className="px-2 py-1 text-sm text-muted-foreground">{dict.noAssignedResidences || 'No assigned residences'}</div>
                   ) : (
                     safeResidences.map((r) => (
                       <SelectItem key={String(r.id)} value={String(r.id)}>{r.name}</SelectItem>
@@ -315,13 +317,13 @@ export default function StockReconciliationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Category</Label>
+              <Label>{dict.categoryLabel || 'Category'}</Label>
               <Select value={categoryFilter ?? 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? undefined : v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All categories" />
+                  <SelectValue placeholder={dict.allCategories || 'All categories'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="all">{dict.allCategories || 'All categories'}</SelectItem>
                   {safeCategories.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
@@ -330,10 +332,10 @@ export default function StockReconciliationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Search</Label>
+              <Label>{dict.searchLabel || 'Search'}</Label>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="Search by Arabic or English name"
+                  placeholder={dict.searchPlaceholder || 'Search by Arabic or English name'}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -341,15 +343,15 @@ export default function StockReconciliationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>View options</Label>
+              <Label>{dict.viewOptionsLabel || 'View options'}</Label>
               <div className="flex flex-col gap-2 pt-2">
                 <label className="flex items-center gap-2">
                   <Checkbox checked={showOnlyWithStock} onCheckedChange={(v) => setShowOnlyWithStock(!!v)} />
-                  <span className="text-sm">Show items with stock only</span>
+                  <span className="text-sm">{dict.showWithStockOnly || 'Show items with stock only'}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <Checkbox checked={showOnlyChanged} onCheckedChange={(v) => setShowOnlyChanged(!!v)} />
-                  <span className="text-sm">Show changed only</span>
+                  <span className="text-sm">{dict.showChangedOnly || 'Show changed only'}</span>
                 </label>
               </div>
             </div>
@@ -357,9 +359,9 @@ export default function StockReconciliationPage() {
 
           {/* Summary */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">Items changed</p><p className="text-2xl font-bold">{summary.changed}</p></div><ListFilter className="h-6 w-6 text-blue-500" /></CardContent></Card>
-            <Card className="border-l-4 border-l-green-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">Total increase</p><p className="text-2xl font-bold text-green-600">{summary.increase}</p></div><CheckCircle className="h-6 w-6 text-green-500" /></CardContent></Card>
-            <Card className="border-l-4 border-l-red-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">Total decrease</p><p className="text-2xl font-bold text-red-600">{summary.decrease}</p></div><AlertCircle className="h-6 w-6 text-red-500" /></CardContent></Card>
+            <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">{dict.itemsChanged || 'Items changed'}</p><p className="text-2xl font-bold">{summary.changed}</p></div><ListFilter className="h-6 w-6 text-blue-500" /></CardContent></Card>
+            <Card className="border-l-4 border-l-green-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">{dict.totalIncrease || 'Total increase'}</p><p className="text-2xl font-bold text-green-600">{summary.increase}</p></div><CheckCircle className="h-6 w-6 text-green-500" /></CardContent></Card>
+            <Card className="border-l-4 border-l-red-500"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-sm text-gray-600">{dict.totalDecrease || 'Total decrease'}</p><p className="text-2xl font-bold text-red-600">{summary.decrease}</p></div><AlertCircle className="h-6 w-6 text-red-500" /></CardContent></Card>
           </div>
         </CardContent>
       </Card>
@@ -367,23 +369,23 @@ export default function StockReconciliationPage() {
       {/* Table */}
       <Card className="shadow-lg">
         <CardHeader className="bg-gray-50 dark:bg-gray-800 border-b">
-          <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-200">Items</CardTitle>
+          <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-200">{dict.itemsTitle || 'Items'}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {!residenceId ? (
-            <div className="p-8 text-center text-gray-600">Select a residence to show items</div>
+            <div className="p-8 text-center text-gray-600">{dict.selectResidenceToShowItems || 'Select a residence to show items'}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-left">Item</TableHead>
-                    <TableHead className="text-left">Category</TableHead>
-                    <TableHead className="text-left">Unit</TableHead>
-                    <TableHead className="text-left">System stock</TableHead>
-                    <TableHead className="text-left">New stock</TableHead>
-                    <TableHead className="text-left">Difference</TableHead>
-                    <TableHead className="text-left">Reason (optional)</TableHead>
+                    <TableHead className="text-left">{dict.itemHeader || 'Item'}</TableHead>
+                    <TableHead className="text-left">{dict.categoryHeader || 'Category'}</TableHead>
+                    <TableHead className="text-left">{dict.unitHeader || 'Unit'}</TableHead>
+                    <TableHead className="text-left">{dict.systemStockHeader || 'System stock'}</TableHead>
+                    <TableHead className="text-left">{dict.newStockHeader || 'New stock'}</TableHead>
+                    <TableHead className="text-left">{dict.differenceHeader || 'Difference'}</TableHead>
+                    <TableHead className="text-left">{dict.reasonHeader || 'Reason (optional)'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -413,7 +415,7 @@ export default function StockReconciliationPage() {
                               const v = e.target.value;
                               setNewStock((s) => ({ ...s, [it.id]: v }));
                             }}
-                            placeholder="0"
+                            placeholder={dict.stockInputPlaceholder || '0'}
                           />
                         </TableCell>
                         <TableCell>
@@ -429,7 +431,7 @@ export default function StockReconciliationPage() {
                           <Input
                             value={reasons[it.id] ?? ''}
                             onChange={(e) => setReasons((r) => ({ ...r, [it.id]: e.target.value }))}
-                            placeholder="e.g. Damaged, Lost, Correction"
+                            placeholder={dict.reasonInputPlaceholder || 'e.g. Damaged, Lost, Correction'}
                           />
                         </TableCell>
                       </TableRow>
@@ -446,23 +448,23 @@ export default function StockReconciliationPage() {
       {isAdmin && (
         <Card>
           <CardHeader>
-            <CardTitle>Pending reconciliation requests</CardTitle>
+            <CardTitle>{dict.pendingReconciliationTitle || 'Pending reconciliation requests'}</CardTitle>
           </CardHeader>
           <CardContent>
             {pendingLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : pending.length === 0 ? (
-              <div className="text-sm text-gray-600">No pending requests.</div>
+              <div className="text-sm text-gray-600">{dict.noPendingRequests || 'No pending requests.'}</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-left">Request</TableHead>
-                      <TableHead className="text-left">Residence</TableHead>
-                      <TableHead className="text-left">Items</TableHead>
-                      <TableHead className="text-left">Requested by</TableHead>
-                      <TableHead className="text-left">Actions</TableHead>
+                      <TableHead className="text-left">{dict.requestHeader || 'Request'}</TableHead>
+                      <TableHead className="text-left">{dict.residenceHeader || 'Residence'}</TableHead>
+                      <TableHead className="text-left">{dict.itemsHeader || 'Items'}</TableHead>
+                      <TableHead className="text-left">{dict.requestedByHeader || 'Requested by'}</TableHead>
+                      <TableHead className="text-left">{dict.actionsHeader || 'Actions'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -490,7 +492,7 @@ export default function StockReconciliationPage() {
                                   setRecons(list as unknown as Rec[]);
                                 }
                               } catch {}
-                            }}>Approve</Button>
+                            }}>{dict.approveButton || 'Approve'}</Button>
                             <Button size="sm" variant="outline" onClick={async (e) => {
                               e.stopPropagation();
                               try {
@@ -507,7 +509,7 @@ export default function StockReconciliationPage() {
                                   setRecons(list as unknown as Rec[]);
                                 }
                               } catch {}
-                            }}>Reject</Button>
+                            }}>{dict.rejectButton || 'Reject'}</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -523,8 +525,8 @@ export default function StockReconciliationPage() {
       {/* Reconciliation history (collapsible) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Reconciliation history</CardTitle>
-          <Button variant="ghost" size="icon" aria-label="Toggle history" onClick={() => setHistoryOpen(v => !v)}>
+          <CardTitle>{dict.reconciliationHistoryTitle || 'Reconciliation history'}</CardTitle>
+          <Button variant="ghost" size="icon" aria-label={dict.toggleHistoryAriaLabel || 'Toggle history'} onClick={() => setHistoryOpen(v => !v)}>
             <ChevronDown className={`h-5 w-5 transition-transform ${historyOpen ? '' : '-rotate-90'}`} />
           </Button>
         </CardHeader>
@@ -533,19 +535,19 @@ export default function StockReconciliationPage() {
           {reconsLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : recons.length === 0 ? (
-            <div className="text-sm text-gray-600">No reconciliations found.</div>
+            <div className="text-sm text-gray-600">{dict.noReconciliationsFound || 'No reconciliations found.'}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-left">Date</TableHead>
-                    <TableHead className="text-left">Reference</TableHead>
-                    <TableHead className="text-left">Residence</TableHead>
-                    <TableHead className="text-left">Items adjusted</TableHead>
-                    <TableHead className="text-left">Total increase</TableHead>
-                    <TableHead className="text-left">Total decrease</TableHead>
-                    <TableHead className="text-left">By</TableHead>
+                    <TableHead className="text-left">{dict.dateHeader || 'Date'}</TableHead>
+                    <TableHead className="text-left">{dict.referenceHeader || 'Reference'}</TableHead>
+                    <TableHead className="text-left">{dict.residenceHeader || 'Residence'}</TableHead>
+                    <TableHead className="text-left">{dict.itemsAdjustedHeader || 'Items adjusted'}</TableHead>
+                    <TableHead className="text-left">{dict.totalIncrease || 'Total increase'}</TableHead>
+                    <TableHead className="text-left">{dict.totalDecrease || 'Total decrease'}</TableHead>
+                    <TableHead className="text-left">{dict.byHeader || 'By'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -733,3 +735,5 @@ export default function StockReconciliationPage() {
     </div>
   );
 }
+
+export default StockReconciliationPage;

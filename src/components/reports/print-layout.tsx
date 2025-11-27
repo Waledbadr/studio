@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Printer, ArrowLeft } from "lucide-react";
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/context/language-context';
 
 interface PrintLayoutProps {
   title: string;
@@ -13,6 +13,7 @@ interface PrintLayoutProps {
 
 export function PrintLayout({ title, description, children, onPrint }: PrintLayoutProps) {
   const router = useRouter();
+  const { dict } = useLanguage();
   
   const handlePrint = () => {
     if (onPrint) {
@@ -28,12 +29,12 @@ export function PrintLayout({ title, description, children, onPrint }: PrintLayo
       <div className="max-w-[210mm] mx-auto mb-6 flex justify-between items-center print:hidden">
         <Button variant="ghost" onClick={() => router.back()} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {dict.back || 'Back'}
         </Button>
         <div className="flex gap-2">
           <Button onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" />
-            Print Report
+            {dict.printLabel || 'Print Report'}
           </Button>
         </div>
       </div>

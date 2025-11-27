@@ -3,6 +3,7 @@
 import React, { useMemo, useEffect } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
+import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
@@ -14,6 +15,7 @@ export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
   const { workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, refreshDashboardStats, autoArchiveOccupants } = ctx;
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
   
   useEffect(() => {
     const init = async () => {
@@ -227,24 +229,24 @@ export default function AccommodationOverviewPage() {
   }, [workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, filteredResidences]);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Accommodation Overview</h1>
-          <p className="text-muted-foreground mt-2">Dashboard and key metrics for accommodation management</p>
+          <h1 className="text-2xl md:text-3xl font-bold">{dict.sidebar.accommodationOverview}</h1>
+          <p className="text-muted-foreground mt-1 md:mt-2">{dict.sidebar.accommodationDescription}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {!metrics.hasFullData && (
              <Button variant="outline" size="sm" onClick={() => refreshDashboardStats()} className="gap-2">
                <RefreshCw className="h-4 w-4" />
-               تحديث القراءات
+               {dict.sidebar.syncDashboard}
              </Button>
           )}
           {/* 🚨 EMERGENCY MODE: Manual sync button (replaces real-time listeners) */}
           <Alert className="py-2 px-3">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              {metrics.hasFullData ? 'بيانات كاملة' : 'قراءات سريعة'}
+              {metrics.hasFullData ? dict.overview.fullData : dict.overview.quickStats}
             </AlertDescription>
           </Alert>
           <ManualSyncButton />
@@ -252,55 +254,55 @@ export default function AccommodationOverviewPage() {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Workers</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.sidebar.totalWorkers}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.totalWorkers}</div>
             <p className="text-xs text-muted-foreground">
-              {metrics.assignedWorkers} assigned, {metrics.unassignedWorkers} unassigned
+              {metrics.assignedWorkers} {dict.sidebar.assigned}, {metrics.unassignedWorkers} {dict.sidebar.unassigned}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Occupancy Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.sidebar.occupancy}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.occupancyRate}%</div>
             <p className="text-xs text-muted-foreground">
-              {metrics.totalOccupied} / {metrics.totalCapacity} capacity
+              {metrics.totalOccupied} / {metrics.totalCapacity} {dict.sidebar.totalCapacity}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Contracts</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.sidebar.activeContracts}</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.activeContracts}</div>
             <p className="text-xs text-muted-foreground">
-              Active contracts
+              {dict.sidebar.activeContracts}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Companies</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.sidebar.totalCompanies}</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.companies}</div>
             <p className="text-xs text-muted-foreground">
-              Registered companies
+              {dict.sidebar.totalCompanies}
             </p>
           </CardContent>
         </Card>
@@ -313,15 +315,15 @@ export default function AccommodationOverviewPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-orange-500" />
-              Capacity Warnings
+              {dict.overview.capacityWarnings}
             </CardTitle>
-            <CardDescription>Residences with high occupancy (&gt;90%)</CardDescription>
+            <CardDescription>{dict.overview.capacityWarningsDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {metrics.capacityWarnings.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
-                No capacity issues
+                {dict.overview.noCapacityIssues}
               </div>
             ) : (
               <div className="space-y-2">
@@ -330,7 +332,7 @@ export default function AccommodationOverviewPage() {
                     <AlertCircle className="h-4 w-4 text-orange-600" />
                     <AlertTitle className="text-sm">{warning.residenceName}</AlertTitle>
                     <AlertDescription className="text-xs">
-                      {warning.occupied} / {warning.capacity} occupied ({warning.rate}%)
+                      {warning.occupied} / {warning.capacity} {dict.sidebar.occupied} ({warning.rate}%)
                     </AlertDescription>
                   </Alert>
                 ))}
@@ -344,15 +346,15 @@ export default function AccommodationOverviewPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-red-500" />
-              Nationality Conflicts
+              {dict.overview.nationalityConflicts}
             </CardTitle>
-            <CardDescription>Rooms with mixed nationalities</CardDescription>
+            <CardDescription>{dict.overview.nationalityConflictsDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {metrics.nationalityConflicts.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
-                No nationality conflicts
+                {dict.overview.noNationalityConflicts}
               </div>
             ) : (
               <div className="space-y-2">
@@ -383,39 +385,39 @@ export default function AccommodationOverviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Pending Transfers</CardTitle>
+            <CardTitle>{dict.sidebar.pendingTransfers}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{metrics.pendingTransfers}</div>
             <Link href="/accommodation/transfers" className="text-sm text-primary hover:underline mt-2 inline-block">
-              View transfers →
+              {dict.ui.viewLabel} {dict.sidebar.transfers} →
             </Link>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Unpaid Invoices</CardTitle>
+            <CardTitle>{dict.sidebar.unpaidInvoices}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{metrics.unpaidInvoices}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {metrics.overdueInvoices} overdue
+              {metrics.overdueInvoices} {dict.sidebar.overdueInvoices}
             </p>
             <Link href="/accommodation/invoices" className="text-sm text-primary hover:underline mt-2 inline-block">
-              View invoices →
+              {dict.ui.viewLabel} {dict.sidebar.invoices} →
             </Link>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Unassigned Workers</CardTitle>
+            <CardTitle>{dict.sidebar.unassigned} {dict.sidebar.workers}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{metrics.unassignedWorkers}</div>
             <Link href="/accommodation/assign" className="text-sm text-primary hover:underline mt-2 inline-block">
-              Assign workers →
+              {dict.sidebar.assignWorkers} →
             </Link>
           </CardContent>
         </Card>
@@ -424,8 +426,8 @@ export default function AccommodationOverviewPage() {
       {/* Occupancy by Residence */}
       <Card>
         <CardHeader>
-          <CardTitle>Occupancy by Residence</CardTitle>
-          <CardDescription>Current occupancy status across all residences</CardDescription>
+          <CardTitle>{dict.sidebar.residenceOccupancy}</CardTitle>
+          <CardDescription>{dict.sidebar.occupancy} {dict.acrossAllResidences}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -452,7 +454,7 @@ export default function AccommodationOverviewPage() {
               );
             })}
             {residences.length === 0 && (
-              <p className="text-sm text-muted-foreground">No residences configured</p>
+              <p className="text-sm text-muted-foreground">{dict.residencesNoData}</p>
             )}
           </div>
         </CardContent>
@@ -461,25 +463,25 @@ export default function AccommodationOverviewPage() {
       {/* Quick Actions */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
+          <CardTitle>{dict.quickActions.addNewOrder}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Link href="/accommodation/workers" className="p-3 border rounded-lg hover:bg-accent transition-colors text-center">
               <Users className="h-5 w-5 mx-auto mb-2" />
-              <div className="text-sm font-medium">Manage Workers</div>
+              <div className="text-sm font-medium">{dict.sidebar.workers}</div>
             </Link>
             <Link href="/accommodation/companies" className="p-3 border rounded-lg hover:bg-accent transition-colors text-center">
               <Building2 className="h-5 w-5 mx-auto mb-2" />
-              <div className="text-sm font-medium">Manage Companies</div>
+              <div className="text-sm font-medium">{dict.sidebar.companies}</div>
             </Link>
             <Link href="/accommodation/contracts" className="p-3 border rounded-lg hover:bg-accent transition-colors text-center">
               <FileText className="h-5 w-5 mx-auto mb-2" />
-              <div className="text-sm font-medium">Manage Contracts</div>
+              <div className="text-sm font-medium">{dict.sidebar.contracts}</div>
             </Link>
             <Link href="/accommodation/reports" className="p-3 border rounded-lg hover:bg-accent transition-colors text-center">
               <TrendingUp className="h-5 w-5 mx-auto mb-2" />
-              <div className="text-sm font-medium">View Reports</div>
+              <div className="text-sm font-medium">{dict.sidebar.reports}</div>
             </Link>
           </div>
         </CardContent>

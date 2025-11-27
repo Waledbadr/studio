@@ -326,12 +326,12 @@ export default function StockMovementReportPage() {
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Date', 'Item', 'Movement Type', 'Quantity', 'Residence', 'Location', 'Notes'];
+    const headers = [dict.date, dict.itemLabel, dict.movementTypeLabel, dict.quantity, dict.residenceLabel, dict.location, dict.notes];
     const csvContent = [
       headers.join(','),
       ...filteredTransactions.map(transaction => [
         format(transaction.date.toDate(), 'yyyy-MM-dd HH:mm'),
-        `"${transaction.itemNameEn || 'Unknown Item'}"`,
+        `"${transaction.itemNameEn || dict.unknownItem}"`,
         getMovementTypeLabel(transaction.type),
         transaction.quantity,
         `"${getResidenceName(transaction.residenceId)}"`,
@@ -386,7 +386,7 @@ export default function StockMovementReportPage() {
 
   const getResidenceName = (residenceId: string) => {
     const residence = residences.find(r => r.id === residenceId);
-    return residence?.name || 'Unknown Residence';
+    return residence?.name || dict.unknownResidence;
   };
 
   const getMovementTypeColor = (type: string) => {
@@ -450,7 +450,7 @@ export default function StockMovementReportPage() {
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-4">
                   <div className="w-1 h-6 bg-primary rounded-full"></div>
-                  <h3 className="text-lg font-semibold text-foreground">{dict.locationHierarchy || 'Location Hierarchy'}</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{dict.locationHierarchy}</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -540,13 +540,13 @@ export default function StockMovementReportPage() {
 
                   {/* Facilities Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="facility" className="text-sm font-medium">{(dict as any).facilitiesLabel || 'Facilities'}</Label>
+                    <Label htmlFor="facility" className="text-sm font-medium">{dict.facilitiesLabel}</Label>
                     <Select value={filters.facilityId || undefined} onValueChange={(v) => handleFilterChange('facilityId', v === '__ALL__' ? '' : v)} disabled={!filters.residenceId}>
                       <SelectTrigger id="facility" className="h-11" disabled={!filters.residenceId}>
-                        <SelectValue placeholder={(dict as any).generalFacilitiesLabel || 'General Facilities'} />
+                        <SelectValue placeholder={dict.generalFacilitiesLabel} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__ALL__">{(dict as any).generalFacilitiesLabel || 'General Facilities'}</SelectItem>
+                        <SelectItem value="__ALL__">{dict.generalFacilitiesLabel}</SelectItem>
                         {availableFacilities.map((fac: any) => {
                           if (!fac?.id) return null;
                           return (
@@ -588,10 +588,10 @@ export default function StockMovementReportPage() {
                         <SelectItem value="AUDIT">{dict.auditAdjustmentLabel}</SelectItem>
                         <SelectItem value="SCRAP">{dict.scrapLabel}</SelectItem>
                         {/* Service sub-options */}
-                        <div className="px-2 py-1 text-xs text-muted-foreground select-none">{(dict as any).serviceFilterLabel || 'Service Movements'}</div>
-                        <SelectItem value="SERVICE_DISPATCH">{(dict as any).serviceDispatch || 'Service Dispatch'}</SelectItem>
-                        <SelectItem value="SERVICE_RETURN">{(dict as any).serviceReturn || 'Service Return'}</SelectItem>
-                        <SelectItem value="SERVICE_SCRAP">{(dict as any).serviceScrap || 'Service Scrap'}</SelectItem>
+                        <div className="px-2 py-1 text-xs text-muted-foreground select-none">{dict.serviceFilterLabel}</div>
+                        <SelectItem value="SERVICE_DISPATCH">{dict.serviceDispatch}</SelectItem>
+                        <SelectItem value="SERVICE_RETURN">{dict.serviceReturn}</SelectItem>
+                        <SelectItem value="SERVICE_SCRAP">{dict.serviceScrap}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -633,45 +633,45 @@ export default function StockMovementReportPage() {
                       const now = new Date();
                       handleFilterChange('startDate', startOfDay(now));
                       handleFilterChange('endDate', endOfDay(now));
-                    }}>{(dict as any).today || 'Today'}</Button>
+                    }}>{dict.today}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const d = subDays(new Date(), 1);
                       handleFilterChange('startDate', startOfDay(d));
                       handleFilterChange('endDate', endOfDay(d));
-                    }}>{(dict as any).yesterday || 'Yesterday'}</Button>
+                    }}>{dict.yesterday}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       handleFilterChange('startDate', startOfWeek(now));
                       handleFilterChange('endDate', endOfWeek(now));
-                    }}>{(dict as any).thisWeek || 'This Week'}</Button>
+                    }}>{dict.thisWeek}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       const d = subWeeks(now, 1);
                       handleFilterChange('startDate', startOfWeek(d));
                       handleFilterChange('endDate', endOfWeek(d));
-                    }}>{(dict as any).lastWeek || 'Last Week'}</Button>
+                    }}>{dict.lastWeek}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       handleFilterChange('startDate', startOfMonth(now));
                       handleFilterChange('endDate', endOfMonth(now));
-                    }}>{(dict as any).thisMonth || 'This Month'}</Button>
+                    }}>{dict.thisMonth}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       const d = subMonths(now, 1);
                       handleFilterChange('startDate', startOfMonth(d));
                       handleFilterChange('endDate', endOfMonth(d));
-                    }}>{(dict as any).lastMonth || 'Last Month'}</Button>
+                    }}>{dict.lastMonth}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       handleFilterChange('startDate', startOfYear(now));
                       handleFilterChange('endDate', endOfYear(now));
-                    }}>{(dict as any).thisYear || 'This Year'}</Button>
+                    }}>{dict.thisYear}</Button>
                     <Button variant="outline" size="sm" onClick={() => {
                       const now = new Date();
                       const d = subYears(now, 1);
                       handleFilterChange('startDate', startOfYear(d));
                       handleFilterChange('endDate', endOfYear(d));
-                    }}>{(dict as any).lastYear || 'Last Year'}</Button>
+                    }}>{dict.lastYear}</Button>
                   </div>
                   {/* Date Inputs (Glass Popovers) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -680,7 +680,7 @@ export default function StockMovementReportPage() {
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button id="startDate" variant="outline" className="w-full h-11 justify-between">
-                            <span>{filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <span>{filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : dict.selectDate}</span>
                             <CalendarIcon className="h-4 w-4 opacity-60" />
                           </Button>
                         </PopoverTrigger>
@@ -693,7 +693,7 @@ export default function StockMovementReportPage() {
                           />
                           <div className="flex justify-end pt-2">
                             <Button variant="ghost" size="sm" onClick={() => handleFilterChange('startDate', undefined)}>
-                              {'Clear'}
+                              {dict.clear}
                             </Button>
                           </div>
                         </PopoverContent>
@@ -705,7 +705,7 @@ export default function StockMovementReportPage() {
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button id="endDate" variant="outline" className="w-full h-11 justify-between">
-                            <span>{filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : 'Select date'}</span>
+                            <span>{filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : dict.selectDate}</span>
                             <CalendarIcon className="h-4 w-4 opacity-60" />
                           </Button>
                         </PopoverTrigger>
@@ -718,7 +718,7 @@ export default function StockMovementReportPage() {
                           />
                           <div className="flex justify-end pt-2">
                             <Button variant="ghost" size="sm" onClick={() => handleFilterChange('endDate', undefined)}>
-                              {'Clear'}
+                              {dict.clear}
                             </Button>
                           </div>
                         </PopoverContent>
@@ -782,17 +782,17 @@ export default function StockMovementReportPage() {
           </CardHeader>
           <CardContent className="p-0">
              {filteredTransactions.length > 0 ? (
-                <div className="overflow-x-auto max-h-[500px]">
-                  <Table>
+                <div className="w-full overflow-x-auto sm:overflow-x-visible max-h-[500px]">
+                  <Table className="min-w-full sm:min-w-[900px]" dir={dict.dir}>
                     <TableHeader className="sticky top-0 bg-muted/50 dark:bg-card">
                       <TableRow>
                         <TableHead className="font-semibold">{dict.dateTimeLabel}</TableHead>
                         <TableHead className="font-semibold">{dict.itemLabel}</TableHead>
                         <TableHead className="font-semibold">{dict.movementTypeLabel}</TableHead>
                         <TableHead className="font-semibold text-right">{dict.quantity}</TableHead>
-                        <TableHead className="font-semibold">{dict.residenceLabel}</TableHead>
-                        <TableHead className="font-semibold">{dict.location}</TableHead>
-                        <TableHead className="font-semibold">{dict.referenceLabel}</TableHead>
+                        <TableHead className="font-semibold hidden md:table-cell">{dict.residenceLabel}</TableHead>
+                        <TableHead className="font-semibold hidden lg:table-cell">{dict.location}</TableHead>
+                        <TableHead className="font-semibold hidden xl:table-cell">{dict.referenceLabel}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -816,13 +816,13 @@ export default function StockMovementReportPage() {
                           <TableCell className="text-right font-medium">
                             {transaction.quantity}
                           </TableCell>
-                          <TableCell className="font-medium text-primary">
+                          <TableCell className="font-medium text-primary hidden md:table-cell">
                             {getResidenceName(transaction.residenceId)}
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                             {getLocationString(transaction) || dict.locationNotSpecified}
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate hidden xl:table-cell">
                             {transaction.referenceDocId || '-'}
                           </TableCell>
                         </TableRow>

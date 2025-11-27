@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 export default function UsersPage() {
+    const { dict } = useLanguage();
     const { users, loading: usersLoading, saveUser, deleteUser, loadUsers, currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -97,39 +99,39 @@ export default function UsersPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">إدارة المستخدمين والعمال</h1>
-                    <p className="text-muted-foreground">إدارة الموظفين والعمال والصلاحيات</p>
+                    <h1 className="text-2xl font-bold">{dict.workers?.title || 'إدارة المستخدمين والعمال'}</h1>
+                    <p className="text-muted-foreground">{dict.workers?.subtitle || 'إدارة الموظفين والعمال والصلاحيات'}</p>
                 </div>
                 <Button onClick={handleAddNewUser}>
                     <PlusCircle className="mr-2 h-4 w-4" /> إضافة مستخدم
                 </Button>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
+            <Tabs value={activeTab} onValueChange={setActiveTab} dir={dict?.ui?.dir || (dict?.ui?.rtl ? 'rtl' : 'ltr') || 'rtl'}>
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="staff">الموظفين ({staffUsers.length})</TabsTrigger>
+                    <TabsTrigger value="staff">{dict.staff || 'الموظفين'} ({staffUsers.length})</TabsTrigger>
                     <TabsTrigger value="workers">
                         <Users className="ml-2 h-4 w-4" />
-                        العمال ({workers.length})
+                        {dict.workers?.title || 'العمال'} ({workers.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="staff">
                     <Card>
                         <CardHeader>
-                            <CardTitle>الموظفين</CardTitle>
-                            <CardDescription>قائمة الموظفين والمشرفين في النظام</CardDescription>
+                            <CardTitle>{dict.staff || 'الموظفين'}</CardTitle>
+                            <CardDescription>{dict.staffDescription || dict.workers?.subtitle || 'قائمة الموظفين والمشرفين في النظام'}</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
+                            <div className="w-full overflow-x-auto sm:overflow-x-visible">
+                                <Table className="min-w-full sm:min-w-[700px]">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="text-right">الاسم</TableHead>
-                                            <TableHead className="text-right">البريد الإلكتروني</TableHead>
-                                            <TableHead className="text-right">الدور</TableHead>
-                                            <TableHead className="text-right">المقرات المخصصة</TableHead>
-                                            <TableHead className="text-right">الإجراءات</TableHead>
+                                            <TableHead className="text-right">{dict.name || 'الاسم'}</TableHead>
+                                            <TableHead className="text-right">{dict.email || 'البريد الإلكتروني'}</TableHead>
+                                            <TableHead className="text-right">{dict.role || 'الدور'}</TableHead>
+                                            <TableHead className="text-right">{dict.assignedResidences || 'المقرات المخصصة'}</TableHead>
+                                            <TableHead className="text-right">{dict.actions || 'الإجراءات'}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -138,7 +140,7 @@ export default function UsersPage() {
                                                 <TableCell className="font-medium text-right">{user.name}</TableCell>
                                                 <TableCell className="text-right">{user.email}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>{user.role}</Badge>
+                                                    <Badge variant={user.role === (dict.admin || 'Admin') ? 'destructive' : 'secondary'}>{dict[user.role?.toLowerCase()] || user.role}</Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex flex-wrap gap-1 justify-end">
@@ -148,19 +150,19 @@ export default function UsersPage() {
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon">
-                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px]">
+                                                                <MoreHorizontal className="h-5 w-5" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                                                                <Edit className="mr-2 h-4 w-4" />
-                                                                تعديل
+                                                            <DropdownMenuItem onClick={() => handleEditUser(user)} className="min-h-[44px]">
+                                                                <Edit className="mr-2 h-5 w-5" />
+                                                                {dict.edit || 'تعديل'}
                                                             </DropdownMenuItem>
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
-                                                                    <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
-                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                    <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-3 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive min-h-[44px]">
+                                                                        <Trash2 className="mr-2 h-5 w-5" />
                                                                         حذف
                                                                     </button>
                                                                 </AlertDialogTrigger>
@@ -188,30 +190,30 @@ export default function UsersPage() {
                 </TabsContent>
 
                 <TabsContent value="workers">
-                    <Card>
+                    <Card className="overflow-x-auto w-full">
                         <CardHeader>
-                            <CardTitle>معاينة البيانات ({workers.length} سجل)</CardTitle>
-                            <CardDescription>قائمة العمال في النظام</CardDescription>
+                            <CardTitle>{dict.workers?.title || `معاينة البيانات (${workers.length} سجل)`}</CardTitle>
+                            <CardDescription>{dict.workers?.subtitle || 'قائمة العمال في النظام'}</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
+                        <CardContent className="p-0 sm:p-6">
+                            <div className="w-full overflow-x-auto sm:overflow-x-visible">
+                                <Table className="min-w-full sm:min-w-[700px]">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="text-right min-w-[200px]">الاسم</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">رقم الوظيفة</TableHead>
-                                            <TableHead className="text-right min-w-[120px]">رقم الهوية</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">الجنسية</TableHead>
-                                            <TableHead className="text-right min-w-[120px]">الشركة</TableHead>
-                                            <TableHead className="text-right min-w-[80px]">الدور</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">الإجراءات</TableHead>
+                                            <TableHead className="text-right min-w-[200px]">{dict.name || 'الاسم'}</TableHead>
+                                            <TableHead className="text-right min-w-[100px]">{dict.employeeId || 'رقم الوظيفة'}</TableHead>
+                                            <TableHead className="text-right min-w-[120px]">{dict.idNumber || 'رقم الهوية'}</TableHead>
+                                            <TableHead className="text-right min-w-[100px]">{dict.nationality || 'الجنسية'}</TableHead>
+                                            <TableHead className="text-right min-w-[120px]">{dict.company || 'الشركة'}</TableHead>
+                                            <TableHead className="text-right min-w-[80px]">{dict.role || 'الدور'}</TableHead>
+                                            <TableHead className="text-right min-w-[100px]">{dict.actions || 'الإجراءات'}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {usersLoading ? renderWorkersSkeleton() : workers.map((worker) => (
                                             <TableRow key={worker.id}>
                                                 <TableCell className="font-medium text-right">
-                                                    <div className="max-w-[200px] truncate" title={worker.name}>
+                                                    <div className="max-w-[200px] truncate" title={worker.name} dir={dict.dir}>
                                                         {worker.name}
                                                     </div>
                                                 </TableCell>
@@ -220,7 +222,7 @@ export default function UsersPage() {
                                                 <TableCell className="text-right">{worker.nationality || '-'}</TableCell>
                                                 <TableCell className="text-right">{worker.company || '-'}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Badge variant="outline">Worker</Badge>
+                                                    <Badge variant="outline">{dict.worker || 'Worker'}</Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
@@ -232,23 +234,23 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => handleEditUser(worker)}>
                                                                 <Edit className="mr-2 h-4 w-4" />
-                                                                تعديل
+                                                                {dict.edit || 'تعديل'}
                                                             </DropdownMenuItem>
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
                                                                     <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                                         <Trash2 className="mr-2 h-4 w-4" />
-                                                                        حذف
+                                                                        {dict.delete || 'حذف'}
                                                                     </button>
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
                                                                     <AlertDialogHeader>
-                                                                        <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
-                                                                        <AlertDialogDescription>سيتم حذف العامل "{worker.name}" نهائياً</AlertDialogDescription>
+                                                                        <AlertDialogTitle>{dict.confirmDeleteTitle || 'هل أنت متأكد؟'}</AlertDialogTitle>
+                                                                        <AlertDialogDescription>{dict.confirmDeleteWorker?.replace('{name}', worker.name) || `سيتم حذف العامل "${worker.name}" نهائياً`}</AlertDialogDescription>
                                                                     </AlertDialogHeader>
                                                                     <AlertDialogFooter>
-                                                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                                        <AlertDialogAction onClick={() => handleDeleteUser(worker.id)}>حذف</AlertDialogAction>
+                                                                        <AlertDialogCancel>{dict.cancel || 'إلغاء'}</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteUser(worker.id)}>{dict.delete || 'حذف'}</AlertDialogAction>
                                                                     </AlertDialogFooter>
                                                                 </AlertDialogContent>
                                                             </AlertDialog>

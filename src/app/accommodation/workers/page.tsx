@@ -3,12 +3,19 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAccommodation } from '@/context/accommodation-context';
+import { useLanguage } from '@/context/language-context';
 import { useToast } from '@/hooks/use-toast';
 import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, Plus, Upload, UserPlus, Database } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function WorkersPage() {
   const ctx = useAccommodation();
+  const { dict } = useLanguage();
   const { toast } = useToast();
   const workers = ctx.workers || [];
   const saveWorker = ctx.saveWorker;
@@ -27,7 +34,7 @@ export default function WorkersPage() {
 
   async function submit() {
     if (!saveWorker) {
-      toast({ title: 'Not configured', description: 'Firebase not configured and context helper missing.', variant: 'destructive' });
+      toast({ title: dict.workers.notConfigured, description: 'Firebase not configured and context helper missing.', variant: 'destructive' });
       return;
     }
     try {
@@ -40,16 +47,16 @@ export default function WorkersPage() {
     company: form.company,
     role: form.role as any 
   });
-      toast({ title: 'Saved', description: 'Worker saved.' });
+      toast({ title: dict.workers.saved, description: dict.workers.saved });
       setEditing(null);
     } catch (e) {
       console.error(e);
-      toast({ title: 'Error', description: 'Failed to save worker.', variant: 'destructive' });
+      toast({ title: dict.workers.error, description: 'Failed to save worker.', variant: 'destructive' });
     }
   }
 
   async function remove(id: string) {
-    if (!confirm('Delete worker?')) return;
+    if (!confirm(dict.workers.deleteConfirm)) return;
     if (!deleteWorker) {
       // fallback local removal
       try {
@@ -57,15 +64,15 @@ export default function WorkersPage() {
         const arr = JSON.parse(raw).filter((w: any) => w.id !== id);
         localStorage.setItem('ac_workers', JSON.stringify(arr));
         toast({ title: 'Deleted (local)', description: 'Worker removed locally.' });
-      } catch (e) { console.error(e); toast({ title: 'Error', description: 'Failed to delete locally.', variant: 'destructive' }); }
+      } catch (e) { console.error(e); toast({ title: dict.workers.error, description: 'Failed to delete locally.', variant: 'destructive' }); }
       return;
     }
     try {
       await deleteWorker(id);
-      toast({ title: 'Deleted', description: 'Worker removed.' });
+      toast({ title: dict.workers.deleted, description: dict.workers.deleted });
     } catch (e) {
       console.error(e);
-      toast({ title: 'Error', description: 'Failed to delete worker.', variant: 'destructive' });
+      toast({ title: dict.workers.error, description: 'Failed to delete worker.', variant: 'destructive' });
     }
   }
 
@@ -75,36 +82,45 @@ export default function WorkersPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Workers • العمال</h1>
-          <p className="text-sm text-muted-foreground mt-1">إدارة بيانات العمال</p>
+          <h1 className="text-2xl md:text-3xl font-bold">{dict.workers.title}</h1>
+          <p className="text-muted-foreground mt-1">{dict.workers.subtitle}</p>
         </div>
-        <div className="flex gap-2">
-          <Link 
-            href="/accommodation/workers/import"
-            className="rounded-md bg-green-600 text-white px-4 py-2 hover:bg-green-700 flex items-center gap-2"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            استيراد من Excel
+        <div className="flex flex-wrap gap-2">
+          <Link href="/accommodation/workers/import">
+            <Button variant="outline" className="gap-2 bg-green-600 text-white hover:bg-green-700 hover:text-white border-green-600">
+              <Upload className="h-4 w-4" />
+              {dict.workers.importExcel}
+            </Button>
           </Link>
-          <button onClick={startAdd} className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent">إضافة عامل</button>
-          <button 
-            onClick={() => handleCreateTransfer([])} 
-            className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent flex items-center gap-2"
-          >
+          <Button onClick={startAdd} variant="outline" className="gap-2">
+            <Plus className="h-4 w-4" />
+            {dict.workers.addWorker}
+          </Button>
+          <Button onClick={() => handleCreateTransfer([])} variant="outline" className="gap-2">
             <ArrowRightLeft className="h-4 w-4" />
-            طلب نقل
-          </button>
-          <Link href="/accommodation/assign" className="rounded-md bg-primary text-primary-foreground px-3 py-1 hover:bg-primary/90">التسكين</Link>
-          <button onClick={async ()=>{
-            if (!migrate) { toast({ title: 'Not configured', description: 'Migration requires Firestore configured.', variant: 'destructive' }); return; }
-            const res = await migrate({ removeLocal: false });
-            toast({ title: 'Migration completed', description: `${res.migrated} migrated, ${res.skipped} skipped, ${res.errors} errors.` });
-          }} className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent">Migrate local → Firestore</button>
+            {dict.workers.transferRequest}
+          </Button>
+          <Link href="/accommodation/assign">
+            <Button className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              {dict.workers.assign}
+            </Button>
+          </Link>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={async ()=>{
+              if (!migrate) { toast({ title: dict.workers.notConfigured, description: 'Migration requires Firestore configured.', variant: 'destructive' }); return; }
+              const res = await migrate({ removeLocal: false });
+              toast({ title: 'Migration completed', description: `${res.migrated} migrated, ${res.skipped} skipped, ${res.errors} errors.` });
+            }} 
+            title={dict.workers.migrate}
+          >
+            <Database className="h-4 w-4" />
+          </Button>
         </div>
       </div>
       
@@ -114,98 +130,112 @@ export default function WorkersPage() {
         preSelectedWorkers={selectedWorkersForTransfer}
       />
 
-      <div className="rounded-md border border-border p-4 bg-card">
-        {editing === null ? (
-          <div>
-            <div className="text-sm text-muted-foreground mb-2">Click Add to create a new worker, or Edit on an existing one.</div>
-          </div>
-        ) : null}
+      <Card>
+        <CardContent className="p-4 md:p-6">
+          {editing === null ? (
+            <div className="text-sm text-muted-foreground mb-4 hidden md:block">{dict.workers.clickAdd}</div>
+          ) : null}
 
-        {editing !== null && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">System ID</label>
-              <input value={form.id} onChange={(e)=>setForm({...form, id:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="w12345" disabled />
+          {editing !== null && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
+              <div className="space-y-2">
+                <Label>{dict.workers.systemId}</Label>
+                <Input value={form.id} disabled placeholder="w12345" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.employeeId}</Label>
+                <Input value={form.employeeId} onChange={(e)=>setForm({...form, employeeId:e.target.value})} placeholder="37433" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.name}</Label>
+                <Input value={form.name} onChange={(e)=>setForm({...form, name:e.target.value})} placeholder="Akram Naimu Deen" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.iqamaNo}</Label>
+                <Input value={form.idNumber} onChange={(e)=>setForm({...form, idNumber:e.target.value})} placeholder="2326188378" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.nationality}</Label>
+                <Input value={form.nationaliy} onChange={(e)=>setForm({...form, nationaliy:e.target.value})} placeholder="Indian" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.company}</Label>
+                <Input value={form.company} onChange={(e)=>setForm({...form, company:e.target.value})} placeholder="SACODECO" />
+              </div>
+              <div className="space-y-2">
+                <Label>{dict.workers.role}</Label>
+                <Select value={form.role} onValueChange={(val)=>setForm({...form, role: val})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Worker">Worker</SelectItem>
+                    <SelectItem value="Supervisor">Supervisor</SelectItem>
+                    <SelectItem value="Engineer">Engineer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 items-end md:col-span-2 justify-end mt-2">
+                <Button variant="outline" onClick={()=>setEditing(null)}>{dict.workers.cancel}</Button>
+                <Button onClick={submit}>{dict.workers.save}</Button>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">رقم الموظف (Employee ID)</label>
-              <input value={form.employeeId} onChange={(e)=>setForm({...form, employeeId:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="37433" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">اسم العامل (Name)</label>
-              <input value={form.name} onChange={(e)=>setForm({...form, name:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="Akram Naimu Deen" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">رقم الهوية (Iqama No)</label>
-              <input value={form.idNumber} onChange={(e)=>setForm({...form, idNumber:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="2326188378" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الجنسية (Nationality)</label>
-              <input value={form.nationaliy} onChange={(e)=>setForm({...form, nationaliy:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="Indian" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الشركة (Company)</label>
-              <input value={form.company} onChange={(e)=>setForm({...form, company:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="SACODECO" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الدور (Role)</label>
-              <select value={form.role} onChange={(e)=>setForm({...form, role: e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full">
-                <option>Worker</option>
-                <option>Supervisor</option>
-                <option>Engineer</option>
-              </select>
-            </div>
-            <div className="flex gap-2 items-end">
-              <button onClick={submit} className="rounded-md bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90 flex-1">حفظ (Save)</button>
-              <button onClick={()=>setEditing(null)} className="rounded-md border border-border bg-background px-4 py-2 hover:bg-accent flex-1">إلغاء (Cancel)</button>
-            </div>
-          </div>
-        )}
+          )}
 
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-right p-3 text-sm font-semibold text-foreground">رقم الموظف<br/><span className="text-xs font-normal text-muted-foreground">C_Number</span></th>
-                <th className="text-right p-3 text-sm font-semibold text-foreground">اسم العامل<br/><span className="text-xs font-normal text-muted-foreground">Name</span></th>
-                <th className="text-right p-3 text-sm font-semibold text-foreground">رقم الهوية<br/><span className="text-xs font-normal text-muted-foreground">Iqama No</span></th>
-                <th className="text-right p-3 text-sm font-semibold text-foreground">الجنسية<br/><span className="text-xs font-normal text-muted-foreground">Nationality</span></th>
-                <th className="text-right p-3 text-sm font-semibold text-foreground">الشركة<br/><span className="text-xs font-normal text-muted-foreground">Company</span></th>
-                <th className="text-right p-3 text-sm font-semibold text-foreground">الدور<br/><span className="text-xs font-normal text-muted-foreground">Role</span></th>
-                <th className="text-center p-3 text-sm font-semibold text-foreground">الإجراءات<br/><span className="text-xs font-normal text-muted-foreground">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {workers.length ? workers.map((w: any) => (
-                <tr key={w.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="p-3 text-sm text-foreground">{w.employeeId || '-'}</td>
-                  <td className="p-3 text-sm font-medium text-foreground">{w.name}</td>
-                  <td className="p-3 text-sm text-foreground font-mono">{w.idNumber || '-'}</td>
-                  <td className="p-3 text-sm text-muted-foreground">{w.nationaliy || '-'}</td>
-                  <td className="p-3 text-sm text-foreground">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                      {w.company || '-'}
-                    </span>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">{w.role || 'Worker'}</td>
-                  <td className="p-3 text-sm">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={()=>startEdit(w)} className="text-sm underline text-primary hover:text-primary/80 px-2 py-1">تعديل</button>
-                      <button onClick={()=>remove(w.id)} className="text-sm text-destructive hover:text-destructive/80 px-2 py-1">حذف</button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-start p-3 font-medium">{dict.workers.employeeId}</th>
+                  <th className="text-start p-3 font-medium">{dict.workers.name}</th>
+                  <th className="text-start p-3 font-medium hidden md:table-cell">{dict.workers.iqamaNo}</th>
+                  <th className="text-start p-3 font-medium hidden md:table-cell">{dict.workers.nationality}</th>
+                  <th className="text-start p-3 font-medium hidden lg:table-cell">{dict.workers.company}</th>
+                  <th className="text-start p-3 font-medium hidden lg:table-cell">{dict.workers.role}</th>
+                  <th className="text-center p-3 font-medium">{dict.workers.actions}</th>
                 </tr>
-              )) : (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    لا يوجد عمال • No workers
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {workers.length ? workers.map((w: any) => (
+                  <tr key={w.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="p-3 font-mono">{w.employeeId || '-'}</td>
+                    <td className="p-3 font-medium">
+                      <div>{w.name}</div>
+                      <div className="md:hidden text-xs text-muted-foreground mt-1">
+                        {w.company} • {w.role}
+                      </div>
+                    </td>
+                    <td className="p-3 font-mono hidden md:table-cell">{w.idNumber || '-'}</td>
+                    <td className="p-3 text-muted-foreground hidden md:table-cell">{w.nationaliy || '-'}</td>
+                    <td className="p-3 hidden lg:table-cell">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        {w.company || '-'}
+                      </span>
+                    </td>
+                    <td className="p-3 text-muted-foreground hidden lg:table-cell">{w.role || 'Worker'}</td>
+                    <td className="p-3">
+                      <div className="flex justify-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={()=>startEdit(w)} className="h-8 px-2 text-primary hover:text-primary/80">
+                          {dict.workers.edit}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={()=>remove(w.id)} className="h-8 px-2 text-destructive hover:text-destructive/80">
+                          {dict.workers.delete}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      {dict.workers.noWorkers}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

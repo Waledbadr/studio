@@ -8,11 +8,11 @@ export default function AccommodationResidencesPage() {
   const { dict } = useLanguage();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Residences</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{dict.sidebar.residences}</h1>
         <p className="text-muted-foreground">
-          View and manage all residences and rooms with occupancy information
+          {dict.sidebar.manageResidences}
         </p>
       </div>
       <AccommodationResidencesView />

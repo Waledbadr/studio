@@ -9,7 +9,7 @@ import { useInventory, type InventoryTransaction } from "@/context/inventory-con
 import { useResidences } from "@/context/residences-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/context/language-context";
@@ -87,12 +87,12 @@ function ItemMovementContent() {
 
   const getRelatedResidenceName = (relatedId: string | undefined) => {
     if (!relatedId) return "";
-    return residences.find((r) => r.id === relatedId)?.name || "Unknown";
+    return residences.find((r) => r.id === relatedId)?.name || dict.unknown;
   };
 
   const getTransactionResidenceName = (transactionResidenceId: string) => {
     return (
-      residences.find((r) => r.id === transactionResidenceId)?.name || "Unknown"
+      residences.find((r) => r.id === transactionResidenceId)?.name || dict.unknown
     );
   };
 
@@ -136,7 +136,7 @@ function ItemMovementContent() {
     ));
   };
 
-  const { dict } = useLanguage();
+  const { dict, locale } = useLanguage();
 
   if (!item || (residenceId && !residence)) {
     return (
@@ -154,13 +154,13 @@ function ItemMovementContent() {
   const renderTransactionDetails = (tx: InventoryTransaction) => {
     switch (tx.type) {
       case "IN":
-        return `Received via MRV: ${tx.referenceDocId}`;
+        return `${dict.movementFromMrvPrefix} ${tx.referenceDocId}`;
       case "OUT":
-        return `Issued to: ${tx.locationName || "N/A"}`;
+        return `${dict.issuedToPrefix} ${tx.locationName || "N/A"}`;
       case "TRANSFER_IN":
-        return `Transfer from: ${getRelatedResidenceName(tx.relatedResidenceId)}`;
+        return `${dict.transferFromPrefix} ${getRelatedResidenceName(tx.relatedResidenceId)}`;
       case "TRANSFER_OUT":
-        return `Transfer to: ${getRelatedResidenceName(tx.relatedResidenceId)}`;
+        return `${dict.transferToPrefix} ${getRelatedResidenceName(tx.relatedResidenceId)}`;
       default:
         return tx.referenceDocId;
     }
@@ -169,16 +169,16 @@ function ItemMovementContent() {
   const renderTransactionType = (tx: InventoryTransaction) => {
     switch (tx.type) {
       case "IN":
-        return <Badge variant="secondary">Received</Badge>;
+        return <Badge variant="secondary">{dict.received}</Badge>;
       case "OUT":
-        return <Badge variant="destructive">Issued</Badge>;
+        return <Badge variant="destructive">{dict.issued}</Badge>;
       case "TRANSFER_IN":
         return (
-          <Badge className="bg-blue-500 hover:bg-blue-500/80">Transfer In</Badge>
+          <Badge className="bg-blue-500 hover:bg-blue-500/80">{(dict as any).transferIn}</Badge>
         );
       case "TRANSFER_OUT":
         return (
-          <Badge className="bg-orange-500 hover:bg-orange-500/80">Transfer Out</Badge>
+          <Badge className="bg-orange-500 hover:bg-orange-500/80">{(dict as any).transferOut}</Badge>
         );
       default:
         return <Badge>{(tx as any).type}</Badge>;
@@ -230,6 +230,29 @@ function ItemMovementContent() {
     }
   };
 
+  const exportToCSV = () => {
+    const headers = [dict.date, dict.details, dict.typeLabel, dict.residenceLabel, dict.quantity, dict.balance];
+    const csvContent = [
+      headers.join(','),
+      ...transactionsWithBalance.map(tx => [
+        format(tx.date.toDate(), "yyyy-MM-dd HH:mm"),
+        `"${renderTransactionDetails(tx)}"`,
+        tx.type,
+        `"${getTransactionResidenceName(tx.residenceId)}"`,
+        tx.type === "IN" || tx.type === "TRANSFER_IN" ? tx.quantity : -tx.quantity,
+        tx.balance
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `item-movement-${item?.nameEn || 'report'}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -249,23 +272,28 @@ function ItemMovementContent() {
             )}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">
-            {residenceId ? dict.currentStockLabel : dict.totalSystemStockLabel}
-          </p>
-          <div className="text-3xl font-bold">
-            {inventoryLoading || transactionsLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              currentStock
-            )}
+        <div className="text-right flex flex-col items-end gap-2">
+          <Button variant="outline" size="sm" onClick={exportToCSV}>
+            <Download className="mr-2 h-4 w-4" /> {dict.exportCsvButton || 'Export CSV'}
+          </Button>
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {residenceId ? dict.currentStockLabel : dict.totalSystemStockLabel}
+            </p>
+            <div className="text-3xl font-bold">
+              {inventoryLoading || transactionsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                currentStock
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <Card>
-        <CardContent className="pt-6">
-          <Table>
+        <CardContent className="pt-6 w-full overflow-x-auto sm:overflow-x-visible">
+          <Table className="min-w-full sm:min-w-[700px]" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
             <TableHeader>
               <TableRow>
                 <TableHead>{dict.date}</TableHead>
@@ -440,6 +468,15 @@ function ItemMovementContent() {
           )}
         </DialogContent>
       </Dialog>
+
+      <style jsx global>{`
+        @media print {
+          header, nav, aside, footer { display: none !important; }
+          .print\\:hidden { display: none !important; }
+          body { background: white !important; }
+          .shadow-lg, .shadow, .border { box-shadow: none !important; border: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

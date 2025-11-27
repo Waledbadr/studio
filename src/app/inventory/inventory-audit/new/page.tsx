@@ -189,9 +189,9 @@ export default function NewInventoryAuditPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto p-6">
+    <div className="space-y-6 max-w-4xl mx-auto p-2 sm:p-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
         <Link href="/inventory/inventory-audit">
           <Button variant="outline" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -199,8 +199,8 @@ export default function NewInventoryAuditPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Start Stock Reconciliation</h1>
-          <p className="text-gray-600">Compare physical inventory with system records and balance discrepancies</p>
+          <h1 className="text-2xl font-bold text-gray-900">{dict.startReconciliationTitle || 'Start Stock Reconciliation'}</h1>
+          <p className="text-gray-600">{dict.startReconciliationDesc || 'Compare physical inventory with system records and balance discrepancies'}</p>
         </div>
       </div>
 
@@ -256,30 +256,30 @@ export default function NewInventoryAuditPage() {
           {currentStep === 1 && (
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="name">Reconciliation Name <span className="text-red-500">*</span></Label>
+                <Label htmlFor="name">{dict.reconciliationNameLabel || 'Reconciliation Name'} <span className="text-red-500">*</span></Label>
                 <Input
                   id="name"
                   value={auditSettings.name}
                   onChange={(e) => setAuditSettings(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Example: February 2025 Stock Reconciliation"
+                  placeholder={dict.reconciliationNamePlaceholder || 'Example: February 2025 Stock Reconciliation'}
                   className={errors.name ? 'border-red-500' : ''}
                 />
                 {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Reconciliation Description</Label>
+                <Label htmlFor="description">{dict.reconciliationDescLabel || 'Reconciliation Description'}</Label>
                 <Textarea
                   id="description"
                   value={auditSettings.description}
                   onChange={(e) => setAuditSettings(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Brief description of the reconciliation process and objectives"
+                  placeholder={dict.reconciliationDescPlaceholder || 'Brief description of the reconciliation process and objectives'}
                   rows={3}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="residence">Building <span className="text-red-500">*</span></Label>
+                <Label htmlFor="residence">{dict.buildingLabel || 'Building'} <span className="text-red-500">*</span></Label>
                 <select
                   id="residence"
                   className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
@@ -291,7 +291,7 @@ export default function NewInventoryAuditPage() {
                     scope: { ...prev.scope, residenceId: e.target.value, locations: [] }
                   }))}
                 >
-                  <option value="">Select Building</option>
+                  <option value="">{dict.selectBuildingOption || 'Select Building'}</option>
                   {residences.map(residence => (
                     <option key={residence.id} value={residence.id}>
                       {residence.name}
@@ -301,9 +301,9 @@ export default function NewInventoryAuditPage() {
                 {errors.residence && <p className="text-red-500 text-sm">{errors.residence}</p>}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="scheduledDate">Scheduled Start Date</Label>
+                  <Label htmlFor="scheduledDate">{dict.scheduledDateLabel || 'Scheduled Start Date'}</Label>
                   <Input
                     id="scheduledDate"
                     type="date"
@@ -316,7 +316,7 @@ export default function NewInventoryAuditPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Estimated Duration (days)</Label>
+                  <Label htmlFor="duration">{dict.estimatedDurationLabel || 'Estimated Duration (days)'}</Label>
                   <Input
                     id="duration"
                     type="number"

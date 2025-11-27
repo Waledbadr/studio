@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button';
 import { TrendingUp, AlertTriangle, AlertCircle, Users, Building2, FileText, Download } from 'lucide-react';
 import Link from 'next/link';
 
+import { useLanguage } from '@/context/language-context';
+
 export default function ReportsPage() {
+  const { dict } = useLanguage();
   const { 
     residences, 
     workers, 
@@ -166,7 +169,7 @@ export default function ReportsPage() {
   const transferHistory = useMemo(() => {
     return transferRequests
       .map(tr => {
-  const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from?.residenceId) : null;
+        const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from?.residenceId) : null;
         const toResidence = residences.find(r => r.id === tr.to.residenceId);
         return {
           transfer: tr,
@@ -180,19 +183,19 @@ export default function ReportsPage() {
 
   const handleExport = (reportType: string) => {
     // TODO: Implement CSV/PDF export
-    alert(`Export ${reportType} - Feature coming soon!`);
+    alert(`${dict.reportsPage.exportFeature} ${reportType} - ${dict.reportsPage.comingSoon}`);
   };
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="text-muted-foreground mt-2">Comprehensive accommodation analytics and insights</p>
+          <h1 className="text-3xl font-bold">{dict.reportsPage.title}</h1>
+          <p className="text-muted-foreground mt-2">{dict.reportsPage.subtitle}</p>
         </div>
         <Button variant="outline">
           <Download className="h-4 w-4 mr-2" />
-          Export All Reports
+          {dict.reportsPage.exportAll}
         </Button>
       </div>
 
@@ -203,7 +206,7 @@ export default function ReportsPage() {
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-indigo-600" />
-                Vacancy Report
+                {dict.reportsPage.vacancyReport}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -213,7 +216,7 @@ export default function ReportsPage() {
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Users className="h-4 w-4 text-purple-600" />
-                Nationality Dist.
+                {dict.reportsPage.nationalityDist}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -223,7 +226,7 @@ export default function ReportsPage() {
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
-                Overcrowding
+                {dict.reportsPage.overcrowding}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -233,7 +236,7 @@ export default function ReportsPage() {
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Users className="h-4 w-4 text-cyan-600" />
-                Workers by Company
+                {dict.reportsPage.workersByCompany}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -243,7 +246,7 @@ export default function ReportsPage() {
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-slate-600" />
-                Unassigned Workers
+                {dict.reportsPage.unassignedWorkers}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -252,12 +255,12 @@ export default function ReportsPage() {
 
       <Tabs defaultValue="occupancy" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="occupancy">Occupancy</TabsTrigger>
-          <TabsTrigger value="capacity">Capacity Warnings</TabsTrigger>
-          <TabsTrigger value="violations">Nationality Violations</TabsTrigger>
-          <TabsTrigger value="contracts">Contract Summary</TabsTrigger>
-          <TabsTrigger value="invoices">Unpaid Invoices</TabsTrigger>
-          <TabsTrigger value="transfers">Transfer History</TabsTrigger>
+          <TabsTrigger value="occupancy">{dict.reportsPage.occupancy}</TabsTrigger>
+          <TabsTrigger value="capacity">{dict.reportsPage.capacityWarnings}</TabsTrigger>
+          <TabsTrigger value="violations">{dict.reportsPage.nationalityViolations}</TabsTrigger>
+          <TabsTrigger value="contracts">{dict.reportsPage.contractSummary}</TabsTrigger>
+          <TabsTrigger value="invoices">{dict.reportsPage.unpaidInvoices}</TabsTrigger>
+          <TabsTrigger value="transfers">{dict.reportsPage.transferHistory}</TabsTrigger>
         </TabsList>
 
         {/* Occupancy Report */}
@@ -266,20 +269,20 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Occupancy by Residence
+                {dict.reportsPage.occupancyByResidence}
               </CardTitle>
-              <CardDescription>Current occupancy status and nationality distribution</CardDescription>
+              <CardDescription>{dict.reportsPage.occupancyDescription}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Residence</TableHead>
-                    <TableHead className="text-center">Rooms</TableHead>
-                    <TableHead className="text-center">Capacity</TableHead>
-                    <TableHead className="text-center">Occupied</TableHead>
-                    <TableHead className="text-center">Rate</TableHead>
-                    <TableHead>Nationality Breakdown</TableHead>
+                    <TableHead>{dict.reportsPage.residence}</TableHead>
+                    <TableHead className="text-center">{dict.reportsPage.rooms}</TableHead>
+                    <TableHead className="text-center">{dict.reportsPage.capacity}</TableHead>
+                    <TableHead className="text-center">{dict.reportsPage.occupied}</TableHead>
+                    <TableHead className="text-center">{dict.reportsPage.rate}</TableHead>
+                    <TableHead>{dict.reportsPage.nationalityBreakdown}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -317,15 +320,15 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-orange-500" />
-                High Occupancy Warnings
+                {dict.reportsPage.highCapacity}
               </CardTitle>
-              <CardDescription>Residences with occupancy ≥ 90%</CardDescription>
+              <CardDescription>{dict.reportsPage.highCapacityDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               {capacityWarnings.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No capacity warnings. All residences are within safe occupancy levels.</p>
+                  <p>{dict.reportsPage.noCapacityWarnings}. {dict.reportsPage.noCapacityWarningsDesc}.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -335,11 +338,11 @@ export default function ReportsPage() {
                       <AlertTitle>{item.residenceName}</AlertTitle>
                       <AlertDescription>
                         <div className="flex items-center justify-between mt-2">
-                          <span>{item.occupied} / {item.capacity} occupied</span>
+                          <span>{item.occupied} / {item.capacity} {dict.reportsPage.occupied}</span>
                           <Badge variant="destructive">{item.rate}%</Badge>
                         </div>
                         <div className="text-xs mt-2">
-                          Recommendation: Consider restricting new assignments or expanding capacity
+                          {dict.reportsPage.recommendationCapacity}
                         </div>
                       </AlertDescription>
                     </Alert>
@@ -356,28 +359,28 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-500" />
-                Nationality Policy Violations
+                {dict.reportsPage.mixedNationalities}
               </CardTitle>
-              <CardDescription>Rooms with mixed nationalities (violates same-nationality rule)</CardDescription>
+              <CardDescription>{dict.reportsPage.mixedNationalitiesDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               {nationalityViolations.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No violations found. All rooms comply with the same-nationality policy.</p>
+                  <p>{dict.reportsPage.noViolations}. {dict.reportsPage.noViolationsDesc}.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {nationalityViolations.map((item, idx) => (
                     <Alert key={idx} variant="destructive" className="border-red-200 bg-red-50">
                       <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>{item.residenceName} - Room {item.roomId}</AlertTitle>
+                      <AlertTitle>{item.residenceName} - {dict.reportsPage.room} {item.roomId}</AlertTitle>
                       <AlertDescription>
                         <div className="mt-2">
-                          Mixed nationalities detected: {item.nationalities.join(', ')}
+                          {dict.reportsPage.mixedNationalities}: {item.nationalities.join(', ')}
                         </div>
                         <div className="text-xs mt-2">
-                          Action Required: Transfer workers to separate rooms by nationality
+                          {dict.reportsPage.actionRequired}: {dict.reportsPage.actionRequiredDesc}
                         </div>
                       </AlertDescription>
                     </Alert>
@@ -394,21 +397,21 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Contract Performance Summary
+                {dict.reportsPage.contractPerformance}
               </CardTitle>
-              <CardDescription>Revenue and occupancy metrics by contract</CardDescription>
+              <CardDescription>{dict.reportsPage.contractPerformanceDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead className="text-center">Workers</TableHead>
-                    <TableHead className="text-center">Invoices</TableHead>
-                    <TableHead className="text-right">Total Revenue</TableHead>
-                    <TableHead className="text-right">Paid</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{dict.reportsPage.company}</TableHead>
+                    <TableHead>{dict.reportsPage.residence}</TableHead>
+                    <TableHead className="text-center">{dict.reportsPage.workers}</TableHead>
+                    <TableHead className="text-center">{dict.invoices.title}</TableHead>
+                    <TableHead className="text-right">{dict.invoices.totalAmount}</TableHead>
+                    <TableHead className="text-right">{dict.invoices.statusPaid}</TableHead>
+                    <TableHead>{dict.reportsPage.status}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -426,7 +429,7 @@ export default function ReportsPage() {
                         {item.totalInvoices}
                         {item.pendingInvoices > 0 && (
                           <Badge variant="outline" className="ml-2 text-xs">
-                            {item.pendingInvoices} pending
+                            {item.pendingInvoices} {dict.reportsPage.pending}
                           </Badge>
                         )}
                       </TableCell>
@@ -455,26 +458,26 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-orange-500" />
-                Unpaid Invoices
+                {dict.reportsPage.outstandingInvoices}
               </CardTitle>
-              <CardDescription>Pending and overdue payments</CardDescription>
+              <CardDescription>{dict.reportsPage.outstandingInvoicesDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               {unpaidInvoices.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>All invoices are paid. Great job!</p>
+                  <p>{dict.reportsPage.allInvoicesPaid}</p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice ID</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Residence</TableHead>
-                      <TableHead>Month</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{dict.reportsPage.invoiceId}</TableHead>
+                      <TableHead>{dict.reportsPage.company}</TableHead>
+                      <TableHead>{dict.reportsPage.residence}</TableHead>
+                      <TableHead>{dict.invoices.billingPeriod}</TableHead>
+                      <TableHead className="text-right">{dict.reportsPage.amount}</TableHead>
+                      <TableHead>{dict.reportsPage.status}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -499,7 +502,7 @@ export default function ReportsPage() {
               )}
               {unpaidInvoices.length > 0 && (
                 <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <div className="font-semibold">Total Outstanding</div>
+                  <div className="font-semibold">{dict.reportsPage.totalOutstanding}</div>
                   <div className="text-2xl font-bold text-destructive">
                     {unpaidInvoices.reduce((sum, item) => sum + item.invoice.totalAmount, 0).toFixed(2)} SAR
                   </div>
@@ -515,26 +518,26 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                Worker Transfer History
+                {dict.reportsPage.recentTransfers}
               </CardTitle>
-              <CardDescription>All transfer requests and their status</CardDescription>
+              <CardDescription>{dict.reportsPage.recentTransfersDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               {transferHistory.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No transfer history available</p>
+                  <p>{dict.reportsPage.noTransferHistory}</p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Transfer ID</TableHead>
-                      <TableHead>From</TableHead>
-                      <TableHead>To</TableHead>
-                      <TableHead className="text-center">Workers</TableHead>
-                      <TableHead>Requested</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{dict.reportsPage.transferId}</TableHead>
+                      <TableHead>{dict.reportsPage.from}</TableHead>
+                      <TableHead>{dict.reportsPage.to}</TableHead>
+                      <TableHead className="text-center">{dict.reportsPage.workers}</TableHead>
+                      <TableHead>{dict.reportsPage.requested}</TableHead>
+                      <TableHead>{dict.reportsPage.status}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -569,3 +572,6 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+
+

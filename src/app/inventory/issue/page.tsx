@@ -129,17 +129,17 @@ export default function IssueMaterialPage() {
     // Handle submit voucher (needed before keyboard shortcuts)
     const handleSubmitVoucher = useCallback(async () => {
         if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
-            toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can submit issue vouchers.', variant: 'destructive' });
+            toast({ title: dict.insufficientPermissions, description: dict.issuePermissionsError, variant: 'destructive' });
             return;
         }
         if (!selectedComplexId || !isVoucherSubmittable) {
-            toast({ title: "Cannot Submit", description: "Voucher is empty or residence is not selected.", variant: "destructive" });
+            toast({ title: dict.cannotSubmit, description: dict.voucherEmptyError, variant: "destructive" });
             return;
         }
         setIsSubmitting(true);
         try {
             await issueItemsFromStock(selectedComplexId, voucherLocations);
-            toast({ title: "Success", description: "Material Issue Voucher has been processed and stock updated." });
+            toast({ title: dict.success, description: dict.issueSuccess });
             setVoucherLocations([]);
             setSelectedBuildingId('');
             setSelectedFloorId('');
@@ -150,7 +150,7 @@ export default function IssueMaterialPage() {
         } catch (error) {
             console.error("Failed to submit voucher:", error);
             const errorMessage = error instanceof Error ? error.message : "An unknown error has occurred";
-            toast({ title: "Submission Error", description: `An error occurred: ${errorMessage}`, variant: "destructive" });
+            toast({ title: dict.submissionError, description: `An error occurred: ${errorMessage}`, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -186,8 +186,8 @@ export default function IssueMaterialPage() {
                 e.preventDefault();
                 setQuickAddMode(prev => !prev);
                 toast({ 
-                    title: quickAddMode ? 'Quick Add Disabled' : 'Quick Add Enabled',
-                    description: quickAddMode ? 'Click items to add normally' : 'Click items to instantly add quantity 1',
+                    title: quickAddMode ? dict.quickAddDisabled : dict.quickAddEnabled,
+                    description: quickAddMode ? dict.quickAddDisabledDesc : dict.quickAddEnabledDesc,
                     duration: 2000
                 });
             }
@@ -265,20 +265,20 @@ export default function IssueMaterialPage() {
         }
         startTransition(async () => {
             if (!isLocationSelected || !selectedComplex) {
-                toast({ title: "No Location Selected", description: "Please select a location or facility first.", variant: "destructive"});
+                toast({ title: dict.noLocationSelected, description: dict.selectLocationFirst, variant: "destructive"});
                 return;
             }
 
             const stock = getStockForResidence(itemToAdd, selectedComplexId);
             if (stock < 1) {
-                toast({ title: "Out of stock", description: "This item is currently out of stock.", variant: "destructive" });
+                toast({ title: dict.outOfStock, description: dict.outOfStockDesc, variant: "destructive" });
                 return;
             }
 
             // Client-side guard: prevent aggregated over-issuing across multiple locations
             const currentAgg = getAggregateIssuedQty(itemToAdd.id);
             if (currentAgg >= stock) {
-                toast({ title: "Stock limit reached", description: `You already allocated ${currentAgg} of ${stock} available.`, variant: "destructive" });
+                toast({ title: dict.stockLimitReached, description: dict.stockLimitReachedDesc.replace('{currentAgg}', String(currentAgg)).replace('{stock}', String(stock)), variant: "destructive" });
                 return;
             }
 
@@ -575,7 +575,7 @@ export default function IssueMaterialPage() {
         <TooltipProvider>
         <div className="space-y-4">
             {/* Header with Enhanced Actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         {dict.mivTitle}
@@ -585,12 +585,12 @@ export default function IssueMaterialPage() {
                                     <Keyboard className="h-4 w-4" />
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Keyboard Shortcuts (Ctrl+/)</TooltipContent>
+                            <TooltipContent>{dict.keyboardShortcuts} (Ctrl+/)</TooltipContent>
                         </Tooltip>
                     </h1>
                     <p className="text-muted-foreground">{dict.mivDescription}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button 
@@ -599,17 +599,17 @@ export default function IssueMaterialPage() {
                                 onClick={() => {
                                     setQuickAddMode(!quickAddMode);
                                     toast({ 
-                                        title: !quickAddMode ? 'Quick Add Enabled' : 'Quick Add Disabled',
-                                        description: !quickAddMode ? 'Click items to instantly add qty 1' : 'Normal mode restored',
+                                        title: !quickAddMode ? dict.quickAddEnabled : dict.quickAddDisabled,
+                                        description: !quickAddMode ? dict.quickAddEnabledDesc : dict.quickAddDisabledDesc,
                                         duration: 2000
                                     });
                                 }}
                             >
                                 <Zap className={`h-4 w-4 mr-2 ${quickAddMode ? 'animate-pulse' : ''}`} />
-                                Quick Add
+                                {dict.quickAdd}
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Quick Add Mode (Ctrl+Q)</TooltipContent>
+                        <TooltipContent>{dict.quickAdd} (Ctrl+Q)</TooltipContent>
                     </Tooltip>
                     <Button variant="outline" size="sm" onClick={() => router.push('/inventory/issue-history')}>
                         <History className="mr-2 h-4 w-4"/> {dict.viewHistoryLabel}
@@ -627,30 +627,30 @@ export default function IssueMaterialPage() {
             </div>
 
             {/* Enhanced Header Section */}
-            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border-2 border-primary/20">
-                <div className="flex items-center gap-2 flex-1">
-                    <Label className="whitespace-nowrap font-semibold text-sm">Issue From:</Label>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border-2 border-primary/20">
+                <div className="flex items-center gap-2 flex-1 w-full">
+                    <Label className="whitespace-nowrap font-semibold text-sm">{dict.issueFrom}</Label>
                     <Select value={selectedComplexId} onValueChange={setSelectedComplexId} disabled={isSubmitting}>
-                        <SelectTrigger className="w-[220px] font-medium">
-                            <SelectValue placeholder="Select residence..." />
+                        <SelectTrigger className="w-full md:w-[220px] font-medium">
+                            <SelectValue placeholder={dict.selectResidencePlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
                             {filteredResidences.map(res => <SelectItem key={res.id} value={res.id}>{res.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex items-center gap-2 flex-1">
-                    <Label className="whitespace-nowrap font-semibold text-sm">Load MR plan:</Label>
+                <div className="flex items-center gap-2 flex-1 w-full">
+                    <Label className="whitespace-nowrap font-semibold text-sm">{dict.loadMrPlan}</Label>
                     <Select value={selectedMrId} onValueChange={handleSelectMr} disabled={!selectedComplexId || mrWithPlanForResidence.length === 0}>
-                        <SelectTrigger className="w-[240px]">
-                            <SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? 'Select MR…' : 'No MRs with plan') : 'Select residence first'} />
+                        <SelectTrigger className="w-full md:w-[240px]">
+                            <SelectValue placeholder={selectedComplexId ? (mrWithPlanForResidence.length ? dict.selectMrPlaceholder : dict.noMrsWithPlan) : dict.selectResidenceFirst} />
                         </SelectTrigger>
                         <SelectContent>
                             {mrWithPlanForResidence.map(o => (
                                 <SelectItem key={o.id} value={o.id}>
                                     <div className="flex items-center gap-2">
                                         <FileText className="h-3 w-3" />
-                                        {o.id} · {o.items.length} items
+                                        {o.id} · {o.items.length} {dict.items}
                                     </div>
                                 </SelectItem>
                             ))}
@@ -661,21 +661,21 @@ export default function IssueMaterialPage() {
 
             {/* Statistics Bar */}
             {voucherLocations.length > 0 && (
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <Card className="p-4">
-                        <div className="text-xs text-muted-foreground">Total Locations</div>
+                        <div className="text-xs text-muted-foreground">{dict.totalLocations}</div>
                         <div className="text-2xl font-bold">{voucherLocations.length}</div>
                     </Card>
                     <Card className="p-4">
-                        <div className="text-xs text-muted-foreground">Total Items</div>
+                        <div className="text-xs text-muted-foreground">{dict.totalItems}</div>
                         <div className="text-2xl font-bold">{voucherLocations.reduce((sum, loc) => sum + loc.items.length, 0)}</div>
                     </Card>
                     <Card className="p-4">
-                        <div className="text-xs text-muted-foreground">Total Units</div>
+                        <div className="text-xs text-muted-foreground">{dict.totalUnits}</div>
                         <div className="text-2xl font-bold">{voucherLocations.reduce((sum, loc) => sum + loc.items.reduce((s, i) => s + i.issueQuantity, 0), 0)}</div>
                     </Card>
                     <Card className="p-4">
-                        <div className="text-xs text-muted-foreground">Quick Actions</div>
+                        <div className="text-xs text-muted-foreground">{dict.quickActionsTitle}</div>
                         <div className="flex gap-1 mt-1">
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -683,7 +683,7 @@ export default function IssueMaterialPage() {
                                         <Trash2 className="h-3 w-3" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Clear All</TooltipContent>
+                                <TooltipContent>{dict.clearAll}</TooltipContent>
                             </Tooltip>
                         </div>
                     </Card>
@@ -694,15 +694,15 @@ export default function IssueMaterialPage() {
                 <Card className="h-full flex flex-col">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-lg">
-                            <MapPin className="h-5 w-5 text-primary"/> Select Location & Items
+                            <MapPin className="h-5 w-5 text-primary"/> {dict.selectLocationAndItems}
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 flex-1 overflow-hidden flex flex-col p-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-shrink-0">
                             <div className="space-y-3">
                                 <h3 className="font-semibold text-sm flex items-center gap-2">
-                                    Location Type
-                                    {isLocationSelected && <Badge variant="secondary" className="text-xs">Selected</Badge>}
+                                    {dict.locationType}
+                                    {isLocationSelected && <Badge variant="secondary" className="text-xs">{dict.selected}</Badge>}
                                 </h3>
                                 <div className="flex gap-2">
                                     <Button 
@@ -712,7 +712,7 @@ export default function IssueMaterialPage() {
                                         disabled={!selectedComplexId}
                                         className="flex items-center gap-2 flex-1"
                                     >
-                                        <Building className="h-4 w-4" /> Unit
+                                        <Building className="h-4 w-4" /> {dict.unitLabel}
                                     </Button>
                                     <Button 
                                         variant={locationType === 'facility' ? 'default' : 'outline'} 
@@ -721,14 +721,14 @@ export default function IssueMaterialPage() {
                                         disabled={!selectedComplexId}
                                         className="flex items-center gap-2 flex-1"
                                     >
-                                        <ConciergeBell className="h-4 w-4" /> Facility
+                                        <ConciergeBell className="h-4 w-4" /> {dict.facilityLabel}
                                     </Button>
                                 </div>
                                 
                                 <div className="space-y-3 pt-1">
                                     {/* Buildings */}
                                     <div className="space-y-2">
-                                        <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Building</h4>
+                                        <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">{dict.buildingLabel}</h4>
                                         <div className="grid grid-cols-2 gap-2">
                                             {selectedComplex?.buildings.map(b => (
                                                 <Button
@@ -754,7 +754,7 @@ export default function IssueMaterialPage() {
                                     {/* Floors */}
                                     {selectedBuildingId && (
                                         <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Floor</h4>
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">{dict.floorLabel}</h4>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {selectedBuilding?.floors.map(f => (
                                                     <Button
@@ -778,7 +778,7 @@ export default function IssueMaterialPage() {
                                     {/* Rooms or Facilities */}
                                     {selectedFloorId && locationType === 'unit' && (
                                         <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Room</h4>
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">{dict.roomLabel}</h4>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {selectedFloor?.rooms.map(r => (
                                                     <Button
@@ -797,7 +797,7 @@ export default function IssueMaterialPage() {
                                     
                                     {locationType === 'facility' && selectedComplexId && (
                                         <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Facility</h4>
+                                            <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wide">{dict.facilityLabel}</h4>
                                             {/* Responsive multi-column grid to fit more facilities */}
                                             <div className="grid gap-2 grid-cols-1">
                                                 {availableFacilities.map(f => (
@@ -816,8 +816,8 @@ export default function IssueMaterialPage() {
                                             {/* Component selection (optional) */}
                                             {selectedFacilityId && availableComponents.length > 0 && (
                                                 <div className="mt-2 p-3 border rounded-md bg-muted/20">
-                                                    <Label className="text-xs font-medium mb-2 block">Select Component (Optional)</Label>
-                                                    <div className="text-xs text-muted-foreground mb-2">If no component is selected, issuing will target the facility itself.</div>
+                                                    <Label className="text-xs font-medium mb-2 block">{dict.selectComponentOptional}</Label>
+                                                    <div className="text-xs text-muted-foreground mb-2">{dict.componentHelpText}</div>
                                                     {/* Responsive grid for components as well */}
                                                     <div className="grid gap-2 max-h-56 overflow-y-auto grid-cols-1">
                                                         {availableComponents.map((c: FacilityComponent) => (
@@ -840,9 +840,9 @@ export default function IssueMaterialPage() {
                             </div>
                             <div className="space-y-3 flex-1 flex flex-col">
                                 <h3 className="font-semibold text-sm flex items-center justify-between">
-                                    <span>Available Inventory</span>
+                                    <span>{dict.inventory}</span>
                                     {availableInventory.length > 0 && (
-                                        <Badge variant="secondary" className="text-xs">{availableInventory.length} items</Badge>
+                                        <Badge variant="secondary" className="text-xs">{availableInventory.length} {dict.items}</Badge>
                                     )}
                                 </h3>
                                 <div className="relative flex-shrink-0">
@@ -850,7 +850,7 @@ export default function IssueMaterialPage() {
                                     <Input
                                         ref={searchInputRef}
                                         type="search"
-                                        placeholder="Search items... (Ctrl+K)"
+                                        placeholder={`${dict.searchItemsPlaceholder} (Ctrl+K)`}
                                         className="pl-8 w-full h-9"
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
@@ -911,14 +911,14 @@ export default function IssueMaterialPage() {
                                             }) : (
                                                 <div className="text-center text-muted-foreground p-8 text-sm">
                                                     <Archive className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                    No inventory found.
+                                                    {dict.noInventoryFound}
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-8">
                                             <Building className="h-12 w-12 mb-3 opacity-30" />
-                                            <p>Select a residence to see items</p>
+                                            <p>{dict.selectResidenceToSeeItems}</p>
                                         </div>
                                     )}
                                 </ScrollArea>
@@ -930,9 +930,9 @@ export default function IssueMaterialPage() {
                 <Card className="h-full flex flex-col">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-lg">
-                            <PackagePlus className="h-5 w-5 text-primary"/> Voucher Items
+                            <PackagePlus className="h-5 w-5 text-primary"/> {dict.voucherItems}
                         </CardTitle>
-                        <CardDescription>Review all items and locations before submitting (Ctrl+Enter)</CardDescription>
+                        <CardDescription>{dict.reviewVoucherDesc}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1 overflow-hidden flex flex-col p-4">
                         <ScrollArea className="flex-1 min-h-0">
@@ -1015,8 +1015,8 @@ export default function IssueMaterialPage() {
                         ) : (
                             <div className="text-center text-muted-foreground h-full flex flex-col items-center justify-center">
                                 <PackagePlus className="h-16 w-16 mb-4 opacity-20" />
-                                <p className="text-sm font-medium">No items added to the voucher yet</p>
-                                <p className="text-xs mt-1">Select a location and add items to get started</p>
+                                <p className="text-sm font-medium">{dict.voucherEmpty}</p>
+                                <p className="text-xs mt-1">{dict.voucherEmptyDesc}</p>
                             </div>
                         )}
                         </ScrollArea>
@@ -1030,37 +1030,37 @@ export default function IssueMaterialPage() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Keyboard className="h-5 w-5" />
-                            Keyboard Shortcuts
+                            {dict.keyboardShortcuts}
                         </DialogTitle>
-                        <DialogDescription>Speed up your workflow with these shortcuts</DialogDescription>
+                        <DialogDescription>{dict.shortcutsDesc}</DialogDescription>
                     </DialogHeader>
                     <div className="grid grid-cols-2 gap-4 py-4">
                         <div className="space-y-3">
-                            <h4 className="font-semibold text-sm">Navigation</h4>
+                            <h4 className="font-semibold text-sm">{dict.navigation}</h4>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between text-sm">
-                                    <span>Focus Search</span>
+                                    <span>{dict.focusSearch}</span>
                                     <Badge variant="secondary" className="font-mono">Ctrl+K</Badge>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span>Clear Search</span>
+                                    <span>{dict.clearSearch}</span>
                                     <Badge variant="secondary" className="font-mono">Esc</Badge>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span>Show Shortcuts</span>
+                                    <span>{dict.showShortcuts}</span>
                                     <Badge variant="secondary" className="font-mono">Ctrl+/</Badge>
                                 </div>
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <h4 className="font-semibold text-sm">Actions</h4>
+                            <h4 className="font-semibold text-sm">{dict.actions}</h4>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between text-sm">
-                                    <span>Submit Voucher</span>
+                                    <span>{dict.submitVoucher}</span>
                                     <Badge variant="secondary" className="font-mono">Ctrl+Enter</Badge>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span>Toggle Quick Add</span>
+                                    <span>{dict.toggleQuickAdd}</span>
                                     <Badge variant="secondary" className="font-mono">Ctrl+Q</Badge>
                                 </div>
                             </div>
@@ -1068,7 +1068,7 @@ export default function IssueMaterialPage() {
                     </div>
                     <div className="bg-muted/50 p-4 rounded-lg">
                         <p className="text-xs text-muted-foreground">
-                            <strong>Quick Add Mode:</strong> When enabled, clicking on an item instantly adds it with quantity 1 to the selected location.
+                            <strong>{dict.quickAddModeLabel}</strong> {dict.quickAddModeHelp}
                         </p>
                     </div>
                 </DialogContent>

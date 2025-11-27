@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAccommodation, type Contract } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
+import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, TrendingUp, Calendar, Search } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 export default function ContractsPage() {
@@ -21,6 +22,7 @@ export default function ContractsPage() {
   
   const { contracts, companies, residences, occupants, workers, saveContract, deleteContract, getInvoicesByContract } = useAccommodation();
   const { currentUser } = useUsers();
+  const { dict } = useLanguage();
   
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
@@ -107,14 +109,10 @@ export default function ContractsPage() {
         await saveContract({
           ...editingContract,
           ...formData,
-          startDate: new Date(formData.startDate).toISOString(),
-          endDate: new Date(formData.endDate).toISOString(),
         });
       } else {
         await saveContract({
           ...formData,
-          startDate: new Date(formData.startDate).toISOString(),
-          endDate: new Date(formData.endDate).toISOString(),
           createdAt: new Date().toISOString(),
         });
       }
@@ -126,13 +124,276 @@ export default function ContractsPage() {
   };
 
   const handleDelete = async (contractId: string) => {
-    if (!confirm('Are you sure you want to delete this contract?')) return;
+    if (!confirm(dict.contracts.deleteConfirm)) {
+      return;
+    }
     try {
       await deleteContract(contractId);
     } catch (error) {
       console.error('Failed to delete contract:', error);
     }
   };
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">{dict.contracts.title}</h1>
+          <p className="text-muted-foreground mt-1">{dict.contracts.subtitle}</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {dict.contracts.addContract}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>{editingContract ? dict.contracts.editContract : dict.contracts.addContract}</DialogTitle>
+              <DialogDescription>
+                {dict.contracts.subtitle}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company">{dict.contracts.company}</Label>
+                  <Select 
+                    value={formData.companyId} 
+                    onValueChange={(val) => setFormData({ ...formData, companyId: val })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={dict.contracts.company} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="residence">{dict.contracts.residence}</Label>
+                  <Select 
+                    value={formData.residenceId} 
+                    onValueChange={(val) => setFormData({ ...formData, residenceId: val })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={dict.contracts.residence} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredResidences.map(r => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">{dict.contracts.startDate}</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endDate">{dict.contracts.endDate}</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="rate">{dict.contracts.rate}</Label>
+                  <Input
+                    id="rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.ratePerPersonPerMonth}
+                    onChange={(e) => setFormData({ ...formData, ratePerPersonPerMonth: parseFloat(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expectedWorkers">{dict.contracts.expectedWorkers}</Label>
+                  <Input
+                    id="expectedWorkers"
+                    type="number"
+                    min="0"
+                    value={formData.expectedWorkers}
+                    onChange={(e) => setFormData({ ...formData, expectedWorkers: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="status">{dict.contracts.status}</Label>
+                <Select 
+                  value={formData.status} 
+                  onValueChange={(val: any) => setFormData({ ...formData, status: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">{dict.contracts.active}</SelectItem>
+                    <SelectItem value="Expired">{dict.contracts.expired}</SelectItem>
+                    <SelectItem value="Terminated">{dict.contracts.terminated}</SelectItem>
+                    <SelectItem value="Pending">{dict.contracts.pending}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">{dict.contracts.notes}</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={dict.contracts.notes}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  {dict.contracts.cancel}
+                </Button>
+                <Button type="submit">{dict.contracts.save}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder={dict.contracts.searchPlaceholder} 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-9 w-full sm:w-[300px]"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder={dict.contracts.status} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{dict.contracts.allStatus}</SelectItem>
+            <SelectItem value="Active">{dict.contracts.active}</SelectItem>
+            <SelectItem value="Expired">{dict.contracts.expired}</SelectItem>
+            <SelectItem value="Terminated">{dict.contracts.terminated}</SelectItem>
+            <SelectItem value="Pending">{dict.contracts.pending}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{dict.contracts.company}</TableHead>
+                  <TableHead className="hidden md:table-cell">{dict.contracts.residence}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{dict.contracts.startDate}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{dict.contracts.endDate}</TableHead>
+                  <TableHead className="text-center">{dict.contracts.status}</TableHead>
+                  <TableHead className="text-right">{dict.contracts.actions}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredContracts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      {dict.contracts.noContracts}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredContracts.map((contract) => {
+                    const company = companies.find(c => c.id === contract.companyId);
+                    const residence = residences.find(r => r.id === contract.residenceId);
+                    const statusColor = 
+                      contract.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                      contract.status === 'Expired' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                      contract.status === 'Terminated' ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' :
+                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                    
+                    return (
+                      <TableRow key={contract.id}>
+                        <TableCell className="font-medium">
+                          <div>{company?.name || 'Unknown Company'}</div>
+                          <div className="text-xs text-muted-foreground md:hidden">
+                            {residence?.name} • {contract.status}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {residence?.name || 'Unknown Residence'}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(contract.startDate).toLocaleDateString()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(contract.endDate).toLocaleDateString()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center hidden md:table-cell">
+                          <Badge variant="outline" className={`border-0 ${statusColor}`}>
+                            {contract.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(contract)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(contract.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Link href={`/accommodation/invoices?contractId=${contract.id}`}>
+                              <Button variant="ghost" size="icon" title={dict.contracts.viewInvoices}>
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+
+
+
+
 
   const getActualWorkers = (residenceId: string, companyId: string) => {
     // Count workers in this residence that belong to this company

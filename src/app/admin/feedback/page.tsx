@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ interface Item {
 }
 
 export default function AdminFeedbackPage() {
+  const { dict } = useLanguage();
   const { currentUser, getUserById } = useUsers();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
@@ -179,55 +181,55 @@ export default function AdminFeedbackPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-5xl mx-auto px-2 sm:px-0">
       {currentUser?.role !== 'Admin' && (
   <div className="text-sm text-destructive">You are not authorized to access this page.</div>
       )}
       {currentUser?.role === 'Admin' && (
       <>
-      <div className="flex items-center justify-between">
-  <h1 className="text-2xl font-semibold">Feedback Board</h1>
-  <Button onClick={() => load()} disabled={loading}>Refresh</Button>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-semibold">{dict.feedbackBoardTitle || 'Feedback Board'}</h1>
+        <Button onClick={() => load()} disabled={loading}>{dict.refresh || 'Refresh'}</Button>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap w-full">
         <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-44"><SelectValue placeholder={dict.status || 'Status'} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="new">New</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="all">{dict.all || 'All'}</SelectItem>
+            <SelectItem value="new">{dict.new || 'New'}</SelectItem>
+            <SelectItem value="in_progress">{dict.inProgress || 'In Progress'}</SelectItem>
+            <SelectItem value="resolved">{dict.resolved || 'Resolved'}</SelectItem>
+            <SelectItem value="rejected">{dict.rejected || 'Rejected'}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={categoryFilter} onValueChange={(v: any) => setCategoryFilter(v)}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectTrigger className="w-52"><SelectValue placeholder={dict.category || 'Category'} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="Bug">Bug</SelectItem>
-            <SelectItem value="Feature Request">Feature Request</SelectItem>
-            <SelectItem value="UI Issue">UI Issue</SelectItem>
-            <SelectItem value="Performance">Performance</SelectItem>
-            <SelectItem value="Other">Other</SelectItem>
+            <SelectItem value="all">{dict.all || 'All'}</SelectItem>
+            <SelectItem value="Bug">{dict.bug || 'Bug'}</SelectItem>
+            <SelectItem value="Feature Request">{dict.featureRequest || 'Feature Request'}</SelectItem>
+            <SelectItem value="UI Issue">{dict.uiIssue || 'UI Issue'}</SelectItem>
+            <SelectItem value="Performance">{dict.performance || 'Performance'}</SelectItem>
+            <SelectItem value="Other">{dict.other || 'Other'}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={prioritySort} onValueChange={(v: any) => setPrioritySort(v)}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Sort by Priority" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder={dict.prioritySort || 'Sort by Priority'} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            <SelectItem value="high_first">High first</SelectItem>
-            <SelectItem value="low_first">Low first</SelectItem>
+            <SelectItem value="none">{dict.none || 'None'}</SelectItem>
+            <SelectItem value="high_first">{dict.highFirst || 'High first'}</SelectItem>
+            <SelectItem value="low_first">{dict.lowFirst || 'Low first'}</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex-1 min-w-48">
-          <input className="w-full border rounded px-3 py-2 text-sm bg-background" placeholder="Search by title or ticket ID" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="w-full border rounded px-3 py-2 text-sm bg-background" placeholder={dict.searchFeedback || 'Search by title or ticket ID'} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
       {/* Open section */}
       <div className="grid gap-3">
-        <h2 className="text-lg font-semibold">Open</h2>
+        <h2 className="text-lg font-semibold">{dict.openFeedback || 'Open'}</h2>
         {openItemsSorted.map((f) => (
           <Collapsible key={f.id} open={!!expanded[f.id]} onOpenChange={(v) => setExpanded((prev) => ({ ...prev, [f.id]: v }))}>
             <Card>
@@ -235,10 +237,10 @@ export default function AdminFeedbackPage() {
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">{f.title} <span className="text-muted-foreground">({f.ticketId})</span></CardTitle>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{f.category}</Badge>
-                    <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{f.status}</Badge>
+                    <Badge variant="outline">{dict[f.category?.toLowerCase()] || f.category}</Badge>
+                    <Badge className={f.status === 'resolved' ? 'bg-green-600' : f.status === 'rejected' ? 'bg-destructive' : ''}>{dict[f.status?.toLowerCase()] || f.status}</Badge>
                     <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">{expanded[f.id] ? 'Hide details' : 'Show details'}</Button>
+                      <Button variant="ghost" size="sm">{expanded[f.id] ? (dict.hideDetails || 'Hide details') : (dict.showDetails || 'Show details')}</Button>
                     </CollapsibleTrigger>
                   </div>
                 </div>
@@ -256,26 +258,26 @@ export default function AdminFeedbackPage() {
                   </div>
                   {f.description && (
                     <div>
-                      <div className="text-sm text-muted-foreground mb-1">Details</div>
+                      <div className="text-sm text-muted-foreground mb-1">{dict.details || 'Details'}</div>
                       <div className="text-sm whitespace-pre-wrap">{f.description}</div>
                     </div>
                   )}
                   {(f.errorCode || f.errorMessage) && (
                     <div className="text-sm">
-                      <div className="text-muted-foreground mb-1">Error</div>
+                      <div className="text-muted-foreground mb-1">{dict.error || 'Error'}</div>
                       <div>Code: <span className="font-mono">{String(f.errorCode || '')}</span></div>
                       {f.errorMessage && <div className="font-mono whitespace-pre-wrap text-sm mt-1">{f.errorMessage}</div>}
                     </div>
                   )}
                   {f.stack && (
                     <div>
-                      <div className="text-sm text-muted-foreground mb-1">Stack</div>
+                      <div className="text-sm text-muted-foreground mb-1">{dict.stack || 'Stack'}</div>
                       <pre className="text-xs overflow-auto max-h-40 p-2 bg-muted rounded"><code>{f.stack}</code></pre>
                     </div>
                   )}
                   {(f.appInfo?.url || f.appInfo?.path || f.appInfo?.referrer) && (
                     <div className="grid gap-1 text-sm">
-                      <div className="text-muted-foreground">App</div>
+                      <div className="text-muted-foreground">{dict.app || 'App'}</div>
                       {f.appInfo?.url && <div className="truncate">URL: <a className="underline" href={f.appInfo.url} target="_blank" rel="noreferrer">{f.appInfo.url}</a></div>}
                       {f.appInfo?.path && <div>Path: <span className="font-mono">{f.appInfo.path}</span></div>}
                       {f.appInfo?.referrer && <div className="truncate">Referrer: <span className="font-mono">{f.appInfo.referrer}</span></div>}
@@ -283,7 +285,7 @@ export default function AdminFeedbackPage() {
                   )}
                   {(f.deviceInfo?.userAgent || f.deviceInfo?.platform || f.deviceInfo?.language) && (
                     <div className="grid gap-1 text-sm">
-                      <div className="text-muted-foreground">Device</div>
+                      <div className="text-muted-foreground">{dict.device || 'Device'}</div>
                       {f.deviceInfo?.platform && <div>Platform: {f.deviceInfo.platform}</div>}
                       {f.deviceInfo?.language && <div>Lang: {f.deviceInfo.language}</div>}
                       {f.deviceInfo?.userAgent && <div className="break-all text-xs">UA: {f.deviceInfo.userAgent}</div>}
@@ -294,8 +296,8 @@ export default function AdminFeedbackPage() {
               </CollapsibleContent>
               <CardContent className="space-y-3">
                 <div className="grid gap-1">
-                  <label className="text-sm text-muted-foreground">Developer comment</label>
-                  <Textarea value={comments[f.id] ?? ''} onChange={(e) => setComments((prev) => ({ ...prev, [f.id]: e.target.value }))} placeholder="Add a note to the user" />
+                  <label className="text-sm text-muted-foreground">{dict.developerComment || 'Developer comment'}</label>
+                  <Textarea value={comments[f.id] ?? ''} onChange={(e) => setComments((prev) => ({ ...prev, [f.id]: e.target.value }))} placeholder={dict.addNoteToUser || 'Add a note to the user'} />
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
                   <div className="flex items-center gap-2">
@@ -412,13 +414,13 @@ export default function AdminFeedbackPage() {
               </Collapsible>
             ))}
             {closedItems.length === 0 && (
-              <div className="text-muted-foreground text-sm p-8 text-center">No closed items.</div>
+              <div className="text-muted-foreground text-sm p-8 text-center">{dict.noClosedItems || 'No closed items.'}</div>
             )}
           </CollapsibleContent>
         </Collapsible>
         {hasMore && (
           <Button variant="outline" onClick={handleLoadMore} disabled={loading}>
-            Load older feedback
+            {dict.loadOlderFeedback || 'Load older feedback'}
           </Button>
         )}
       </div>

@@ -52,7 +52,7 @@ export function AppSidebar() {
           <div className="flex flex-col gap-1 p-2">
             <div className="flex items-center gap-2">
               <Building className="h-8 w-8 text-amber-600" />
-              <span className="text-xl font-semibold text-amber-600 group-data-[collapsible=icon]:hidden">Accommodation</span>
+              <span className="text-xl font-semibold text-amber-600 group-data-[collapsible=icon]:hidden">{dict.sidebar.accommodation}</span>
             </div>
           </div>
         </SidebarHeader>
@@ -61,13 +61,13 @@ export function AppSidebar() {
             {/* Main Section */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                Main
+                {dict.sidebar.main}
               </div>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/overview'} tooltip="Overview">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/overview'} tooltip={dict.sidebar.overview}>
                   <Link href="/accommodation/overview" onClick={handleNavigate}>
                     <Home />
-                    <span className="group-data-[collapsible=icon]:hidden">Overview</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.overview}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -77,45 +77,45 @@ export function AppSidebar() {
             {/* Management Section */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                Management
+                {dict.sidebar.management}
               </div>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/residences'} tooltip="Residences">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/residences'} tooltip={dict.sidebar.residences}>
                   <Link href="/accommodation/residences" onClick={handleNavigate}>
                     <Building />
-                    <span className="group-data-[collapsible=icon]:hidden">Residences</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.residences}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/workers'} tooltip="Workers">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/workers'} tooltip={dict.sidebar.workers}>
                   <Link href="/accommodation/workers" onClick={handleNavigate}>
                     <Users />
-                    <span className="group-data-[collapsible=icon]:hidden">Workers</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.workers}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/assign'} tooltip="Assign Workers">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/assign'} tooltip={dict.sidebar.assignWorkers}>
                   <Link href="/accommodation/assign" onClick={handleNavigate}>
                     <Move />
-                    <span className="group-data-[collapsible=icon]:hidden">Assign Workers</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.assignWorkers}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/transfers'} tooltip="Transfers">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/transfers'} tooltip={dict.sidebar.transfers}>
                   <Link href="/accommodation/transfers" onClick={handleNavigate}>
                     <GitBranch />
-                    <span className="group-data-[collapsible=icon]:hidden">Transfers</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.transfers}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/pending-transfers'} tooltip="Pending Transfers">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/pending-transfers'} tooltip={dict.sidebar.pendingTransfers}>
                   <Link href="/accommodation/pending-transfers" onClick={handleNavigate}>
                     <Truck />
-                    <span className="group-data-[collapsible=icon]:hidden">Pending Transfers</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.pendingTransfers}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -125,29 +125,29 @@ export function AppSidebar() {
             {/* Contracts & Billing Section */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                Contracts & Billing
+                {dict.sidebar.contractsBilling}
               </div>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/companies'} tooltip="Companies">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/companies'} tooltip={dict.sidebar.companies}>
                   <Link href="/accommodation/companies" onClick={handleNavigate}>
                     <Building />
-                    <span className="group-data-[collapsible=icon]:hidden">Companies</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.companies}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/contracts'} tooltip="Contracts">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/contracts'} tooltip={dict.sidebar.contracts}>
                   <Link href="/accommodation/contracts" onClick={handleNavigate}>
                     <FileCheck />
-                    <span className="group-data-[collapsible=icon]:hidden">Contracts</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.contracts}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/invoices'} tooltip="Invoices">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/invoices'} tooltip={dict.sidebar.invoices}>
                   <Link href="/accommodation/invoices" onClick={handleNavigate}>
                     <ClipboardList />
-                    <span className="group-data-[collapsible=icon]:hidden">Invoices</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.invoices}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -157,13 +157,13 @@ export function AppSidebar() {
             {/* Reports Section */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                Reports
+                {dict.sidebar.reports}
               </div>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/accommodation/reports'} tooltip="Reports">
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/reports'} tooltip={dict.sidebar.reports}>
                   <Link href="/accommodation/reports" onClick={handleNavigate}>
                     <AreaChart />
-                    <span className="group-data-[collapsible=icon]:hidden">Reports</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar.reports}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -185,7 +185,7 @@ export function AppSidebar() {
                   )}
                 </Avatar>
                 <div className="group-data-[collapsible=icon]:hidden text-left">
-                  <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                  <p className="font-semibold text-sm">{loading ? dict.ui.loading : currentUser?.name}</p>
                   <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
                 </div>
               </div>

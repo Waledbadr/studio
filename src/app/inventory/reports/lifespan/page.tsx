@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInDays } from 'date-fns';
 import { useLanguage } from '@/context/language-context';
 
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
 interface LifespanException {
     id: string;
     itemId: string;
@@ -77,7 +80,7 @@ export default function LifespanReportPage() {
                         id: `${latestTx.id}-${previousTx.id}`,
                         itemId: itemInfo.id,
                         itemName: `${itemInfo.nameEn} / ${itemInfo.nameAr}`,
-                        locationName: latestTx.locationName || 'N/A',
+                        locationName: latestTx.locationName || dict.notAvailable,
                         lifespanDays: itemInfo.lifespanDays,
                         previousIssueDate: previousDate,
                         latestIssueDate: latestDate,
@@ -89,9 +92,32 @@ export default function LifespanReportPage() {
 
         return exceptions.sort((a,b) => b.latestIssueDate.getTime() - a.latestIssueDate.getTime());
 
-    }, [transactions, items, transactionsLoading, inventoryLoading]);
+    }, [transactions, items, transactionsLoading, inventoryLoading, dict.notAvailable]);
 
     const loading = transactionsLoading || inventoryLoading;
+
+    const exportToCSV = () => {
+        const headers = [dict.itemLabel, dict.location, dict.lifespanDays, dict.previousIssue, dict.latestIssue, dict.actualDays];
+        const csvContent = [
+            headers.join(','),
+            ...lifespanExceptions.map(ex => [
+                `"${ex.itemName}"`,
+                `"${ex.locationName}"`,
+                ex.lifespanDays,
+                format(ex.previousIssueDate, 'yyyy-MM-dd'),
+                format(ex.latestIssueDate, 'yyyy-MM-dd'),
+                ex.actualDays
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lifespan-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
 
     const renderSkeleton = () => (
         Array.from({ length: 5 }).map((_, i) => (
@@ -108,13 +134,18 @@ export default function LifespanReportPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold">{dict.lifespanReportTitle}</h1>
-                <p className="text-muted-foreground">{dict.lifespanReportDescription}</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold">{dict.lifespanReportTitle}</h1>
+                    <p className="text-muted-foreground">{dict.lifespanReportDescription}</p>
+                </div>
+                <Button variant="outline" onClick={exportToCSV}>
+                    <Download className="mr-2 h-4 w-4" /> {dict.exportCsvButton || 'Export CSV'}
+                </Button>
             </div>
 
             <Card>
-                <CardContent className="pt-6">
+                <CardContent className="pt-6 overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -149,6 +180,14 @@ export default function LifespanReportPage() {
                     </Table>
                 </CardContent>
             </Card>
+            <style jsx global>{`
+                @media print {
+                    header, nav, aside, footer { display: none !important; }
+                    .print\\:hidden { display: none !important; }
+                    body { background: white !important; }
+                    .shadow-lg, .shadow, .border { box-shadow: none !important; border: none !important; }
+                }
+            `}</style>
         </div>
     );
 }

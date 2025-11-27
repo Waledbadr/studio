@@ -102,11 +102,11 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   return (
     <header className={headerClass} {...props}>
-      <SidebarTrigger className="md:hidden" />
+      <SidebarTrigger />
       <button
         onClick={toggleApp}
-        className="ml-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
-        title={atAccommodation ? `الرجوع لتطبيق ${dict.ui.materialsApp}` : `فتح ${dict.ui.accommodationApp}`}
+        className="mx-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
+        title={atAccommodation ? `${dict.ui.backTo} ${dict.ui.materialsApp}` : `${dict.ui.open} ${dict.ui.accommodationApp}`}
       >
         {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
       </button>

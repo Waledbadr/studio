@@ -20,7 +20,7 @@ export default function ReportsPage() {
       <section>
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <List className="h-5 w-5" />
-          Inventory Reports
+          {dict.inventoryReportsTitle || 'Inventory Reports'}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <ReportCard 
@@ -38,14 +38,14 @@ export default function ReportsPage() {
           <ReportCard 
             href="/inventory/reports/consumption-by-residence"
             icon={<BarChart3 className="h-6 w-6 text-blue-600" />}
-            title="Consumption by Residence"
-            description="Total items issued and consumed per residence."
+            title={dict.consumptionByResidence || 'Consumption by Residence'}
+            description={dict.consumptionByResidenceReport || 'Total items issued and consumed per residence.'}
           />
           <ReportCard 
             href="/inventory/reports/slow-moving"
             icon={<Clock className="h-6 w-6 text-orange-600" />}
-            title="Slow Moving Items"
-            description="Items with no movement in the last 90 days."
+            title={dict.slowMovingItemsTitle || 'Slow Moving Items'}
+            description={dict.slowMovingItemsDescription || 'Items with no movement in the last 90 days.'}
           />
         </div>
       </section>
@@ -54,14 +54,14 @@ export default function ReportsPage() {
       <section>
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Home className="h-5 w-5" />
-          Accommodation Reports
+          {dict.reportsPage?.title || dict.accommodationOverview || 'Accommodation Reports'}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <ReportCard 
             href="/accommodation/reports"
             icon={<Building2 className="h-6 w-6 text-indigo-600" />}
-            title="Accommodation Reports Dashboard"
-            description="Access all accommodation reports including Vacancy, Nationality, and Overcrowding."
+            title={dict.reportsPage?.title || 'Accommodation Reports Dashboard'}
+            description={dict.reportsPage?.subtitle || 'Access all accommodation reports including Vacancy, Nationality, and Overcrowding.'}
           />
         </div>
       </section>
@@ -70,14 +70,14 @@ export default function ReportsPage() {
       <section>
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Wrench className="h-5 w-5" />
-          Maintenance Reports
+          {dict.maintenanceReportsTitle || 'Maintenance Reports'}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <ReportCard 
             href="/maintenance/reports/requests-by-status"
             icon={<Activity className="h-6 w-6 text-emerald-600" />}
-            title="Requests by Status"
-            description="Overview of maintenance requests and their progress."
+            title={dict.requestsByStatusTitle || 'Requests by Status'}
+            description={dict.requestsByStatusDescription || dict.maintenanceReportsDescription || 'Overview of maintenance requests and their progress.'}
           />
         </div>
       </section>

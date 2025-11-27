@@ -15,7 +15,16 @@ import {
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
-const Form = FormProvider
+
+interface FormProps extends React.ComponentProps<typeof FormProvider> {
+  direction?: "ltr" | "rtl"
+}
+
+const Form = ({ direction, ...props }: FormProps) => (
+  <div dir={direction} className={direction === "rtl" ? "rtl" : "ltr"}>
+    <FormProvider {...props} />
+  </div>
+)
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
@@ -72,15 +81,24 @@ const FormItemContext = React.createContext<FormItemContextValue>(
   {} as FormItemContextValue
 )
 
-const FormItem = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
-  const id = React.useId()
 
+interface FormItemProps extends React.HTMLAttributes<HTMLDivElement> {
+  direction?: "ltr" | "rtl"
+}
+const FormItem = React.forwardRef<HTMLDivElement, FormItemProps>(({ className, direction, ...props }, ref) => {
+  const id = React.useId()
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn("space-y-2", className)} {...props} />
+      <div
+        ref={ref}
+        className={cn(
+          "space-y-2",
+          direction === "rtl" ? "rtl" : "ltr",
+          className
+        )}
+        dir={direction}
+        {...props}
+      />
     </FormItemContext.Provider>
   )
 })

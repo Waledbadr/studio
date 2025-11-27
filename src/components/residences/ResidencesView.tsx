@@ -175,18 +175,18 @@ const FacilityItem = React.memo(function FacilityItem({
   onCancelEdit?: () => void,
   enableInlineEdit?: boolean
 }) {
-  // Be defensive: some legacy facilities may not have a type
+  const { dict } = useLanguage();
   const iconKey = String(facility.type || 'default').toLowerCase();
   const Icon = facilityIcons[iconKey] || facilityIcons.default;
   return (
     <div
-      className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
+      className="flex items-center justify-between p-2 bg-background rounded-md text-sm border flex-wrap sm:flex-nowrap"
       draggable={!!canEdit && !!showMoveBadge}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      title={canEdit ? 'Drag to move this facility' : undefined}
+      title={canEdit ? dict.residences?.dragFacilityTooltip || 'Drag to move this facility' : undefined}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         <Icon className="h-4 w-4 text-muted-foreground" />
         {isEditing ? (
           <Input 
@@ -204,13 +204,13 @@ const FacilityItem = React.memo(function FacilityItem({
           <span 
             className={`${canEdit && onStartEdit && enableInlineEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
             onClick={canEdit && onStartEdit && enableInlineEdit ? onStartEdit : undefined}
-            title={canEdit && onStartEdit && enableInlineEdit ? 'انقر للتعديل' : undefined}
+            title={canEdit && onStartEdit && enableInlineEdit ? dict.edit || 'Edit' : undefined}
           >
             {facility.name}
           </span>
         )}
         {canEdit && onRename && !onStartEdit && (
-          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>{dict.edit || 'Rename'}</Button>
         )}
       </div>
       {showMoveBadge && (
@@ -220,7 +220,7 @@ const FacilityItem = React.memo(function FacilityItem({
       <div className="flex items-center gap-1">
         {facility.components && facility.components.length > 0 && (
           <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-            {facility.components.length} مكونات
+            {facility.components.length} {dict.residences?.componentsLabel || 'components'}
           </span>
         )}
       </div>
@@ -231,12 +231,12 @@ const FacilityItem = React.memo(function FacilityItem({
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>This will delete facility "{facility.name}".</AlertDialogDescription>
+              <AlertDialogTitle>{dict.areYouSure || 'Are you sure?'}</AlertDialogTitle>
+              <AlertDialogDescription>{dict.residences?.deleteConfirm?.replace('{name}', facility.name) || `This will delete facility "${facility.name}".`}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+              <AlertDialogCancel>{dict.cancel || 'Cancel'}</AlertDialogCancel>
+              <AlertDialogAction onClick={onDelete}>{dict.delete || 'Delete'}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -245,58 +245,73 @@ const FacilityItem = React.memo(function FacilityItem({
   );
 });
 
-const FacilitySection = React.memo(function FacilitySection({ 
-  facilities, 
-  canEdit,
-  canAdd,
-  onAdd,
-  onDelete,
-  onRename,
-  onItemDragStart,
-  onItemDragEnd,
-  onDrop,
-  dragging,
-  showMoveBadge,
-  enableDelete,
-  editingFacilityId,
-  editingFacilityName,
-  onEditingFacilityNameChange,
-  onStartEditFacility,
-  onSaveEditFacility,
-  onCancelEditFacility,
-  enableInlineEdit,
-  onManageComponents,
-  isEdit
-}: { 
-  facilities: Facility[] | undefined, 
-  canEdit: boolean,
-  canAdd?: boolean,
-  onAdd: () => void, 
-  onDelete: (facilityId: string) => void,
-  onRename?: (facilityId: string) => void,
-  onItemDragStart?: (facilityId: string, e: React.DragEvent) => void,
-  onItemDragEnd?: (e: React.DragEvent) => void,
-  onDrop?: () => void,
-  dragging?: boolean,
-  showMoveBadge?: boolean,
-  enableDelete?: boolean,
-  editingFacilityId?: string,
-  editingFacilityName?: string,
-  onEditingFacilityNameChange?: (name: string) => void,
-  onStartEditFacility?: (facilityId: string) => void,
-  onSaveEditFacility?: () => void,
-  onCancelEditFacility?: () => void,
-  enableInlineEdit?: boolean,
-  onManageComponents?: (facilityId: string) => void,
-  isEdit?: boolean
+const FacilitySection = React.memo(function FacilitySection(props: {
+  facilities?: Facility[]; // Allow undefined by making it optional
+  canEdit: boolean;
+  canAdd?: boolean;
+  onAdd: () => void;
+  onDelete: (facilityId: string) => void;
+  onRename?: (facilityId: string) => void;
+  onItemDragStart?: (facilityId: string, e: React.DragEvent) => void;
+  onItemDragEnd?: (e: React.DragEvent) => void;
+  onDrop?: () => void;
+  dragging?: boolean;
+  showMoveBadge?: boolean;
+  enableDelete?: boolean;
+  editingFacilityId?: string;
+  editingFacilityName?: string;
+  onEditingFacilityNameChange?: (name: string) => void;
+  onStartEditFacility?: (facilityId: string) => void;
+  onSaveEditFacility?: () => void;
+  onCancelEditFacility?: () => void;
+  enableInlineEdit?: boolean;
+  onManageComponents?: (facilityId: string) => void;
+  isEdit?: boolean;
 }) {
+  const {
+    facilities = [], // Default to an empty array
+    canEdit,
+    canAdd,
+    onAdd,
+    onDelete,
+    onRename,
+    onItemDragStart,
+    onItemDragEnd,
+    onDrop,
+    dragging,
+    showMoveBadge,
+    enableDelete,
+    editingFacilityId,
+    editingFacilityName,
+    onEditingFacilityNameChange,
+    onStartEditFacility,
+    onSaveEditFacility,
+    onCancelEditFacility,
+    enableInlineEdit,
+    onManageComponents,
+    isEdit,
+  } = props;
+
+  const { dict } = useLanguage();
+
   return (
     <div
       className="space-y-2 mt-2"
-      onDragOver={(e) => { if (canEdit && onDrop) { e.preventDefault(); e.stopPropagation(); } }}
-      onDrop={(e) => { if (onDrop) { e.preventDefault(); e.stopPropagation(); onDrop(); } }}
+      onDragOver={(e) => {
+        if (canEdit && onDrop) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+      onDrop={(e) => {
+        if (onDrop) {
+          e.preventDefault();
+          e.stopPropagation();
+          onDrop();
+        }
+      }}
     >
-  <div className={`space-y-3 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
+      <div className={`space-y-3 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
         {(facilities || []).map(facility => (
           <div key={facility.id} className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
@@ -320,16 +335,15 @@ const FacilitySection = React.memo(function FacilitySection({
                 />
               </div>
             </div>
-            
             {/* Show components if any */}
-    {facility.components && facility.components.length > 0 && (
+            {facility.components && facility.components.length > 0 && (
               <div className="ml-4 pl-3 border-l-2 border-muted">
                 <div className="grid grid-cols-3 gap-1 text-xs">
-      {facility.components.map((component) => (
+                  {facility.components.map((component) => (
                     <div 
                       key={component.id}
                       className="flex items-center gap-1 p-1 bg-muted/50 rounded text-xs"
-                      title={`${component.name} - ${component.status || 'working'}`}
+                      title={`${component.name} - ${component.status || dict.residences?.working || 'working'}`}
                     >
                       <span>{componentIcons[component.type] || '⚙️'}</span>
                       <span className="truncate">{component.name}</span>
@@ -340,7 +354,6 @@ const FacilitySection = React.memo(function FacilitySection({
                 </div>
               </div>
             )}
-            
             {/* Add component button */}
             {canEdit && isEdit && onManageComponents && (
               <div className="ml-4 mt-2">
@@ -350,124 +363,23 @@ const FacilitySection = React.memo(function FacilitySection({
                   className="h-6 px-2 text-xs border-dashed border"
                   onClick={() => onManageComponents(facility.id)}
                 >
-                  <Plus className="h-3 w-3 mr-1"/> Add Component
+                  <Plus className="h-3 w-3 mr-1"/> {dict.residences?.addComponent || 'Add Component'}
                 </Button>
               </div>
             )}
           </div>
         ))}
-        
         {dragging && (facilities?.length || 0) === 0 && (
           <div className="flex items-center justify-center min-h-12 border-2 border-dashed rounded-md text-xs text-muted-foreground">
-            Drop here
+            {dict.residences?.dropHere || 'Drop here'}
           </div>
         )}
-        
         {canEdit && canAdd && (
           <Button variant="outline" size="sm" className="border-dashed" onClick={onAdd}>
-            <Plus className="h-4 w-4 mr-2"/> Add Facility
+            <Plus className="h-4 w-4 mr-2"/> {dict.residences?.addFacility || 'Add Facility'}
           </Button>
         )}
       </div>
-    </div>
-  );
-});
-
-const RoomItem = React.memo(function RoomItem({ 
-  room, 
-  canEdit, 
-  onDelete, 
-  showCapacity, 
-  onDragStart, 
-  onDragEnd, 
-  showMoveBadge, 
-  enableDelete, 
-  onRename,
-  isEditing,
-  editingName,
-  onEditingNameChange,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit
-}: { 
-  room: Room, 
-  canEdit: boolean, 
-  onDelete: () => void, 
-  showCapacity: boolean, 
-  onDragStart?: (e: React.DragEvent) => void, 
-  onDragEnd?: (e: React.DragEvent) => void, 
-  showMoveBadge?: boolean, 
-  enableDelete?: boolean, 
-  onRename?: () => void,
-  isEditing?: boolean,
-  editingName?: string,
-  onEditingNameChange?: (name: string) => void,
-  onStartEdit?: () => void,
-  onSaveEdit?: () => void,
-  onCancelEdit?: () => void
-}) {
-  return (
-    <div
-      className="flex items-center justify-between p-2 bg-background rounded-md text-sm border"
-      draggable={!!canEdit && !!showMoveBadge}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      title={canEdit ? 'Drag to move this room to another floor in the same building' : undefined}
-    >
-      <div className="flex items-center gap-2">
-        <DoorOpen className="h-4 w-4 text-muted-foreground" />
-        <div>
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <Input 
-                value={editingName || ''} 
-                onChange={(e) => onEditingNameChange?.(e.target.value)}
-                className="h-6 text-sm"
-                autoFocus
-                onBlur={onSaveEdit}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onSaveEdit?.();
-                  if (e.key === 'Escape') onCancelEdit?.();
-                }}
-              />
-            ) : (
-              <span 
-                className={`${canEdit && onStartEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
-                onClick={canEdit && onStartEdit ? onStartEdit : undefined}
-                title={canEdit && onStartEdit ? 'انقر للتعديل' : undefined}
-              >
-                {room.name}
-              </span>
-            )}
-            {canEdit && onRename && !onStartEdit && (
-              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
-            )}
-          </div>
-          {showCapacity ? (
-            <div className="text-xs text-muted-foreground">{room.area ? `${room.area} m² •` : ''} {room.capacity ? `Capacity: ${room.capacity}` : 'Capacity: -'}</div>
-          ) : null}
-        </div>
-      </div>
-      {showMoveBadge && (
-        <Move className="h-3 w-3 text-muted-foreground mr-2" />
-      )}
-      {canEdit && enableDelete && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>This will delete room "{room.name}".</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
     </div>
   );
 });
@@ -501,50 +413,50 @@ const AddFacilityDialog = ({
     }
   };
 
+  // Use dict from useLanguage
+  const { dict } = useLanguage();
   return (
     <Dialog open={isOpen} onOpenChange={(open: boolean) => onOpenChange(open)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Facility</DialogTitle>
-          <DialogDescription>
-            Add a new facility to the selected level. Use quantity for numbered items (e.g., Bathroom #3 becomes Bathroom 1, 2, 3).
-          </DialogDescription>
+          <DialogTitle>{dict.addNewFacilityTitle || 'Add New Facility'}</DialogTitle>
+          <DialogDescription>{dict.addNewFacilityDescription || 'Add a new facility to the selected level. Use quantity for numbered items.'}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="facility-name">Facility Name</Label>
-            <Input id="facility-name" placeholder="e.g., Guest Bathroom" value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="facility-name">{dict.facilityNameLabel || 'Facility Name'}</Label>
+            <Input id="facility-name" placeholder={dict.exampleFacilityPlaceholder || 'e.g., Guest Bathroom'} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="facility-type">Facility Type</Label>
+            <Label htmlFor="facility-type">{dict.facilityTypeLabel || 'Facility Type'}</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger id="facility-type">
-                <SelectValue placeholder="Select type"/>
+                <SelectValue placeholder={dict.selectFacilityTypePlaceholder || 'Select type'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">General</SelectItem>
-                <SelectItem value="bathroom">Bathroom • حمام</SelectItem>
-                <SelectItem value="kitchen">Kitchen • مطبخ</SelectItem>
-                <SelectItem value="storeroom">Storeroom • مستودع</SelectItem>
-                <SelectItem value="management">Management • إدارة</SelectItem>
-                <SelectItem value="yard">Yard • حوش</SelectItem>
-                <SelectItem value="corridor">Corridor • ممر</SelectItem>
-                <SelectItem value="laundry">Laundry • مغسلة</SelectItem>
-                <SelectItem value="shop">Shop • محل</SelectItem>
-                <SelectItem value="clinic">Clinic • عيادة</SelectItem>
-                <SelectItem value="basement">Basement • بدروم</SelectItem>
-                <SelectItem value="hall">Hall • صالة</SelectItem>
+                <SelectItem value="default">{dict.facilityTypeGeneral || 'General'}</SelectItem>
+                <SelectItem value="bathroom">{dict.facilityTypeBathroom || 'Bathroom'} • حمام</SelectItem>
+                <SelectItem value="kitchen">{dict.facilityTypeKitchen || 'Kitchen'} • مطبخ</SelectItem>
+                <SelectItem value="storeroom">{dict.facilityTypeStoreroom || 'Storeroom'} • مستودع</SelectItem>
+                <SelectItem value="management">{dict.facilityTypeManagement || 'Management'} • إدارة</SelectItem>
+                <SelectItem value="yard">{dict.facilityTypeYard || 'Yard'} • حوش</SelectItem>
+                <SelectItem value="corridor">{dict.facilityTypeCorridor || 'Corridor'} • ممر</SelectItem>
+                <SelectItem value="laundry">{dict.facilityTypeLaundry || 'Laundry'} • مغسلة</SelectItem>
+                <SelectItem value="shop">{dict.facilityTypeShop || 'Shop'} • محل</SelectItem>
+                <SelectItem value="clinic">{dict.facilityTypeClinic || 'Clinic'} • عيادة</SelectItem>
+                <SelectItem value="basement">{dict.facilityTypeBasement || 'Basement'} • بدروم</SelectItem>
+                <SelectItem value="hall">{dict.facilityTypeHall || 'Hall'} • صالة</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="facility-quantity">Quantity</Label>
+            <Label htmlFor="facility-quantity">{dict.facilityQuantityLabel || 'Quantity'}</Label>
             <Input id="facility-quantity" type="number" min="1" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleAdd}>Add Facility</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{dict.cancel || 'Cancel'}</Button>
+          <Button onClick={handleAdd}>{dict.addFacility || 'Add Facility'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -559,104 +471,105 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   const { dict } = useLanguage();
   const [mode, setMode] = useState<'view' | 'move' | 'edit' | 'delete'>('view');
   const isMove = mode === 'move';
-  const isEdit = mode === 'edit';
-  const isDelete = mode === 'delete';
-  const [viewMode, setViewMode] = useState<'cards' | 'tree' | 'board'>('cards');
-
-  const clearDragImage = (e: React.DragEvent) => {
-    // Minimize drag preview to reduce lag on some browsers
-    const img = new Image();
-    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-    e.dataTransfer.setDragImage(img, 0, 0);
-  };
-
-  useEffect(() => {
-    loadResidences();
-    loadUsersContext();
-  }, [loadResidences, loadUsersContext]);
-
-  // Search & Filters
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
-  const [cityFilter, setCityFilter] = useState<string>('all');
-  const [managerFilter, setManagerFilter] = useState<string>('all');
-  const selectedManager = useMemo(() => users.find(u => u.id === managerFilter), [users, managerFilter]);
-
-  // Track expanded buildings per complex to lazy-mount contents
-  const [openByComplex, setOpenByComplex] = useState<Record<string, string[]>>({});
-  
-  // Track editing states
-  const [editingBuilding, setEditingBuilding] = useState<{complexId: string, buildingId: string} | null>(null);
-  const [editingFloor, setEditingFloor] = useState<{complexId: string, buildingId: string, floorId: string} | null>(null);
-  const [editingRoom, setEditingRoom] = useState<{complexId: string, buildingId: string, floorId: string, roomId: string} | null>(null);
-  const [editingFacility, setEditingFacility] = useState<{complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', buildingId?: string, floorId?: string} | null>(null);
-  const [editingBuildingName, setEditingBuildingName] = useState('');
-  const [editingFloorName, setEditingFloorName] = useState('');
-  const [editingRoomName, setEditingRoomName] = useState('');
-  const [editingFacilityName, setEditingFacilityName] = useState('');
-  
-  // Building editing functions
-  const startEditingBuilding = useCallback((complexId: string, buildingId: string, currentName: string) => {
-    setEditingBuilding({ complexId, buildingId });
-    setEditingBuildingName(currentName);
-  }, []);
-
-  const saveEditingBuilding = useCallback(() => {
-    if (editingBuilding && editingBuildingName.trim()) {
-      updateBuildingName(editingBuilding.complexId, editingBuilding.buildingId, editingBuildingName.trim());
-      setEditingBuilding(null);
-      setEditingBuildingName('');
-    }
-  }, [editingBuilding, editingBuildingName, updateBuildingName]);
-
-  const cancelEditingBuilding = useCallback(() => {
-    setEditingBuilding(null);
-    setEditingBuildingName('');
-  }, []);
-
-  // Floor editing functions
-  const startEditingFloor = useCallback((complexId: string, buildingId: string, floorId: string, currentName: string) => {
-    setEditingFloor({ complexId, buildingId, floorId });
-    setEditingFloorName(currentName);
-  }, []);
-
-  const saveEditingFloor = useCallback(() => {
-    if (editingFloor && editingFloorName.trim()) {
-      updateFloorName(editingFloor.complexId, editingFloor.buildingId, editingFloor.floorId, editingFloorName.trim());
-      setEditingFloor(null);
-      setEditingFloorName('');
-    }
-  }, [editingFloor, editingFloorName, updateFloorName]);
-
-  const cancelEditingFloor = useCallback(() => {
-    setEditingFloor(null);
-    setEditingFloorName('');
-  }, []);
-
-  // Room editing functions
-  const startEditingRoom = useCallback((complexId: string, buildingId: string, floorId: string, roomId: string, currentName: string) => {
-    setEditingRoom({ complexId, buildingId, floorId, roomId });
-    setEditingRoomName(currentName);
-  }, []);
-
-  const saveEditingRoom = useCallback(() => {
-    if (editingRoom && editingRoomName.trim()) {
-      updateRoomName(editingRoom.complexId, editingRoom.buildingId, editingRoom.floorId, editingRoom.roomId, editingRoomName.trim());
-      setEditingRoom(null);
-      setEditingRoomName('');
-    }
-  }, [editingRoom, editingRoomName, updateRoomName]);
-
-  const cancelEditingRoom = useCallback(() => {
-    setEditingRoom(null);
-    setEditingRoomName('');
-  }, []);
-
-  // Facility editing functions
-  const startEditingFacility = useCallback((complexId: string, facilityId: string, level: 'complex' | 'building' | 'floor', currentName: string, buildingId?: string, floorId?: string) => {
-    setEditingFacility({ complexId, facilityId, level, buildingId, floorId });
-    setEditingFacilityName(currentName);
-  }, []);
+  const RoomItem = React.memo(function RoomItem({ 
+    room, 
+    canEdit, 
+    onDelete, 
+    showCapacity, 
+    onDragStart, 
+    onDragEnd, 
+    showMoveBadge, 
+    enableDelete, 
+    onRename,
+    isEditing,
+    editingName,
+    onEditingNameChange,
+    onStartEdit,
+    onSaveEdit,
+    onCancelEdit
+  }: { 
+    room: Room, 
+    canEdit: boolean, 
+    onDelete: () => void, 
+    showCapacity: boolean, 
+    onDragStart?: (e: React.DragEvent) => void, 
+    onDragEnd?: (e: React.DragEvent) => void, 
+    showMoveBadge?: boolean, 
+    enableDelete?: boolean, 
+    onRename?: () => void,
+    isEditing?: boolean,
+    editingName?: string,
+    onEditingNameChange?: (name: string) => void,
+    onStartEdit?: () => void,
+    onSaveEdit?: () => void,
+    onCancelEdit?: () => void
+  }) {
+    const { dict } = useLanguage();
+    return (
+      <div
+        className="flex items-center justify-between p-2 bg-background rounded-md text-sm border flex-wrap sm:flex-nowrap"
+        draggable={!!canEdit && !!showMoveBadge}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        title={canEdit ? dict.residences?.dragRoomTooltip || 'Drag to move this room to another floor in the same building' : undefined}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <DoorOpen className="h-4 w-4 text-muted-foreground" />
+          <div>
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <Input 
+                  value={editingName || ''} 
+                  onChange={(e) => onEditingNameChange?.(e.target.value)}
+                  className="h-6 text-sm"
+                  autoFocus
+                  onBlur={onSaveEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onSaveEdit?.();
+                    if (e.key === 'Escape') onCancelEdit?.();
+                  }}
+                />
+              ) : (
+                <span 
+                  className={`${canEdit && onStartEdit && enableInlineEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                  onClick={canEdit && onStartEdit && enableInlineEdit ? onStartEdit : undefined}
+                  title={canEdit && onStartEdit && enableInlineEdit ? dict.edit || 'Edit' : undefined}
+                >
+                  {room.name}
+                </span>
+              )}
+              {canEdit && onRename && !onStartEdit && (
+                <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onRename}>Rename</Button>
+              )}
+            </div>
+            {showCapacity ? (
+              <div className="text-xs text-muted-foreground">{room.area ? `${room.area} m² •` : ''} {room.capacity ? `${dict.residences?.capacity || 'Capacity'}: ${room.capacity}` : `${dict.residences?.capacity || 'Capacity'}: -`}</div>
+            ) : null}
+          </div>
+        </div>
+        {showMoveBadge && (
+          <Move className="h-3 w-3 text-muted-foreground mr-2" />
+        )}
+        {canEdit && enableDelete && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><Trash2 className="h-3 w-3 text-destructive" /></Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                <AlertDialogTitle>{dict.areYouSure || 'Are you sure?'}</AlertDialogTitle>
+                <AlertDialogDescription>{dict.residences?.deleteConfirm?.replace('{name}', room.name) || `This will delete room "${room.name}".`}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{dict.cancel || 'Cancel'}</AlertDialogCancel>
+                <AlertDialogAction onClick={onDelete}>{dict.delete || 'Delete'}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    );
+  });
 
   const saveEditingFacility = useCallback(() => {
     if (editingFacility && editingFacilityName.trim()) {
@@ -1082,53 +995,53 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">{dict.residencesTitle}</h1>
           <p className="text-muted-foreground">{dict.residencesDescription}</p>
         </div>
-  {isAdmin && (
-            <Dialog open={dialogStates.addComplex} onOpenChange={(open) => open ? openDialog('addComplex') : closeDialog('addComplex')}>
-        <DialogTrigger asChild>
-  <Button disabled={!isEdit} title={!isEdit ? 'فعّل وضع التعديل لإضافة مجمع جديد' : undefined}>
-        <PlusCircle className="mr-2 h-4 w-4" /> {dict.addComplex}
-        </Button>
-      </DialogTrigger>
+        {isAdmin && (
+          <Dialog open={dialogStates.addComplex} onOpenChange={(open) => open ? openDialog('addComplex') : closeDialog('addComplex')}>
+            <DialogTrigger asChild>
+              <Button disabled={!isEdit} title={!isEdit ? dict.residencesEnableEditToAddComplex || 'Enable edit mode to add a new complex' : undefined}>
+                <PlusCircle className="mr-2 h-4 w-4" />{dict.addComplex}
+              </Button>
+            </DialogTrigger>
             <DialogContent>
-                <form onSubmit={handleAddComplex}>
+              <form onSubmit={handleAddComplex}>
                 <DialogHeader>
-                    <DialogTitle>Add New Complex</DialogTitle>
-                    <DialogDescription>Enter the details for the new residential complex.</DialogDescription>
+                  <DialogTitle>{dict.addNewComplexTitle || 'Add New Complex'}</DialogTitle>
+                  <DialogDescription>{dict.addNewComplexDescription || 'Enter the details for the new residential complex.'}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="complex-name" className="text-right">Name</Label>
-                      <Input id="complex-name" placeholder="e.g., Seaside Residences" className="col-span-3" value={formData.newComplexName} onChange={(e) => setFormData(prev => ({ ...prev, newComplexName: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="complex-city" className="text-right">City</Label>
-                      <Input id="complex-city" placeholder="e.g., Dubai" className="col-span-3" value={formData.newComplexCity} onChange={(e) => setFormData(prev => ({ ...prev, newComplexCity: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="complex-manager" className="text-right">Manager</Label>
-                        <Select onValueChange={(value) => setFormData(prev => ({ ...prev, newComplexManagerId: value }))} value={formData.newComplexManagerId}>
-                            <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Select a manager" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {users.map((user) => (
-                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-name" className="text-right">{dict.nameLabel || 'Name'}</Label>
+                    <Input id="complex-name" placeholder={dict.exampleComplexPlaceholder || 'e.g., Seaside Residences'} className="col-span-3" value={formData.newComplexName} onChange={(e) => setFormData(prev => ({ ...prev, newComplexName: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-city" className="text-right">{dict.cityLabel || 'City'}</Label>
+                    <Input id="complex-city" placeholder={dict.exampleCityPlaceholder || 'e.g., Dubai'} className="col-span-3" value={formData.newComplexCity} onChange={(e) => setFormData(prev => ({ ...prev, newComplexCity: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="complex-manager" className="text-right">{dict.managerLabel || 'Manager'}</Label>
+                    <Select onValueChange={(value) => setFormData(prev => ({ ...prev, newComplexManagerId: value }))} value={formData.newComplexManagerId}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder={dict.selectManagerPlaceholder || 'Select a manager'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <DialogFooter>
-                    <Button type="submit">Save Complex</Button>
+                  <Button type="submit">{dict.saveComplex || 'Save Complex'}</Button>
                 </DialogFooter>
-                </form>
+              </form>
             </DialogContent>
-            </Dialog>
+          </Dialog>
         )}
       </div>
 
@@ -1306,10 +1219,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                   ) : (
                                     <span 
                                       className={`font-medium ${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
-                                      onClick={isEdit ? (e) => {
-                                        e.stopPropagation();
-                                        startEditingBuilding(complex.id, building.id, building.name);
-                                      } : undefined}
+                                      onClick={isEdit ? () => startEditingBuilding(complex.id, building.id, building.name) : undefined}
                                       title={isEdit ? 'انقر للتعديل' : undefined}
                                     >
                                       {building.name}
@@ -1370,13 +1280,6 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                         } : undefined}
                                         onSaveEditFacility={saveEditingFacility}
                                         onCancelEditFacility={cancelEditingFacility}
-                                        onRename={!isEdit ? (facilityId) => {
-                                          const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
-                                          const val = prompt('Rename facility', current?.name || '');
-                                          if (val && val.trim() && val.trim() !== current?.name) {
-                                            updateFacilityName(complex.id, 'building', facilityId, val.trim(), building.id);
-                                          }
-                                        } : undefined}
                                         enableInlineEdit={isEdit}
                                         onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
                                         isEdit={isEdit}
@@ -1399,7 +1302,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                     aria-label={(openFloorKeys[`${building.id}:${floor.id}`] ?? true) ? 'Collapse floor' : 'Expand floor'}
                                                     title={(openFloorKeys[`${building.id}:${floor.id}`] ?? true) ? 'طي الطابق' : 'توسيع الطابق'}
                                                   >
-                                                    <ChevronDown className={`h-4 w-4 transition-transform ${((openFloorKeys[`${building.id}:${floor.id}`] ?? true) ? '' : '-rotate-90')}`} />
+                                                    <ChevronDown className={`h-4 w-4 transition-transform ${fOpen ? '' : '-rotate-90'}`} />
                                                   </Button>
                                                   <Layers className="h-4 w-4" />
                                                   {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
@@ -1425,364 +1328,133 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                                   )}
                                               </div>
                                               {isAdmin && (
-                                                  <div className="flex justify-center gap-1">
-                                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
-                                                          <PlusCircle className="mr-1 h-3 w-3" /> Room
-                                                      </Button>
-                                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
-                                                          <Plus className="mr-1 h-3 w-3" /> Multi
-                                                      </Button>
-                                                      <AlertDialog>
-                                                          <AlertDialogTrigger asChild>
-                                                              <Button variant="destructive" size="sm" className="h-6 w-6 p-0" disabled={!isEdit}><Trash2 className="h-3 w-3" /></Button>
-                                                          </AlertDialogTrigger>
-                                                          <AlertDialogContent>
-                                                              <AlertDialogHeader>
-                                                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                              <AlertDialogDescription>This will delete "{floor.name}" and all its contents.</AlertDialogDescription>
-                                                              </AlertDialogHeader>
-                                                              <AlertDialogFooter>
-                                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                              <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
-                                                              </AlertDialogFooter>
-                                                          </AlertDialogContent>
-                                                      </AlertDialog>
-                                                  </div>
+                                                <div className="flex gap-1">
+                                                  <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                      <PlusCircle className="mr-1 h-3 w-3" /> Room
+                                                  </Button>
+                                                  <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                                      <Plus className="mr-1 h-3 w-3" /> Multi
+                                                  </Button>
+                                                  <AlertDialog>
+                                                      <AlertDialogTrigger asChild>
+                                                          <Button variant="destructive" size="sm" className="h-6 w-6 p-0" disabled={!isEdit}><Trash2 className="h-3 w-3" /></Button>
+                                                      </AlertDialogTrigger>
+                                                      <AlertDialogContent>
+                                                          <AlertDialogHeader>
+                                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                          <AlertDialogDescription>This will delete "{floor.name}" and all its contents.</AlertDialogDescription>
+                                                          </AlertDialogHeader>
+                                                          <AlertDialogFooter>
+                                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                          <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                                          </AlertDialogFooter>
+                                                      </AlertDialogContent>
+                                                  </AlertDialog>
+                                                </div>
                                               )}
                                           </div>
-                                          {(openFloorKeys[`${building.id}:${floor.id}`] ?? true) && (
-                                          <div
-                                            className={`pl-6 space-y-2`}
-                                            onDragOver={(e) => {
-                                              if (isAdmin) { e.preventDefault(); e.stopPropagation(); }
-                                            }}
-                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
-                                          >
-                                              <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
+                                          {fOpen && (
+                                            <div className="p-3 space-y-3">
+                                              {/* Reuse the same room grid and facilities from card view to keep features consistent */}
+                                              <div
+                                                className={`pl-0 space-y-2`}
+                                                onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
+                                                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
+                                              >
+                                                <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
                                                   {floor.rooms.map((room: Room) => (
-                                                  <RoomItem
+                                                    <RoomItem
                                                       key={room.id}
                                                       room={room}
                                                       canEdit={!!isAdmin}
                                                       onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
-                                                    showCapacity={showCapacity}
-                                                    onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
-                                                    onDragEnd={isMove ? handleDragEnd : undefined}
-                                                    showMoveBadge={isMove}
-                                                    enableDelete={isDelete}
-                                                    isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
-                                                    editingName={editingRoomName}
-                                                    onEditingNameChange={setEditingRoomName}
-                                                    onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
-                                                    onSaveEdit={saveEditingRoom}
-                                                    onCancelEdit={cancelEditingRoom}
+                                                      showCapacity={showCapacity}
+                                                      onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
+                                                      onDragEnd={isMove ? handleDragEnd : undefined}
+                                                      showMoveBadge={isMove}
+                                                      enableDelete={isDelete}
+                                                      isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
+                                                      editingName={editingRoomName}
+                                                      onEditingNameChange={setEditingRoomName}
+                                                      onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
+                                                      onSaveEdit={saveEditingRoom}
+                                                      onCancelEdit={cancelEditingRoom}
                                                     />
                                                   ))}
-                                              </div>
-                                              {dragging && floor.rooms.length === 0 && (
-                                                <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
-                                                  Drop room here
                                                 </div>
-                                              )}
-                                              <div>
-                                                <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
-                                                {showFacilities && (
-                                                  <FacilitySection 
-                                                    facilities={asArray<Facility>(floor.facilities)}
-                                                    canEdit={!!isAdmin}
-                                                    canAdd={isEdit}
-                                                    onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
-                                                    onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
-                                                    onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
-                                                    onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                                                    onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                                    dragging={!!draggingFacility}
-                                                    showMoveBadge={isMove}
-                                                    enableDelete={isDelete}
-                                                    editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
-                                                    editingFacilityName={editingFacilityName}
-                                                    onEditingFacilityNameChange={setEditingFacilityName}
-                                                    onStartEditFacility={isEdit ? (facilityId) => {
-                                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
-                                                      if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
-                                                    } : undefined}
-                                                    onSaveEditFacility={saveEditingFacility}
-                                                    onCancelEditFacility={cancelEditingFacility}
-                                                    onRename={!isEdit ? (facilityId) => {
-                                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
-                                                      const val = prompt('Rename facility', current?.name || '');
-                                                      if (val && val.trim() && val.trim() !== current?.name) {
-                                                        updateFacilityName(complex.id, 'floor', facilityId, val.trim(), building.id, floor.id);
-                                                      }
-                                                    } : undefined}
-                                                    enableInlineEdit={isEdit}
-                                                    onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                                    isEdit={isEdit}
-                                                  />
+                                                {dragging && floor.rooms.length === 0 && (
+                                                  <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
+                                                    Drop room here
+                                                  </div>
                                                 )}
-                                              </div>
-                                          </div>
+                                                <div>
+                                                  <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
+                                                  {showFacilities && (
+                                                    <FacilitySection 
+                                                      facilities={asArray<Facility>(floor.facilities)}
+                                                      canEdit={!!isAdmin}
+                                                      canAdd={isEdit}
+                                                      onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
+                                                      onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
+                                                      onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
+                                                      onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                                      onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                                      dragging={!!draggingFacility}
+                                                      showMoveBadge={isMove}
+                                                      enableDelete={isDelete}
+                                                      editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
+                                                      editingFacilityName={editingFacilityName}
+                                                      onEditingFacilityNameChange={setEditingFacilityName}
+                                                      onStartEditFacility={isEdit ? (facilityId) => {
+                                                        const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
+                                                        if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
+                                                      } : undefined}
+                                                      onSaveEditFacility={saveEditingFacility}
+                                                      onCancelEditFacility={cancelEditingFacility}
+                                                      enableInlineEdit={isEdit}
+                                                      onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                                      isEdit={isEdit}
+                                                    />
+                                                  )}
+                                                </div>
+                                            </div>
                                           )}
                                       </div>
                                   ))}
-                              </div>
-                            </AccordionContent>
-                          )}
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
-                  {(complex.facilities && complex.facilities.length > 0) || isAdmin ? (
-                      <>
-                        <Separator className="my-4" />
-                        <h4 className="text-md font-semibold mb-2 flex items-center gap-2"><ConciergeBell className="h-5 w-5 text-primary" /> {(dict as any).generalFacilitiesLabel || 'Residence Facilities'}</h4>
-            {showFacilities && (
-                          <FacilitySection 
-                            facilities={asArray<Facility>(complex.facilities)}
-                            canEdit={!!isAdmin}
-                            canAdd={isEdit}
-                            onAdd={() => openDialog('addFacility', { level: 'complex', complexId: complex.id })}
-                            onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
-              onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'complex' }, e) : undefined}
-                            onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                            onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'complex' })}
-                            dragging={!!draggingFacility}
-                            showMoveBadge={isMove}
-                            enableDelete={isDelete}
-                            onRename={isEdit ? (facilityId) => {
-                              const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
-                              const val = prompt('Rename facility', current?.name || '');
-                              if (val && val.trim() && val.trim() !== current?.name) {
-                                updateFacilityName(complex.id, 'complex', facilityId, val.trim());
-                              }
-                            } : undefined}
-                            enableInlineEdit={isEdit}
-                            onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'complex' })}
-                            isEdit={isEdit}
-                          />
-                        )}
-                      </>
-                  ) : null}
-                </CardContent>
-                )}
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {viewMode === 'tree' && Object.entries(filteredResidences.reduce((acc, complex) => {
-        const city = complex.city || 'Uncategorized';
-        if (!acc[city]) acc[city] = [] as Complex[];
-        acc[city].push(complex);
-        return acc;
-      }, {} as Record<string, Complex[]>)).map(([city, complexes]) => (
-        <div key={city}>
-          <h2 className="text-xl font-semibold mb-3 flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> {city}</h2>
-          <div className="rounded-md border divide-y">
-            {complexes.map((complex) => {
-              const complexOpen = openComplexIds[complex.id] ?? true;
-              return (
-                <div key={complex.id} className="">
-                  <div className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleComplexOpen(complex.id)}>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${complexOpen ? '' : '-rotate-90'}`} />
-                      </Button>
-                      <div className="font-semibold">{complex.name}</div>
-                      <div className="text-xs text-muted-foreground">Manager: {getManagerName(complex.managerId)}</div>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openDialog('addBuilding', {complexId: complex.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Building</Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(complex)}><Pencil className="h-4 w-4" /></Button>
-                      </div>
-                    )}
-                  </div>
-                  {complexOpen && (
-                    <div className="pl-8 pr-3 pb-3 space-y-4">
-                      {complex.buildings.map((building) => {
-                        const bKey = `building-${building.id}`;
-                        const bOpen = (openByComplex[complex.id] || []).includes(bKey);
-                        const floorsCount = building.floors.length;
-                        const roomsCount = building.floors.reduce((acc, f) => acc + f.rooms.length, 0);
-                        return (
-                          <div key={building.id} className="border rounded-md">
-            <div className="flex items-center justify-between p-2">
-                              <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleBuildingOpen(complex.id, building.id)}>
-                                  <ChevronDown className={`h-4 w-4 transition-transform ${bOpen ? '' : '-rotate-90'}`} />
-                                </Button>
-                                <Building className="h-4 w-4 text-muted-foreground" />
-                                {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
-                                  <Input 
-                                    value={editingBuildingName} 
-                                    onChange={(e) => setEditingBuildingName(e.target.value)}
-                                    className="h-6 text-sm font-medium"
-                                    autoFocus
-                                    onBlur={saveEditingBuilding}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') saveEditingBuilding();
-                                      if (e.key === 'Escape') cancelEditingBuilding();
-                                    }}
-                                  />
-                                ) : (
-                                  <div 
-                                    className={`font-medium ${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
-                                    onClick={isEdit ? () => startEditingBuilding(complex.id, building.id, building.name) : undefined}
-                                    title={isEdit ? 'انقر للتعديل' : undefined}
-                                  >
-                                    {building.name}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">{(dict as any).buildingFacilitiesLabel || 'Building Facilities'}</Label>
+                                    {showFacilities && (
+                                      <FacilitySection 
+                                        facilities={asArray<Facility>(building.facilities)}
+                                        canEdit={!!isAdmin}
+                                        canAdd={isEdit}
+                                        onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
+                                        onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
+                                        onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id }, e) : undefined}
+                                        onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                        onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'building', buildingId: building.id })}
+                                        dragging={!!draggingFacility}
+                                        showMoveBadge={isMove}
+                                        enableDelete={isDelete}
+                                        editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
+                                        editingFacilityName={editingFacilityName}
+                                        onEditingFacilityNameChange={setEditingFacilityName}
+                                        onStartEditFacility={isEdit ? (facilityId) => {
+                                          const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
+                                          if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
+                                        } : undefined}
+                                        onSaveEditFacility={saveEditingFacility}
+                                        onCancelEditFacility={cancelEditingFacility}
+                                        enableInlineEdit={isEdit}
+                                        onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
+                                        isEdit={isEdit}
+                                      />
+                                    )}
                                   </div>
-                                )}
-                                <div className="text-xs text-muted-foreground">{floorsCount} floors • {roomsCount} rooms</div>
-                              </div>
-                              {isAdmin && (
-                                <div className="flex justify-center gap-1">
-              <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-3 w-3 mr-1" /> Floor</Button>
-                                </div>
-                              )}
-                            </div>
-                            {bOpen && (
-                              <div className="pl-8 pr-3 pb-3 space-y-4">
-                                {building.floors.map((floor) => {
-                                  const fKey = `${building.id}:${floor.id}`;
-                                  const fOpen = openFloorKeys[fKey] ?? true;
-                                  return (
-                                    <div key={floor.id} className="rounded-md bg-muted/30">
-                                      <div className="flex items-center justify-between p-2">
-                                        <div className="flex items-center gap-2 font-semibold">
-                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleFloorOpen(building.id, floor.id)}>
-                                            <ChevronDown className={`h-4 w-4 transition-transform ${fOpen ? '' : '-rotate-90'}`} />
-                                          </Button>
-                                          <Layers className="h-4 w-4" />
-                                          {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
-                                            <Input 
-                                              value={editingFloorName} 
-                                              onChange={(e) => setEditingFloorName(e.target.value)}
-                                              className="h-6 text-sm"
-                                              autoFocus
-                                              onBlur={saveEditingFloor}
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Enter') saveEditingFloor();
-                                                if (e.key === 'Escape') cancelEditingFloor();
-                                              }}
-                                            />
-                                          ) : (
-                                            <span 
-                                              className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
-                                              onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
-                                              title={isEdit ? 'انقر للتعديل' : undefined}
-                                            >
-                                              {floor.name}
-                                            </span>
-                                          )}
-                                        </div>
-                                        {isAdmin && (
-                                          <div className="flex justify-center gap-1">
-                                            <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-3 w-3 mr-1" /> Room</Button>
-                                            <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-3 w-3 mr-1" /> Multi</Button>
-                                          </div>
-                                        )}
-                                      </div>
-                                      {fOpen && (
-                                        <div className="p-3 space-y-3">
-                                          {/* Reuse the same room grid and facilities from card view to keep features consistent */}
-                                          <div
-                                            className={`pl-0 space-y-2`}
-                                            onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
-                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
-                                          >
-                                            <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
-                                              {floor.rooms.map((room: Room) => (
-                                                <RoomItem
-                                                  key={room.id}
-                                                  room={room}
-                                                  canEdit={!!isAdmin}
-                                                  onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
-                                                  showCapacity={showCapacity}
-                                                  onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
-                                                  onDragEnd={isMove ? handleDragEnd : undefined}
-                                                  showMoveBadge={isMove}
-                                                  enableDelete={isDelete}
-                                                  isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
-                                                  editingName={editingRoomName}
-                                                  onEditingNameChange={setEditingRoomName}
-                                                  onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
-                                                  onSaveEdit={saveEditingRoom}
-                                                  onCancelEdit={cancelEditingRoom}
-                                                />
-                                              ))}
-                                            </div>
-                                            {dragging && floor.rooms.length === 0 && (
-                                              <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
-                                                Drop room here
-                                              </div>
-                                            )}
-                                            <div>
-                                              <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
-                                              {showFacilities && (
-                                                <FacilitySection 
-                                                  facilities={asArray<Facility>(floor.facilities)}
-                                                  canEdit={!!isAdmin}
-                                                  canAdd={isEdit}
-                                                  onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
-                                                  onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
-                                                  onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
-                                                  onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                                                  onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                                  dragging={!!draggingFacility}
-                                                  showMoveBadge={isMove}
-                                                  enableDelete={isDelete}
-                                                  editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
-                                                  editingFacilityName={editingFacilityName}
-                                                  onEditingFacilityNameChange={setEditingFacilityName}
-                                                  onStartEditFacility={isEdit ? (facilityId) => {
-                                                    const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
-                                                    if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
-                                                  } : undefined}
-                                                  onSaveEditFacility={saveEditingFacility}
-                                                  onCancelEditFacility={cancelEditingFacility}
-                                                  enableInlineEdit={isEdit}
-                                                  onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                                  isEdit={isEdit}
-                                                />
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
+                                  {isAdmin && isEdit && (
+                                    <div className="pt-1">
+                                      <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Floor</Button>
                                     </div>
-                                  );
-                                })}
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">{(dict as any).buildingFacilitiesLabel || 'Building Facilities'}</Label>
-                                  {showFacilities && (
-                                    <FacilitySection 
-                                      facilities={asArray<Facility>(building.facilities)}
-                                      canEdit={!!isAdmin}
-                                      canAdd={isEdit}
-                                      onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
-                                      onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
-                                      onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id }, e) : undefined}
-                                      onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                                      onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'building', buildingId: building.id })}
-                                      dragging={!!draggingFacility}
-                                      showMoveBadge={isMove}
-                                      enableDelete={isDelete}
-                                      editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
-                                      editingFacilityName={editingFacilityName}
-                                      onEditingFacilityNameChange={setEditingFacilityName}
-                                      onStartEditFacility={isEdit ? (facilityId) => {
-                                        const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
-                                        if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
-                                      } : undefined}
-                                      onSaveEditFacility={saveEditingFacility}
-                                      onCancelEditFacility={cancelEditingFacility}
-                                      enableInlineEdit={isEdit}
-                                      onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
-                                      isEdit={isEdit}
-                                    />
                                   )}
                                 </div>
                               </div>
@@ -1791,7 +1463,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                         );
                       })}
                       {(complex.facilities && complex.facilities.length > 0) || isAdmin ? (
-                        <div className="pt-2">
+                        <div className="mt-3">
                           <h4 className="text-sm font-semibold mb-1 flex items-center gap-2"><ConciergeBell className="h-4 w-4 text-primary" /> {(dict as any).generalFacilitiesLabel || 'Residence Facilities'}</h4>
                           {showFacilities && (
                             <FacilitySection 
@@ -1824,9 +1496,10 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                       ) : null}
                     </div>
                   )}
-                </div>
-              );
-            })}
+                </CardContent>
+                )}
+              </Card>
+            ))}
           </div>
         </div>
       ))}
@@ -1898,420 +1571,145 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                           <div className="text-xs text-muted-foreground">{floorsCount}F • {roomsCount}R</div>
                         </div>
                         <div className="p-3 space-y-4">
-                          {building.floors.map((floor) => (
-                            <div key={floor.id} className="rounded-md bg-muted/30 border">
-                              <div className="px-3 py-2 flex items-center justify-between">
-                                <div className="flex items-center gap-2 font-semibold">
-                                  <Layers className="h-4 w-4" />
-                                  {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
-                                    <Input 
-                                      value={editingFloorName} 
-                                      onChange={(e) => setEditingFloorName(e.target.value)}
-                                      className="h-6 text-sm"
-                                      autoFocus
-                                      onBlur={saveEditingFloor}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') saveEditingFloor();
-                                        if (e.key === 'Escape') cancelEditingFloor();
-                                      }}
-                                    />
-                                  ) : (
-                                    <span 
-                                      className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
-                                      onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
-                                      title={isEdit ? 'انقر للتعديل' : undefined}
-                                    >
-                                      {floor.name}
-                                    </span>
+                          {building.floors.map((floor) => {
+                            const fKey = `${building.id}:${floor.id}`;
+                            const fOpen = openFloorKeys[fKey] ?? true;
+                            return (
+                              <div key={floor.id} className="rounded-md bg-muted/30">
+                                <div className="px-3 py-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-2 font-semibold">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleFloorOpen(building.id, floor.id)}>
+                                      <ChevronDown className={`h-4 w-4 transition-transform ${fOpen ? '' : '-rotate-90'}`} />
+                                    </Button>
+                                    <Layers className="h-4 w-4" />
+                                    {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
+                                      <Input 
+                                        value={editingFloorName} 
+                                        onChange={(e) => setEditingFloorName(e.target.value)}
+                                        className="h-6 text-sm"
+                                        autoFocus
+                                        onBlur={saveEditingFloor}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveEditingFloor();
+                                          if (e.key === 'Escape') cancelEditingFloor();
+                                        }}
+                                      />
+                                    ) : (
+                                      <span 
+                                        className={`${isEdit ? 'cursor-pointer px-1 py-0.5 rounded border border-blue-400 hover:border-blue-600' : ''}`}
+                                        onClick={isEdit ? () => startEditingFloor(complex.id, building.id, floor.id, floor.name) : undefined}
+                                        title={isEdit ? 'انقر للتعديل' : undefined}
+                                      >
+                                        {floor.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isAdmin && (
+                                    <div className="flex justify-center gap-1">
+                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                          <PlusCircle className="mr-1 h-3 w-3" /> Room
+                                      </Button>
+                                      <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}>
+                                          <Plus className="mr-1 h-3 w-3" /> Multi
+                                      </Button>
+                                      <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                              <Button variant="destructive" size="sm" className="h-6 w-6 p-0" disabled={!isEdit}><Trash2 className="h-3 w-3" /></Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                              <AlertDialogHeader>
+                                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                              <AlertDialogDescription>This will delete "{floor.name}" and all its contents.</AlertDialogDescription>
+                                              </AlertDialogHeader>
+                                              <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => deleteFloor(complex.id, building.id, floor.id)}>Delete</AlertDialogAction>
+                                              </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                      </AlertDialog>
+                                    </div>
                                   )}
                                 </div>
-                                {isAdmin && (
-                                  <div className="flex justify-center gap-1">
-                                    <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addRoom', {complexId: complex.id, buildingId: building.id, floorId: floor.id})}><PlusCircle className="h-3 w-3 mr-1" /> Room</Button>
-                                    <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={!isEdit} onClick={() => openDialog('addMultipleRooms', {level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id})}><Plus className="h-3 w-3 mr-1" /> Multi</Button>
-                                  </div>
-                                )}
-                              </div>
-                              <div
-                                className={`px-3 pb-3 space-y-2`}
-                                onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
-                                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
-                              >
-                                <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
-                                  {floor.rooms.map((room: Room) => (
-                                    <RoomItem
-                                      key={room.id}
-                                      room={room}
-                                      canEdit={!!isAdmin}
-                                      onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
-                                      showCapacity={showCapacity}
-                                      onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
-                                      onDragEnd={isMove ? handleDragEnd : undefined}
-                                      showMoveBadge={isMove}
-                                      enableDelete={isDelete}
-                                      isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
-                                      editingName={editingRoomName}
-                                      onEditingNameChange={setEditingRoomName}
-                                      onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
-                                      onSaveEdit={saveEditingRoom}
-                                      onCancelEdit={cancelEditingRoom}
-                                    />
-                                  ))}
+                                {fOpen && (
+                                  <div className="p-3 space-y-3">
+                                    {/* Reuse the same room grid and facilities from card view to keep features consistent */}
+                                    <div
+                                      className={`pl-0 space-y-2`}
+                                      onDragOver={(e) => { if (isAdmin) { e.preventDefault(); e.stopPropagation(); } }}
+                                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
+                                    >
+                                      <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
+                                        {floor.rooms.map((room: Room) => (
+                                          <RoomItem
+                                            key={room.id}
+                                            room={room}
+                                            canEdit={!!isAdmin}
+                                            onDelete={() => deleteRoom(complex.id, building.id, floor.id, room.id)}
+                                            showCapacity={showCapacity}
+                                            onDragStart={isMove ? (e) => { clearDragImage(e); handleDragStart({ roomId: room.id, complexId: complex.id, buildingId: building.id, fromFloorId: floor.id }); } : undefined}
+                                            onDragEnd={isMove ? handleDragEnd : undefined}
+                                            showMoveBadge={isMove}
+                                            enableDelete={isDelete}
+                                            isEditing={editingRoom?.complexId === complex.id && editingRoom?.buildingId === building.id && editingRoom?.floorId === floor.id && editingRoom?.roomId === room.id}
+                                            editingName={editingRoomName}
+                                            onEditingNameChange={setEditingRoomName}
+                                            onStartEdit={isEdit ? () => startEditingRoom(complex.id, building.id, floor.id, room.id, room.name) : undefined}
+                                            onSaveEdit={saveEditingRoom}
+                                            onCancelEdit={cancelEditingRoom}
+                                          />
+                                        ))}
+                                      </div>
+                                      {dragging && floor.rooms.length === 0 && (
+                                        <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
+                                          Drop room here
+                                        </div>
+                                      )}
+                                      <div>
+                                        <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
+                                        {showFacilities && (
+                                          <FacilitySection 
+                                            facilities={asArray<Facility>(floor.facilities)}
+                                            canEdit={!!isAdmin}
+                                            canAdd={isEdit}
+                                            onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
+                                            onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
+                                            onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
+                                            onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
+                                            onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                            dragging={!!draggingFacility}
+                                            showMoveBadge={isMove}
+                                            enableDelete={isDelete}
+                                            editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
+                                            editingFacilityName={editingFacilityName}
+                                            onEditingFacilityNameChange={setEditingFacilityName}
+                                            onStartEditFacility={isEdit ? (facilityId) => {
+                                              const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
+                                              if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
+                                            } : undefined}
+                                            onSaveEditFacility={saveEditingFacility}
+                                            onCancelEditFacility={cancelEditingFacility}
+                                            enableInlineEdit={isEdit}
+                                            onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
+                                            isEdit={isEdit}
+                                          />
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                                {dragging && floor.rooms.length === 0 && (
-                                  <div className="mt-2 col-span-full flex items-center justify-center min-h-16 border-2 border-dashed rounded-md text-xs text-muted-foreground">
-                                    Drop room here
-                                  </div>
-                                )}
                               </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">{(dict as any).floorFacilitiesLabel || 'Floor Facilities'}</Label>
-                                {showFacilities && (
-                                  <FacilitySection 
-                                    facilities={asArray<Facility>(floor.facilities)}
-                                    canEdit={!!isAdmin}
-                                    canAdd={isEdit}
-                                    onAdd={() => openDialog('addFacility', { level: 'floor', complexId: complex.id, buildingId: building.id, floorId: floor.id })}
-                                    onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'floor', building.id, floor.id)}
-                                    onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id }, e) : undefined}
-                                    onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                                    onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                    dragging={!!draggingFacility}
-                                    showMoveBadge={isMove}
-                                    enableDelete={isDelete}
-                                    editingFacilityId={editingFacility?.level === 'floor' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id && editingFacility?.floorId === floor.id ? editingFacility.facilityId : undefined}
-                                    editingFacilityName={editingFacilityName}
-                                    onEditingFacilityNameChange={setEditingFacilityName}
-                                    onStartEditFacility={isEdit ? (facilityId) => {
-                                      const current = asArray<Facility>(floor.facilities).find(f => f.id === facilityId);
-                                      if (current) startEditingFacility(complex.id, facilityId, 'floor', current.name, building.id, floor.id);
-                                    } : undefined}
-                                    onSaveEditFacility={saveEditingFacility}
-                                    onCancelEditFacility={cancelEditingFacility}
-                                    enableInlineEdit={isEdit}
-                                    onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'floor', buildingId: building.id, floorId: floor.id })}
-                                    isEdit={isEdit}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                          <div>
-                            <Label className="text-xs text-muted-foreground">{(dict as any).buildingFacilitiesLabel || 'Building Facilities'}</Label>
-                            {showFacilities && (
-                              <FacilitySection 
-                                facilities={asArray<Facility>(building.facilities)}
-                                canEdit={!!isAdmin}
-                                canAdd={isEdit}
-                                onAdd={() => openDialog('addFacility', { level: 'building', complexId: complex.id, buildingId: building.id })}
-                                onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'building', building.id)}
-                                onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id }, e) : undefined}
-                                onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                                onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'building', buildingId: building.id })}
-                                dragging={!!draggingFacility}
-                                showMoveBadge={isMove}
-                                enableDelete={isDelete}
-                                editingFacilityId={editingFacility?.level === 'building' && editingFacility?.complexId === complex.id && editingFacility?.buildingId === building.id ? editingFacility.facilityId : undefined}
-                                editingFacilityName={editingFacilityName}
-                                onEditingFacilityNameChange={setEditingFacilityName}
-                                onStartEditFacility={isEdit ? (facilityId) => {
-                                  const current = asArray<Facility>(building.facilities).find(f => f.id === facilityId);
-                                  if (current) startEditingFacility(complex.id, facilityId, 'building', current.name, building.id);
-                                } : undefined}
-                                onSaveEditFacility={saveEditingFacility}
-                                onCancelEditFacility={cancelEditingFacility}
-                                enableInlineEdit={isEdit}
-                                onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'building', buildingId: building.id })}
-                                isEdit={isEdit}
-                              />
                             )}
                           </div>
-                          {isAdmin && isEdit && (
-                            <div className="pt-1">
-                              <Button variant="outline" size="sm" onClick={() => openDialog('addFloor', {complexId: complex.id, buildingId: building.id})}><PlusCircle className="h-4 w-4 mr-1" /> Add Floor</Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {(complex.facilities && complex.facilities.length > 0) || isAdmin ? (
-                  <div className="mt-3">
-                    <h4 className="text-sm font-semibold mb-1 flex items-center gap-2"><ConciergeBell className="h-4 w-4 text-primary" /> {(dict as any).generalFacilitiesLabel || 'Residence Facilities'}</h4>
-                    {showFacilities && (
-                      <FacilitySection 
-                        facilities={asArray<Facility>(complex.facilities)}
-                        canEdit={!!isAdmin}
-                        canAdd={isEdit}
-                        onAdd={() => openDialog('addFacility', { level: 'complex', complexId: complex.id })}
-                        onDelete={(facilityId) => handleDeleteFacility(complex.id, facilityId, 'complex')}
-                        onItemDragStart={isMove ? (facilityId, e) => handleFacilityDragStart(facilityId, { complexId: complex.id, level: 'complex' }, e) : undefined}
-                        onItemDragEnd={isMove ? handleFacilityDragEnd : undefined}
-                        onDrop={() => handleFacilityDrop({ complexId: complex.id, level: 'complex' })}
-                        dragging={!!draggingFacility}
-                        showMoveBadge={isMove}
-                        editingFacilityId={editingFacility?.level === 'complex' && editingFacility?.complexId === complex.id ? editingFacility.facilityId : undefined}
-                        editingFacilityName={editingFacilityName}
-                        onEditingFacilityNameChange={setEditingFacilityName}
-                        onStartEditFacility={isEdit ? (facilityId) => {
-                          const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
-                          if (current) startEditingFacility(complex.id, facilityId, 'complex', current.name);
-                        } : undefined}
-                        onSaveEditFacility={saveEditingFacility}
-                        onCancelEditFacility={cancelEditingFacility}
-                        enableInlineEdit={isEdit}
-                        enableDelete={isDelete}
-                        onManageComponents={(facilityId) => handleManageComponents(facilityId, { complexId: complex.id, level: 'complex' })}
-                        isEdit={isEdit}
-                        onRename={isEdit ? (facilityId) => {
-                          const current = asArray<Facility>(complex.facilities).find(f => f.id === facilityId);
-                          const val = prompt('Rename facility', current?.name || '');
-                          if (val && val.trim() && val.trim() !== current?.name) {
-                            updateFacilityName(complex.id, 'complex', facilityId, val.trim());
-                          }
-                        } : undefined}
-                      />
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : null}
-              </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {isAdmin && disabledResidences.length > 0 && (
-        <div>
-          <Separator className="my-6" />
-          <h2 className="text-xl font-semibold mb-3">Disabled Residences</h2>
-          <div className="grid gap-3">
-            {disabledResidences.map(dis => (
-              <Card key={dis.id}>
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{dis.name}</div>
-                    <div className="text-sm text-muted-foreground">{dis.city}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setResidenceDisabled(dis.id, false)}>Enable</Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete residence?</AlertDialogTitle>
-                          <AlertDialogDescription>This will permanently delete the residence and all its contents.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteComplex(dis.id)}>Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardContent>
+                )}
               </Card>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Add Building Dialog */}
-      <Dialog open={dialogStates.addBuilding} onOpenChange={(open) => open ? openDialog('addBuilding') : closeDialog('addBuilding')}>
-        <DialogContent>
-          <form onSubmit={handleAddBuilding}>
-            <DialogHeader>
-              <DialogTitle>Add New Building</DialogTitle>
-              <DialogDescription>
-                Enter the name for the new building. It will be added to the selected complex.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="building-name" className="text-right">Name</Label>
-                <Input id="building-name" placeholder="e.g., Building C" className="col-span-3" value={formData.newBuildingName} onChange={(e) => setFormData(prev => ({ ...prev, newBuildingName: e.target.value }))} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Save Building</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Add Floor Dialog */}
-      <Dialog open={dialogStates.addFloor} onOpenChange={(open) => open ? openDialog('addFloor') : closeDialog('addFloor')}>
-        <DialogContent>
-          <form onSubmit={handleAddFloor}>
-            <DialogHeader>
-              <DialogTitle>Add New Floor</DialogTitle>
-              <DialogDescription>
-                Enter a floor name. Use {'{n}'} to insert numbers when adding multiple (e.g., "Floor {'{n}'}").
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="floor-name" className="text-right">Name</Label>
-                <Input id="floor-name" placeholder="e.g., Floor 3" className="col-span-3" value={formData.newFloorName} onChange={(e) => setFormData(prev => ({ ...prev, newFloorName: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="floor-qty" className="text-right">Quantity</Label>
-                <Input id="floor-qty" type="number" min="1" className="col-span-3" value={formData.newFloorQuantity} onChange={(e) => setFormData(prev => ({ ...prev, newFloorQuantity: Math.max(1, Number(e.target.value) || 1) }))} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Save Floor(s)</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Room Dialog */}
-      <Dialog open={dialogStates.addRoom} onOpenChange={(open) => open ? openDialog('addRoom') : closeDialog('addRoom')}>
-        <DialogContent>
-          <form onSubmit={handleAddRoom}>
-            <DialogHeader>
-              <DialogTitle>Add New Room</DialogTitle>
-              <DialogDescription>
-                Enter the name for the new room. Default size: 4x4m (16m², capacity: 4)
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="room-name" className="text-right">Name</Label>
-                <Input id="room-name" placeholder="e.g., Room 301" className="col-span-3" value={formData.newRoomName} onChange={(e) => setFormData(prev => ({ ...prev, newRoomName: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="room-length" className="text-right">Length (m)</Label>
-                <Input id="room-length" placeholder="Default: 4" className="col-span-3" value={formData.newRoomLength} onChange={(e) => setFormData(prev => ({ ...prev, newRoomLength: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="room-width" className="text-right">Width (m)</Label>
-                <Input id="room-width" placeholder="Default: 4" className="col-span-3" value={formData.newRoomWidth} onChange={(e) => setFormData(prev => ({ ...prev, newRoomWidth: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="room-area" className="text-right">Or Area (m²)</Label>
-                <Input id="room-area" placeholder="Default: 16" className="col-span-3" value={formData.newRoomArea} onChange={(e) => setFormData(prev => ({ ...prev, newRoomArea: e.target.value }))} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Save Room</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Multiple Rooms Dialog */}
-      <AddMultipleRoomsDialog
-        isOpen={dialogStates.addMultipleRooms}
-        onOpenChange={(open) => {
-          if (!open) closeDialog('addMultipleRooms');
-        }}
-        floorInfo={contextIds && contextIds.complexId && contextIds.buildingId && contextIds.floorId ? { complexId: contextIds.complexId!, buildingId: contextIds.buildingId!, floorId: contextIds.floorId! } : null}
-        onAddRooms={addMultipleRooms}
-      />
-      
-      {/* Edit Complex Dialog */}
-      <Dialog open={dialogStates.editComplex} onOpenChange={(open) => open ? openDialog('editComplex') : closeDialog('editComplex')}>
-          <DialogContent>
-              <form onSubmit={handleUpdateComplex}>
-                  <DialogHeader>
-                      <DialogTitle>Edit Complex</DialogTitle>
-                      <DialogDescription>Update the details for the residential complex.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="edit-complex-name" className="text-right">Name</Label>
-                          <Input 
-                              id="edit-complex-name" 
-                              className="col-span-3" 
-                              value={editingComplex?.name || ''} 
-                              onChange={(e) => editingComplex && setEditingComplex({...editingComplex, name: e.target.value})}
-                          />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="edit-complex-city" className="text-right">City</Label>
-                          <Input 
-                              id="edit-complex-city" 
-                              className="col-span-3" 
-                              value={editingComplex?.city || ''} 
-                              onChange={(e) => editingComplex && setEditingComplex({...editingComplex, city: e.target.value})}
-                          />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="edit-complex-manager" className="text-right">Manager</Label>
-                          <Select 
-                              onValueChange={(managerId) => editingComplex && setEditingComplex({...editingComplex, managerId})} 
-                              value={editingComplex?.managerId}
-                          >
-                              <SelectTrigger className="col-span-3">
-                                  <SelectValue placeholder="Select a manager" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  {users.map((user) => (
-                                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                                  ))}
-                              </SelectContent>
-                          </Select>
-                      </div>
-                  </div>
-                  <DialogFooter>
-                      <Button type="button" variant="ghost" onClick={() => closeDialog('editComplex')}>Cancel</Button>
-                      <Button type="submit">Save Changes</Button>
-                  </DialogFooter>
-              </form>
-          </DialogContent>
-      </Dialog>
-      
-      {/* Add Facility Dialog */}
-      {contextIds?.complexId && contextIds.level && (
-        <AddFacilityDialog 
-            isOpen={dialogStates.addFacility}
-            onOpenChange={(open) => open ? openDialog('addFacility') : closeDialog('addFacility')}
-            context={{
-              level: contextIds.level,
-              complexId: contextIds.complexId,
-              buildingId: contextIds.buildingId,
-              floorId: contextIds.floorId,
-            }}
-            onAdd={addFacility}
-        />
-      )}
-
-      {/* Manage Facility Components Dialog */}
-      <Dialog open={dialogStates.manageFacilityComponents} onOpenChange={(open) => open ? openDialog('manageFacilityComponents') : closeDialog('manageFacilityComponents')}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>إضافة مكون جديد</DialogTitle>
-            <DialogDescription>أضف مكون جديد إلى هذا التجهيز</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {contextIds?.facilityId && contextIds?.complexId && contextIds?.level ? (
-              <AddComponentForm
-                facilityId={contextIds.facilityId}
-                onClose={() => closeDialog('manageFacilityComponents')}
-                onAddComponent={async (facilityId, component) => {
-                  await addFacilityComponent(
-                    contextIds.complexId!,
-                    facilityId,
-                    contextIds.level as 'complex' | 'building' | 'floor',
-                    component,
-                    contextIds.buildingId,
-                    contextIds.floorId
-                  );
-                }}
-              />
-            ) : (
-              <div className="text-red-500">
-                Missing context: {JSON.stringify(contextIds)}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      ))}
     </div>
   );
 }

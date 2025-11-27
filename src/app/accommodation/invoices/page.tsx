@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { useAccommodation, type Invoice } from '@/context/accommodation-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function InvoicesPage() {
+  const { dict } = useLanguage();
   const { invoices, contracts, companies, residences, generateMonthlyInvoices, saveInvoice } = useAccommodation();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -115,7 +117,7 @@ export default function InvoicesPage() {
         status: 'Paid',
         paidAt: new Date().toISOString(),
       });
-      toast({ title: 'Success', description: 'Invoice marked as paid' });
+      toast({ title: dict.invoices.success, description: dict.invoices.invoiceMarkedAsPaid });
     } catch (error) {
       console.error('Failed to update invoice:', error);
     }
@@ -135,10 +137,19 @@ export default function InvoicesPage() {
       Cancelled: { variant: 'outline', icon: AlertCircle },
     };
     const { variant, icon: Icon } = config[status];
+    
+    const statusLabel = {
+      Draft: dict.invoices.statusDraft,
+      Pending: dict.invoices.statusPending,
+      Paid: dict.invoices.statusPaid,
+      Overdue: dict.invoices.statusOverdue,
+      Cancelled: dict.invoices.statusCancelled,
+    }[status] || status;
+
     return (
       <Badge variant={variant} className="flex items-center gap-1 w-fit">
         <Icon className="h-3 w-3" />
-        {status}
+        {statusLabel}
       </Badge>
     );
   };
@@ -156,27 +167,27 @@ export default function InvoicesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Invoices</h1>
-          <p className="text-muted-foreground mt-2">Manage accommodation invoices and billing</p>
+          <h1 className="text-3xl font-bold">{dict.invoices.title}</h1>
+          <p className="text-muted-foreground mt-2">{dict.invoices.subtitle}</p>
         </div>
         <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Generate Invoices
+              {dict.invoices.generateInvoices}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Generate Monthly Invoices</DialogTitle>
+              <DialogTitle>{dict.invoices.generateMonthlyInvoices}</DialogTitle>
               <DialogDescription>
-                Generate invoices for all active contracts for the selected month
+                {dict.invoices.generateDescription}
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Quick Select Month</Label>
+                <Label>{dict.invoices.quickSelectMonth}</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {months.map((m) => (
                     <Button
@@ -193,7 +204,7 @@ export default function InvoicesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Fiscal Period Range</Label>
+                <Label>{dict.invoices.fiscalPeriodRange}</Label>
                 <div className="flex flex-col gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -216,7 +227,7 @@ export default function InvoicesPage() {
                             format(dateRange.from, "LLL dd, y")
                           )
                         ) : (
-                          <span>Pick a date range</span>
+                          <span>{dict.invoices.pickDateRange}</span>
                         )}
                       </Button>
                     </PopoverTrigger>
@@ -232,26 +243,26 @@ export default function InvoicesPage() {
                     </PopoverContent>
                   </Popover>
                   <p className="text-xs text-muted-foreground">
-                    Start date is inclusive, End date is exclusive for calculation purposes.
+                    {dict.invoices.dateRangeNote}
                   </p>
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                <p>This will create invoices for:</p>
+                <p>{dict.invoices.willCreateInvoicesFor}</p>
                 <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>All active contracts during the selected month</li>
-                  <li>Based on actual worker occupancy</li>
-                  <li>Calculated using contract rates</li>
+                  <li>{dict.invoices.activeContractsNote}</li>
+                  <li>{dict.invoices.occupancyNote}</li>
+                  <li>{dict.invoices.calculatedNote}</li>
                 </ul>
               </div>
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setGenerateDialogOpen(false)}>
-                Cancel
+                {dict.ui.cancel}
               </Button>
               <Button onClick={handleGenerateInvoices}>
-                Generate Invoices
+                {dict.invoices.generateInvoices}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -262,50 +273,50 @@ export default function InvoicesPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.invoices.totalRevenue}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total.toFixed(2)} SAR</div>
-            <p className="text-xs text-muted-foreground">{invoices.length} invoices</p>
+            <p className="text-xs text-muted-foreground">{invoices.length} {dict.invoices.title}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paid</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.invoices.paid}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.paid.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Paid').length} invoices
+              {invoices.filter(inv => inv.status === 'Paid').length} {dict.invoices.title}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.invoices.pending}</CardTitle>
             <Clock className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{stats.pending.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Pending').length} invoices
+              {invoices.filter(inv => inv.status === 'Pending').length} {dict.invoices.title}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.invoices.overdue}</CardTitle>
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{stats.overdue.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Overdue').length} invoices
+              {invoices.filter(inv => inv.status === 'Overdue').length} {dict.invoices.title}
             </p>
           </CardContent>
         </Card>
@@ -314,7 +325,7 @@ export default function InvoicesPage() {
       {/* Filters */}
       <div className="flex items-center gap-4">
         <Input
-          placeholder="Search invoices..."
+          placeholder={dict.invoices.searchPlaceholder}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -324,12 +335,12 @@ export default function InvoicesPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Paid">Paid</SelectItem>
-            <SelectItem value="Overdue">Overdue</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{dict.invoices.allStatus}</SelectItem>
+            <SelectItem value="Draft">{dict.invoices.draft}</SelectItem>
+            <SelectItem value="Pending">{dict.invoices.pending}</SelectItem>
+            <SelectItem value="Paid">{dict.invoices.paid}</SelectItem>
+            <SelectItem value="Overdue">{dict.invoices.overdue}</SelectItem>
+            <SelectItem value="Cancelled">{dict.invoices.cancelled}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -337,17 +348,17 @@ export default function InvoicesPage() {
       {/* Invoices Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Invoices ({filteredInvoices.length})</CardTitle>
-          <CardDescription>Billing history and pending invoices</CardDescription>
+          <CardTitle>{dict.invoices.allInvoices} ({filteredInvoices.length})</CardTitle>
+          <CardDescription>{dict.invoices.billingHistory}</CardDescription>
         </CardHeader>
         <CardContent>
           {filteredInvoices.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No invoices found</p>
+              <p>{dict.invoices.noInvoicesFound}</p>
               <Button onClick={() => setGenerateDialogOpen(true)} className="mt-4" variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
-                Generate invoices
+                {dict.invoices.generateInvoices}
               </Button>
             </div>
           ) : (
@@ -355,14 +366,14 @@ export default function InvoicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice ID</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Workers</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{dict.invoices.invoiceId}</TableHead>
+                    <TableHead>{dict.companies.title}</TableHead>
+                    <TableHead>{dict.residences.residence}</TableHead>
+                    <TableHead>{dict.invoices.month}</TableHead>
+                    <TableHead className="text-right">{dict.invoices.workers}</TableHead>
+                    <TableHead className="text-right">{dict.invoices.amount}</TableHead>
+                    <TableHead>{dict.invoices.status}</TableHead>
+                    <TableHead className="text-right">{dict.invoices.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -446,7 +457,7 @@ export default function InvoicesPage() {
           {selectedInvoice && (
             <>
               <DialogHeader>
-                <DialogTitle>Invoice Details</DialogTitle>
+                <DialogTitle>{dict.invoices.invoiceDetails}</DialogTitle>
                 <DialogDescription>
                   {selectedInvoice.id}
                 </DialogDescription>
@@ -455,13 +466,13 @@ export default function InvoicesPage() {
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground">Company</Label>
+                    <Label className="text-muted-foreground">{dict.companies.title}</Label>
                     <div className="font-medium">
                       {companies.find(c => c.id === selectedInvoice.companyId)?.name || selectedInvoice.companyId}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Residence</Label>
+                    <Label className="text-muted-foreground">{dict.residences.residence}</Label>
                     <div className="font-medium">
                       {residences.find(r => r.id === selectedInvoice.residenceId)?.name || selectedInvoice.residenceId}
                     </div>
@@ -470,46 +481,46 @@ export default function InvoicesPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground">Billing Period</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.billingPeriod}</Label>
                     <div className="font-medium">{selectedInvoice.month}</div>
                     <div className="text-sm text-muted-foreground">
                       {new Date(selectedInvoice.startDate).toLocaleDateString()} - {new Date(selectedInvoice.endDate).toLocaleDateString()}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Number of Days</Label>
-                    <div className="font-medium">{selectedInvoice.numberOfDays} days</div>
+                    <Label className="text-muted-foreground">{dict.invoices.numberOfDays}</Label>
+                    <div className="font-medium">{selectedInvoice.numberOfDays} {dict.invoices.days}</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground">Number of Workers</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.numberOfWorkers}</Label>
                     <div className="font-medium">{selectedInvoice.numberOfWorkers}</div>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Rate per Person/Month</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.ratePerPerson}</Label>
                     <div className="font-medium">{selectedInvoice.ratePerPerson.toFixed(2)} SAR</div>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
                   <div className="flex items-center justify-between">
-                    <Label className="text-lg font-semibold">Total Amount</Label>
+                    <Label className="text-lg font-semibold">{dict.invoices.totalAmount}</Label>
                     <div className="text-2xl font-bold">{selectedInvoice.totalAmount.toFixed(2)} SAR</div>
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    Total calculated based on individual worker occupancy days (Rate ÷ 30 × Days).
+                    {dict.invoices.totalCalculatedNote}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground">Status</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.status}</Label>
                     <div className="mt-1">{getStatusBadge(selectedInvoice.status)}</div>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Generated At</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.generatedAt}</Label>
                     <div className="font-medium">
                       {new Date(selectedInvoice.generatedAt).toLocaleString()}
                     </div>
@@ -518,7 +529,7 @@ export default function InvoicesPage() {
 
                 {selectedInvoice.paidAt && (
                   <div>
-                    <Label className="text-muted-foreground">Paid At</Label>
+                    <Label className="text-muted-foreground">{dict.invoices.paidAt}</Label>
                     <div className="font-medium text-green-600">
                       {new Date(selectedInvoice.paidAt).toLocaleString()}
                     </div>
@@ -527,7 +538,7 @@ export default function InvoicesPage() {
 
                 {selectedInvoice.notes && (
                   <div>
-                    <Label className="text-muted-foreground mb-2 block">Worker Breakdown</Label>
+                    <Label className="text-muted-foreground mb-2 block">{dict.invoices.workerBreakdown}</Label>
                     {(() => {
                       try {
                         const breakdown = JSON.parse(selectedInvoice.notes);
@@ -537,9 +548,9 @@ export default function InvoicesPage() {
                               <Table>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="h-8">Worker</TableHead>
-                                    <TableHead className="h-8 text-right">Days</TableHead>
-                                    <TableHead className="h-8 text-right">Amount</TableHead>
+                                    <TableHead className="h-8">{dict.invoices.worker}</TableHead>
+                                    <TableHead className="h-8 text-right">{dict.invoices.days}</TableHead>
+                                    <TableHead className="h-8 text-right">{dict.invoices.amount}</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -566,14 +577,14 @@ export default function InvoicesPage() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-                  Close
+                  {dict.invoices.close}
                 </Button>
                 {selectedInvoice.status === 'Pending' && (
                   <Button onClick={() => {
                     handleMarkAsPaid(selectedInvoice);
                     setDetailsDialogOpen(false);
                   }}>
-                    Mark as Paid
+                    {dict.invoices.markAsPaid}
                   </Button>
                 )}
               </DialogFooter>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLanguage } from '@/context/language-context';
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +24,7 @@ export default function ServiceOrdersListPage() {
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const router = useRouter();
+  const { dict } = useLanguage();
 
   const [status, setStatus] = useState<string>("ALL");
   const [residenceId, setResidenceId] = useState<string>("ALL");
@@ -65,13 +67,13 @@ export default function ServiceOrdersListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Service Orders</h1>
           <p className="text-muted-foreground">Send items to maintenance/workshops and track returns.</p>
         </div>
-        <Button asChild>
-          <Link href="/inventory/service-orders/new">
+        <Button asChild className="w-full sm:w-auto">
+          <Link href="/inventory/service-orders/new" className="flex items-center justify-center">
             <PlusCircle className="mr-2 h-4 w-4" /> New Service Order
           </Link>
         </Button>
@@ -79,11 +81,13 @@ export default function ServiceOrdersListPage() {
 
       <Card>
         <CardContent>
-          <div className="flex flex-wrap gap-3 items-end mb-4">
+          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end mb-4">
             <div>
               <div className="text-xs text-muted-foreground mb-1">Status</div>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All</SelectItem>
                   <SelectItem value="DRAFT">Draft</SelectItem>
@@ -106,7 +110,7 @@ export default function ServiceOrdersListPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1 min-w-[220px]">
+            <div className="flex-1 min-w-[180px]">
               <div className="text-xs text-muted-foreground mb-1">Search</div>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ref/destination/residence" />
             </div>

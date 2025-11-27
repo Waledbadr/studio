@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useLanguage } from '@/context/language-context';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 export default function ResetAccommodationPage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<string>("");
+  const { dict } = useLanguage();
   const { toast } = useToast();
 
   const handleReset = async () => {
@@ -19,24 +21,24 @@ export default function ResetAccommodationPage() {
     }
 
     setLoading(true);
-    setProgress("جاري البدء...");
+    setProgress(dict.resetStarting || "جاري البدء...");
 
     try {
       // 1. Delete occupants
-      setProgress("جاري حذف الساكنين (Occupants)...");
+      setProgress(dict.resetDeletingOccupants || "جاري حذف الساكنين (Occupants)...");
       await deleteCollection('occupants');
 
       // 2. Delete history
-      setProgress("جاري حذف السجل التاريخي (History)...");
+      setProgress(dict.resetDeletingHistory || "جاري حذف السجل التاريخي (History)...");
       await deleteCollection('accommodationHistory');
 
       // 3. Reset residences
-      setProgress("جاري تصفير الغرف في المجمعات (Residences)...");
+      setProgress(dict.resetResettingResidences || "جاري تصفير الغرف في المجمعات (Residences)...");
       await resetResidences();
 
-      setProgress("تمت العملية بنجاح! ✅");
+      setProgress(dict.resetSuccess || "تمت العملية بنجاح! ✅");
       toast({
-        title: "تمت العملية بنجاح",
+        title: dict.resetSuccessTitle || "تمت العملية بنجاح",
         description: "تم حذف جميع بيانات التسكين وتفريغ الغرف.",
         variant: "default",
       });
@@ -45,7 +47,7 @@ export default function ResetAccommodationPage() {
       console.error("Error resetting data:", error);
       setProgress(`حدث خطأ: ${error.message}`);
       toast({
-        title: "خطأ",
+        title: dict.error || "خطأ",
         description: error.message,
         variant: "destructive",
       });
@@ -84,12 +86,10 @@ export default function ResetAccommodationPage() {
   };
 
   const resetResidences = async () => {
-    const residencesRef = collection(db, 'residences');
+              <CardTitle>{dict.resetAccommodationTitle || 'إعادة تعيين بيانات التسكين'}</CardTitle>
     const snapshot = await getDocs(residencesRef);
 
-    if (snapshot.empty) return;
-
-    let updatedCount = 0;
+              <CardDescription>{dict.resetAccommodationDesc || 'سيتم حذف جميع بيانات التسكين وإعادة تعيين الغرف والمقيمين. لا يمكن التراجع عن هذه العملية.'}</CardDescription>
 
     for (const docSnapshot of snapshot.docs) {
       const residence = docSnapshot.data();
@@ -115,7 +115,7 @@ export default function ResetAccommodationPage() {
         return floors.map(floor => ({
           ...floor,
           rooms: resetRooms(floor.rooms)
-        }));
+              {loading ? dict.loadingText || "جاري التنفيذ..." : dict.resetButton || "حذف جميع البيانات وتفريغ الغرف"}
       };
 
       // Helper to reset buildings

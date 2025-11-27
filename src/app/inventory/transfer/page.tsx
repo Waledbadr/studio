@@ -92,30 +92,30 @@ export default function TransferHistoryPage() {
 
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
+             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                <h1 className="text-2xl font-bold">Stock Transfer History</h1>
-                <p className="text-muted-foreground">Review and manage all stock transfer requests.</p>
+                <h1 className="text-2xl font-bold">{dict.transferHistoryTitle}</h1>
+                <p className="text-muted-foreground">{dict.transferHistoryDesc}</p>
                 </div>
                  <Button asChild>
                     <Link href="/inventory/transfer/new">
-                        <PlusCircle className="mr-2 h-4 w-4" /> New Transfer
+                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.newTransfer}
                     </Link>
                 </Button>
             </div>
             
             <Card>
-                <CardContent>
+                <CardContent className="p-0">
                      <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>From</TableHead>
-                                <TableHead>To</TableHead>
-                                <TableHead>Items</TableHead>
+                                <TableHead>{dict.date}</TableHead>
+                                <TableHead>{dict.fromLabel}</TableHead>
+                                <TableHead>{dict.toLabel}</TableHead>
+                                <TableHead>{dict.itemsLabel}</TableHead>
                                 <TableHead>{dict.referenceLabel}</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>{dict.statusLabel}</TableHead>
+                                <TableHead className="text-right">{dict.actionsLabel}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -144,10 +144,10 @@ export default function TransferHistoryPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onClick={() => handleApprove(transfer.id)}>
-                                                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Approve
+                                                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> {dict.approveAction}
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => handleReject(transfer.id)}>
-                                                        <XCircle className="mr-2 h-4 w-4 text-red-500" /> Reject
+                                                        <XCircle className="mr-2 h-4 w-4 text-red-500" /> {dict.rejectAction}
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -156,7 +156,7 @@ export default function TransferHistoryPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">No transfer requests found.</TableCell>
+                                    <TableCell colSpan={7} className="h-48 text-center text-muted-foreground">{dict.noTransfersFound}</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
@@ -173,7 +173,7 @@ export default function TransferHistoryPage() {
                     {selected ? (
                         <div className="text-sm text-muted-foreground space-y-1 mb-3">
                             <div>
-                                {dict.typeLabel}: <span className="font-medium text-foreground">TRANSFER</span>
+                                {dict.typeLabel}: <span className="font-medium text-foreground">{dict.transferType}</span>
                             </div>
                             <div>
                                 {dict.date}: {format(selected.date.toDate(), 'PPP p')}

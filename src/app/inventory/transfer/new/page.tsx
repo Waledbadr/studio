@@ -110,7 +110,7 @@ export default function NewStockTransferPage() {
         if (quantity < 1) quantity = 1;
         if (quantity > stock) {
             quantity = stock;
-            toast({ title: "Stock Limit", description: `Cannot transfer more than the available ${stock} units.`, variant: "destructive" });
+            toast({ title: dict.stockLimitTitle, description: dict.stockLimitDesc.replace('{stock}', stock.toString()), variant: "destructive" });
         }
         
         setTransferItems(prev => prev.map(item => item.id === itemId ? { ...item, transferQuantity: quantity } : item));
@@ -136,7 +136,7 @@ export default function NewStockTransferPage() {
     
     const handleSubmitTransfer = async () => {
         if (!fromResidenceId || !toResidenceId || transferItems.length === 0 || !currentUser) {
-            toast({ title: "Invalid Transfer", description: "Please select source, destination, and add items to transfer.", variant: "destructive" });
+            toast({ title: dict.invalidTransferTitle, description: dict.invalidTransferDesc, variant: "destructive" });
             return;
         }
 
@@ -157,7 +157,7 @@ export default function NewStockTransferPage() {
             router.push('/inventory/transfer');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-            toast({ title: "Error", description: `Transfer failed: ${errorMessage}`, variant: "destructive" });
+            toast({ title: dict.transferErrorTitle, description: dict.transferErrorDesc.replace('{error}', errorMessage), variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -180,7 +180,7 @@ export default function NewStockTransferPage() {
                 {/* Left Side: Select Residences and Items */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>1. Select Residences & Items</CardTitle>
+                        <CardTitle>{dict.transferStep1Title}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">

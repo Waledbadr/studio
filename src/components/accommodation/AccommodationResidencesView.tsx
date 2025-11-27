@@ -607,21 +607,21 @@ export default function AccommodationResidencesView() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Residence</TableHead>
-              <TableHead>Building</TableHead>
-              <TableHead>Floor</TableHead>
-              <TableHead>Room</TableHead>
-              <TableHead>Capacity</TableHead>
-              <TableHead>Occupancy</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{dict.residences.residence}</TableHead>
+              <TableHead>{dict.residences.building}</TableHead>
+              <TableHead>{dict.residences.floor}</TableHead>
+              <TableHead>{dict.residences.room}</TableHead>
+              <TableHead>{dict.residences.capacity}</TableHead>
+              <TableHead>{dict.residences.occupancy}</TableHead>
+              <TableHead>{dict.residences.status}</TableHead>
+              <TableHead className="text-right">{dict.residences.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
-                  No rooms found
+                  {dict.residences.noRooms}
                 </TableCell>
               </TableRow>
             ) : (
@@ -657,7 +657,7 @@ export default function AccommodationResidencesView() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={isOvercrowded ? "destructive" : isFull ? "secondary" : "outline"}>
-                        {isOvercrowded ? "Overcrowded" : isFull ? "Full" : "Available"}
+                        {isOvercrowded ? dict.residences.overcrowded : isFull ? dict.residences.full : dict.residences.available}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -674,7 +674,7 @@ export default function AccommodationResidencesView() {
                           size="icon"
                           className="text-destructive"
                           onClick={() => {
-                            if (confirm(`Delete room "${room.name}"?`)) {
+                            if (confirm(dict.residences.deleteConfirm.replace('{name}', room.name))) {
                               handleDeleteRoom(residence.id, building?.id, floor?.id, room.id);
                             }
                           }}
@@ -699,37 +699,37 @@ export default function AccommodationResidencesView() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Complexes</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.complexes}</CardTitle>
             <CardDescription className="text-2xl font-bold">{stats.complexes}</CardDescription>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Buildings</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.buildings}</CardTitle>
             <CardDescription className="text-2xl font-bold">{stats.buildings}</CardDescription>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Floors</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.floors}</CardTitle>
             <CardDescription className="text-2xl font-bold">{stats.floors}</CardDescription>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Rooms</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.rooms}</CardTitle>
             <CardDescription className="text-2xl font-bold">{stats.rooms}</CardDescription>
           </CardHeader>
         </Card>
         <Card className="border-primary/50">
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Occupants</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.occupants}</CardTitle>
             <CardDescription className="text-2xl font-bold text-primary">{stats.occupants}</CardDescription>
           </CardHeader>
         </Card>
         <Card className={stats.occupancyRate > 80 ? "border-orange-500/50" : ""}>
           <CardHeader className="p-4">
-            <CardTitle className="text-sm text-muted-foreground">Occupancy Rate</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{dict.residences.occupancy}</CardTitle>
             <CardDescription className="text-2xl font-bold">{stats.occupancyRate}%</CardDescription>
           </CardHeader>
         </Card>
@@ -743,17 +743,17 @@ export default function AccommodationResidencesView() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search residences, buildings, floors, or rooms..."
+                placeholder={dict.residences.searchPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <Select value={cityFilter} onValueChange={setCityFilter}>
               <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="City" />
+                <SelectValue placeholder={dict.residences.city} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Cities</SelectItem>
+                <SelectItem value="all">{dict.residences.allCities}</SelectItem>
                 {cities.map(city => (
                   <SelectItem key={city} value={city}>{city}</SelectItem>
                 ))}
@@ -764,37 +764,37 @@ export default function AccommodationResidencesView() {
                 variant={viewMode === 'cards' ? 'default' : 'outline'} 
                 size="sm" 
                 onClick={() => setViewMode('cards')}
-                title="Cards view"
+                title={dict.residences.cards}
               >
                 <Grid3x3 className="h-4 w-4 mr-2" />
-                Cards
+                {dict.residences.cards}
               </Button>
               <Button 
                 variant={viewMode === 'tree' ? 'default' : 'outline'} 
                 size="sm" 
                 onClick={() => setViewMode('tree')}
-                title="Tree view"
+                title={dict.residences.tree}
               >
                 <List className="h-4 w-4 mr-2" />
-                Tree
+                {dict.residences.tree}
               </Button>
               <Button 
                 variant={viewMode === 'board' ? 'default' : 'outline'} 
                 size="sm" 
                 onClick={() => setViewMode('board')}
-                title={dict.boardView}
+                title={dict.residences.board}
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
-                {dict.board}
+                {dict.residences.board}
               </Button>
               <Button 
                 variant={viewMode === 'table' ? 'default' : 'outline'} 
                 size="sm" 
                 onClick={() => setViewMode('table')}
-                title="Table View"
+                title={dict.residences.table}
               >
                 <TableIcon className="h-4 w-4 mr-2" />
-                Table
+                {dict.residences.table}
               </Button>
             </div>
           </div>
@@ -806,10 +806,10 @@ export default function AccommodationResidencesView() {
               size="sm" 
               onClick={handleUpdateAllRoomsDefaultArea}
               className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
-              title="Update all rooms without area to 24m² (6 capacity)"
+              title={dict.residences.updateDefaultArea}
             >
               <DoorOpen className="h-4 w-4 mr-2" />
-              Update Default Room Areas
+              {dict.residences.updateDefaultArea}
             </Button>
           </div>
         </CardContent>
@@ -818,7 +818,7 @@ export default function AccommodationResidencesView() {
       {/* Results summary */}
       {(deferredSearch || cityFilter !== 'all') && (
         <div className="text-sm text-muted-foreground">
-          Showing {filteredResidences.length} of {residences.length} residences
+          {filteredResidences.length} / {residences.length} {dict.residences.residencesCountSuffix}
         </div>
       )}
 
@@ -840,7 +840,7 @@ export default function AccommodationResidencesView() {
                     {complex.name}
                     {complex.isEmergencyMode && (
                       <Badge variant="destructive" className="text-xs animate-pulse">
-                        <Siren className="h-3 w-3 mr-1" /> Emergency Mode
+                        <Siren className="h-3 w-3 mr-1" /> {dict.residences.emergencyMode}
                       </Badge>
                     )}
                   </CardTitle>
@@ -856,7 +856,7 @@ export default function AccommodationResidencesView() {
               {canManageEmergency && (
                 <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <Label htmlFor={`emergency-${complex.id}`} className={`text-xs font-medium ${complex.isEmergencyMode ? "text-red-600" : "text-muted-foreground"}`}>
-                    {complex.isEmergencyMode ? "Emergency ON" : "Emergency OFF"}
+                    {complex.isEmergencyMode ? `${dict.residences.emergencyMode} (${dict.active})` : `${dict.residences.emergencyMode} (${dict.inactive})`}
                   </Label>
                   <Switch
                     id={`emergency-${complex.id}`}
@@ -885,7 +885,7 @@ export default function AccommodationResidencesView() {
                                 <div className="font-medium">{room.name}</div>
                                 <div className="text-sm text-muted-foreground">
                                   {room.area ? `${room.area} m²` : '-'} • 
-                                  Capacity: {room.capacity || '-'}
+                                  {dict.residences.capacity}: {room.capacity || '-'}
                                 </div>
                               </div>
                             </div>
@@ -977,7 +977,7 @@ export default function AccommodationResidencesView() {
                               className="h-8 w-8 text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`Delete building "${building.name}"? This will delete all floors and rooms inside.`)) {
+                                if (confirm(dict.residences.deleteBuildingConfirm.replace('{name}', building.name))) {
                                   handleDeleteBuilding(complex.id, building.id);
                                 }
                               }}
@@ -1034,7 +1034,7 @@ export default function AccommodationResidencesView() {
                                       size="icon"
                                       className="h-6 w-6 text-destructive"
                                       onClick={() => {
-                                        if (confirm(`Delete floor "${floor.name}"? This will delete all rooms inside.`)) {
+                                        if (confirm(dict.residences.deleteFloorConfirm.replace('{name}', floor.name))) {
                                           handleDeleteFloor(complex.id, building.id, floor.id);
                                         }
                                       }}
@@ -1170,7 +1170,7 @@ export default function AccommodationResidencesView() {
                       {(complex.rooms?.length || 0) + 
                        (complex.buildings?.reduce((acc, b) => 
                          acc + (b.floors?.reduce((acc2, f) => acc2 + (f.rooms?.length || 0), 0) || 0), 0) || 0)
-                      } rooms
+                      } {dict.residences.rooms}
                     </span>
                     <span>
                       {occupants.filter(occ => {
@@ -1181,7 +1181,7 @@ export default function AccommodationResidencesView() {
                           ) || [])
                         ];
                         return roomIds.includes(occ.roomId);
-                      }).length} occupants
+                      }).length} {dict.residences.occupants}
                     </span>
                   </div>
                 </div>
@@ -1208,7 +1208,7 @@ export default function AccommodationResidencesView() {
                             <div>
                               <div className="font-medium text-sm">{room.name}</div>
                               <div className="text-xs text-muted-foreground">
-                                {room.area ? `${room.area} m²` : '-'} • Capacity: {room.capacity || '-'}
+                                {room.area ? `${room.area} m²` : '-'} • {dict.residences.capacity}: {room.capacity || '-'}
                               </div>
                             </div>
                           </div>
@@ -1344,7 +1344,7 @@ export default function AccommodationResidencesView() {
                         {complex.name}
                         {complex.isEmergencyMode && (
                           <Badge variant="destructive" className="text-xs h-5">
-                            <Siren className="h-3 w-3 mr-1" /> Emergency
+                            <Siren className="h-3 w-3 mr-1" /> {dict.residences.emergencyMode}
                           </Badge>
                         )}
                       </div>
@@ -1377,7 +1377,7 @@ export default function AccommodationResidencesView() {
                                   <div className="font-medium">{building.name}</div>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {floorsCount}P • {roomsCount}G
+                                  {floorsCount}{language === 'ar' ? 'ط' : 'F'} • {roomsCount}{language === 'ar' ? 'غ' : 'R'}
                                 </div>
                               </div>
                               
@@ -1390,7 +1390,7 @@ export default function AccommodationResidencesView() {
                                         <span>{floor.name}</span>
                                       </div>
                                       <div className="text-xs text-muted-foreground">
-                                        {floor.rooms?.length || 0} rooms
+                                        {floor.rooms?.length || 0} {dict.residences.rooms}
                                       </div>
                                     </div>
                                     
@@ -1414,7 +1414,7 @@ export default function AccommodationResidencesView() {
                                                 <span className="font-medium truncate">{room.name}</span>
                                               </div>
                                               <div className="text-[10px] text-muted-foreground mb-1">
-                                                {room.area ? `${room.area} م²` : '-'} • {room.capacity || '-'}
+                                                {room.area ? `${room.area} m²` : '-'} • {room.capacity || '-'}
                                               </div>
                                               <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${
                                                 isFull ? 'bg-red-100 dark:bg-red-900/30' :
@@ -1452,16 +1452,16 @@ export default function AccommodationResidencesView() {
       <Dialog open={!!editingRoom} onOpenChange={(open) => !open && setEditingRoom(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Room Area</DialogTitle>
+            <DialogTitle>{dict.residences.editRoom}</DialogTitle>
             <DialogDescription>
-              Edit room area. Capacity will be calculated automatically (4m² = 1 worker).
+              {dict.residences.editRoomDesc}
             </DialogDescription>
           </DialogHeader>
 
           {editingRoom && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="room-name">Room Name</Label>
+                <Label htmlFor="room-name">{dict.residences.name}</Label>
                 <Input
                   id="room-name"
                   value={editingRoom.room.name || ''}
@@ -1473,7 +1473,7 @@ export default function AccommodationResidencesView() {
               </div>
 
               <div>
-                <Label htmlFor="room-area">Area (m²)</Label>
+                <Label htmlFor="room-area">{dict.residences.area}</Label>
                 <Input
                   id="room-area"
                   type="number"
@@ -1495,7 +1495,7 @@ export default function AccommodationResidencesView() {
               </div>
 
               <div>
-                <Label htmlFor="room-capacity">Capacity (Auto-calculated)</Label>
+                <Label htmlFor="room-capacity">{dict.residences.capacity}</Label>
                 <Input
                   id="room-capacity"
                   type="number"
@@ -1504,7 +1504,7 @@ export default function AccommodationResidencesView() {
                   className="bg-muted"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Formula: Area ÷ 4 = {editingRoom.room.area ? `${editingRoom.room.area} ÷ 4 = ${calculateCapacity(editingRoom.room.area)} workers` : '0 workers'}
+                  {dict.residences.formula}: {dict.residences.area} ÷ 4 = {editingRoom.room.area ? `${editingRoom.room.area} ÷ 4 = ${calculateCapacity(editingRoom.room.area)} ${dict.residences.workers}` : `0 ${dict.residences.workers}`}
                 </p>
               </div>
             </div>
@@ -1512,10 +1512,10 @@ export default function AccommodationResidencesView() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingRoom(null)}>
-              Cancel
+              {dict.residences.cancel}
             </Button>
             <Button onClick={handleSaveRoom}>
-              Save
+              {dict.residences.save}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -186,57 +186,57 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-2xl mx-auto px-2 sm:px-0">
       <div>
-        <h1 className="text-2xl font-bold">Profile</h1>
-        <p className="text-muted-foreground">Update your personal details and preferences.</p>
+        <h1 className="text-2xl font-bold">{dict.profileTitle || 'Profile'}</h1>
+        <p className="text-muted-foreground">{dict.profileDescription || 'Update your personal details and preferences.'}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Account</CardTitle>
-          <CardDescription>Change your name, email and contact details.</CardDescription>
+          <CardTitle>{dict.accountTitle || 'Account'}</CardTitle>
+          <CardDescription>{dict.accountDescription || 'Change your name, email and contact details.'}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div>
-            <Label>Name</Label>
+            <Label>{dict.name || 'Name'}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <Label>Email</Label>
+            <Label>{dict.email || 'Email'}</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div>
-            <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional phone number" />
+            <Label>{dict.phone || 'Phone'}</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={dict.optionalPhone || 'Optional phone number'} />
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving}>Save Profile</Button>
-            <Button variant="outline" onClick={handleChangePassword}>Change Password</Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button onClick={handleSave} disabled={saving}>{dict.saveProfile || 'Save Profile'}</Button>
+            <Button variant="outline" onClick={handleChangePassword}>{dict.changePassword || 'Change Password'}</Button>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Preferences</CardTitle>
-          <CardDescription>Theme and language preferences.</CardDescription>
+          <CardTitle>{dict.preferencesTitle || 'Preferences'}</CardTitle>
+          <CardDescription>{dict.preferencesDescription || 'Theme and language preferences.'}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div>
-            <Label>Theme Mode</Label>
+            <Label>{dict.themeMode || 'Theme Mode'}</Label>
             <Select value={themeMode} onValueChange={(v: any) => setThemeMode(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="light">{dict.light || 'Light'}</SelectItem>
+                <SelectItem value="dark">{dict.dark || 'Dark'}</SelectItem>
+                <SelectItem value="system">{dict.system || 'System'}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Color Theme</Label>
+            <Label>{dict.colorTheme || 'Color Theme'}</Label>
             <Select value={colorTheme} onValueChange={(v: any) => setColorTheme(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -245,12 +245,12 @@ export default function ProfilePage() {
             </Select>
           </div>
           <div>
-            <Label>Language</Label>
+            <Label>{dict.language || 'Language'}</Label>
             <Select value={locale} onValueChange={(v: any) => handleChangeLanguage(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="ar">العربية</SelectItem>
+                <SelectItem value="en">{dict.english || 'English'}</SelectItem>
+                <SelectItem value="ar">{dict.arabic || 'العربية'}</SelectItem>
               </SelectContent>
             </Select>
           </div>

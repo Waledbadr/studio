@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Printer, Grid3X3 } from "lucide-react";
+import { Printer, Grid3X3, Download } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { normalizeText, includesNormalized } from "@/lib/utils";
@@ -120,7 +120,7 @@ export default function StockMatrixReportPage() {
 
     // Group by category
     for (const it of filteredItems) {
-      const cat = (it as any).category || "Uncategorized";
+      const cat = (it as any).category || dict.addressesUncategorized || "Uncategorized";
       if (!group[cat]) group[cat] = [];
       group[cat].push(it);
     }
@@ -158,6 +158,29 @@ export default function StockMatrixReportPage() {
 
   const printPage = () => {
     window.print();
+  };
+
+  const exportToCSV = () => {
+    const headers = [dict.categoryItemHeader, ...visibleResidences.map(r => r.name || r.id), dict.grandTotalLabel];
+    const rows = grouped.flatMap(([cat, items]) => {
+      return (items as any[]).map(it => {
+        const rowTotal = visibleResidences.reduce((sum, r) => sum + Number(it.stockByResidence?.[r.id] || 0), 0);
+        return [
+          `"${it?.nameEn || ""}${it?.nameEn && it?.nameAr ? " | " : ""}${it?.nameAr || ""}"`,
+          ...visibleResidences.map(r => Number(it.stockByResidence?.[r.id] || 0)),
+          rowTotal
+        ].join(',');
+      });
+    });
+    
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stock-matrix-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const openDetails = (item: any) => {
@@ -236,6 +259,9 @@ export default function StockMatrixReportPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-semibold">{dict.displaySettingsTitle}</CardTitle>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={exportToCSV} className="border-green-300 hover:bg-green-50 dark:hover:bg-green-900/20">
+                <Download className="mr-2 h-4 w-4" /> {dict.exportCsvButton || 'Export CSV'}
+              </Button>
               <Button variant="outline" onClick={printPage} className="border-amber-300">
                 <Printer className="mr-2 h-4 w-4" /> {dict.printLabel}
               </Button>
@@ -281,8 +307,8 @@ export default function StockMatrixReportPage() {
         {/* Print Header (only in print) */}
         <div className="hidden print:block">
           <div className="text-center mb-4">
-            <div className="font-extrabold text-2xl tracking-widest text-amber-700">{"EstateCare"}</div>
-            <div className="mt-1 text-xl font-bold">{"تقرير مخزون حسب السكن"}</div>
+            <div className="font-extrabold text-2xl tracking-widest text-amber-700">{(dict as any).appName || "EstateCare"}</div>
+            <div className="mt-1 text-xl font-bold">{dict.printTitleStockMatrix || "Stock Matrix Report"}</div>
             <div className="mt-1 text-sm text-muted-foreground">
               {new Date().toLocaleString()}
             </div>
@@ -299,11 +325,11 @@ export default function StockMatrixReportPage() {
               <div className="text-sm text-muted-foreground">{new Date().toLocaleString()}</div>
             </div>
           </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
+          <CardContent className="p-0 w-full overflow-x-auto sm:overflow-x-visible">
+            <Table className="min-w-full sm:min-w-[900px]" dir={dict.dir}>
               <TableHeader className="sticky top-0 bg-muted/40 dark:bg-card z-10">
                 <TableRow>
-                  <TableHead className="min-w-[220px]">{dict.categoryItemHeader}</TableHead>
+                  <TableHead className="min-w-[120px] sm:min-w-[220px]">{dict.categoryItemHeader}</TableHead>
                   {visibleResidences.map((r) => (
                     <TableHead key={r.id} className="text-center">
                       {r.name || r.id}
@@ -347,7 +373,7 @@ export default function StockMatrixReportPage() {
                                   <button
                                     type="button"
                                     className="text-foreground dark:text-white hover:underline focus:outline-none"
-                                    title={(dict.viewHistoryLabel || 'View History') as string}
+                                    title={dict.viewHistoryLabel || 'View History'}
                                     onClick={() => openTxDialog(it, r.id)}
                                   >
                                     {formatQty(Number(it.stockByResidence?.[r.id] || 0))}
@@ -414,8 +440,8 @@ export default function StockMatrixReportPage() {
               {dict.itemLabel}: {locale === 'ar' ? (detailsItem?.nameAr || detailsItem?.nameEn) : (detailsItem?.nameEn || detailsItem?.nameAr)}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="w-full overflow-x-auto sm:overflow-x-visible">
+            <Table className="min-w-full sm:min-w-[400px]" dir={dict.dir}>
               <TableHeader>
                 <TableRow>
                   <TableHead>{dict.residenceLabel}</TableHead>
@@ -451,10 +477,10 @@ export default function StockMatrixReportPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {(dict.movementDetailsTitle || 'Movements') as string}: {txItem ? `${txItem?.nameEn || ''}${txItem?.nameEn && txItem?.nameAr ? ' | ' : ''}${txItem?.nameAr || ''}` : ''}
+              {dict.movementDetailsTitle || 'Movements'}: {txItem ? `${txItem?.nameEn || ''}${txItem?.nameEn && txItem?.nameAr ? ' | ' : ''}${txItem?.nameAr || ''}` : ''}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-x-auto">
+          <div className="w-full overflow-x-auto sm:overflow-x-visible">
             {txLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : txRows.length === 0 ? (

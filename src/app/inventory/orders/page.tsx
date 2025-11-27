@@ -124,12 +124,12 @@ export default function PurchaseOrdersPage() {
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>{dict.orderId || 'Request ID'}</TableHead>
-                    <TableHead>{dict.date || 'Date'}</TableHead>
-                    <TableHead>{dict.location || 'Residence'}</TableHead>
-                    <TableHead>{dict.items || 'Items'}</TableHead>
-                    <TableHead>{dict.status || 'Status'}</TableHead>
-                    {showActions && <TableHead className="text-right">{dict.actions || 'Actions'}</TableHead>}
+                    <TableHead>{dict.orderId}</TableHead>
+                    <TableHead>{dict.date}</TableHead>
+                    <TableHead>{dict.location}</TableHead>
+                    <TableHead>{dict.items}</TableHead>
+                    <TableHead>{dict.status}</TableHead>
+                    {showActions && <TableHead className="text-right">{dict.actions}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -171,7 +171,7 @@ export default function PurchaseOrdersPage() {
                                             size="sm"
                                             onClick={() => router.push(`/inventory/receive/${order.id}`)}
                                         >
-                                            <Truck className="mr-2 h-4 w-4" /> {(dict.receiveButton || 'Receive') + ' MRV'}
+                                            <Truck className="mr-2 h-4 w-4" /> {dict.receiveButton + ' MRV'}
                                         </Button>
                                     )}
                                     <DropdownMenu>
@@ -180,38 +180,38 @@ export default function PurchaseOrdersPage() {
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                                         <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}`)}>
-                                                        <Eye className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Details'}
+                                                        <Eye className="mr-2 h-4 w-4" /> {dict.viewAll}
                                         </DropdownMenuItem>
                                         {isAdmin && order.status === 'Approved' && !order.approvalAttachmentUrl && (
                                             <DropdownMenuItem onClick={(e) => handleOpenUploadDialog(e as any, order.id)}>
-                                                <Paperclip className="mr-2 h-4 w-4" /> Add Approval Attachment
+                                                <Paperclip className="mr-2 h-4 w-4" /> {dict.addApprovalAttachment}
                                             </DropdownMenuItem>
                                         )}
                                                                                 {isAdmin && (
                                                                                         Array.isArray(order.plannedDistribution) && order.plannedDistribution.length > 0 ? (
                                                                                             <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit-plan`)}>
-                                                                                                <Pencil className="mr-2 h-4 w-4" /> Edit Plan
+                                                                                                <Pencil className="mr-2 h-4 w-4" /> {dict.editPlan}
                                                                                             </DropdownMenuItem>
                                                                                         ) : (
                                                                                             <DropdownMenuItem onClick={() => router.push(`/inventory/orders/${order.id}/edit`)}>
-                                                                                                <Pencil className="mr-2 h-4 w-4" /> Edit Request
+                                                                                                <Pencil className="mr-2 h-4 w-4" /> {dict.editRequest}
                                                                                             </DropdownMenuItem>
                                                                                         )
                                                                                 )}
                                         {isAdmin && <DropdownMenuSub>
-                                            <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
+                                            <DropdownMenuSubTrigger>{dict.changeStatus}</DropdownMenuSubTrigger>
                                             <DropdownMenuSubContent>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Pending')}>
                                                     <XCircle className="mr-2 h-4 w-4" /> {dict.dashboard?.pending || 'Pending'}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Approved')}>
-                                                    <CheckCircle className="mr-2 h-4 w-4" /> {dict.ui?.saveChanges || 'Approved'}
+                                                    <CheckCircle className="mr-2 h-4 w-4" /> {dict.approveAction}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Delivered')}>
-                                                    <Truck className="mr-2 h-4 w-4" /> {dict.delivered || 'Delivered'}
+                                                    <Truck className="mr-2 h-4 w-4" /> {dict.delivered}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleUpdateStatus(order.id, 'Cancelled')}>
-                                                    <XCircle className="mr-2 h-4 w-4 text-destructive" /> {dict.cancelled || 'Cancelled'}
+                                                    <XCircle className="mr-2 h-4 w-4 text-destructive" /> {dict.cancelled}
                                                 </DropdownMenuItem>
                                             </DropdownMenuSubContent>
                                         </DropdownMenuSub>}
@@ -220,17 +220,17 @@ export default function PurchaseOrdersPage() {
                                             <AlertDialogTrigger asChild>
                                                 <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                     <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete Request
+                                                    {dict.deleteRequest}
                                                 </button>
                                             </AlertDialogTrigger>
                                                 <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>{'Are you sure?'}</AlertDialogTitle>
-                                                    <AlertDialogDescription>{`This will permanently delete request #${order.id}. This action cannot be undone.`}</AlertDialogDescription>
+                                                    <AlertDialogTitle>{dict.areYouSure}</AlertDialogTitle>
+                                                    <AlertDialogDescription>{dict.deleteRequestConfirm.replace('{id}', order.id)}</AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>{dict.ui?.cancel || 'Cancel'}</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => deleteOrder(order.id)}>{'Delete'}</AlertDialogAction>
+                                                    <AlertDialogCancel>{dict.cancel}</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => deleteOrder(order.id)}>{dict.delete}</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>}
@@ -243,7 +243,7 @@ export default function PurchaseOrdersPage() {
                 )) : (
                     <TableRow>
                             <TableCell colSpan={showActions ? 6 : 5} className="h-48 text-center text-muted-foreground">
-                            {dict.noRecordsFound || 'No material requests found.'}
+                            {dict.noRecordsFound}
                         </TableCell>
                     </TableRow>
                 )}
@@ -254,36 +254,36 @@ export default function PurchaseOrdersPage() {
 
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
+             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                <h1 className="text-2xl font-bold">{dict.ui?.materialsApp || 'Materials Requests'}</h1>
-                <p className="text-muted-foreground">{dict.ui?.currentRequest || 'Review and manage all material requests.'}</p>
+                <h1 className="text-2xl font-bold">{dict.materialsApp}</h1>
+                <p className="text-muted-foreground">{dict.currentRequest}</p>
                 </div>
-                 <div className="flex items-center gap-2">
+                 <div className="flex flex-wrap gap-2 w-full md:w-auto">
                     {isAdmin && (
                         <>
-                            <Button asChild variant="secondary">
+                            <Button asChild variant="secondary" className="flex-1 md:flex-none">
                                 <Link href="/inventory/orders/consolidated-report">
-                                    <LayoutGrid className="mr-2 h-4 w-4" /> {dict.consolidatedPrinting || 'Consolidated Printing'}
+                                    <LayoutGrid className="mr-2 h-4 w-4" /> {dict.consolidatedPrinting}
                                 </Link>
                             </Button>
-                            <Button asChild variant="outline">
+                            <Button asChild variant="outline" className="flex-1 md:flex-none">
                                 <Link href="/inventory/orders/consolidated-report?view=list">
-                                    <List className="mr-2 h-4 w-4" /> تقرير مجمع
+                                    <List className="mr-2 h-4 w-4" /> {dict.consolidatedReport}
                                 </Link>
                             </Button>
                         </>
                     )}
-                    <Button asChild>
+                    <Button asChild className="flex-1 md:flex-none">
                         <Link href="/inventory/new-order">
-                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.newRequest || 'New Request'}
+                        <PlusCircle className="mr-2 h-4 w-4" /> {dict.newRequest}
                         </Link>
                     </Button>
                 </div>
             </div>
 
             {/* Quick Statistics */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex items-center space-x-2">
@@ -291,7 +291,7 @@ export default function PurchaseOrdersPage() {
                                 <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{dict.activeRequests || 'Active Requests'}</p>
+                                <p className="text-sm font-medium">{dict.activeRequests}</p>
                                 <p className="text-2xl font-bold">{activeOrders.length}</p>
                             </div>
                         </div>
@@ -343,7 +343,7 @@ export default function PurchaseOrdersPage() {
             </div>
             
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0 pb-4">
                     <div>
                         <CardTitle>{dict.activeRequests || 'Active Requests'}</CardTitle>
                         <CardDescription>
@@ -354,17 +354,19 @@ export default function PurchaseOrdersPage() {
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCompletedToggle(!isCompletedOpen)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 w-full sm:w-auto justify-center"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? dict.ui?.hideCompleted || 'Hide Completed' : dict.ui?.showCompleted || 'Show Completed'}
+                        {isCompletedOpen ? dict.hideCompleted : dict.showCompleted}
                         <Badge variant="secondary" className="text-xs">
                             {completedOrders.length}
                         </Badge>
                     </Button>
                 </CardHeader>
-                <CardContent>
-                    {renderOrdersTable(activeOrders)}
+                <CardContent className="p-0 sm:p-6">
+                    <div className="overflow-x-auto">
+                        {renderOrdersTable(activeOrders)}
+                    </div>
                 </CardContent>
             </Card>
 
@@ -374,28 +376,28 @@ export default function PurchaseOrdersPage() {
                     <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
                         <CollapsibleTrigger asChild>
                             <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-muted/50">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 bg-muted/50 rounded-lg">
                                             <Archive className="h-4 w-4 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <CardTitle className="text-base">Completed Requests</CardTitle>
+                                            <CardTitle className="text-base">{dict.completedRequests || 'Completed Requests'}</CardTitle>
                                             <CardDescription>
-                                                Delivered and cancelled requests • Click to {isCompletedOpen ? 'collapse' : 'expand'}
+                                                {dict.completedRequestsDesc || 'Delivered and cancelled requests • Click to collapse/expand'}
                                             </CardDescription>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                                         <div className="flex items-center gap-2">
                                             <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
                                                 <Truck className="h-3 w-3 mr-1" />
-                                                {completedOrders.filter(o => o.status === 'Delivered').length} Delivered
+                                                {completedOrders.filter(o => o.status === 'Delivered').length} {dict.delivered || 'Delivered'}
                                             </Badge>
                                             {completedOrders.filter(o => o.status === 'Cancelled').length > 0 && (
                                                 <Badge variant="outline" className="text-xs bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
                                                     <XCircle className="h-3 w-3 mr-1" />
-                                                    {completedOrders.filter(o => o.status === 'Cancelled').length} Cancelled
+                                                    {completedOrders.filter(o => o.status === 'Cancelled').length} {dict.cancelled || 'Cancelled'}
                                                 </Badge>
                                             )}
                                         </div>
@@ -409,8 +411,10 @@ export default function PurchaseOrdersPage() {
                             </CardHeader>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                            <CardContent className="pt-4">
-                                {renderOrdersTable(completedOrders, false)}
+                            <CardContent className="p-0 sm:p-6 pt-4">
+                                <div className="overflow-x-auto">
+                                    {renderOrdersTable(completedOrders, false)}
+                                </div>
                             </CardContent>
                         </CollapsibleContent>
                     </Card>

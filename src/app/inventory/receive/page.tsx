@@ -126,7 +126,7 @@ export default function ReceiveMaterialsPage() {
             action: (
               <div className="flex items-center justify-end gap-2">
                 <Button size="sm" variant="outline" onClick={() => router.push(`/inventory/receive/approvals/${r.id}`)}>
-                  {isAdmin ? 'Review' : 'View'}
+                  {isAdmin ? dict.reviewLabel : dict.viewLabel}
                 </Button>
                 {isAdmin && (
                   <Button
@@ -142,7 +142,7 @@ export default function ReceiveMaterialsPage() {
                       setApproveBusy(prev => ({ ...prev, [r.id]: false }));
                     }}
                   >
-                    {busy ? 'Approving…' : 'Approve'}
+                    {busy ? dict.approvingLabel : dict.approveLabel}
                   </Button>
                 )}
               </div>
@@ -167,7 +167,7 @@ export default function ReceiveMaterialsPage() {
                         action: (
                             <div className="flex items-center justify-end gap-2">
                                 <Button size="sm" onClick={() => router.push(`/inventory/receive/${o.id}`)}>
-                                    Receive
+                                    {dict.receiveLabel}
                                 </Button>
                             </div>
                         )
@@ -197,17 +197,18 @@ export default function ReceiveMaterialsPage() {
                         }, [mrvsList, router, residenceName]);
 
     const renderUnifiedTable = (rows: any[], showActions: boolean = true, showMrRef: boolean = false) => (
+        <div className="overflow-x-auto">
         <Table>
             <TableHeader>
                 <TableRow>
-                                            <TableHead>{dict.orderId || 'Request ID'}</TableHead>
-                                            <TableHead>{'Type'}</TableHead>
-            {showMrRef && <TableHead>{'MR Ref'}</TableHead>}
-                        <TableHead>{dict.date || 'Date'}</TableHead>
-                        <TableHead>{dict.location || 'Residence'}</TableHead>
-                        <TableHead>{dict.items || 'Items'}</TableHead>
-                        <TableHead>{dict.status || 'Status'}</TableHead>
-                        {showActions && <TableHead className="text-right">{dict.actions || 'Action'}</TableHead>}
+                                            <TableHead>{dict.orderId}</TableHead>
+                                            <TableHead>{dict.typeLabel}</TableHead>
+            {showMrRef && <TableHead>{dict.referenceLabel}</TableHead>}
+                        <TableHead>{dict.date}</TableHead>
+                        <TableHead>{dict.location}</TableHead>
+                        <TableHead>{dict.items}</TableHead>
+                        <TableHead>{dict.status}</TableHead>
+                        {showActions && <TableHead className="text-right">{dict.actions}</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -238,12 +239,13 @@ export default function ReceiveMaterialsPage() {
                 )) : (
                                         <TableRow>
                                                 <TableCell colSpan={(showActions ? 7 : 6) + (showMrRef ? 1 : 0)} className="h-32 text-center text-muted-foreground">
-                                                    {dict.noRecordsFound || 'No records found.'}
+                                                    {dict.noRecordsFound}
                                                 </TableCell>
                                         </TableRow>
                 )}
             </TableBody>
         </Table>
+        </div>
     );
 
     const readyToReceiveCount = pendingMrvCount + userVisibleApprovedMRs.length;
@@ -252,28 +254,28 @@ export default function ReceiveMaterialsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                <div>
-                   <h1 className="text-2xl font-bold">{dict.receiveMrvTitle || 'Material Receive Voucher (MRV)'}</h1>
-                   <p className="text-muted-foreground">{dict.receiveMrvPageDescription || dict.ui?.currentRequest}</p>
+                   <h1 className="text-2xl font-bold">{dict.receiveMrvTitle}</h1>
+                   <p className="text-muted-foreground">{dict.receiveMrvPageDescription}</p>
                </div>
-                 <div className="flex items-center gap-2">
+                 <div className="flex flex-wrap items-center gap-2">
                     <Button variant="secondary" onClick={() => router.push('/inventory/receive/new-approval')}>
-                            {dict.newMRVApproval || dict.reviewLabel}
+                            {dict.newMRVApproval}
                     </Button>
                     {/* View MRV receipts history */}
                     <Button variant="outline" onClick={() => router.push('/inventory/receive/receipts')}>
-                        <History className="mr-2 h-4 w-4" /> {dict.viewAll || 'View Receipts History'}
+                        <History className="mr-2 h-4 w-4" /> {dict.viewAll}
                     </Button>
                     {/* Navigate to MR (Materials Requests) dedicated page */}
                     <Button variant="outline" onClick={() => router.push('/inventory/orders')}>
-                            {dict.materialsRequestsLabel || dict.ui?.materialsApp}
+                            {dict.materialsRequestsLabel}
                     </Button>
                 </div>
             </div>
 
             {/* Quick Statistics */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex items-center space-x-2">
@@ -281,7 +283,7 @@ export default function ReceiveMaterialsPage() {
                                 <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{dict.readyToReceive || 'Ready to Receive'}</p>
+                                <p className="text-sm font-medium">{dict.readyToReceive}</p>
                                 <p className="text-2xl font-bold">{readyToReceiveCount}</p>
                             </div>
                         </div>
@@ -294,7 +296,7 @@ export default function ReceiveMaterialsPage() {
                                 <Truck className="h-4 w-4 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{dict.delivered || 'Delivered'}</p>
+                                <p className="text-sm font-medium">{dict.delivered}</p>
                                 <p className="text-2xl font-bold">{completedDeliveredCount}</p>
                             </div>
                         </div>
@@ -307,7 +309,7 @@ export default function ReceiveMaterialsPage() {
                                 <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{dict.ui?.rejected || 'Rejected'}</p>
+                                <p className="text-sm font-medium">{dict.rejected}</p>
                                 <p className="text-2xl font-bold">{rejectedMrvCount}</p>
                             </div>
                         </div>
@@ -320,7 +322,7 @@ export default function ReceiveMaterialsPage() {
                                 <Archive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{dict.totalRequestsCard || 'Total Requests'}</p>
+                                <p className="text-sm font-medium">{dict.totalRequestsCard}</p>
                                 <p className="text-2xl font-bold">{totalRequestsCount}</p>
                             </div>
                         </div>
@@ -329,11 +331,11 @@ export default function ReceiveMaterialsPage() {
             </div>
             
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 space-y-0 pb-4">
                     <div>
-                        <CardTitle>{dict.pendingMRVApprovals || 'Pending MRV Approvals'}</CardTitle>
+                        <CardTitle>{dict.pendingMRVApprovals}</CardTitle>
                         <CardDescription>
-                            {dict.pendingMrvCardDescription || 'Requests awaiting approval or posting to stock'} ({pendingMrvCount} requests)
+                            {dict.pendingMrvCardDescription} ({pendingMrvCount} {dict.items})
                         </CardDescription>
                     </div>
                         <Button 
@@ -343,7 +345,7 @@ export default function ReceiveMaterialsPage() {
                         className="flex items-center gap-2"
                     >
                         <Archive className="h-4 w-4" />
-                        {isCompletedOpen ? dict.ui?.hideCompleted : dict.ui?.showCompleted}
+                        {isCompletedOpen ? dict.hideCompleted : dict.showCompleted}
                         <Badge variant="secondary" className="text-xs">
                             {mrvsList.length}
                         </Badge>
@@ -360,15 +362,15 @@ export default function ReceiveMaterialsPage() {
                      <Card className={isCompletedOpen ? "border-muted" : "border-muted/50"}>
                          <CollapsibleTrigger asChild>
                              <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-muted/50">
-                                 <div className="flex items-center justify-between">
+                                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                                      <div className="flex items-center gap-3">
                                          <div className="p-2 bg-muted/50 rounded-lg">
                                              <Archive className="h-4 w-4 text-muted-foreground" />
                                          </div>
                                          <div>
-                                             <CardTitle className="text-base">Completed MRV Requests</CardTitle>
+                                             <CardTitle className="text-base">{dict.completedMrvRequests}</CardTitle>
                                              <CardDescription>
-                                                 All posted MRV receipts • Click to {isCompletedOpen ? 'collapse' : 'expand'}
+                                                 {dict.completedMrvRequestsDesc}
                                              </CardDescription>
                                          </div>
                                      </div>
@@ -376,12 +378,12 @@ export default function ReceiveMaterialsPage() {
                                          <div className="flex items-center gap-2">
                                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
                                                  <Truck className="h-3 w-3 mr-1" />
-                                                 {approvedMrvCount} Delivered
+                                                 {approvedMrvCount} {dict.delivered}
                                              </Badge>
                                              {rejectedMrvCount > 0 && (
                                                  <Badge variant="outline" className="text-xs bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
                                                      <XCircle className="h-3 w-3 mr-1" />
-                                                     {rejectedMrvCount} Rejected
+                                                     {rejectedMrvCount} {dict.rejected}
                                                  </Badge>
                                              )}
                                          </div>

@@ -2,17 +2,19 @@
 
 import React, { useState } from 'react';
 import { useAccommodation, type Company } from '@/context/accommodation-context';
+import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, FileText, Mail, Phone } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, Mail, Phone, Search } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CompaniesPage() {
   const { companies, contracts, saveCompany, deleteCompany, getContractsByCompany } = useAccommodation();
+  const { dict } = useLanguage();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +81,7 @@ export default function CompaniesPage() {
   };
 
   const handleDelete = async (companyId: string) => {
-    if (!confirm('Are you sure you want to delete this company? This action cannot be undone.')) {
+    if (!confirm(dict.companies.deleteConfirm)) {
       return;
     }
     try {
@@ -90,15 +92,194 @@ export default function CompaniesPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Companies</h1>
-          <p className="text-muted-foreground mt-2">Manage sister companies and external partners</p>
+          <h1 className="text-2xl md:text-3xl font-bold">{dict.companies.title}</h1>
+          <p className="text-muted-foreground mt-1">{dict.companies.subtitle}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()}>
+            <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {dict.companies.addCompany}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>{editingCompany ? dict.companies.editCompany : dict.companies.addCompany}</DialogTitle>
+              <DialogDescription>
+                {dict.companies.subtitle}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nameAr">{dict.companies.nameAr}</Label>
+                  <Input
+                    id="nameAr"
+                    value={formData.nameAr}
+                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                    placeholder="شركة ..."
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nameEn">{dict.companies.nameEn}</Label>
+                  <Input
+                    id="nameEn"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    placeholder="... Company"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="name">{dict.companies.name} (Display)</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Display Name"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">{dict.companies.email}</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.contactEmail}
+                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                    placeholder="contact@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">{dict.companies.phone}</Label>
+                  <Input
+                    id="phone"
+                    value={formData.contactPhone}
+                    onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                    placeholder="+966..."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">{dict.companies.address}</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Riyadh, Saudi Arabia"
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  {dict.companies.cancel}
+                </Button>
+                <Button type="submit">{dict.companies.save}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex items-center gap-2 max-w-sm">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <Input 
+          placeholder={dict.companies.searchPlaceholder} 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="h-9"
+        />
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{dict.companies.name}</TableHead>
+                  <TableHead className="hidden md:table-cell">{dict.companies.email}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{dict.companies.phone}</TableHead>
+                  <TableHead className="text-center">{dict.companies.activeContracts}</TableHead>
+                  <TableHead className="text-right">{dict.companies.actions}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCompanies.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      {dict.companies.noCompanies}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredCompanies.map((company) => {
+                    const companyContracts = getContractsByCompany(company.id);
+                    const activeContracts = companyContracts.filter(c => c.status === 'Active').length;
+                    
+                    return (
+                      <TableRow key={company.id}>
+                        <TableCell className="font-medium">
+                          <div>{company.name}</div>
+                          <div className="text-xs text-muted-foreground md:hidden">
+                            {company.contactEmail}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {company.contactEmail && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail className="h-3 w-3" />
+                              {company.contactEmail}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {company.contactPhone && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {company.contactPhone}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {activeContracts}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(company)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(company.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Link href={`/accommodation/contracts?companyId=${company.id}`}>
+                              <Button variant="ghost" size="icon" title={dict.companies.viewContracts}>
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}            <Button onClick={() => handleOpenDialog()}>
               <Plus className="h-4 w-4 mr-2" />
               Add Company
             </Button>

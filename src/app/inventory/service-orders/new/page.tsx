@@ -17,9 +17,10 @@ import { Command, CommandGroup, CommandInput, CommandList } from "@/components/u
 import { Button as UIButton } from "@/components/ui/button";
 import { includesNormalized } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useDict } from "@/lib/dict-context";
 // removed ChevronDown; infinite scroll now auto-expands
 
-export default function NewServiceOrderPage() {
+  const dict = useDict();
   const { createAndDispatchServiceOrder } = useServiceOrders();
   const { residences } = useResidences();
   const { items, getStockForResidence } = useInventory();
@@ -158,24 +159,24 @@ export default function NewServiceOrderPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="max-w-5xl">
+    <div className="space-y-6 px-2 sm:px-0">
+      <Card className="max-w-5xl mx-auto">
         <CardHeader>
-          <CardTitle>New Service Order</CardTitle>
-          <CardDescription>Send items to maintenance/workshop and deduct stock.</CardDescription>
+          <CardTitle>{dict.quickActions.addNewOrder || 'New Service Order'}</CardTitle>
+          <CardDescription>{dict.serviceOrderDesc || 'Send items to maintenance/workshop and deduct stock.'}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Residence selection */}
           <div>
-            <Label>Residence</Label>
+            <Label>{dict.residences.residence}</Label>
             <Select value={residenceId} onValueChange={setResidenceId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select residence" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder={dict.residences.residence} /></SelectTrigger>
               <SelectContent>
                 {allowedResidences.map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
                 {allowedResidences.length === 0 && (
-                  <div className="px-2 py-2 text-sm text-muted-foreground">No residences assigned</div>
+                  <div className="px-2 py-2 text-sm text-muted-foreground">{dict.residences.residencesNoAssigned || 'No residences assigned'}</div>
                 )}
               </SelectContent>
             </Select>
@@ -183,7 +184,7 @@ export default function NewServiceOrderPage() {
 
           {!residence && (
             <div className="rounded-md border border-yellow-200 bg-yellow-50 text-yellow-900 text-sm px-3 py-2">
-              اختر السكن لعرض الأصناف المتوفرة في المخزون
+              {dict.selectResidenceToSeeItems || 'اختر السكن لعرض الأصناف المتوفرة في المخزون'}
             </div>
           )}
 
@@ -192,35 +193,35 @@ export default function NewServiceOrderPage() {
             {!residence && (
               <div
                 className="absolute inset-0 z-10 cursor-not-allowed"
-                onClick={() => toast({ title: "يرجى اختيار السكن", description: "اختر السكن أولاً لتمكين باقي الحقول.", variant: "destructive" })}
+                onClick={() => toast({ title: dict.residences.residence, description: dict.selectResidenceFirst || 'اختر السكن أولاً لتمكين باقي الحقول.', variant: "destructive" })}
               />
             )}
             <div className={!residence ? "opacity-50 pointer-events-none" : ""}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <Label>Destination Type</Label>
+                  <Label>{dict.destinationType || 'Destination Type'}</Label>
                   <Select value={destinationType} onValueChange={setDestinationType}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose type" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={dict.destinationType || 'Choose type'} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="InternalMaintenance">Internal Maintenance</SelectItem>
-                      <SelectItem value="ExternalWorkshop">External Workshop</SelectItem>
-                      <SelectItem value="Vendor">Vendor</SelectItem>
+                      <SelectItem value="InternalMaintenance">{dict.internalMaintenance || 'Internal Maintenance'}</SelectItem>
+                      <SelectItem value="ExternalWorkshop">{dict.externalWorkshop || 'External Workshop'}</SelectItem>
+                      <SelectItem value="Vendor">{dict.vendor || 'Vendor'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Destination Name</Label>
-                  <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder="Workshop name" />
+                  <Label>{dict.destinationName || 'Destination Name'}</Label>
+                  <Input value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder={dict.destinationNamePlaceholder || 'Workshop name'} />
                 </div>
               </div>
 
           <div className="space-y-2">
-            <Label>Items</Label>
-    <div className="flex flex-wrap gap-2 items-end">
+            <Label>{dict.items || 'Items'}</Label>
+            <div className="flex flex-wrap gap-2 items-end">
               <Popover open={comboOpen} onOpenChange={setComboOpen}>
                 <PopoverTrigger asChild>
-      <UIButton variant="outline" className="w-96 justify-between" disabled={!residence}>
-                    Add item
+                  <UIButton variant="outline" className="w-96 justify-between" disabled={!residence}>
+                    {dict.addItem || 'Add item'}
                     <span className="text-xs text-muted-foreground">EN | AR</span>
                   </UIButton>
                 </PopoverTrigger>
@@ -233,7 +234,7 @@ export default function NewServiceOrderPage() {
                   avoidCollisions
                 >
                   <Command shouldFilter={false}>
-                    <CommandInput placeholder="Search items (EN | AR | keywords)" value={search} onValueChange={onSearchChange} />
+                    <CommandInput placeholder={dict.ui.searchPlaceholder || 'Search items (EN | AR | keywords)'} value={search} onValueChange={onSearchChange} />
                     <CommandList ref={listRef} className="max-h-[68vh] overflow-y-auto overscroll-contain" onScroll={onListScroll}>
                         {/* Intentionally no empty state message */}
                         <CommandGroup>
@@ -278,16 +279,16 @@ export default function NewServiceOrderPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Qty Sent</TableHead>
+                    <TableHead>{dict.itemLabel || 'Item'}</TableHead>
+                    <TableHead className="text-right">{dict.currentStockLabel || 'Stock'}</TableHead>
+                    <TableHead className="text-right">{dict.qtySent || 'Qty Sent'}</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">No items selected</TableCell>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">{dict.noItemsSelected || 'No items selected'}</TableCell>
                     </TableRow>
                   )}
                   {rows.map((r) => {
@@ -301,7 +302,7 @@ export default function NewServiceOrderPage() {
                             <span>{r.nameEn} <span className="text-muted-foreground">| {r.nameAr}</span></span>
                             {residence && (
                               <span className={`text-xs ${curStock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                                Available: {curStock}
+                                {dict.currentStockLabel || 'Available'}: {curStock}
                               </span>
                             )}
                           </div>
@@ -319,7 +320,7 @@ export default function NewServiceOrderPage() {
                           />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" onClick={() => removeRow(r.id)}>Remove</Button>
+                          <Button variant="ghost" onClick={() => removeRow(r.id)}>{dict.remove || 'Remove'}</Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -330,8 +331,8 @@ export default function NewServiceOrderPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 mt-4">
-              <Button onClick={handleSubmit} disabled={!residence || !destinationName.trim() || rows.every((r) => r.quantity <= 0)}>Dispatch</Button>
+            <div className="flex flex-col-reverse gap-2 mt-4 sm:flex-row sm:justify-end">
+              <Button onClick={handleSubmit} disabled={!residence || !destinationName.trim() || rows.every((r) => r.quantity <= 0)}>{dict.dispatch || 'Dispatch'}</Button>
             </div>
             {/* End blocked content */}
             </div>

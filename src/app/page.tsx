@@ -164,11 +164,12 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-6">
+            {/* Responsive dashboard cards: 2-cols mobile, 3-cols md, 4-cols lg */}
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{dict.dashboard?.totalRequests || 'Total Requests'}</CardTitle>
+            <CardTitle className="text-sm font-medium">{dict.dashboard?.totalRequests || dict.reportsTitle || 'Total Requests'}</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
                     <CardContent>
@@ -178,7 +179,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">{dict.dashboard?.pending || 'Pending'}</CardTitle>
+                        <CardTitle className="text-sm font-medium">{dict.dashboard?.pending || dict.pending || 'Pending'}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -188,7 +189,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">{dict.dashboard?.completed || 'Completed'}</CardTitle>
+                        <CardTitle className="text-sm font-medium">{dict.dashboard?.completed || dict.completed || 'Completed'}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -199,11 +200,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Pair: Recent Service Orders + Recent Maintenance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         <Card className="border-t-4 border-blue-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5 text-blue-500"/> {dict.dashboard?.recentMaterialRequests || 'Recent MRs'}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><ListOrdered className="h-5 w-5 text-blue-500"/> {dict.dashboard?.recentMaterialRequests || dict.reportsTitle || 'Recent MRs'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/orders">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -211,10 +212,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaterialRequestsFound || 'No material requests found.'}</div>
+                : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaterialRequestsFound || dict.noRecordsFound || 'No material requests found.'}</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaterialRequests.map((order, i) => (
                                 <TableRow key={`${order.id}-${i}`} onClick={() => router.push(`/inventory/orders/${order.id}`)} className="cursor-pointer hover:bg-accent/30">
@@ -230,7 +231,7 @@ export default function DashboardPage() {
                                             : order.status === 'Cancelled' ? 'destructive'
                                             : 'outline'
                                         }>
-                                            {order.status}
+                                            {dict[order.status?.toLowerCase()] || order.status}
                                         </Badge>
                                     </TableCell>
                                 </TableRow>
@@ -244,7 +245,7 @@ export default function DashboardPage() {
         <Card className="border-t-4 border-green-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-green-500"/> {dict.dashboard?.recentReceipts || 'Recent MRVs'}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-green-500"/> {dict.dashboard?.recentReceipts || dict.receiveMrvTitle || 'Recent MRVs'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/inventory/receive">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -252,10 +253,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                 {loading || mrvsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentReceiptsFound || 'No recent receipts found.'}</div>
+                : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentReceiptsFound || dict.noRecordsFound || 'No recent receipts found.'}</div>
                 : (
                     <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentReceipts.map((rec: any, i: number) => {
                                                                 const href = rec.type === 'MRV'
@@ -268,7 +269,7 @@ export default function DashboardPage() {
                                             <div className="text-sm text-muted-foreground">{rec.residence}</div>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant={rec.status === 'Delivered' ? 'default' : 'secondary'}>{rec.status}{rec.type === 'MRV' ? ' • MRV' : ''}</Badge>
+                                            <Badge variant={rec.status === 'Delivered' ? 'default' : 'secondary'}>{dict[rec.status?.toLowerCase()] || rec.status}{rec.type === 'MRV' ? ' • MRV' : ''}</Badge>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -282,7 +283,7 @@ export default function DashboardPage() {
                 <Card className="border-t-4 border-orange-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                                        <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5 text-orange-500"/> {dict.dashboard?.recentIssues || 'Recent MIVs'}</CardTitle>
+                                        <CardTitle className="flex items-center gap-2"><ClipboardMinus className="h-5 w-5 text-orange-500"/> {dict.dashboard?.recentIssues || dict.issuePageDescription || 'Recent MIVs'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                                         <Link href="/inventory/issue-history">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -290,10 +291,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                                  {mivsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentIssuesFound || 'No recent issues found.'}</div>
+                                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentIssuesFound || dict.noRecordsFound || 'No recent issues found.'}</div>
                                 : (
                                         <Table>
-                                                 <TableHeader><TableRow><TableHead>{dict.mivId || 'MIV ID'}</TableHead><TableHead>{dict.date || 'Date'}</TableHead></TableRow></TableHeader>
+                                                 <TableHeader><TableRow><TableHead>{dict.mivId || 'MIV ID'}</TableHead><TableHead>{dict.date || dict.dateLabel || 'Date'}</TableHead></TableRow></TableHeader>
                                                 <TableBody>
                                                         {recentIssues.map((miv, i) => (
                                                                 <TableRow key={`${miv.id}-${i}`} onClick={() => router.push(`/inventory/issue-history/${miv.id}`)} className="cursor-pointer hover:bg-accent/30">
@@ -316,7 +317,7 @@ export default function DashboardPage() {
                 <Card className="border-t-4 border-fuchsia-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                                        <CardTitle className="flex items-center gap-2"><GitBranch className="h-5 w-5 text-fuchsia-500"/> {(dict.dashboard as any)?.recentServiceOrders || 'Recent Service Orders'}</CardTitle>
+                                        <CardTitle className="flex items-center gap-2"><GitBranch className="h-5 w-5 text-fuchsia-500"/> {dict.dashboard?.recentServiceOrders || dict.serviceOrder || 'Recent Service Orders'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                                         <Link href="/inventory/service-orders">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -326,14 +327,14 @@ export default function DashboardPage() {
                                 {loading ? (
                                     <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                                 ) : recentServiceOrders.length === 0 ? (
-                                    <div className="text-center text-muted-foreground p-10">{(dict.dashboard as any)?.noServiceOrdersFound || 'No service orders found.'}</div>
+                                    <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noServiceOrdersFound || dict.noRecordsFound || 'No service orders found.'}</div>
                                 ) : (
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                <TableHead>{dict.location || 'Location'}</TableHead>
-                                                <TableHead>{dict.status || 'Status'}</TableHead>
+                                                <TableHead>{dict.location || dict.locationLabel || 'Location'}</TableHead>
+                                                <TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -346,7 +347,7 @@ export default function DashboardPage() {
                                                     <TableCell>{o.residenceName}</TableCell>
                                                     <TableCell>
                                                         <Badge variant={o.status === 'COMPLETED' ? 'default' : o.status === 'PARTIAL_RETURN' ? 'secondary' : o.status === 'CANCELLED' ? 'destructive' : 'outline'}>
-                                                            {o.status}
+                                                            {dict[o.status?.toLowerCase()] || o.status}
                                                         </Badge>
                                                     </TableCell>
                                                 </TableRow>
@@ -360,7 +361,7 @@ export default function DashboardPage() {
              <Card>
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> {dict.dashboard?.recentMaintenance || 'Recent Maintenance'}</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5"/> {dict.dashboard?.recentMaintenance || dict.maintenanceRequestsTitle || 'Recent Maintenance'}</CardTitle>
                 </div>
                 <Button asChild size="sm" className="ml-auto gap-1">
                     <Link href="/maintenance">{dict.viewAll || 'View All'}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -368,10 +369,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaintenanceRequestsFound || 'No maintenance requests found.'}</div>
+                : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaintenanceRequestsFound || dict.noRecordsFound || 'No maintenance requests found.'}</div>
                 : (
                     <Table>
-                        <TableHeader><TableRow><TableHead>{dict.idLabel || 'ID'}</TableHead><TableHead>{dict.location || 'Location'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>{dict.idLabel || 'ID'}</TableHead><TableHead>{dict.location || dict.locationLabel || 'Location'}</TableHead><TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {recentMaintenance.map((req, i) => (
                                 <TableRow key={`${req.id}-${i}`}>
@@ -381,7 +382,7 @@ export default function DashboardPage() {
                                         <div className="text-sm text-muted-foreground">{req.complexName}</div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
+                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{dict[req.status?.toLowerCase()] || req.status}</Badge>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -391,11 +392,11 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <Card className="border-t-4 border-purple-500">
                         <CardHeader className="flex flex-row items-center">
                             <div className="grid gap-2">
-                                <CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5 text-purple-500"/> {dict.sidebar?.stockReconciliation || 'Stock Reconciliation'}</CardTitle>
+                                <CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5 text-purple-500"/> {dict.sidebar?.stockReconciliation || dict.reconciliationTitle || 'Stock Reconciliation'}</CardTitle>
                             </div>
                             <Button asChild size="sm" className="ml-auto gap-1">
                                 <Link href="/inventory/inventory-audit">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
@@ -404,18 +405,18 @@ export default function DashboardPage() {
                         <CardContent>
                             {isAdmin && (
                                 <div className="space-y-3">
-                                    <div className="text-sm font-medium">Pending</div>
+                                    <div className="text-sm font-medium">{dict.pending || 'Pending'}</div>
                                     {pendingReconsLoading ? (
                                         <div className="flex items-center justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                                     ) : pendingRecons.length === 0 ? (
-                                        <div className="text-center text-muted-foreground p-6">No pending reconciliation requests.</div>
+                                        <div className="text-center text-muted-foreground p-6">{dict.noReconciliationLinesFound || 'No pending reconciliation requests.'}</div>
                                     ) : (
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                    <TableHead>{dict.location || 'Location'}</TableHead>
-                                                    <TableHead>{dict.status || 'Status'}</TableHead>
+                                                    <TableHead>{dict.location || dict.locationLabel || 'Location'}</TableHead>
+                                                    <TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -424,7 +425,7 @@ export default function DashboardPage() {
                                                         <TableCell><div className="font-mono">{r.reservedId || r.id}</div></TableCell>
                                                         <TableCell>{residences.find(x => String(x.id) === String(r.residenceId))?.name || r.residenceId}</TableCell>
                                                         <TableCell>
-                                                            <Badge variant="secondary">Pending</Badge>
+                                                            <Badge variant="secondary">{dict.pending || 'Pending'}</Badge>
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -435,7 +436,7 @@ export default function DashboardPage() {
                             )}
 
                             <div className="space-y-3 mt-6">
-                                <div className="text-sm font-medium">Latest</div>
+                                <div className="text-sm font-medium">{dict.latest || 'Latest'}</div>
                                 {reconsLoading ? (
                                     <div className="flex items-center justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                                 ) : recentReconciliations.length === 0 ? (
@@ -445,8 +446,8 @@ export default function DashboardPage() {
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                <TableHead>{dict.location || 'Location'}</TableHead>
-                                                <TableHead>{dict.status || 'Status'}</TableHead>
+                                                <TableHead>{dict.location || dict.locationLabel || 'Location'}</TableHead>
+                                                <TableHead>{dict.status || dict.statusLabel || 'Status'}</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -454,7 +455,7 @@ export default function DashboardPage() {
                                                 <TableRow key={rec.id} onClick={() => router.push('/inventory/reports/reconciliations')} className="cursor-pointer hover:bg-accent/30">
                                                     <TableCell><div className="font-mono">{rec.id}</div></TableCell>
                                                     <TableCell>{residences.find(x => String(x.id) === String(rec.residenceId))?.name || rec.residenceId}</TableCell>
-                                                    <TableCell><Badge variant="default">Completed</Badge></TableCell>
+                                                    <TableCell><Badge variant="default">{dict.completed || 'Completed'}</Badge></TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
@@ -467,20 +468,20 @@ export default function DashboardPage() {
                 <Card className="border-t-4 border-rose-500">
                     <CardHeader className="flex flex-row items-center">
                         <div className="grid gap-2">
-                            <CardTitle className="flex items-center gap-2"><ArrowDownRight className="h-5 w-5 text-rose-500"/> {(dict.dashboard as any)?.recentDepreciation || 'Recent Depreciation'}</CardTitle>
+                            <CardTitle className="flex items-center gap-2"><ArrowDownRight className="h-5 w-5 text-rose-500"/> {dict.dashboard?.recentDepreciation || dict.depreciationLabel || 'Recent Depreciation'}</CardTitle>
                         </div>
                     </CardHeader>
                     <CardContent>
                         {deprLoading ? (
                             <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                         ) : recentDepreciation.length === 0 ? (
-                            <div className="text-center text-muted-foreground p-10">No recent depreciation.</div>
+                            <div className="text-center text-muted-foreground p-10">{dict.noRecentDepreciation || 'No recent depreciation.'}</div>
                         ) : (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>{dict.itemLabel || 'Item'}</TableHead>
-                                        <TableHead>{dict.location || 'Location'}</TableHead>
+                                        <TableHead>{dict.location || dict.locationLabel || 'Location'}</TableHead>
                                         <TableHead>{dict.quantity || 'Quantity'}</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -505,7 +506,7 @@ export default function DashboardPage() {
                 <Card className="border-t-4 border-teal-500">
                     <CardHeader className="flex flex-row items-center">
                         <div className="grid gap-2">
-                            <CardTitle className="flex items-center gap-2"><Move className="h-5 w-5 text-teal-500"/> {(dict.dashboard as any)?.recentStockTransfers || 'Recent Stock Transfers'}</CardTitle>
+                            <CardTitle className="flex items-center gap-2"><Move className="h-5 w-5 text-teal-500"/> {dict.dashboard?.recentStockTransfers || dict.transferHistoryTitle || 'Recent Stock Transfers'}</CardTitle>
                         </div>
                         <Button asChild size="sm" className="ml-auto gap-1">
                             <Link href="/inventory/transfer">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
