@@ -16,6 +16,7 @@ import { Upload, FileText, X } from 'lucide-react';
 import { updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useUsers } from '@/context/users-context';
+import { FileUploadArea } from '@/components/ui/file-upload-area';
 
 interface QuickUploadAttachmentDialogProps {
   open: boolean;
@@ -32,80 +33,16 @@ export function QuickUploadAttachmentDialog({
 }: QuickUploadAttachmentDialogProps) {
   const { toast } = useToast();
   const { currentUser } = useUsers();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      validateAndSetFile(droppedFile);
-    }
-  };
-
-  const validateAndSetFile = (selectedFile: File) => {
-    const maxSize = 15 * 1024 * 1024;
-    if (selectedFile.size > maxSize) {
-      toast({
-        title: 'File too large',
-        description: 'Maximum file size is 15MB',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/webp',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
-    
-    if (!allowedTypes.includes(selectedFile.type)) {
-      toast({
-        title: 'Unsupported file type',
-        description: 'Please upload a PDF, image (JPG, PNG, WEBP), or Word document',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setFile(selectedFile);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setFile(null);
-  };
 
   const handleUpload = async () => {
-    if (!file || !db || !currentUser) return;
+    if (files.length === 0 || !db || !currentUser) return;
 
     setUploading(true);
     try {
-      // Upload file
+      // Upload first file
+      const file = files[0];
       const formData = new FormData();
       formData.append('file', file);
 
@@ -132,18 +69,18 @@ export function QuickUploadAttachmentDialog({
       });
 
       toast({
-        title: 'Attachment uploaded successfully',
-        description: 'The approval attachment has been added to the order',
+        title: 'تم رفع المرفق بنجاح',
+        description: 'تم إضافة مرفق الموافقة إلى الطلب',
       });
 
-      setFile(null);
+      setFiles([]);
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       toast({
-        title: 'Upload error',
-        description: error?.message || 'An error occurred while uploading the attachment',
+        title: 'خطأ في الرفع',
+        description: error?.message || 'حدث خطأ أثناء رفع المرفق',
         variant: 'destructive',
       });
     } finally {
@@ -151,97 +88,26 @@ export function QuickUploadAttachmentDialog({
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Upload Approval Attachment</DialogTitle>
+          <DialogTitle>رفع مرفق الموافقة</DialogTitle>
           <DialogDescription>
-            Add a signed approval document to this order
+            إضافة مستند موافقة موقع لهذا الطلب
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="quick-attachment">Attachment File</Label>
-            
-            {!file ? (
-              <div className="space-y-3">
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    dragActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    id="quick-attachment"
-                    type="file"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    onChange={handleFileChange}
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                    disabled={uploading}
-                  />
-                  <div className="space-y-2">
-                    <Upload className="mx-auto h-10 w-10 text-muted-foreground" />
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-semibold text-primary">Click to select file</span>
-                      {' or drag and drop'}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      PDF, Image or Word (up to 15MB)
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => document.getElementById('quick-attachment')?.click()}
-                  disabled={uploading}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Browse File
-                </Button>
-              </div>
-            ) : (
-              <div className="border rounded-lg p-4 bg-muted/50">
-                <div className="flex items-start justify-between gap-3">
-                  <FileText className="h-8 w-8 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" dir="ltr">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 h-8 w-8"
-                    onClick={handleRemoveFile}
-                    disabled={uploading}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+          <FileUploadArea
+            files={files}
+            onFilesChange={setFiles}
+            maxFiles={3}
+            label="ملف المرفق"
+            description="PDF, صور (JPG, PNG, WEBP), Word • الحد الأقصى 15 ميجا"
+            compact
+            disabled={uploading}
+          />
         </div>
 
         <DialogFooter>
@@ -251,15 +117,15 @@ export function QuickUploadAttachmentDialog({
             onClick={() => onOpenChange(false)}
             disabled={uploading}
           >
-            Cancel
+            إلغاء
           </Button>
           <Button
             type="button"
             onClick={handleUpload}
-            disabled={uploading || !file}
+            disabled={uploading || files.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700"
           >
-            {uploading ? 'Uploading...' : 'Upload Attachment'}
+            {uploading ? 'جاري الرفع...' : 'رفع المرفق'}
           </Button>
         </DialogFooter>
       </DialogContent>

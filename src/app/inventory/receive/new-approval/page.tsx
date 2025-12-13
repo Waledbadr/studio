@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
-import { UploadCloud, Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
+import { Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
+import { FileUploadArea } from '@/components/ui/file-upload-area';
 import { db } from '@/lib/firebase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import { useUsers } from '@/context/users-context';
@@ -20,6 +21,8 @@ import { AddItemDialog } from '@/components/inventory/add-item-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EditItemDialog } from '@/components/inventory/edit-item-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useLanguage } from '@/context/language-context';
 
 // MRV with Admin approval, UI similar to New Order
 export default function NewMRVApprovalPage() {
@@ -28,19 +31,51 @@ export default function NewMRVApprovalPage() {
   const { currentUser } = useUsers();
   const { toast } = useToast();
   const router = useRouter();
+  const { locale } = useLanguage();
 
   const [residenceId, setResidenceId] = useState('');
   const [lines, setLines] = useState<Record<string, number>>({});
   const [supplierName, setSupplierName] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [notes, setNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [editItemOpen, setEditItemOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+
+  const attachmentI18n = useMemo(() => locale === 'ar' ? {
+    addButton: 'إضافة مرفقات الفاتورة',
+    dialogTitle: 'مرفقات الفاتورة',
+    dialogDescription: 'إضافة فواتير ومرفقات قبل الإرسال للموافقة',
+    label: 'مرفقات الفاتورة (إلزامي)',
+    description: 'PDF, صور (JPG, PNG, WEBP) • يمكنك رفع حتى 5 ملفات',
+    cancel: 'إلغاء',
+    submit: 'رفع وإرسال الطلب',
+    submitting: 'جاري الإرسال...'
+  } : {
+    addButton: 'Add Invoice Attachments',
+    dialogTitle: 'Invoice Attachments',
+    dialogDescription: 'Add invoices/attachments before submitting for approval.',
+    label: 'Invoice Attachments (Required)',
+    description: 'PDF, images (JPG, PNG, WEBP) • up to 5 files',
+    cancel: 'Cancel',
+    submit: 'Upload & Submit',
+    submitting: 'Submitting...'
+  }, [locale]);
+
+  const canOpenAttachmentDialog = useMemo(() => {
+    return Boolean(
+      residenceId &&
+      supplierName.trim() &&
+      invoiceNo.trim() &&
+      selectedLines.length > 0 &&
+      !hasBlockingLines
+    );
+  }, [residenceId, supplierName, invoiceNo, selectedLines.length, hasBlockingLines]);
 
   // Variant selection state for popover-based add button (mirrors New Order page UX)
   const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
@@ -190,26 +225,22 @@ export default function NewMRVApprovalPage() {
     );
   }
 
-  const handleSubmit = async () => {
+  const validateBeforeAttachments = () => {
     if (!db) {
       toast({ title: 'Error', description: 'Firestore not configured.', variant: 'destructive' });
-      return;
+      return false;
     }
     if (!residenceId) {
       toast({ title: 'Error', description: 'Choose a residence.', variant: 'destructive' });
-      return;
+      return false;
     }
     if (!supplierName.trim() || !invoiceNo.trim()) {
       toast({ title: 'Error', description: 'Supplier and Invoice No. are required.', variant: 'destructive' });
-      return;
-    }
-    if (!file) {
-      toast({ title: 'Error', description: 'Invoice attachment is required.', variant: 'destructive' });
-      return;
+      return false;
     }
     if (selectedLines.length === 0) {
       toast({ title: 'Error', description: 'Enter at least one quantity.', variant: 'destructive' });
-      return;
+      return false;
     }
 
     // Prevent submission if any selected line quantity is already available in stock
@@ -221,25 +252,37 @@ export default function NewMRVApprovalPage() {
       } else {
         toast({ title: 'لا حاجة للشراء', description: 'بعض الأصناف متوفرة بالمخزون. عدّل الكميات أو احذف الأصناف.', variant: 'destructive' });
       }
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateBeforeAttachments()) return;
+    if (files.length === 0) {
+      toast({ title: 'Error', description: 'Invoice attachment is required.', variant: 'destructive' });
       return;
     }
 
     setSubmitting(true);
     try {
-      let attachmentUrl: string | null = null;
-      let attachmentPath: string | null = null;
-      if (file) {
+      // Upload all files and collect URLs
+      const attachments: { url: string; path: string; name: string }[] = [];
+      for (const file of files) {
         const fd = new FormData();
         fd.append('file', file);
         const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || 'Upload failed');
+          throw new Error(err.error || `Upload failed for ${file.name}`);
         }
         const data = await res.json();
-        attachmentUrl = data.url;
-        attachmentPath = data.path;
+        attachments.push({ url: data.url, path: data.path, name: file.name });
       }
+      // Use first attachment for backward compatibility
+      const attachmentUrl = attachments[0]?.url || null;
+      const attachmentPath = attachments[0]?.path || null;
       // Reserve a unified MRV short code now so Pending and Approved share the same number
       const now = new Date();
       const yy = now.getFullYear().toString().slice(-2);
@@ -264,6 +307,7 @@ export default function NewMRVApprovalPage() {
         invoiceNo,
         attachmentUrl,
         attachmentPath,
+        attachments, // Store all attachments for multiple file support
         notes: notes || null,
         status: 'Pending',
         requestedById: currentUser?.id || null,
@@ -281,6 +325,11 @@ export default function NewMRVApprovalPage() {
     }
   };
 
+  const openAttachmentDialog = () => {
+    if (!validateBeforeAttachments()) return;
+    setAttachmentDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -290,7 +339,7 @@ export default function NewMRVApprovalPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setAddItemOpen(true)}>+ Add New Item</Button>
-          <Button onClick={handleSubmit} disabled={submitting || !residenceId || hasBlockingLines}>
+          <Button onClick={openAttachmentDialog} disabled={submitting || !canOpenAttachmentDialog}>
           {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : `Submit (${totalQty})`}
           </Button>
         </div>
@@ -332,15 +381,15 @@ export default function NewMRVApprovalPage() {
           </div>
 
           {/* Row 2 */}
-          <div className="space-y-2 md:col-span-8">
+          <div className="space-y-2 md:col-span-6">
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" className="min-h-[90px]" />
           </div>
-          <div className="space-y-2 md:col-span-4">
-            <Label>Invoice Attachment</Label>
-            <div className="flex items-center gap-3">
-              <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full" />
-              <UploadCloud className="h-5 w-5 text-muted-foreground" />
+          <div className="space-y-2 md:col-span-6">
+            <div className="h-full flex items-end justify-end">
+              <Button variant="secondary" onClick={openAttachmentDialog} disabled={submitting || !canOpenAttachmentDialog}>
+                {attachmentI18n.addButton}
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -482,6 +531,34 @@ export default function NewMRVApprovalPage() {
         onItemUpdated={updateItem}
         item={itemToEdit}
       />
+
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{attachmentI18n.dialogTitle}</DialogTitle>
+            <DialogDescription>{attachmentI18n.dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <FileUploadArea
+              files={files}
+              onFilesChange={setFiles}
+              maxFiles={5}
+              label={attachmentI18n.label}
+              description={attachmentI18n.description}
+              compact
+              disabled={submitting}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttachmentDialogOpen(false)} disabled={submitting}>
+              {attachmentI18n.cancel}
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting || files.length === 0}>
+              {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {attachmentI18n.submitting}</> : attachmentI18n.submit}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FileUploadArea } from '@/components/ui/file-upload-area';
 
 interface ApprovalAttachmentDialogProps {
   open: boolean;
@@ -34,83 +35,17 @@ export function ApprovalAttachmentDialog({
   orderId,
 }: ApprovalAttachmentDialogProps) {
   const { toast } = useToast();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      validateAndSetFile(droppedFile);
-    }
-  };
-
-  const validateAndSetFile = (selectedFile: File) => {
-    // Validate file size (15MB max)
-    const maxSize = 15 * 1024 * 1024;
-    if (selectedFile.size > maxSize) {
-      toast({
-        title: 'File too large',
-        description: 'Maximum file size is 15MB',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Validate file type (common document formats)
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/webp',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
-    
-    if (!allowedTypes.includes(selectedFile.type)) {
-      toast({
-        title: 'Unsupported file type',
-        description: 'Please upload a PDF, image (JPG, PNG, WEBP), or Word document',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setFile(selectedFile);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setFile(null);
-  };
 
   const handleApproveWithAttachment = async () => {
     setUploading(true);
     try {
       let attachmentData: { url: string; path: string; filename: string } | null = null;
 
-      // Upload file if provided
-      if (file) {
+      // Upload first file if provided
+      if (files.length > 0) {
+        const file = files[0];
         const formData = new FormData();
         formData.append('file', file);
 
@@ -132,8 +67,8 @@ export function ApprovalAttachmentDialog({
         };
 
         toast({
-          title: 'Attachment uploaded successfully',
-          description: 'Approving the request...',
+          title: 'تم رفع المرفق بنجاح',
+          description: 'جاري الموافقة على الطلب...',
         });
       }
 
@@ -141,13 +76,13 @@ export function ApprovalAttachmentDialog({
       await onApprove(attachmentData);
       
       // Reset state
-      setFile(null);
+      setFiles([]);
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       toast({
-        title: 'Upload error',
-        description: error?.message || 'An error occurred while uploading the attachment',
+        title: 'خطأ في الرفع',
+        description: error?.message || 'حدث خطأ أثناء رفع المرفق',
         variant: 'destructive',
       });
     } finally {
@@ -159,26 +94,18 @@ export function ApprovalAttachmentDialog({
     setUploading(true);
     try {
       await onApprove(null);
-      setFile(null);
+      setFiles([]);
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error approving:', error);
       toast({
-        title: 'Approval error',
-        description: error?.message || 'An error occurred while approving the request',
+        title: 'خطأ في الموافقة',
+        description: error?.message || 'حدث خطأ أثناء الموافقة على الطلب',
         variant: 'destructive',
       });
     } finally {
       setUploading(false);
     }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -187,94 +114,29 @@ export function ApprovalAttachmentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <span>Approve Material Request</span>
+            <span>الموافقة على طلب المواد</span>
           </DialogTitle>
           <DialogDescription>
-            You can upload a signed approval attachment (optional) or approve directly without attachment
+            يمكنك رفع مرفق الموافقة (اختياري) أو الموافقة مباشرة بدون مرفق
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <Alert>
             <AlertDescription className="text-sm">
-              <strong>Note:</strong> Attachment upload is optional. You can approve the request without an attachment or upload a signed document.
+              <strong>ملاحظة:</strong> رفع المرفق اختياري. يمكنك الموافقة على الطلب بدون مرفق أو رفع مستند موقع.
             </AlertDescription>
           </Alert>
 
-          <div className="space-y-2">
-            <Label htmlFor="attachment" className="block">
-              Approval Attachment (Optional)
-            </Label>
-            
-            {!file ? (
-              <div className="space-y-3">
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    dragActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    id="attachment"
-                    type="file"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    onChange={handleFileChange}
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                    disabled={uploading}
-                  />
-                  <div className="space-y-2">
-                    <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-semibold text-primary">Click to select file</span>
-                      {' or drag and drop here'}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      PDF, Image (JPG, PNG, WEBP) or Word (up to 15MB)
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => document.getElementById('attachment')?.click()}
-                  disabled={uploading}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Browse File
-                </Button>
-              </div>
-            ) : (
-              <div className="border rounded-lg p-4 bg-muted/50">
-                <div className="flex items-start justify-between gap-3">
-                  <FileText className="h-10 w-10 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" dir="ltr">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 h-8 w-8"
-                    onClick={handleRemoveFile}
-                    disabled={uploading}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+          <FileUploadArea
+            files={files}
+            onFilesChange={setFiles}
+            maxFiles={3}
+            label="مرفق الموافقة (اختياري)"
+            description="PDF, صور (JPG, PNG, WEBP), Word • الحد الأقصى 15 ميجا"
+            compact
+            disabled={uploading}
+          />
         </div>
 
         <DialogFooter className="flex flex-row gap-2 justify-end">
@@ -284,7 +146,7 @@ export function ApprovalAttachmentDialog({
             onClick={() => onOpenChange(false)}
             disabled={uploading}
           >
-            Cancel
+            إلغاء
           </Button>
           <Button
             type="button"
@@ -292,15 +154,15 @@ export function ApprovalAttachmentDialog({
             onClick={handleSkipAndApprove}
             disabled={uploading}
           >
-            {uploading ? 'Approving...' : 'Approve without Attachment'}
+            {uploading ? 'جاري الموافقة...' : 'الموافقة بدون مرفق'}
           </Button>
           <Button
             type="button"
             onClick={handleApproveWithAttachment}
-            disabled={uploading || !file}
+            disabled={uploading || files.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700"
           >
-            {uploading ? 'Uploading & Approving...' : 'Upload & Approve'}
+            {uploading ? 'جاري الرفع والموافقة...' : 'رفع والموافقة'}
           </Button>
         </DialogFooter>
       </DialogContent>

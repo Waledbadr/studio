@@ -9,12 +9,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { Printer, Edit } from 'lucide-react';
+import { Printer, Edit, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { FileUploadArea, type UploadedFile } from '@/components/ui/file-upload-area';
 
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
@@ -26,7 +27,7 @@ export default function MRVDetailsPage() {
 
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [receivedByNameLocal, setReceivedByNameLocal] = useState<string>('');
   const { toast } = useToast();
@@ -96,58 +97,78 @@ export default function MRVDetailsPage() {
       }
     }
     // Sort by name EN for stable print order
-    return Array.from(byId.values()).sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
-  }, [data?.items, inventoryItems]);
+  // Helper to get uploaded files from data
+  const uploadedFiles: UploadedFile[] = useMemo(() => {
+    const result: UploadedFile[] = [];
+    // Check for attachments array (new format)
+    if (data?.attachments && Array.isArray(data.attachments)) {
+      data.attachments.forEach((att: any) => {
+        result.push({ url: att.url, path: att.path, name: att.name || 'Attachment' });
+      });
+    }
+    // Also include single attachment for backward compatibility
+    if (data?.attachmentUrl && !result.some(f => f.url === data.attachmentUrl)) {
+      result.push({ url: data.attachmentUrl, path: data.attachmentPath, name: data.attachmentRef || 'Invoice' });
+    }
+    return result;
+  }, [data]);
+
+  // Handle upload
+  const handleUploadFiles = async () => {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const newAttachments: { url: string; path: string; name: string }[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.append('mrvId', mrvId);
+        form.append('file', file);
+        const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Upload failed (${res.status})`);
+        }
+        const body = await res.json();
+        newAttachments.push({ url: body.url, path: body.path, name: file.name });
+      }
+      
+      // Update Firestore with new attachments
+      if (db) {
+        const mrvRef = doc(db, 'mrvs', mrvId);
+        await updateDoc(mrvRef, {
+          attachments: arrayUnion(...newAttachments),
+          // Keep backward compatibility
+          attachmentUrl: newAttachments[0]?.url || data?.attachmentUrl,
+          attachmentPath: newAttachments[0]?.path || data?.attachmentPath,
+        });
+      }
+      
+      // Update local state
+      setData((prev: any) => ({
+        ...prev,
+        attachments: [...(prev?.attachments || []), ...newAttachments],
+        attachmentUrl: newAttachments[0]?.url || prev?.attachmentUrl,
+        attachmentPath: newAttachments[0]?.path || prev?.attachmentPath,
+      }));
+      
+      setFiles([]);
+      toast({ title: 'تم رفع المرفقات بنجاح', description: `تم رفع ${newAttachments.length} ملف` });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'فشل الرفع', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold">Material Receive Voucher</h1>
           <p className="text-muted-foreground">MRV: {mrvId}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Replace/Upload attachment */}
-          <div className="flex items-center gap-2">
-    <Label htmlFor="mrv-attach">Attachment</Label>
-            <Input id="mrv-attach" type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="max-w-[240px]" disabled={uploading} />
-            <Button
-              variant="secondary"
-              disabled={!file || uploading}
-              onClick={async () => {
-                if (!file) return;
-                try {
-                  setUploading(true);
-                  const form = new FormData();
-                  form.append('mrvId', mrvId);
-                  form.append('file', file);
-                  const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.error || `Upload failed (${res.status})`);
-                  } else {
-                    // Use server response to update UI immediately; if server couldn't write to Firestore, refetch
-                    const body = await res.json().catch(() => ({}));
-                    if (body?.url) {
-                      setData((prev: any) => ({ ...(prev || {}), attachmentUrl: body.url, attachmentPath: body.path || null, attachmentRef: body.attachmentRef || null }));
-                      if (!body?.wroteToFirestore) {
-                        const snap = await (await import('firebase/firestore')).getDoc((await import('firebase/firestore')).doc(db!, 'mrvs', mrvId));
-                        const meta = snap.exists() ? (snap.data() as any) : {};
-                        setData((prev: any) => ({ ...(prev || {}), ...meta }));
-                      }
-                    }
-                  }
-                  setFile(null);
-                  toast({ title: 'Attachment uploaded' });
-                } catch (e) {
-                  console.error(e);
-                  toast({ title: 'Upload failed', variant: 'destructive' });
-                } finally {
-                  setUploading(false);
-                }
-              }}
-            >{uploading ? 'Uploading…' : 'Upload'}</Button>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
           {currentUser?.role === 'Admin' && (
             <Button variant="outline" onClick={() => router.push(`/inventory/receive/receipts/${mrvId}/edit`)}>
               <Edit className="mr-2 h-4 w-4" /> Edit
@@ -159,6 +180,39 @@ export default function MRVDetailsPage() {
           <Button variant="outline" onClick={() => router.back()}>Back</Button>
         </div>
       </div>
+
+      {/* Attachments Section - Professional Display */}
+      <Card className="print:hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">المرفقات • Attachments</CardTitle>
+          <CardDescription>يمكنك رفع فواتير ومستندات متعددة</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FileUploadArea
+            files={files}
+            onFilesChange={setFiles}
+            uploadedFiles={uploadedFiles}
+            maxFiles={10}
+            uploading={uploading}
+            compact
+          />
+          {files.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <Button onClick={handleUploadFiles} disabled={uploading}>
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    جاري الرفع...
+                  </>
+                ) : (
+                  `رفع ${files.length} ملف`
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
       <style jsx global>{`
             @page {
               size: A4 portrait;
@@ -237,10 +291,14 @@ export default function MRVDetailsPage() {
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Residence • الموقع:</span><span className="font-medium">{residenceName(data?.residenceId)}</span></div>
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Supplier • المورد:</span><span className="font-medium">{data?.supplierName || '-'}</span></div>
             <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">Invoice No. • رقم الفاتورة:</span><span className="font-medium">{data?.invoiceNo || '-'}</span></div>
-            <div className="flex items-center gap-2 text-sm col-span-1 sm:col-span-2">
-              <span className="text-muted-foreground">Attachment • مرفق:</span>
-              {data?.attachmentUrl ? (
-                <a href={data.attachmentUrl} target="_blank" rel="noreferrer" className="text-primary underline">Open</a>
+            <div className="flex items-center gap-2 text-sm col-span-1 sm:col-span-2 flex-wrap">
+              <span className="text-muted-foreground">Attachments • المرفقات:</span>
+              {uploadedFiles.length > 0 ? (
+                <span className="flex gap-2 flex-wrap">
+                  {uploadedFiles.map((f, i) => (
+                    <a key={i} href={f.url} target="_blank" rel="noreferrer" className="text-primary underline text-xs">{f.name}</a>
+                  ))}
+                </span>
               ) : (
                 <span className="font-medium">—</span>
               )}

@@ -16,6 +16,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
+import { FileUploadArea } from '@/components/ui/file-upload-area';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,10 +47,28 @@ export default function ReceiveOrderPage() {
     const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
-    const { dict } = useLanguage();
+    const { dict, locale } = useLanguage();
     const { currentUser } = useUsers();
-    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+    const [pendingForceComplete, setPendingForceComplete] = useState(false);
+
+    const attachmentI18n = React.useMemo(() => locale === 'ar' ? {
+        title: 'مرفقات الاستلام',
+        description: 'يمكنك رفع فواتير أو مستندات قبل تأكيد الاستلام (اختياري)',
+        descriptionShort: 'PDF, صور • يمكنك رفع حتى 5 ملفات',
+        cancel: 'إلغاء',
+        confirm: 'تأكيد الاستلام',
+        confirming: 'جاري التأكيد...'
+    } : {
+        title: 'Receipt Attachments',
+        description: 'Attach invoices or documents before confirming receipt (optional).',
+        descriptionShort: 'PDF, images • you can upload up to 5 files',
+        cancel: 'Cancel',
+        confirm: 'Confirm Receipt',
+        confirming: 'Confirming...'
+    }, [locale]);
 
     const fetchOrderForPage = useCallback(async (orderId: string) => {
         if (!db) return;
@@ -160,43 +180,43 @@ export default function ReceiveOrderPage() {
 
         try {
             const { mrvId } = await receiveOrderItems(order.id, itemsToProcess, forceComplete);
-            // If there's an attachment and an MRV was created, upload via server API to avoid CORS
-            if (attachmentFile && mrvId) {
+            // If there are attachments and an MRV was created, upload via server API
+            if (attachmentFiles.length > 0 && mrvId) {
                 setUploading(true);
                 try {
-                    const form = new FormData();
-                    form.append('mrvId', mrvId);
-                    form.append('file', attachmentFile);
-                    const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.error || `Upload failed (${res.status})`);
-                    } else {
-                        // Server persists metadata; fallback to client write if needed
-                        const data = await res.json().catch(() => null);
-                        if (data && data.url && !data.wroteToFirestore) {
-                            try {
-                                await updateDoc(doc(db!, 'mrvs', mrvId), {
-                                    attachmentUrl: data.url,
-                                    attachmentPath: data.path || null,
-                                    attachmentRef: data.attachmentRef || null,
-                                });
-                            } catch (e) {
-                                // ignore; UI will still navigate
-                                console.warn('Client fallback MRV update failed:', e);
-                            }
+                    const attachments: { url: string; path: string; name: string }[] = [];
+                    for (const file of attachmentFiles) {
+                        const form = new FormData();
+                        form.append('mrvId', mrvId);
+                        form.append('file', file);
+                        const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.error || `Upload failed (${res.status})`);
                         }
-                        toast({ title: 'Attachment uploaded', description: 'Linked to MRV successfully.' });
+                        const data = await res.json();
+                        attachments.push({ url: data.url, path: data.path, name: file.name });
                     }
+                    
+                    // Update MRV with all attachments
+                    if (db && attachments.length > 0) {
+                        await updateDoc(doc(db, 'mrvs', mrvId), {
+                            attachments,
+                            attachmentUrl: attachments[0].url,
+                            attachmentPath: attachments[0].path,
+                        });
+                    }
+                    
+                    toast({ title: 'تم رفع المرفقات', description: `تم رفع ${attachments.length} ملف` });
                 } catch (e) {
                     console.error('Attachment upload failed', e);
-                    toast({ title: 'Upload failed', description: 'Receipt saved, but attachment could not be uploaded.', variant: 'destructive' });
+                    toast({ title: 'فشل الرفع', description: 'تم حفظ الاستلام، لكن فشل رفع المرفقات.', variant: 'destructive' });
                 } finally {
                     setUploading(false);
                 }
-            } else if (attachmentFile && !mrvId) {
+            } else if (attachmentFiles.length > 0 && !mrvId) {
                 // No MRV created (e.g., close without receiving quantities)
-                toast({ title: 'No MRV created', description: 'Order was closed without posting items; attachment was not uploaded.' });
+                toast({ title: 'لم يتم إنشاء MRV', description: 'تم إغلاق الطلب بدون استلام أصناف؛ لم يتم رفع المرفقات.' });
             }
             // Navigate to MRV details if available, else back to orders
             if (mrvId) {
@@ -208,6 +228,11 @@ export default function ReceiveOrderPage() {
             // Error toast is handled by the context
             console.error(error);
         }
+    };
+
+    const openAttachmentDialog = (forceComplete: boolean) => {
+        setPendingForceComplete(forceComplete);
+        setAttachmentDialogOpen(true);
     };
 
     if (loading) {
@@ -243,40 +268,29 @@ export default function ReceiveOrderPage() {
     }
     
     return (
+        <>
         <div className="space-y-6">
-                                <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">{dict.receiveMrvTitle}</h1>
                     <p className="text-muted-foreground">{dict.receiveMrvDescription.replace('{id}', order.id)}</p>
                 </div>
-                                 <div className="flex items-center gap-2">
-                                        {/* Optional attachment upload */}
-                                        <div className="flex items-center gap-2">
-                                            <Label htmlFor="mrv-attachment" className="whitespace-nowrap">Attachment</Label>
-                                            <Input
-                                                id="mrv-attachment"
-                                                type="file"
-                                                accept="application/pdf,image/*"
-                                                onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)}
-                                                className="max-w-[240px]"
-                                                disabled={ordersLoading || uploading}
-                                            />
-                                        </div>
+                <div className="flex items-center gap-2 flex-wrap">
                     <Button variant="outline" onClick={() => router.back()}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                                                        <Button variant="secondary" disabled={ordersLoading || uploading}>
-                                                                 {ordersLoading || uploading ? (
+                            <Button variant="secondary" disabled={ordersLoading || uploading}>
+                                {ordersLoading || uploading ? (
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /></>
                                 ) : (
                                     <><PackageX className="mr-2 h-4 w-4" /> Receive & Close Order</>
                                 )}
                             </Button>
                         </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
                                     <AlertDialogTitle>{dict.confirmCloseTitle}</AlertDialogTitle>
                                     <AlertDialogDescription>
                                         {dict.confirmCloseDescription}
@@ -284,13 +298,13 @@ export default function ReceiveOrderPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>{dict.ui.cancel}</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleConfirmReceipt(true)}>
+                                    <AlertDialogAction onClick={() => openAttachmentDialog(true)}>
                                         {dict.confirmAndClose}
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                     </AlertDialog>
-                    <Button onClick={() => handleConfirmReceipt(false)} disabled={ordersLoading || uploading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
+                        <Button onClick={() => openAttachmentDialog(false)} disabled={ordersLoading || uploading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}>
                         {ordersLoading || uploading ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.processing}</>
                         ) : (
@@ -343,6 +357,45 @@ export default function ReceiveOrderPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Attachments handled via dialog */}
         </div>
+
+        <Dialog
+            open={attachmentDialogOpen}
+            onOpenChange={(open) => { if (!uploading) setAttachmentDialogOpen(open); }}
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{attachmentI18n.title}</DialogTitle>
+                    <DialogDescription>{attachmentI18n.description}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <FileUploadArea
+                        files={attachmentFiles}
+                        onFilesChange={setAttachmentFiles}
+                        maxFiles={5}
+                        compact
+                        disabled={ordersLoading || uploading}
+                        description={attachmentI18n.descriptionShort}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setAttachmentDialogOpen(false)} disabled={uploading}>
+                        {attachmentI18n.cancel}
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setAttachmentDialogOpen(false);
+                            handleConfirmReceipt(pendingForceComplete);
+                        }}
+                        disabled={ordersLoading || uploading || (!!currentUser && !(currentUser.role === 'Admin' || currentUser.role === 'Supervisor'))}
+                    >
+                        {uploading ? attachmentI18n.confirming : attachmentI18n.confirm}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

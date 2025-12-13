@@ -17,6 +17,9 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
+import { FileUploadArea, type UploadedFile } from '@/components/ui/file-upload-area';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useLanguage } from '@/context/language-context';
 
 export default function MRVApprovalDetailPage() {
   const params = useParams();
@@ -25,6 +28,7 @@ export default function MRVApprovalDetailPage() {
   const { approveMRVRequest, rejectMRVRequest } = useInventory();
   const { residences, loadResidences } = useResidences();
   const { currentUser } = useUsers();
+  const { locale } = useLanguage();
 
   const id = (params?.id as string) || '';
 
@@ -35,8 +39,27 @@ export default function MRVApprovalDetailPage() {
   const [invoiceNo, setInvoiceNo] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Record<string, number>>({});
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isApproving, setIsApproving] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+
+  const attachmentI18n = React.useMemo(() => locale === 'ar' ? {
+    title: 'مرفقات الفاتورة',
+    description: 'يمكنك رفع مرفق الموافقة قبل إنشاء MRV (اختياري)',
+    label: 'مرفقات الفاتورة',
+    descriptionShort: 'PDF، صور، Word • اختياري',
+    cancel: 'إلغاء',
+    approve: 'الموافقة الآن',
+    approving: 'جاري الموافقة...'
+  } : {
+    title: 'Invoice Attachments',
+    description: 'Upload an approval attachment before creating the MRV (optional).',
+    label: 'Invoice Attachments',
+    descriptionShort: 'PDF, images, Word • optional',
+    cancel: 'Cancel',
+    approve: 'Approve Now',
+    approving: 'Approving...'
+  }, [locale]);
 
   useEffect(() => {
     if (residences.length === 0) loadResidences();
@@ -79,16 +102,35 @@ export default function MRVApprovalDetailPage() {
 
   const setQty = (id: string, q: number) => setLines(prev => ({ ...prev, [id]: Math.max(0, isNaN(q) ? 0 : q) }));
 
-  const handleReplaceAttachment = async (): Promise<{ url: string; path: string } | null> => {
-    if (!file) return null;
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Upload failed');
+  // Helper to get uploaded files from data
+  const uploadedFiles: UploadedFile[] = useMemo(() => {
+    const result: UploadedFile[] = [];
+    if (data?.attachments && Array.isArray(data.attachments)) {
+      data.attachments.forEach((att: any) => {
+        result.push({ url: att.url, path: att.path, name: att.name || 'Attachment' });
+      });
     }
-    return res.json();
+    if (data?.attachmentUrl && !result.some(f => f.url === data.attachmentUrl)) {
+      result.push({ url: data.attachmentUrl, path: data.attachmentPath, name: 'Invoice' });
+    }
+    return result;
+  }, [data]);
+
+  const handleUploadAttachments = async (): Promise<{ url: string; path: string; name: string }[]> => {
+    if (files.length === 0) return [];
+    const attachments: { url: string; path: string; name: string }[] = [];
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Upload failed for ${file.name}`);
+      }
+      const data = await res.json();
+      attachments.push({ url: data.url, path: data.path, name: file.name });
+    }
+    return attachments;
   };
 
   const handleSave = async () => {
@@ -104,17 +146,36 @@ export default function MRVApprovalDetailPage() {
 
     setSaving(true);
     try {
-      let upload: { url: string; path: string } | null = null;
-      if (file) upload = await handleReplaceAttachment();
+      const newAttachments = await handleUploadAttachments();
+      const existingAttachments = data?.attachments || [];
+      const allAttachments = [...existingAttachments, ...newAttachments];
+      
       const ref = doc(collection(db, 'mrvRequests'), data.id);
       await updateDoc(ref, {
         supplierName: supplierName.trim(),
         invoiceNo: invoiceNo.trim(),
         notes: notes || null,
         items: selectedLines,
-        ...(upload ? { attachmentUrl: upload.url, attachmentPath: upload.path } : {}),
+        attachments: allAttachments,
+        // Keep backward compatibility
+        ...(newAttachments.length > 0 ? { 
+          attachmentUrl: newAttachments[0].url, 
+          attachmentPath: newAttachments[0].path 
+        } : {}),
         updatedAt: Timestamp.now()
       });
+      
+      // Update local data with new attachments
+      if (newAttachments.length > 0) {
+        setData((prev: any) => ({
+          ...prev,
+          attachments: allAttachments,
+          attachmentUrl: newAttachments[0].url,
+          attachmentPath: newAttachments[0].path,
+        }));
+        setFiles([]);
+      }
+      
       toast({ title: 'Saved', description: 'Changes saved.' });
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Failed to save.', variant: 'destructive' });
@@ -146,6 +207,11 @@ export default function MRVApprovalDetailPage() {
     }
   };
 
+  const openApproveDialog = () => {
+    if (!data || !currentUser) return;
+    setApproveDialogOpen(true);
+  };
+
   const handleReject = async () => {
     if (!data || !currentUser) return;
     try {
@@ -165,7 +231,7 @@ export default function MRVApprovalDetailPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>Back</Button>
           <Button variant="secondary" onClick={handleSave} disabled={saving || isApproving}>{saving ? 'Saving…' : 'Save'}</Button>
-          <Button onClick={handleApprove} disabled={currentUser?.role !== 'Admin' || isApproving}>{isApproving ? 'Approving…' : 'Approve'}</Button>
+          <Button onClick={openApproveDialog} disabled={currentUser?.role !== 'Admin' || isApproving}>{isApproving ? attachmentI18n.approving : attachmentI18n.approve}</Button>
           <Button variant="destructive" onClick={handleReject} disabled={currentUser?.role !== 'Admin' || isApproving}>Reject</Button>
         </div>
       </div>
@@ -191,15 +257,6 @@ export default function MRVApprovalDetailPage() {
           <div className="space-y-2 md:col-span-2">
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Invoice Attachment</Label>
-            <div className="flex items-center gap-3">
-              {data?.attachmentUrl && (
-                <a className="underline text-primary" href={data.attachmentUrl} target="_blank" rel="noreferrer">Open current</a>
-              )}
-              <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </div>
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Requested At</div>
@@ -242,6 +299,33 @@ export default function MRVApprovalDetailPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={approveDialogOpen} onOpenChange={(open) => { if (!isApproving) setApproveDialogOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{attachmentI18n.title}</DialogTitle>
+            <DialogDescription>{attachmentI18n.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <FileUploadArea
+              files={files}
+              onFilesChange={setFiles}
+              uploadedFiles={uploadedFiles}
+              maxFiles={5}
+              label={attachmentI18n.label}
+              description={attachmentI18n.descriptionShort}
+              compact
+              disabled={saving || isApproving}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveDialogOpen(false)} disabled={isApproving}>{attachmentI18n.cancel}</Button>
+            <Button onClick={handleApprove} disabled={isApproving}>
+              {isApproving ? attachmentI18n.approving : attachmentI18n.approve}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
