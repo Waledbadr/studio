@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { useResidences } from "@/context/residences-context";
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/context/language-context';
 import { useServiceOrders, type ServiceOrder } from '@/context/service-orders-context';
+import { LocationBreadcrumb } from '@/components/ui/location-breadcrumb';
 
 export default function DashboardPage() {
     const { dict } = useLanguage();
@@ -491,7 +493,13 @@ export default function DashboardPage() {
                                                 <div className="font-medium">{tx.itemNameEn || tx.itemNameAr}</div>
                                                 <div className="text-sm text-muted-foreground">{tx.referenceDocId}</div>
                                             </TableCell>
-                                            <TableCell>{tx.locationName || residences.find(r => r.id === tx.residenceId)?.name || tx.residenceId}</TableCell>
+                                            <TableCell>
+                                                {tx.locationName ? (
+                                                    <LocationBreadcrumb path={tx.locationName} />
+                                                ) : (
+                                                    residences.find(r => r.id === tx.residenceId)?.name || tx.residenceId
+                                                )}
+                                            </TableCell>
                                             <TableCell>{tx.quantity}</TableCell>
                                         </TableRow>
                                     ))}

@@ -273,7 +273,7 @@ export default function ReceiveOrderPage() {
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">{dict.receiveMrvTitle}</h1>
-                    <p className="text-muted-foreground">{dict.receiveMrvDescription.replace('{id}', order.id)}</p>
+                    <p className="text-muted-foreground">{dict.receiveMrvDescription?.replace('{id}', order.id) || `Request #${order.id}`}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Button variant="outline" onClick={() => router.back()}>

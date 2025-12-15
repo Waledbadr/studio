@@ -218,8 +218,13 @@ export default function MIVDetailPage() {
                             {entries.map(([locName, items], locIndex) => (
                                 <React.Fragment key={`${locName}-${locIndex}`}>
                                     <TableRow className="section-row" key={`section-${locIndex}`}>
-                                        <TableCell colSpan={2} className="font-semibold text-primary">
-                                            {locName}
+                                        <TableCell colSpan={2} className="font-semibold text-primary" dir="ltr" style={{textAlign: 'left'}}>
+                                            {locName.split(' -> ').map((part, i, arr) => (
+                                                <React.Fragment key={i}>
+                                                    <span dir="auto">{part}</span>
+                                                    {i < arr.length - 1 && <span> → </span>}
+                                                </React.Fragment>
+                                            ))}
                                         </TableCell>
                                     </TableRow>
                                     {items.map((it, i) => (

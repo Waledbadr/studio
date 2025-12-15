@@ -9,13 +9,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { Printer, Edit, Loader2 } from 'lucide-react';
+import { Printer, Edit, Loader2, Upload } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { FileUploadArea, type UploadedFile } from '@/components/ui/file-upload-area';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
@@ -30,6 +31,7 @@ export default function MRVDetailsPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [receivedByNameLocal, setReceivedByNameLocal] = useState<string>('');
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
   const { toast } = useToast();
   const handlePrint = () => {
     if (typeof window !== 'undefined') window.print();
@@ -97,6 +99,11 @@ export default function MRVDetailsPage() {
       }
     }
     // Sort by name EN for stable print order
+    return Array.from(byId.values()).sort((a, b) => 
+      (a.itemNameEn || '').localeCompare(b.itemNameEn || '')
+    );
+  }, [data?.items, inventoryItems]);
+
   // Helper to get uploaded files from data
   const uploadedFiles: UploadedFile[] = useMemo(() => {
     const result: UploadedFile[] = [];
@@ -152,6 +159,7 @@ export default function MRVDetailsPage() {
       }));
       
       setFiles([]);
+      setAttachmentDialogOpen(false);
       toast({ title: 'تم رفع المرفقات بنجاح', description: `تم رفع ${newAttachments.length} ملف` });
     } catch (e) {
       console.error(e);
@@ -181,33 +189,29 @@ export default function MRVDetailsPage() {
         </div>
       </div>
 
-      {/* Attachments Section - Professional Display */}
+      {/* Attachments Section - Show Button and Uploaded Files */}
       <Card className="print:hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">المرفقات • Attachments</CardTitle>
           <CardDescription>يمكنك رفع فواتير ومستندات متعددة</CardDescription>
         </CardHeader>
-        <CardContent>
-          <FileUploadArea
-            files={files}
-            onFilesChange={setFiles}
-            uploadedFiles={uploadedFiles}
-            maxFiles={10}
-            uploading={uploading}
-            compact
-          />
-          {files.length > 0 && (
-            <div className="mt-4 flex justify-end">
-              <Button onClick={handleUploadFiles} disabled={uploading}>
-                {uploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    جاري الرفع...
-                  </>
-                ) : (
-                  `رفع ${files.length} ملف`
-                )}
-              </Button>
+        <CardContent className="space-y-4">
+          <Button onClick={() => setAttachmentDialogOpen(true)} variant="outline" className="w-full">
+            <Upload className="mr-2 h-4 w-4" />
+            رفع مرفقات جديدة
+          </Button>
+          {uploadedFiles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">الملفات المرفوعة:</p>
+              <FileUploadArea
+                files={[]}
+                onFilesChange={() => {}}
+                uploadedFiles={uploadedFiles}
+                maxFiles={10}
+                uploading={false}
+                compact
+                viewOnly
+              />
             </div>
           )}
         </CardContent>
@@ -355,6 +359,42 @@ export default function MRVDetailsPage() {
           </div>
         </CardFooter>
       </Card>
+
+      {/* Attachments Upload Dialog */}
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إضافة مرفقات • Add Attachments</DialogTitle>
+            <DialogDescription>قم برفع الفواتير أو المستندات المتعلقة بهذا السند</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <FileUploadArea
+              files={files}
+              onFilesChange={setFiles}
+              maxFiles={10}
+              label="المرفقات • Attachments"
+              description="PDF, صور (JPG, PNG, WEBP) • حتى 10 ملفات"
+              compact
+              disabled={uploading}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAttachmentDialogOpen(false); setFiles([]); }} disabled={uploading}>
+              إلغاء
+            </Button>
+            <Button onClick={handleUploadFiles} disabled={uploading || files.length === 0}>
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  جاري الرفع...
+                </>
+              ) : (
+                `رفع ${files.length} ملف`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

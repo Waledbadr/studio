@@ -67,16 +67,6 @@ export default function NewMRVApprovalPage() {
     submitting: 'Submitting...'
   }, [locale]);
 
-  const canOpenAttachmentDialog = useMemo(() => {
-    return Boolean(
-      residenceId &&
-      supplierName.trim() &&
-      invoiceNo.trim() &&
-      selectedLines.length > 0 &&
-      !hasBlockingLines
-    );
-  }, [residenceId, supplierName, invoiceNo, selectedLines.length, hasBlockingLines]);
-
   // Variant selection state for popover-based add button (mirrors New Order page UX)
   const variantSelectionsRef = useRef<Record<string, Record<string, boolean>>>({});
 
@@ -145,6 +135,16 @@ export default function NewMRVApprovalPage() {
   }, [selectedLines, items, residenceId, getStockForResidence]);
 
   const hasBlockingLines = useMemo(() => Object.values(lineWarnings).some(w => w.noNeed), [lineWarnings]);
+
+  const canOpenAttachmentDialog = useMemo(() => {
+    return Boolean(
+      residenceId &&
+      supplierName.trim() &&
+      invoiceNo.trim() &&
+      selectedLines.length > 0 &&
+      !hasBlockingLines
+    );
+  }, [residenceId, supplierName, invoiceNo, selectedLines.length, hasBlockingLines]);
 
   // Helper: split name into base/detail parts like in New Order
   const splitNameDetail = (name?: string): { base: string; detail: string } => {

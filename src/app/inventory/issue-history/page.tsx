@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
+import { LocationBreadcrumb } from '@/components/ui/location-breadcrumb';
 
 export default function MIVHistoryPage() {
     const { getMIVs, loading } = useInventory();
@@ -87,7 +88,7 @@ export default function MIVHistoryPage() {
                                     <TableCell className="font-medium">{formatMivId(miv.id)}</TableCell>
                                     <TableCell>{format(miv.date.toDate(), 'PPP p')}</TableCell>
                                     <TableCell>{getResidenceName(miv.residenceId)}</TableCell>
-                                    <TableCell>{miv.locationName}</TableCell>
+                                    <TableCell><LocationBreadcrumb path={miv.locationName} /></TableCell>
                                     <TableCell>{miv.itemCount}</TableCell>
                                 </TableRow>
                             )) : (

@@ -22,6 +22,7 @@ import { useOrders, type Order } from '@/context/orders-context';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { LocationBreadcrumb } from '@/components/ui/location-breadcrumb';
 
 
 interface IssuedItem extends InventoryItem {
@@ -944,7 +945,7 @@ export default function IssueMaterialPage() {
                                         <AccordionItem key={location.locationId} value={location.locationId} className="border rounded-lg px-4 bg-card">
                                             <AccordionTrigger className="font-semibold text-sm hover:no-underline py-3">
                                                 <div className="flex items-center justify-between w-full pr-2">
-                                                    <span dir="ltr" className="truncate">{location.locationName}</span>
+                                                    <span className="truncate"><LocationBreadcrumb path={location.locationName} /></span>
                                                     <div className="flex items-center gap-2">
                                                         <Badge variant="secondary">{location.items.length} items</Badge>
                                                         <Badge variant="outline">{totalQty} units</Badge>

@@ -716,6 +716,7 @@ const ar = {
     mivTitle: 'سند صرف مواد (MIV)',
     receiveMrvTitle: 'سند استلام مواد (MRV)',
     receiveMrvPageDescription: 'مراجعة طلبات MRV المعلقة واستلام الطلبات المعتمدة.',
+    receiveMrvDescription: 'تأكيد الكميات المستلمة للطلب رقم #{id}',
     mivDescription: 'صرف المواد من مخزن السكن إلى المواقع المحددة.',
     viewHistoryLabel: 'عرض السجل',
     submitVoucher: 'إرسال السند',
