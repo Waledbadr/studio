@@ -1,5 +1,25 @@
 import { NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
+
+let cachedPut: null | ((...args: any[]) => Promise<any>) = null;
+
+async function getBlobPut() {
+  if (cachedPut) return cachedPut;
+
+  if (typeof (globalThis as any).File === 'undefined') {
+    try {
+      const undici = await import('undici');
+      (globalThis as any).File = (undici as any).File;
+      (globalThis as any).Blob = (undici as any).Blob;
+      (globalThis as any).FormData = (undici as any).FormData;
+    } catch {
+      // ignore
+    }
+  }
+
+  const mod = await import('@vercel/blob');
+  cachedPut = (mod as any).put;
+  return cachedPut;
+}
 
 export const runtime = 'nodejs';
 
@@ -44,6 +64,8 @@ export async function POST(req: Request) {
 
     const arrayBuffer = await (fileValue as any).arrayBuffer();
     const body = Buffer.from(arrayBuffer);
+
+    const put = await getBlobPut();
 
     const { url } = await put(blobPath, body, {
       access: 'public',
