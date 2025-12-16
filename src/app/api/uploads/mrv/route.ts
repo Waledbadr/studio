@@ -22,24 +22,52 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
+      return NextResponse.json(
+        {
+          error: 'BLOB_READ_WRITE_TOKEN is not configured',
+          hint: 'Set BLOB_READ_WRITE_TOKEN in your Render environment variables.',
+        },
+        { status: 500 }
+      );
+    }
+
     const form = await req.formData();
-    const file = form.get('file') as File | null;
+    const fileValue = form.get('file');
     const mrvId = (form.get('mrvId') as string) || '';
-    if (!file || !mrvId) {
+    if (!fileValue || !mrvId) {
       return NextResponse.json({ error: 'file and mrvId required' }, { status: 400 });
     }
 
+    const hasArrayBuffer = typeof (fileValue as any)?.arrayBuffer === 'function';
+    if (!hasArrayBuffer) {
+      return NextResponse.json({ error: 'Invalid file payload' }, { status: 400 });
+    }
+
+    const originalName = typeof (fileValue as any)?.name === 'string' ? (fileValue as any).name : 'upload.bin';
+    const contentType = typeof (fileValue as any)?.type === 'string' ? (fileValue as any).type : 'application/octet-stream';
+    const size = typeof (fileValue as any)?.size === 'number' ? (fileValue as any).size : 0;
+    const maxSize = 15 * 1024 * 1024; // 15MB
+    if (size > maxSize) {
+      return NextResponse.json({ error: 'File too large (max 15MB)' }, { status: 413 });
+    }
+
     const db = getAdminDb();
-    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+    const safeName = originalName.replace(/[^\w.\-]+/g, '_');
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
     const m = (now.getMonth() + 1).toString().padStart(2, '0');
     const blobPath = `mrvs/receipts/${yy}/${m}/${mrvId}/${Date.now()}_${safeName}`;
     const attachmentRef = `${mrvId}/${safeName}`;
 
-    const putRes = await put(blobPath, file as any, {
+    const arrayBuffer = await (fileValue as any).arrayBuffer();
+    const body = Buffer.from(arrayBuffer);
+
+    const putRes = await put(blobPath, body, {
       access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN as string | undefined,
+      contentType,
+      token,
     } as any);
 
     // Update Firestore if Admin is configured (optional).
