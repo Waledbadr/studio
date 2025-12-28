@@ -250,6 +250,13 @@ BLOB_READ_WRITE_TOKEN=vercel_blob_rw_token_here
 - أضف `BLOB_READ_WRITE_TOKEN` من إعدادات المشروع -> Environment Variables.
 - تأكد من أن المتغير موجود على بيئة Preview و Production عند الحاجة.
 
+**نشر على Render** ⭐:
+
+1. **احصل على Token من Vercel**: Vercel Dashboard → Storage → Blob → Tokens → Create Read-Write Token
+2. **أضف في Render**: Dashboard → Your Service → Environment → Add Variable (`BLOB_READ_WRITE_TOKEN`)
+3. **تشخيص**: افتح `/api/uploads/diagnostics` للتحقق من الإعداد
+4. **دليل كامل**: راجع [`RENDER_UPLOAD_FIX_AR.md`](./RENDER_UPLOAD_FIX_AR.md)
+
 ملاحظات:
 
 - إذا ظهر الخطأ: `Vercel Blob: No token found...` فهذا يعني أن المتغير غير مضبوط أو غير متاح في بيئة التشغيل الحالية.
