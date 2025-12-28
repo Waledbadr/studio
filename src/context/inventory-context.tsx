@@ -871,7 +871,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const prev = existingById.get(itemId) || {};
         const prevSbr = { ...(prev.stockByResidence || {}) } as Record<string, number>;
         const prevAtRes = Math.max(0, Number(prevSbr[payload.residenceId] || 0));
-        const nextAtRes = prevAtRes + totalQty;
+        const nextAtRes = Math.max(0, prevAtRes + totalQty);
         const newSbr = { ...prevSbr, [payload.residenceId]: nextAtRes };
         const newTotal = Object.values(newSbr).reduce((sum, v: any) => {
           const n = Number(v);

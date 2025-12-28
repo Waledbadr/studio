@@ -108,9 +108,13 @@ export default function AccommodationResidencesView() {
     return residences.filter(r => currentUser.assignedResidences.includes(r.id));
   }, [currentUser, residences]);
 
+  // Separate active and disabled residences
+  const activeResidences = useMemo(() => userResidences.filter(r => !r.disabled), [userResidences]);
+  const disabledResidences = useMemo(() => userResidences.filter(r => r.disabled), [userResidences]);
+
   // Filter residences based on search and city
   const filteredResidences = useMemo(() => {
-    let filtered = userResidences;
+    let filtered = activeResidences;
     
     // Apply city filter
     if (cityFilter !== 'all') {
@@ -140,7 +144,7 @@ export default function AccommodationResidencesView() {
       
       return false;
     });
-  }, [userResidences, deferredSearch, cityFilter]);
+  }, [activeResidences, deferredSearch, cityFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -1520,6 +1524,41 @@ export default function AccommodationResidencesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Disabled Residences Section */}
+      {disabledResidences.length > 0 && (
+        <Card className="mt-6 border-muted">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building className="h-5 w-5 text-muted-foreground" />
+              Disabled Residences
+            </CardTitle>
+            <CardDescription>
+              These residences are disabled and not available for assignment
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3">
+              {disabledResidences.map((residence) => (
+                <div 
+                  key={residence.id}
+                  className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
+                >
+                  <div>
+                    <div className="font-medium text-muted-foreground">
+                      {language === 'ar' ? residence.nameAr || residence.name : residence.nameEn || residence.name}
+                    </div>
+                    <div className="text-sm text-muted-foreground/70">{residence.city}</div>
+                  </div>
+                  <Badge variant="secondary" className="bg-muted">
+                    Disabled
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

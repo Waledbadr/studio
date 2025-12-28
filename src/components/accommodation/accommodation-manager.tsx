@@ -78,9 +78,11 @@ export function AccommodationManager() {
   // Filter Residences
   const accessibleResidences = React.useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'Admin') return residences;
+    // Filter out disabled residences
+    const activeResidences = residences.filter(r => !r.disabled);
+    if (currentUser.role === 'Admin') return activeResidences;
     // Filter by assignedResidences array
-    return residences.filter(r => currentUser.assignedResidences?.includes(r.id));
+    return activeResidences.filter(r => currentUser.assignedResidences?.includes(r.id));
   }, [residences, currentUser]);
 
   // Global State

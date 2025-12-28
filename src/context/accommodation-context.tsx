@@ -159,7 +159,8 @@ export type Company = {
 export type Contract = {
   id: string;
   companyId: string;
-  residenceId: string;
+  residenceId: string; // Legacy: single residence (kept for backward compatibility)
+  residenceIds?: string[]; // New: array of residence IDs, or ['all'] for all residences
   startDate: string; // ISO date
   endDate: string; // ISO date
   ratePerPersonPerMonth: number;
@@ -236,6 +237,7 @@ type AccommodationContextValue = {
   findWorkerAsync: (queryStr: string) => Promise<Worker[]>;
   getWorkersByIds: (ids: string[]) => Promise<Worker[]>; // NEW
   checkWorkerOccupancy: (workerId: string) => Promise<Occupant | null>; // NEW
+  getTransferringWorkers: () => Promise<Worker[]>; // NEW: Get all workers with status 'Transferring'
   checkInWorkerAsync: (params: {
     workerId: string;
     residenceId: string;
@@ -392,7 +394,7 @@ type AccommodationContextValue = {
   // Invoice CRUD & generation
   saveInvoice: (invoice: Invoice | Omit<Invoice, 'id'>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
-  generateMonthlyInvoices: (month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }) => Promise<{ generated: number; errors: number }>;
+  generateMonthlyInvoices: (month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }, filters?: { companyId?: string, residenceId?: string }) => Promise<{ generated: number; errors: number }>;
   // Utility
   getContractsByCompany: (companyId: string) => Contract[];
   getInvoicesByContract: (contractId: string) => Invoice[];
@@ -528,7 +530,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       localStorage.setItem('estatecare_residences', JSON.stringify(newResidences));
       
       // Also update local state if we are using it
-      setResidences(newResidences.map(mapComplexToResidence));
+      // Filter out disabled residences
+      const activeNewResidences = newResidences.filter((r: any) => !r.disabled);
+      setResidences(activeNewResidences.map(mapComplexToResidence));
 
       // Save to localStorage
       // localStorage.setItem('ac_workers', JSON.stringify(newWorkers));
@@ -699,7 +703,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         setLoading(true);
         unsubscribeSnapshot = onSnapshot(collection(_db, "residences"), (snapshot) => {
           const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          setResidences(docs.map(mapComplexToResidence));
+          // Filter out disabled residences
+          const activeDocs = docs.filter((d: any) => !d.disabled);
+          setResidences(activeDocs.map(mapComplexToResidence));
           setLoading(false);
         }, (error) => {
           console.error("Accommodation: failed to load residences from Firestore", error);
@@ -729,7 +735,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
       if (stored) {
         const parsed = JSON.parse(stored || "[]");
-        setResidences((parsed || []).map(mapComplexToResidence));
+        // Filter out disabled residences from cache
+        const activeResidences = (parsed || []).filter((d: any) => !d.disabled);
+        setResidences(activeResidences.map(mapComplexToResidence));
       }
     } catch (e) {
       console.error("Accommodation refresh failed", e);
@@ -1330,6 +1338,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
   }, [db]);
 
+  // NEW: Get all workers with status 'Transferring'
+  const getTransferringWorkers = useCallback(async (): Promise<Worker[]> => {
+    if (!db) {
+      console.log('[getTransferringWorkers] No DB, returning empty array');
+      return [];
+    }
+    try {
+      console.log('[getTransferringWorkers] Fetching workers with status=Transferring...');
+      const q = query(
+        collection(db, 'workers'),
+        where('status', '==', 'Transferring')
+      );
+      const snap = await getDocs(q);
+      const workers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      console.log(`[getTransferringWorkers] Found ${workers.length} transferring workers`);
+      return workers;
+    } catch (e) {
+      console.error('[getTransferringWorkers] Failed:', e);
+      return [];
+    }
+  }, [db]);
+
   const getRoomOccupantsAsync = useCallback(async (residenceId: string, roomId: string) => {
     if (!db || !residenceId || !roomId) return [];
     try {
@@ -1419,6 +1449,55 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const snap = await getDocs(q);
       if (snap.empty) return { ok: false, error: 'worker-not-found' };
       worker = { id: snap.docs[0].id, ...snap.docs[0].data() } as Worker;
+    }
+
+    // AUTO-CHECKOUT: If worker is Transferring and has current occupancy, check them out one day before new check-in
+    if (worker.status === 'Transferring') {
+      try {
+        // Find current active occupancy
+        const currentOccupancyQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', params.workerId),
+          where('until', '==', null)
+        );
+        const currentOccSnap = await getDocs(currentOccupancyQuery);
+        
+        if (!currentOccSnap.empty) {
+          const currentOcc = currentOccSnap.docs[0];
+          const currentOccData = currentOcc.data();
+          
+          // Calculate checkout date: one day before new check-in date
+          const newCheckInDate = params.checkInDate ? new Date(params.checkInDate) : new Date();
+          const autoCheckOutDate = new Date(newCheckInDate);
+          autoCheckOutDate.setDate(autoCheckOutDate.getDate() - 1);
+          const autoCheckOutISO = autoCheckOutDate.toISOString();
+          
+          console.log(`🔄 [Auto-Checkout] Worker ${params.workerId} is Transferring. Auto-checking out from residence ${currentOccData.residenceId} on ${autoCheckOutISO.split('T')[0]}`);
+          
+          // Update the current occupancy with checkout date
+          await updateDoc(currentOcc.ref, {
+            until: autoCheckOutISO,
+            checkOutBy: params.performedBy,
+            checkoutType: 'Transfer',
+            notes: 'تم الإخراج تلقائياً عند التسكين في السكن الجديد'
+          });
+          
+          // Update mutation timestamp
+          lastMutationTimeRef.current = Date.now();
+          
+          // Update local state
+          setOccupants(prev => prev.map(o => 
+            o.id === currentOcc.id 
+              ? { ...o, until: autoCheckOutISO, checkOutBy: params.performedBy, checkoutType: 'Transfer' }
+              : o
+          ));
+          
+          console.log(`✅ [Auto-Checkout] Successfully checked out worker from previous residence`);
+        }
+      } catch (e) {
+        console.warn('⚠️ [Auto-Checkout] Failed to auto-checkout transferring worker (non-critical):', e);
+        // Continue with check-in even if auto-checkout fails
+      }
     }
 
     // 2. Fetch Room Occupants (to check capacity & nationality)
@@ -1761,7 +1840,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // ============ INVOICE GENERATION ============
-  async function generateMonthlyInvoices(month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }): Promise<{ generated: number; errors: number }> {
+  async function generateMonthlyInvoices(month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }, filters?: { companyId?: string, residenceId?: string }): Promise<{ generated: number; errors: number }> {
     // month format: YYYY-MM
     const result = { generated: 0, errors: 0 };
     try {
@@ -1782,9 +1861,27 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       
       // 2. Get History for the period
       const periodHistory = getHistoryByDateRange(startDate.toISOString(), endDate.toISOString());
+      
+      // 3. Pre-load workers for all occupants to avoid empty workers array
+      const allOccupantWorkerIds = new Set<string>();
+      occupants.forEach(occ => allOccupantWorkerIds.add(occ.workerId));
+      periodHistory.forEach(h => allOccupantWorkerIds.add(h.workerId));
+      
+      let availableWorkers = workers; // Start with already loaded workers
+      if (allOccupantWorkerIds.size > 0) {
+        console.log(`[Invoice Generation] Pre-loading ${allOccupantWorkerIds.size} workers...`);
+        const fetchedWorkers = await getWorkersByIds(Array.from(allOccupantWorkerIds));
+        
+        // Merge with existing workers
+        const workerMap = new Map(workers.map(w => [w.id, w]));
+        fetchedWorkers.forEach(w => workerMap.set(w.id, w));
+        availableWorkers = Array.from(workerMap.values());
+        
+        console.log(`[Invoice Generation] Workers available for billing: ${availableWorkers.length}`);
+      }
 
       // Find all active contracts for this month
-      const activeContracts = contracts.filter(c => {
+      let activeContracts = contracts.filter(c => {
         if (c.status !== 'Active') return false;
         const contractStart = new Date(c.startDate);
         const contractEnd = new Date(c.endDate);
@@ -1792,66 +1889,153 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         return contractStart < endDate && contractEnd > startDate;
       });
 
+      // Apply company filter if specified
+      if (filters?.companyId && filters.companyId !== 'all') {
+        activeContracts = activeContracts.filter(c => c.companyId === filters.companyId);
+        console.log(`[Invoice Generation] Filtered to company ${filters.companyId}: ${activeContracts.length} contracts`);
+      }
+
+      console.log(`[Invoice Generation] Found ${activeContracts.length} active contracts for period ${startDate.toISOString()} - ${endDate.toISOString()}`);
+      console.log(`[Invoice Generation] Total occupants in system: ${occupants.length}`);
+      console.log(`[Invoice Generation] Total workers in system: ${workers.length}`);
+      console.log(`[Invoice Generation] Total history records in period: ${periodHistory.length}`);
+
       for (const contract of activeContracts) {
-        try {
-          // Check if invoice already exists for this month
-          const existing = invoices.find(inv => 
-            inv.contractId === contract.id && inv.month === month
-          );
-          if (existing) {
-            console.log(`Invoice already exists for contract ${contract.id} month ${month}`);
-            continue;
-          }
+        // Get all residence IDs for this contract (supports multiple residences)
+        let contractResidenceIds = getContractResidenceIds(contract);
+        
+        // Apply residence filter if specified
+        if (filters?.residenceId && filters.residenceId !== 'all') {
+          contractResidenceIds = contractResidenceIds.filter(id => id === filters.residenceId);
+          console.log(`[Invoice Generation] Filtered to residence ${filters.residenceId}: ${contractResidenceIds.length} residences`);
+        }
+        
+        if (contractResidenceIds.length === 0) {
+          console.warn(`Contract ${contract.id} has no residences (after filter) - skipping`);
+          continue;
+        }
 
-          // Resolve Company
-          const company = companies.find(c => c.id === contract.companyId);
-          if (!company) {
-             console.warn(`Company not found for contract ${contract.id}`);
-             continue;
-          }
+        // Resolve Company
+        const company = companies.find(c => c.id === contract.companyId);
+        if (!company) {
+           console.warn(`Company not found for contract ${contract.id}`);
+           continue;
+        }
 
-          // Find Workers for this Company
-          // Match by name (if worker.company is name) or ID.
-          const companyWorkers = workers.filter(w => 
-            w.company === company.name || w.company === company.id
-          );
+        // Generate invoice for each residence in the contract
+        for (const residenceId of contractResidenceIds) {
+          try {
+            // Check if invoice already exists for this month and residence
+            const existing = invoices.find(inv => 
+              inv.contractId === contract.id && 
+              inv.month === month && 
+              inv.residenceId === residenceId
+            );
+            if (existing) {
+              console.log(`Invoice already exists for contract ${contract.id} residence ${residenceId} month ${month}`);
+              continue;
+            }
 
-          // Calculate Days for each worker
-          const workerBreakdown: any[] = [];
-          let totalBillableDays = 0;
+            console.log(`[Invoice Debug] Processing residence ${residenceId}`);
+            console.log(`[Invoice Debug] Total occupants: ${occupants.length}`);
+            console.log(`[Invoice Debug] Occupants in this residence: ${occupants.filter(o => o.residenceId === residenceId).length}`);
 
-          for (const worker of companyWorkers) {
-             // Filter movements for this worker in this residence
-             const workerMovements = periodHistory.filter(h => 
-               h.workerId === worker.id && 
-               h.residenceId === contract.residenceId
-             ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+            // Find ALL workers who were in this residence during the billing period
+            // AND belong to this company
+            const workerIdsInResidence = new Set<string>();
+            
+            // Add currently occupied workers
+            occupants
+              .filter(occ => occ.residenceId === residenceId && !occ.until)
+              .forEach(occ => workerIdsInResidence.add(occ.workerId));
+            
+            // Add workers from historical movements in this period
+            periodHistory
+              .filter(h => h.residenceId === residenceId)
+              .forEach(h => workerIdsInResidence.add(h.workerId));
+            
+            // Also check toResidenceId for transfers
+            periodHistory
+              .filter(h => h.toResidenceId === residenceId)
+              .forEach(h => workerIdsInResidence.add(h.workerId));
+            
+            // Filter to only workers belonging to this company
+            const companyName = (company.name || '').trim().toLowerCase();
+            const companyNameAr = (company.nameAr || '').trim().toLowerCase();
+            const companyNameEn = (company.nameEn || '').trim().toLowerCase();
+            const companyId = (company.id || '').trim().toLowerCase();
+            
+            const residenceWorkers = availableWorkers.filter(w => {
+              if (!workerIdsInResidence.has(w.id)) return false;
+              
+              const workerCompany = (w.company || '').trim().toLowerCase();
+              return (
+                workerCompany === companyName ||
+                workerCompany === companyNameAr ||
+                workerCompany === companyNameEn ||
+                workerCompany === companyId
+              );
+            });
 
-             // Check if currently occupying
-             const currentOccupancy = occupants.find(o => 
-               o.workerId === worker.id && o.residenceId === contract.residenceId
-             );
+            console.log(`[Invoice Generation] Contract ${contract.id}, Residence ${residenceId}: Found ${residenceWorkers.length} workers for company "${company.name}" (Total in residence: ${workerIdsInResidence.size})`);
 
-             // Determine initial state at startDate
-             let isInside = false;
-             
-             if (workerMovements.length > 0) {
-                const firstEvent = workerMovements[0];
-                const firstType = firstEvent.actionType;
-                // If first event is leaving, they must have been inside
-                // For TRANSFER, check if it's outgoing from this residence
-                const isTransferOut = firstType === 'TRANSFER' && firstEvent.fromResidenceId === contract.residenceId;
-                
-                if (firstType === 'CHECK_OUT' || isTransferOut) {
-                   isInside = true;
-                }
-             } else {
-                // No movements in period.
-                if (currentOccupancy) {
-                   // If currently occupied and no movements, check if they were there before start
-                   if (new Date(currentOccupancy.since) < startDate) {
-                      isInside = true;
-                   }
+            if (residenceWorkers.length === 0) {
+              console.warn(`No workers found for company "${company.name}" in residence ${residenceId} (contract ${contract.id})`);
+            }
+
+            // Calculate Days for each worker
+            const workerBreakdown: any[] = [];
+            let totalBillableDays = 0;
+
+            for (const worker of residenceWorkers) {
+               // Filter movements for this worker in this residence
+               const workerMovements = periodHistory.filter(h => 
+                 h.workerId === worker.id && 
+                 h.residenceId === residenceId
+               ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+
+               // Check if currently occupying
+               const currentOccupancy = occupants.find(o => 
+                 o.workerId === worker.id && o.residenceId === residenceId && !o.until
+               );
+
+               // Also check all occupancy records (including checked out)
+               const allWorkerOccupancy = occupants.filter(o => 
+                 o.workerId === worker.id && o.residenceId === residenceId
+               );
+
+               // Determine initial state at startDate
+               let isInside = false;
+               
+               if (workerMovements.length > 0) {
+                  const firstEvent = workerMovements[0];
+                  const firstType = firstEvent.actionType;
+                  // If first event is leaving, they must have been inside
+                  // For TRANSFER, check if it's outgoing from this residence
+                  const isTransferOut = firstType === 'TRANSFER' && firstEvent.fromResidenceId === residenceId;
+                  
+                  if (firstType === 'CHECK_OUT' || isTransferOut) {
+                     isInside = true;
+                  }
+               } else {
+                  // No movements in period - check occupancy records
+                  // Check if there's any occupancy record that overlaps with the billing period
+                  for (const occ of allWorkerOccupancy) {
+                     const occStart = new Date(occ.since);
+                     const occEnd = occ.until ? new Date(occ.until) : endDate;
+                     
+                     // Check if occupancy overlaps with billing period
+                     if (occStart < endDate && occEnd > startDate) {
+                        isInside = true;
+                        break;
+                     }
+                  }
+                  
+                  // Fallback: If currently occupied and check-in was before period start
+                  if (!isInside && currentOccupancy) {
+                     if (new Date(currentOccupancy.since) < startDate) {
+                        isInside = true;
+                     }
                 }
              }
 
@@ -1860,74 +2044,100 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
              let currentStatus = isInside;
              let lastDate = startDate;
 
-             for (const event of workerMovements) {
-                const eventDate = new Date(event.actionDate);
-                if (eventDate < startDate) continue; 
-                if (eventDate > endDate) break; 
+             // If no movements but worker is/was inside, calculate from occupancy records
+             if (workerMovements.length === 0 && isInside) {
+                // Find the relevant occupancy record
+                for (const occ of allWorkerOccupancy) {
+                   const occStart = new Date(occ.since);
+                   const occEnd = occ.until ? new Date(occ.until) : endDate;
+                   
+                   // Calculate overlap with billing period
+                   const effectiveStart = occStart > startDate ? occStart : startDate;
+                   const effectiveEnd = occEnd < endDate ? occEnd : endDate;
+                   
+                   if (effectiveStart < effectiveEnd) {
+                      const diff = differenceInDays(effectiveEnd, effectiveStart) + 1; // +1 to include start day
+                      days += Math.max(0, diff);
+                   }
+                }
+             } else {
+                // Use movement-based calculation
+                for (const event of workerMovements) {
+                   const eventDate = new Date(event.actionDate);
+                   if (eventDate < startDate) continue; 
+                   if (eventDate > endDate) break; 
 
+                   if (currentStatus) {
+                      const diff = differenceInDays(eventDate, lastDate); // Don't add +1 here, will add at final calculation
+                      days += diff;
+                   }
+                   
+                   const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === contract.residenceId;
+                   
+                   if (event.actionType === 'CHECK_IN' || isTransferIn) {
+                      currentStatus = true;
+                   } else {
+                      currentStatus = false;
+                   }
+                   lastDate = eventDate;
+                }
+
+                // After last event, if still inside, add days until endDate
                 if (currentStatus) {
-                   const diff = differenceInDays(eventDate, lastDate);
+                   const diff = differenceInDays(endDate, lastDate) + 1; // +1 to include last day
                    days += diff;
                 }
-                
-                const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === contract.residenceId;
-                
-                if (event.actionType === 'CHECK_IN' || isTransferIn) {
-                   currentStatus = true;
-                } else {
-                   currentStatus = false;
-                }
-                lastDate = eventDate;
-             }
+               }
 
-             // After last event, if still inside, add days until endDate
-             if (currentStatus) {
-                const diff = differenceInDays(endDate, lastDate);
-                days += diff;
-             }
+               if (days > 0) {
+                  workerBreakdown.push({
+                     workerId: worker.id,
+                     name: worker.name,
+                     days,
+                     amount: (contract.ratePerPersonPerMonth / 30) * days
+                  });
+                  totalBillableDays += days;
+               }
+            }
 
-             if (days > 0) {
-                workerBreakdown.push({
-                   workerId: worker.id,
-                   name: worker.name,
-                   days,
-                   amount: (contract.ratePerPersonPerMonth / 30) * days
-                });
-                totalBillableDays += days;
-             }
+            if (totalBillableDays === 0) {
+               console.log(`No billable days for contract ${contract.id} residence ${residenceId}`);
+               continue;
+            }
+
+            const totalAmount = workerBreakdown.reduce((sum, w) => sum + w.amount, 0);
+
+            // Generate short invoice ID: inv_CityAbbr_ResAbbr_YYMM
+            const residenceObj = residences.find(r => r.id === residenceId);
+            const cityAbbr = (residenceObj?.city || 'UNK').substring(0, 3).toUpperCase();
+            const resAbbr = (residenceObj?.name || residenceId).substring(0, 4).replace(/[^a-zA-Z0-9]/g, '');
+            const yearMonth = month.replace('-', '').substring(2); // YYMM from YYYYMM
+            
+            const invoice: Invoice = {
+              id: `inv_${cityAbbr}_${resAbbr}_${yearMonth}`,
+              contractId: contract.id,
+              companyId: contract.companyId,
+              residenceId: residenceId,
+              month,
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              numberOfWorkers: workerBreakdown.length,
+              numberOfDays: totalBillableDays,
+              ratePerPerson: contract.ratePerPersonPerMonth,
+              totalAmount: Math.round(totalAmount * 100) / 100,
+              status: 'Pending',
+              generatedAt: new Date().toISOString(),
+              notes: JSON.stringify(workerBreakdown),
+            };
+
+            await saveInvoice(invoice);
+            result.generated++;
+          } catch (e) {
+            console.error(`Failed to generate invoice for contract ${contract.id} residence ${residenceId}:`, e);
+            result.errors++;
           }
-
-          if (totalBillableDays === 0) {
-             console.log(`No billable days for contract ${contract.id}`);
-             continue;
-          }
-
-          const totalAmount = workerBreakdown.reduce((sum, w) => sum + w.amount, 0);
-
-          const invoice: Invoice = {
-            id: `inv_${contract.id}_${month.replace('-', '')}`,
-            contractId: contract.id,
-            companyId: contract.companyId,
-            residenceId: contract.residenceId,
-            month,
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            numberOfWorkers: workerBreakdown.length,
-            numberOfDays: totalBillableDays,
-            ratePerPerson: contract.ratePerPersonPerMonth,
-            totalAmount: Math.round(totalAmount * 100) / 100,
-            status: 'Pending',
-            generatedAt: new Date().toISOString(),
-            notes: JSON.stringify(workerBreakdown),
-          };
-
-          await saveInvoice(invoice);
-          result.generated++;
-        } catch (e) {
-          console.error(`Failed to generate invoice for contract ${contract.id}:`, e);
-          result.errors++;
-        }
-      }
+        } // end for each residence
+      } // end for each contract
 
       toast({ 
         title: 'Invoice Generation Complete', 
@@ -1941,6 +2151,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // ============ UTILITY FUNCTIONS ============
+  
+  // Helper to get effective residence IDs from a contract
+  function getContractResidenceIds(contract: Contract): string[] {
+    // If residenceIds is set, use it
+    if (contract.residenceIds && contract.residenceIds.length > 0) {
+      // If 'all' is in the array, return all residence IDs
+      if (contract.residenceIds.includes('all')) {
+        return residences.map(r => r.id);
+      }
+      return contract.residenceIds;
+    }
+    // Fallback to legacy single residenceId
+    if (contract.residenceId) {
+      // If 'all', return all residence IDs
+      if (contract.residenceId === 'all') {
+        return residences.map(r => r.id);
+      }
+      return [contract.residenceId];
+    }
+    return [];
+  }
+  
   function getContractsByCompany(companyId: string): Contract[] {
     return contracts.filter(c => c.companyId === companyId);
   }
@@ -2696,7 +2928,53 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const residence = residences.find(r => r.id === params.residenceId);
       const isEmergency = params.emergencyMode || residence?.isEmergencyMode;
 
+      // AUTO-CHECKOUT: For Transferring workers, check them out from previous residence one day before
+      const checkInDate = params.checkInDate || new Date().toISOString();
+      const newCheckInDate = new Date(checkInDate);
+      const autoCheckOutDate = new Date(newCheckInDate);
+      autoCheckOutDate.setDate(autoCheckOutDate.getDate() - 1);
+      const autoCheckOutISO = autoCheckOutDate.toISOString();
+
       for (const worker of workersToProcess) {
+        // AUTO-CHECKOUT: If worker is Transferring, find and checkout from previous residence
+        if (worker.status === 'Transferring') {
+          try {
+            const currentOccupancyQuery = query(
+              collection(db, 'occupants'),
+              where('workerId', '==', worker.id),
+              where('until', '==', null)
+            );
+            const currentOccSnap = await getDocs(currentOccupancyQuery);
+            
+            if (!currentOccSnap.empty) {
+              const currentOcc = currentOccSnap.docs[0];
+              const currentOccData = currentOcc.data();
+              
+              console.log(`🔄 [Auto-Checkout Bulk] Worker ${worker.id} is Transferring. Auto-checking out from residence ${currentOccData.residenceId} on ${autoCheckOutISO.split('T')[0]}`);
+              
+              // Add to batch: Update the current occupancy with checkout date
+              batch.update(currentOcc.ref, {
+                until: autoCheckOutISO,
+                checkOutBy: params.performedBy,
+                checkoutType: 'Transfer',
+                notes: 'تم الإخراج تلقائياً عند التسكين في السكن الجديد'
+              });
+              
+              // Update local state
+              setOccupants(prev => prev.map(o => 
+                o.id === currentOcc.id 
+                  ? { ...o, until: autoCheckOutISO, checkOutBy: params.performedBy, checkoutType: 'Transfer' }
+                  : o
+              ));
+              
+              console.log(`✅ [Auto-Checkout Bulk] Worker ${worker.id} will be checked out from previous residence`);
+            }
+          } catch (e) {
+            console.warn(`⚠️ [Auto-Checkout Bulk] Failed to auto-checkout worker ${worker.id} (non-critical):`, e);
+            // Continue with check-in even if auto-checkout fails
+          }
+        }
+
         // SKIP CHECKS IF EMERGENCY MODE
         if (!isEmergency) {
           // Rule 1: Nationality
@@ -2754,6 +3032,21 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           isEmergency: isEmergency || false
         };
         batch.set(doc(db, 'occupants', occId), newOcc);
+
+        // Update worker status to Active if they were Transferring
+        if (worker.status === 'Transferring') {
+          batch.update(doc(db, 'workers', worker.id), {
+            status: 'Active',
+            transferDestination: null
+          });
+          
+          // Update local state
+          setWorkers(prev => prev.map(w => 
+            w.id === worker.id 
+              ? { ...w, status: 'Active', transferDestination: undefined }
+              : w
+          ));
+        }
 
         // History Doc
         const newHist: AccommodationHistory = {
@@ -3100,6 +3393,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     findWorkerAsync,
     getWorkersByIds,
     checkWorkerOccupancy,
+    getTransferringWorkers,
     checkInWorkerAsync,
     checkOutWorkerAsync,
     getRoomOccupantsAsync,

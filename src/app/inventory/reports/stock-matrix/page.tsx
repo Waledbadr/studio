@@ -9,17 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Printer, Grid3X3 } from "lucide-react";
+import { Printer, Grid3X3, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { normalizeText, includesNormalized } from "@/lib/utils";
 import { AR_SYNONYMS, buildNormalizedSynonyms } from "@/lib/aliases";
+import { useToast } from "@/hooks/use-toast";
 
 export default function StockMatrixReportPage() {
   const { items, loading, getAllInventoryTransactions } = useInventory() as any;
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { dict, locale } = useLanguage() as any;
+  const { toast } = useToast();
 
   const [hideEmptyItems, setHideEmptyItems] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,10 +32,14 @@ export default function StockMatrixReportPage() {
   const [txItem, setTxItem] = useState<any | null>(null);
   const [txResidenceId, setTxResidenceId] = useState<string | null>(null);
   const [txRows, setTxRows] = useState<any[]>([]);
+  const [fixingNegatives, setFixingNegatives] = useState(false);
   const normalizedSynonyms = useMemo(() => buildNormalizedSynonyms(AR_SYNONYMS), []);
 
-  // Format numbers: replace 0 with '-'
-  const formatQty = (n: number) => (Number(n) === 0 ? '-' : Number(n).toLocaleString());
+  // Format numbers: replace 0 with '-', clamp negatives to 0
+  const formatQty = (n: number) => {
+    const val = Math.max(0, Number(n) || 0);
+    return val === 0 ? '-' : val.toLocaleString();
+  };
 
   // Determine visible residences for the user
   const visibleResidences = useMemo(() => {
@@ -110,7 +116,7 @@ export default function StockMatrixReportPage() {
       // Hide items that are all zero across the visible residences
       if (hideEmptyItems) {
         const hasStock = visibleResidences.some((r) => {
-          const qty = Number((it as any).stockByResidence?.[r.id] || 0);
+          const qty = Math.max(0, Number((it as any).stockByResidence?.[r.id] || 0));
           return qty > 0;
         });
         if (!hasStock) return false;
@@ -136,13 +142,13 @@ export default function StockMatrixReportPage() {
     for (const [, rows] of groupedEntries as any) {
       for (const it of rows as any[]) {
         for (const res of visibleResidences) {
-          const q = Number(it.stockByResidence?.[res.id] || 0);
+          const q = Math.max(0, Number(it.stockByResidence?.[res.id] || 0));
           if (!resTotals.has(res.id)) resTotals.set(res.id, 0);
           resTotals.set(res.id, resTotals.get(res.id)! + q);
           grand += q;
         }
       }
-    }
+    }  
 
     return {
       grouped: groupedEntries as [string, any[]][],
@@ -202,6 +208,45 @@ export default function StockMatrixReportPage() {
     }
   };
 
+  const fixNegativeStocks = async () => {
+    if (fixingNegatives) return;
+    
+    // Confirm with user before proceeding
+    const confirmMsg = locale === 'ar' 
+      ? 'هل أنت متأكد من إصلاح جميع القيم السالبة؟ سيتم تحويلها إلى صفر وإنشاء سجلات تعديل.' 
+      : 'Are you sure you want to fix all negative values? They will be set to zero and adjustment records will be created.';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    setFixingNegatives(true);
+    try {
+      const res = await fetch('/api/inventory/fix-negative?apply=true', {
+        method: 'GET'
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({
+          title: locale === 'ar' ? 'تم الإصلاح' : 'Fixed Successfully',
+          description: locale === 'ar' 
+            ? `تم إصلاح ${data.fixedCount} عنصر` 
+            : `Fixed ${data.fixedCount} items`,
+        });
+        // Reload page to show updated values
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        throw new Error(data.error || 'Failed');
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: locale === 'ar' ? 'خطأ' : 'Error',
+        description: error.message || (locale === 'ar' ? 'فشل الإصلاح' : 'Failed to fix negatives'),
+      });
+    } finally {
+      setFixingNegatives(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -236,6 +281,20 @@ export default function StockMatrixReportPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-semibold">{dict.displaySettingsTitle}</CardTitle>
             <div className="flex gap-2">
+              {(currentUser?.role === 'Admin' || currentUser?.role === 'Supervisor') && (
+                <Button 
+                  variant="outline" 
+                  onClick={fixNegativeStocks} 
+                  disabled={fixingNegatives}
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" /> 
+                  {fixingNegatives 
+                    ? (locale === 'ar' ? 'جاري الإصلاح...' : 'Fixing...') 
+                    : (locale === 'ar' ? 'إصلاح القيم السالبة' : 'Fix Negative Values')
+                  }
+                </Button>
+              )}
               <Button variant="outline" onClick={printPage} className="border-amber-300">
                 <Printer className="mr-2 h-4 w-4" /> {dict.printLabel}
               </Button>
@@ -329,7 +388,7 @@ export default function StockMatrixReportPage() {
                           </TableCell>
                         </TableRow>
                         {(rows as any[]).map((it: any) => {
-                          const rowTotal = visibleResidences.reduce((sum, r) => sum + Number(it.stockByResidence?.[r.id] || 0), 0);
+                          const rowTotal = visibleResidences.reduce((sum, r) => sum + Math.max(0, Number(it.stockByResidence?.[r.id] || 0)), 0);
                           return (
                             <TableRow key={it.id} className="hover:bg-muted/40">
                               <TableCell>

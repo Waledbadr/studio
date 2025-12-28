@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAccommodation, type Invoice } from '@/context/accommodation-context';
+import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus } from 'lucide-react';
+import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus, Printer, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getFiscalMonthPeriod, formatFiscalDate, FISCAL_START_DAY } from '@/lib/fiscal-month-utils';
 import { Calendar } from '@/components/ui/calendar';
@@ -19,7 +21,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function InvoicesPage() {
-  const { invoices, contracts, companies, residences, generateMonthlyInvoices, saveInvoice } = useAccommodation();
+  const router = useRouter();
+  const { invoices, contracts, companies, residences, generateMonthlyInvoices, saveInvoice, deleteInvoice } = useAccommodation();
+  const { currentUser } = useUsers();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,6 +36,35 @@ export default function InvoicesPage() {
   });
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<Invoice | null>(null);
+  const [newStatus, setNewStatus] = useState<Invoice['status']>('Pending');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
+  const [selectedResidenceId, setSelectedResidenceId] = useState<string>('all');
+
+  // Filter residences based on user's assigned residences
+  const userResidences = useMemo(() => {
+    if (!currentUser) return [];
+    // Admin can see all residences
+    if (currentUser.role === 'Admin') return residences;
+    // Other users can only see their assigned residences
+    if (!currentUser.assignedResidences || currentUser.assignedResidences.length === 0) return [];
+    return residences.filter(r => 
+      currentUser.assignedResidences.includes(r.id) ||
+      r.managerId === currentUser.id
+    );
+  }, [residences, currentUser]);
+
+  // Filter invoices to only show user's residences
+  const userInvoices = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Admin') return invoices;
+    const userResidenceIds = userResidences.map(r => r.id);
+    return invoices.filter(inv => userResidenceIds.includes(inv.residenceId));
+  }, [invoices, currentUser, userResidences]);
 
   // Get current month in YYYY-MM format for default
   const currentMonth = useMemo(() => {
@@ -40,7 +73,7 @@ export default function InvoicesPage() {
   }, []);
 
   const filteredInvoices = useMemo(() => {
-    return invoices
+    return userInvoices
       .filter(invoice => {
         if (statusFilter !== 'all' && invoice.status !== statusFilter) return false;
         
@@ -79,12 +112,24 @@ export default function InvoicesPage() {
       const result = await generateMonthlyInvoices(selectedMonth, undefined, {
         startDate: dateRange.from,
         endDate: dateRange.to
+      }, {
+        companyId: selectedCompanyId !== 'all' ? selectedCompanyId : undefined,
+        residenceId: selectedResidenceId !== 'all' ? selectedResidenceId : undefined
       });
       setGenerateDialogOpen(false);
-      toast({
-        title: 'Success',
-        description: `Generated ${result.generated} invoices${result.errors > 0 ? ` with ${result.errors} errors` : ''}`,
-      });
+      
+      if (result.generated === 0 && result.errors === 0) {
+        toast({
+          title: 'No Invoices Generated',
+          description: 'لا توجد عقود نشطة للفترة المحددة أو لا يوجد عمال مسكنين. تأكد من وجود عقود وعمال مسجلين.',
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `Generated ${result.generated} invoices${result.errors > 0 ? ` with ${result.errors} errors` : ''}`,
+        });
+      }
     } catch (error) {
       console.error('Failed to generate invoices:', error);
     }
@@ -126,6 +171,77 @@ export default function InvoicesPage() {
     setDetailsDialogOpen(true);
   };
 
+  const handleOpenStatusDialog = (invoice: Invoice) => {
+    setInvoiceToEdit(invoice);
+    setNewStatus(invoice.status);
+    setStatusDialogOpen(true);
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!invoiceToEdit) return;
+    try {
+      await saveInvoice({
+        ...invoiceToEdit,
+        status: newStatus,
+        paidAt: newStatus === 'Paid' ? new Date().toISOString() : invoiceToEdit.paidAt,
+      });
+      toast({ title: 'Success', description: `Invoice status updated to ${newStatus}` });
+      setStatusDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to update invoice:', error);
+      toast({ title: 'Error', description: 'Failed to update invoice status', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    try {
+      await deleteInvoice(invoiceToDelete.id);
+      toast({ title: 'Success', description: 'Invoice deleted successfully' });
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete invoice:', error);
+      toast({ title: 'Error', description: 'Failed to delete invoice', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteAndRegenerate = async () => {
+    if (!invoiceToDelete) return;
+    setIsRegenerating(true);
+    try {
+      const invoiceData = { ...invoiceToDelete };
+      
+      // Delete the invoice first
+      await deleteInvoice(invoiceToDelete.id);
+      
+      // Wait for Firestore listener to update local state
+      // This ensures the deleted invoice is removed from the invoices array
+      // before generateMonthlyInvoices checks for existing invoices
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Regenerate for the same period
+      const result = await generateMonthlyInvoices(invoiceData.month, undefined, {
+        startDate: new Date(invoiceData.startDate),
+        endDate: new Date(invoiceData.endDate)
+      });
+      
+      if (result.generated > 0) {
+        toast({ title: 'Success / تم بنجاح', description: `تم إعادة توليد الفاتورة بنجاح (${result.generated} فاتورة)` });
+      } else {
+        toast({ title: 'تنبيه', description: 'تم حذف الفاتورة. لم يتم توليد فاتورة جديدة (لا يوجد عمال في الفترة المحددة)', variant: 'default' });
+      }
+      
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+    } catch (error) {
+      console.error('Failed to regenerate invoice:', error);
+      toast({ title: 'Error', description: 'Failed to regenerate invoice', variant: 'destructive' });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const getStatusBadge = (status: Invoice['status']) => {
     const config: Record<Invoice['status'], { variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: any }> = {
       Draft: { variant: 'outline', icon: FileText },
@@ -144,13 +260,13 @@ export default function InvoicesPage() {
   };
 
   const stats = useMemo(() => {
-    const total = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
-    const paid = invoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
-    const pending = invoices.filter(inv => inv.status === 'Pending').reduce((sum, inv) => sum + inv.totalAmount, 0);
-    const overdue = invoices.filter(inv => inv.status === 'Overdue').reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const total = userInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const paid = userInvoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const pending = userInvoices.filter(inv => inv.status === 'Pending').reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const overdue = userInvoices.filter(inv => inv.status === 'Overdue').reduce((sum, inv) => sum + inv.totalAmount, 0);
     
     return { total, paid, pending, overdue };
-  }, [invoices]);
+  }, [userInvoices]);
 
   return (
     <div className="p-6 space-y-6">
@@ -195,7 +311,7 @@ export default function InvoicesPage() {
               <div className="space-y-2">
                 <Label>Fiscal Period Range</Label>
                 <div className="flex flex-col gap-2">
-                  <Popover>
+                  <Popover modal={true}>
                     <PopoverTrigger asChild>
                       <Button
                         id="date"
@@ -220,7 +336,7 @@ export default function InvoicesPage() {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[9999]" align="start" sideOffset={4}>
                       <Calendar
                         initialFocus
                         mode="range"
@@ -243,6 +359,57 @@ export default function InvoicesPage() {
                   <li>Based on actual worker occupancy</li>
                   <li>Calculated using contract rates</li>
                 </ul>
+              </div>
+              
+              {/* Show active contracts info */}
+              <div className="rounded-lg border p-3 bg-muted/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Active Contracts:</span>
+                  <Badge variant={contracts.filter(c => c.status === 'Active').length > 0 ? 'default' : 'destructive'}>
+                    {contracts.filter(c => c.status === 'Active').length}
+                  </Badge>
+                </div>
+                {contracts.filter(c => c.status === 'Active').length === 0 && (
+                  <p className="text-xs text-destructive mt-2">
+                    ⚠️ لا توجد عقود نشطة. يجب إنشاء عقد أولاً من صفحة العقود.
+                  </p>
+                )}
+              </div>
+
+              {/* Company Filter */}
+              <div className="space-y-2">
+                <Label>الشركة (اختياري)</Label>
+                <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="جميع الشركات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الشركات</SelectItem>
+                    {companies.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Residence Filter */}
+              <div className="space-y-2">
+                <Label>السكن (اختياري)</Label>
+                <Select value={selectedResidenceId} onValueChange={setSelectedResidenceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="جميع السكنات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع السكنات</SelectItem>
+                    {userResidences.map((residence) => (
+                      <SelectItem key={residence.id} value={residence.id}>
+                        {residence.name} {residence.city ? `- ${residence.city}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -267,7 +434,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total.toFixed(2)} SAR</div>
-            <p className="text-xs text-muted-foreground">{invoices.length} invoices</p>
+            <p className="text-xs text-muted-foreground">{userInvoices.length} invoices</p>
           </CardContent>
         </Card>
 
@@ -279,7 +446,7 @@ export default function InvoicesPage() {
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.paid.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Paid').length} invoices
+              {userInvoices.filter(inv => inv.status === 'Paid').length} invoices
             </p>
           </CardContent>
         </Card>
@@ -292,7 +459,7 @@ export default function InvoicesPage() {
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{stats.pending.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Pending').length} invoices
+              {userInvoices.filter(inv => inv.status === 'Pending').length} invoices
             </p>
           </CardContent>
         </Card>
@@ -305,7 +472,7 @@ export default function InvoicesPage() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{stats.overdue.toFixed(2)} SAR</div>
             <p className="text-xs text-muted-foreground">
-              {invoices.filter(inv => inv.status === 'Overdue').length} invoices
+              {userInvoices.filter(inv => inv.status === 'Overdue').length} invoices
             </p>
           </CardContent>
         </Card>
@@ -403,31 +570,61 @@ export default function InvoicesPage() {
                           {getStatusBadge(invoice.status)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => handleViewDetails(invoice)}
+                              title="View Details"
                             >
                               <FileText className="h-4 w-4" />
                             </Button>
-                            {invoice.status === 'Pending' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleMarkAsPaid(invoice)}
-                                className="text-green-600 hover:text-green-700"
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                              </Button>
-                            )}
                             <Button
                               size="sm"
                               variant="ghost"
-                              disabled={!invoice.pdfUrl}
+                              onClick={() => handleOpenStatusDialog(invoice)}
+                              title="Change Status"
                             >
-                              <Download className="h-4 w-4" />
+                              <Edit2 className="h-4 w-4" />
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/accommodation/invoices/${invoice.id}`)}
+                              title="Print Invoice"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            {/* Delete button - Admin only */}
+                            {currentUser?.role === 'Admin' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setInvoiceToDelete(invoice);
+                                  setDeleteDialogOpen(true);
+                                }}
+                                title="Delete / Regenerate"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {/* Regenerate button - Admin & Supervisor */}
+                            {(currentUser?.role === 'Admin' || currentUser?.role === 'Supervisor') && currentUser?.role !== 'Admin' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setInvoiceToDelete(invoice);
+                                  setDeleteDialogOpen(true);
+                                }}
+                                title="Regenerate Invoice"
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -564,21 +761,157 @@ export default function InvoicesPage() {
                 )}
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex-wrap gap-2">
                 <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
                   Close
                 </Button>
-                {selectedInvoice.status === 'Pending' && (
-                  <Button onClick={() => {
-                    handleMarkAsPaid(selectedInvoice);
+                <Button 
+                  variant="secondary" 
+                  onClick={() => router.push(`/accommodation/invoices/${selectedInvoice.id}`)}
+                  className="gap-2"
+                >
+                  <Printer className="h-4 w-4" />
+                  Print Invoice
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    handleOpenStatusDialog(selectedInvoice);
                     setDetailsDialogOpen(false);
-                  }}>
-                    Mark as Paid
-                  </Button>
-                )}
+                  }}
+                  className="gap-2"
+                >
+                  <Edit2 className="h-4 w-4" />
+                  Change Status
+                </Button>
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Status Change Dialog */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تغيير حالة الفاتورة / Change Invoice Status</DialogTitle>
+            <DialogDescription>
+              {invoiceToEdit?.id.split('_').slice(-2).join('-')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Current Status / الحالة الحالية</Label>
+              <div>{getStatusBadge(invoiceToEdit?.status || 'Pending')}</div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>New Status / الحالة الجديدة</Label>
+              <Select value={newStatus} onValueChange={(v) => setNewStatus(v as Invoice['status'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Draft">Draft - مسودة</SelectItem>
+                  <SelectItem value="Pending">Pending - قيد الانتظار</SelectItem>
+                  <SelectItem value="Paid">Paid - مدفوعة</SelectItem>
+                  <SelectItem value="Overdue">Overdue - متأخرة</SelectItem>
+                  <SelectItem value="Cancelled">Cancelled - ملغاة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateStatus}>
+              Update Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete / Regenerate Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>حذف / إعادة توليد الفاتورة</DialogTitle>
+            <DialogDescription>
+              Delete / Regenerate Invoice
+            </DialogDescription>
+          </DialogHeader>
+          
+          {invoiceToDelete && (
+            <div className="space-y-4 py-4">
+              <div className="bg-muted p-3 rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Invoice:</span>
+                  <span className="font-mono">{invoiceToDelete.id.split('_').slice(-2).join('-')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Company:</span>
+                  <span>{companies.find(c => c.id === invoiceToDelete.companyId)?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Period:</span>
+                  <span>{invoiceToDelete.month}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Amount:</span>
+                  <span className="font-bold">{invoiceToDelete.totalAmount.toFixed(2)} SAR</span>
+                </div>
+              </div>
+              
+              <div className="text-sm text-muted-foreground">
+                <p className="mb-2">اختر الإجراء المطلوب:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  {currentUser?.role === 'Admin' && (
+                    <li><strong>حذف فقط:</strong> حذف الفاتورة بدون إعادة توليد</li>
+                  )}
+                  <li><strong>إعادة توليد:</strong> حذف وإنشاء فاتورة جديدة محدّثة</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isRegenerating}
+            >
+              Cancel / إلغاء
+            </Button>
+            {currentUser?.role === 'Admin' && (
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteInvoice}
+                disabled={isRegenerating}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Only / حذف فقط
+              </Button>
+            )}
+            <Button 
+              onClick={handleDeleteAndRegenerate}
+              disabled={isRegenerating}
+            >
+              {isRegenerating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Delete & Regenerate / حذف وإعادة توليد
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
