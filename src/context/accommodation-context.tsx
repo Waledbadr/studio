@@ -159,7 +159,8 @@ export type Company = {
 export type Contract = {
   id: string;
   companyId: string;
-  residenceId: string;
+  residenceId: string; // Legacy: single residence (kept for backward compatibility)
+  residenceIds?: string[]; // New: array of residence IDs, or ['all'] for all residences
   startDate: string; // ISO date
   endDate: string; // ISO date
   ratePerPersonPerMonth: number;
@@ -232,10 +233,16 @@ type AccommodationContextValue = {
   fetchWorkerHistory: (workerId: string) => Promise<AccommodationHistory[]>;
   fetchRoomHistory: (roomId: string) => Promise<AccommodationHistory[]>;
   
+  // History Management
+  deleteHistoryRecord: (historyId: string) => Promise<{ ok: boolean; error?: string }>;
+  updateHistoryRecord: (historyId: string, updates: Partial<AccommodationHistory>) => Promise<{ ok: boolean; error?: string }>;
+  undoLastAction: (workerId: string) => Promise<{ ok: boolean; error?: string; message?: string }>;
+  
   // ⚡ Optimized Async Operations (Direct Firestore)
   findWorkerAsync: (queryStr: string) => Promise<Worker[]>;
   getWorkersByIds: (ids: string[]) => Promise<Worker[]>; // NEW
   checkWorkerOccupancy: (workerId: string) => Promise<Occupant | null>; // NEW
+  getTransferringWorkers: () => Promise<Worker[]>; // NEW: Get all workers with status 'Transferring'
   checkInWorkerAsync: (params: {
     workerId: string;
     residenceId: string;
@@ -392,7 +399,7 @@ type AccommodationContextValue = {
   // Invoice CRUD & generation
   saveInvoice: (invoice: Invoice | Omit<Invoice, 'id'>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
-  generateMonthlyInvoices: (month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }) => Promise<{ generated: number; errors: number }>;
+  generateMonthlyInvoices: (month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }, filters?: { companyId?: string, residenceId?: string }, forceRegenerate?: boolean) => Promise<{ generated: number; errors: number }>;
   // Utility
   getContractsByCompany: (companyId: string) => Contract[];
   getInvoicesByContract: (contractId: string) => Invoice[];
@@ -528,7 +535,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       localStorage.setItem('estatecare_residences', JSON.stringify(newResidences));
       
       // Also update local state if we are using it
-      setResidences(newResidences.map(mapComplexToResidence));
+      // Filter out disabled residences
+      const activeNewResidences = newResidences.filter((r: any) => !r.disabled);
+      setResidences(activeNewResidences.map(mapComplexToResidence));
 
       // Save to localStorage
       // localStorage.setItem('ac_workers', JSON.stringify(newWorkers));
@@ -699,7 +708,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         setLoading(true);
         unsubscribeSnapshot = onSnapshot(collection(_db, "residences"), (snapshot) => {
           const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          setResidences(docs.map(mapComplexToResidence));
+          // Filter out disabled residences
+          const activeDocs = docs.filter((d: any) => !d.disabled);
+          setResidences(activeDocs.map(mapComplexToResidence));
           setLoading(false);
         }, (error) => {
           console.error("Accommodation: failed to load residences from Firestore", error);
@@ -729,7 +740,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const stored = typeof window !== "undefined" ? localStorage.getItem("estatecare_residences") : null;
       if (stored) {
         const parsed = JSON.parse(stored || "[]");
-        setResidences((parsed || []).map(mapComplexToResidence));
+        // Filter out disabled residences from cache
+        const activeResidences = (parsed || []).filter((d: any) => !d.disabled);
+        setResidences(activeResidences.map(mapComplexToResidence));
       }
     } catch (e) {
       console.error("Accommodation refresh failed", e);
@@ -1330,6 +1343,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
   }, [db]);
 
+  // NEW: Get all workers with status 'Transferring'
+  const getTransferringWorkers = useCallback(async (): Promise<Worker[]> => {
+    if (!db) {
+      console.log('[getTransferringWorkers] No DB, returning empty array');
+      return [];
+    }
+    try {
+      console.log('[getTransferringWorkers] Fetching workers with status=Transferring...');
+      const q = query(
+        collection(db, 'workers'),
+        where('status', '==', 'Transferring')
+      );
+      const snap = await getDocs(q);
+      const workers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      console.log(`[getTransferringWorkers] Found ${workers.length} transferring workers`);
+      return workers;
+    } catch (e) {
+      console.error('[getTransferringWorkers] Failed:', e);
+      return [];
+    }
+  }, [db]);
+
   const getRoomOccupantsAsync = useCallback(async (residenceId: string, roomId: string) => {
     if (!db || !residenceId || !roomId) return [];
     try {
@@ -1419,6 +1454,55 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const snap = await getDocs(q);
       if (snap.empty) return { ok: false, error: 'worker-not-found' };
       worker = { id: snap.docs[0].id, ...snap.docs[0].data() } as Worker;
+    }
+
+    // AUTO-CHECKOUT: If worker is Transferring and has current occupancy, check them out one day before new check-in
+    if (worker.status === 'Transferring') {
+      try {
+        // Find current active occupancy
+        const currentOccupancyQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', params.workerId),
+          where('until', '==', null)
+        );
+        const currentOccSnap = await getDocs(currentOccupancyQuery);
+        
+        if (!currentOccSnap.empty) {
+          const currentOcc = currentOccSnap.docs[0];
+          const currentOccData = currentOcc.data();
+          
+          // Calculate checkout date: one day before new check-in date
+          const newCheckInDate = params.checkInDate ? new Date(params.checkInDate) : new Date();
+          const autoCheckOutDate = new Date(newCheckInDate);
+          autoCheckOutDate.setDate(autoCheckOutDate.getDate() - 1);
+          const autoCheckOutISO = autoCheckOutDate.toISOString();
+          
+          console.log(`🔄 [Auto-Checkout] Worker ${params.workerId} is Transferring. Auto-checking out from residence ${currentOccData.residenceId} on ${autoCheckOutISO.split('T')[0]}`);
+          
+          // Update the current occupancy with checkout date
+          await updateDoc(currentOcc.ref, {
+            until: autoCheckOutISO,
+            checkOutBy: params.performedBy,
+            checkoutType: 'Transfer',
+            notes: 'تم الإخراج تلقائياً عند التسكين في السكن الجديد'
+          });
+          
+          // Update mutation timestamp
+          lastMutationTimeRef.current = Date.now();
+          
+          // Update local state
+          setOccupants(prev => prev.map(o => 
+            o.id === currentOcc.id 
+              ? { ...o, until: autoCheckOutISO, checkOutBy: params.performedBy, checkoutType: 'Transfer' }
+              : o
+          ));
+          
+          console.log(`✅ [Auto-Checkout] Successfully checked out worker from previous residence`);
+        }
+      } catch (e) {
+        console.warn('⚠️ [Auto-Checkout] Failed to auto-checkout transferring worker (non-critical):', e);
+        // Continue with check-in even if auto-checkout fails
+      }
     }
 
     // 2. Fetch Room Occupants (to check capacity & nationality)
@@ -1761,7 +1845,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // ============ INVOICE GENERATION ============
-  async function generateMonthlyInvoices(month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }): Promise<{ generated: number; errors: number }> {
+  async function generateMonthlyInvoices(month: string, customStartDay?: number, customRange?: { startDate: Date, endDate: Date }, filters?: { companyId?: string, residenceId?: string }, forceRegenerate?: boolean): Promise<{ generated: number; errors: number }> {
     // month format: YYYY-MM
     const result = { generated: 0, errors: 0 };
     try {
@@ -1782,9 +1866,27 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       
       // 2. Get History for the period
       const periodHistory = getHistoryByDateRange(startDate.toISOString(), endDate.toISOString());
+      
+      // 3. Pre-load workers for all occupants to avoid empty workers array
+      const allOccupantWorkerIds = new Set<string>();
+      occupants.forEach(occ => allOccupantWorkerIds.add(occ.workerId));
+      periodHistory.forEach(h => allOccupantWorkerIds.add(h.workerId));
+      
+      let availableWorkers = workers; // Start with already loaded workers
+      if (allOccupantWorkerIds.size > 0) {
+        console.log(`[Invoice Generation] Pre-loading ${allOccupantWorkerIds.size} workers...`);
+        const fetchedWorkers = await getWorkersByIds(Array.from(allOccupantWorkerIds));
+        
+        // Merge with existing workers
+        const workerMap = new Map(workers.map(w => [w.id, w]));
+        fetchedWorkers.forEach(w => workerMap.set(w.id, w));
+        availableWorkers = Array.from(workerMap.values());
+        
+        console.log(`[Invoice Generation] Workers available for billing: ${availableWorkers.length}`);
+      }
 
       // Find all active contracts for this month
-      const activeContracts = contracts.filter(c => {
+      let activeContracts = contracts.filter(c => {
         if (c.status !== 'Active') return false;
         const contractStart = new Date(c.startDate);
         const contractEnd = new Date(c.endDate);
@@ -1792,66 +1894,189 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         return contractStart < endDate && contractEnd > startDate;
       });
 
+      // Apply company filter if specified
+      if (filters?.companyId && filters.companyId !== 'all') {
+        activeContracts = activeContracts.filter(c => c.companyId === filters.companyId);
+        console.log(`[Invoice Generation] Filtered to company ${filters.companyId}: ${activeContracts.length} contracts`);
+      }
+
+      console.log(`[Invoice Generation] Found ${activeContracts.length} active contracts for period ${startDate.toISOString()} - ${endDate.toISOString()}`);
+      console.log(`[Invoice Generation] Total occupants in system: ${occupants.length}`);
+      console.log(`[Invoice Generation] Total workers in system: ${workers.length}`);
+      console.log(`[Invoice Generation] Total history records in period: ${periodHistory.length}`);
+
       for (const contract of activeContracts) {
-        try {
-          // Check if invoice already exists for this month
-          const existing = invoices.find(inv => 
-            inv.contractId === contract.id && inv.month === month
-          );
-          if (existing) {
-            console.log(`Invoice already exists for contract ${contract.id} month ${month}`);
-            continue;
-          }
+        // Get all residence IDs for this contract (supports multiple residences)
+        let contractResidenceIds = getContractResidenceIds(contract);
+        
+        // Apply residence filter if specified
+        if (filters?.residenceId && filters.residenceId !== 'all') {
+          contractResidenceIds = contractResidenceIds.filter(id => id === filters.residenceId);
+          console.log(`[Invoice Generation] Filtered to residence ${filters.residenceId}: ${contractResidenceIds.length} residences`);
+        }
+        
+        if (contractResidenceIds.length === 0) {
+          console.warn(`Contract ${contract.id} has no residences (after filter) - skipping`);
+          continue;
+        }
 
-          // Resolve Company
-          const company = companies.find(c => c.id === contract.companyId);
-          if (!company) {
-             console.warn(`Company not found for contract ${contract.id}`);
-             continue;
-          }
+        // Resolve Company
+        const company = companies.find(c => c.id === contract.companyId);
+        if (!company) {
+           console.warn(`Company not found for contract ${contract.id}`);
+           continue;
+        }
 
-          // Find Workers for this Company
-          // Match by name (if worker.company is name) or ID.
-          const companyWorkers = workers.filter(w => 
-            w.company === company.name || w.company === company.id
-          );
+        // Generate invoice for each residence in the contract
+        for (const residenceId of contractResidenceIds) {
+          try {
+            // Check if invoice already exists for this month and residence (skip if forceRegenerate)
+            if (!forceRegenerate) {
+              const existing = invoices.find(inv => 
+                inv.contractId === contract.id && 
+                inv.month === month && 
+                inv.residenceId === residenceId
+              );
+              if (existing) {
+                console.log(`Invoice already exists for contract ${contract.id} residence ${residenceId} month ${month}`);
+                continue;
+              }
+            }
 
-          // Calculate Days for each worker
-          const workerBreakdown: any[] = [];
-          let totalBillableDays = 0;
+            console.log(`[Invoice Debug] Processing residence ${residenceId}`);
+            console.log(`[Invoice Debug] Total occupants: ${occupants.length}`);
+            console.log(`[Invoice Debug] Occupants in this residence: ${occupants.filter(o => o.residenceId === residenceId).length}`);
 
-          for (const worker of companyWorkers) {
-             // Filter movements for this worker in this residence
-             const workerMovements = periodHistory.filter(h => 
-               h.workerId === worker.id && 
-               h.residenceId === contract.residenceId
-             ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+            // Find ALL workers who were in this residence during the billing period
+            // AND belong to this company
+            const workerIdsInResidence = new Set<string>();
+            
+            // Add currently occupied workers (no checkout date)
+            occupants
+              .filter(occ => occ.residenceId === residenceId && !occ.until)
+              .forEach(occ => workerIdsInResidence.add(occ.workerId));
+            
+            // Add workers who were in this residence during the billing period (including checked out)
+            occupants
+              .filter(occ => {
+                if (occ.residenceId !== residenceId) return false;
+                const occStart = new Date(occ.since);
+                const occEnd = occ.until ? new Date(occ.until) : endDate;
+                // Check if occupancy overlaps with billing period (use >= for same day)
+                return occStart <= endDate && occEnd >= startDate;
+              })
+              .forEach(occ => workerIdsInResidence.add(occ.workerId));
+            
+            // Add workers from historical movements in this period
+            periodHistory
+              .filter(h => h.residenceId === residenceId)
+              .forEach(h => workerIdsInResidence.add(h.workerId));
+            
+            // Also check toResidenceId for transfers
+            periodHistory
+              .filter(h => h.toResidenceId === residenceId)
+              .forEach(h => workerIdsInResidence.add(h.workerId));
+            
+            // Filter to only workers belonging to this company
+            const companyName = (company.name || '').trim().toLowerCase();
+            const companyNameAr = (company.nameAr || '').trim().toLowerCase();
+            const companyNameEn = (company.nameEn || '').trim().toLowerCase();
+            const companyId = (company.id || '').trim().toLowerCase();
+            
+            const residenceWorkers = availableWorkers.filter(w => {
+              if (!workerIdsInResidence.has(w.id)) return false;
+              
+              const workerCompany = (w.company || '').trim().toLowerCase();
+              return (
+                workerCompany === companyName ||
+                workerCompany === companyNameAr ||
+                workerCompany === companyNameEn ||
+                workerCompany === companyId
+              );
+            });
 
-             // Check if currently occupying
-             const currentOccupancy = occupants.find(o => 
-               o.workerId === worker.id && o.residenceId === contract.residenceId
-             );
+            console.log(`[Invoice Generation] Contract ${contract.id}, Residence ${residenceId}: Found ${residenceWorkers.length} workers for company "${company.name}" (Total in residence: ${workerIdsInResidence.size})`);
 
-             // Determine initial state at startDate
-             let isInside = false;
-             
-             if (workerMovements.length > 0) {
-                const firstEvent = workerMovements[0];
-                const firstType = firstEvent.actionType;
-                // If first event is leaving, they must have been inside
-                // For TRANSFER, check if it's outgoing from this residence
-                const isTransferOut = firstType === 'TRANSFER' && firstEvent.fromResidenceId === contract.residenceId;
-                
-                if (firstType === 'CHECK_OUT' || isTransferOut) {
-                   isInside = true;
-                }
-             } else {
-                // No movements in period.
-                if (currentOccupancy) {
-                   // If currently occupied and no movements, check if they were there before start
-                   if (new Date(currentOccupancy.since) < startDate) {
-                      isInside = true;
-                   }
+            if (residenceWorkers.length === 0) {
+              console.warn(`No workers found for company "${company.name}" in residence ${residenceId} (contract ${contract.id})`);
+            }
+
+            // Calculate Days for each worker
+            const workerBreakdown: any[] = [];
+            let totalBillableDays = 0;
+
+            for (const worker of residenceWorkers) {
+               // Filter movements for this worker in this residence
+               const workerMovements = periodHistory.filter(h => 
+                 h.workerId === worker.id && 
+                 h.residenceId === residenceId
+               ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+
+               // Check if currently occupying
+               const currentOccupancy = occupants.find(o => 
+                 o.workerId === worker.id && o.residenceId === residenceId && !o.until
+               );
+
+               // Check all occupancy records that overlap with the billing period
+               const allWorkerOccupancy = occupants.filter(o => {
+                 if (o.workerId !== worker.id || o.residenceId !== residenceId) return false;
+                 const occStart = new Date(o.since);
+                 const occEnd = o.until ? new Date(o.until) : endDate;
+                 // Only include records that overlap with billing period
+                 return occStart <= endDate && occEnd >= startDate;
+               });
+
+               // Debug logging for specific worker
+               if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                 console.log(`[DEBUG] Worker: ${worker.name}`);
+                 console.log(`[DEBUG] Billing period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+                 console.log(`[DEBUG] All occupancy records for this worker:`, allWorkerOccupancy.map(o => ({
+                   since: o.since,
+                   until: o.until,
+                   residenceId: o.residenceId
+                 })));
+                 console.log(`[DEBUG] Movements count:`, workerMovements.length);
+                 console.log(`[DEBUG] Movements:`, workerMovements.map(m => ({
+                   actionType: m.actionType,
+                   actionDate: m.actionDate,
+                   residenceId: m.residenceId,
+                   toResidenceId: m.toResidenceId,
+                   fromResidenceId: m.fromResidenceId
+                 })));
+               }
+
+               // Determine initial state at startDate
+               let isInside = false;
+               
+               if (workerMovements.length > 0) {
+                  const firstEvent = workerMovements[0];
+                  const firstType = firstEvent.actionType;
+                  // If first event is leaving, they must have been inside
+                  // For TRANSFER, check if it's outgoing from this residence
+                  const isTransferOut = firstType === 'TRANSFER' && firstEvent.fromResidenceId === residenceId;
+                  
+                  if (firstType === 'CHECK_OUT' || isTransferOut) {
+                     isInside = true;
+                  }
+               } else {
+                  // No movements in period - check occupancy records
+                  // Check if there's any occupancy record that overlaps with the billing period
+                  for (const occ of allWorkerOccupancy) {
+                     const occStart = new Date(occ.since);
+                     const occEnd = occ.until ? new Date(occ.until) : endDate;
+                     
+                     // Check if occupancy overlaps with billing period (use >= for same day)
+                     if (occStart <= endDate && occEnd >= startDate) {
+                        isInside = true;
+                        break;
+                     }
+                  }
+                  
+                  // Fallback: If currently occupied and check-in was before period start
+                  if (!isInside && currentOccupancy) {
+                     if (new Date(currentOccupancy.since) < startDate) {
+                        isInside = true;
+                     }
                 }
              }
 
@@ -1860,74 +2085,136 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
              let currentStatus = isInside;
              let lastDate = startDate;
 
-             for (const event of workerMovements) {
-                const eventDate = new Date(event.actionDate);
-                if (eventDate < startDate) continue; 
-                if (eventDate > endDate) break; 
+             // If no movements, calculate from occupancy records
+             if (workerMovements.length === 0) {
+                // Find the relevant occupancy records that overlap with billing period
+                for (const occ of allWorkerOccupancy) {
+                   const occStart = new Date(occ.since);
+                   const occEnd = occ.until ? new Date(occ.until) : endDate;
+                   
+                   // Calculate overlap with billing period
+                   const effectiveStart = occStart > startDate ? occStart : startDate;
+                   const effectiveEnd = occEnd < endDate ? occEnd : endDate;
+                   
+                   if (effectiveStart <= effectiveEnd) {
+                      // +1 to include both start and end days (same day = 1, consecutive = 2)
+                      const diff = differenceInDays(effectiveEnd, effectiveStart) + 1;
+                      days += Math.max(0, diff);
+                      
+                      // Debug logging
+                      if (worker.name && worker.name.includes('RAHEEM')) {
+                        console.log(`[DEBUG] Occupancy record:`, {
+                          since: occ.since,
+                          until: occ.until,
+                          effectiveStart: effectiveStart.toISOString(),
+                          effectiveEnd: effectiveEnd.toISOString(),
+                          calculatedDays: diff
+                        });
+                      }
+                   }
+                }
+             } else {
+                // Use movement-based calculation
+                if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                  console.log(`[DEBUG] Using movement-based calculation, initial status:`, currentStatus);
+                }
+                
+                for (const event of workerMovements) {
+                   const eventDate = new Date(event.actionDate);
+                   if (eventDate < startDate) continue; 
+                   if (eventDate > endDate) break; 
 
+                   if (currentStatus) {
+                      // +1 to include both start and end days (same day = 1, consecutive = 2)
+                      const diff = differenceInDays(eventDate, lastDate) + 1;
+                      days += diff;
+                      
+                      if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                        console.log(`[DEBUG] Adding days from ${lastDate.toISOString()} to ${eventDate.toISOString()}: ${diff} days`);
+                      }
+                   }
+                   
+                   const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === contract.residenceId;
+                   
+                   if (event.actionType === 'CHECK_IN' || isTransferIn) {
+                      currentStatus = true;
+                      if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                        console.log(`[DEBUG] Status changed to IN at ${eventDate.toISOString()}`);
+                      }
+                   } else {
+                      currentStatus = false;
+                      if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                        console.log(`[DEBUG] Status changed to OUT at ${eventDate.toISOString()}`);
+                      }
+                   }
+                   lastDate = eventDate;
+                }
+
+                // After last event, if still inside, add days until endDate
                 if (currentStatus) {
-                   const diff = differenceInDays(eventDate, lastDate);
+                   // +1 to include both start and end days (same day = 1, consecutive = 2)
+                   const diff = differenceInDays(endDate, lastDate) + 1;
                    days += diff;
+                   
+                   if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                     console.log(`[DEBUG] Adding remaining days from ${lastDate.toISOString()} to ${endDate.toISOString()}: ${diff} days`);
+                   }
                 }
                 
-                const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === contract.residenceId;
-                
-                if (event.actionType === 'CHECK_IN' || isTransferIn) {
-                   currentStatus = true;
-                } else {
-                   currentStatus = false;
+                if (worker.name && (worker.name.includes('RAHEEM') || worker.name.includes('MAROOF'))) {
+                  console.log(`[DEBUG] Total calculated days:`, days);
                 }
-                lastDate = eventDate;
-             }
+               }
 
-             // After last event, if still inside, add days until endDate
-             if (currentStatus) {
-                const diff = differenceInDays(endDate, lastDate);
-                days += diff;
-             }
+               if (days > 0) {
+                  workerBreakdown.push({
+                     workerId: worker.id,
+                     name: worker.name,
+                     days,
+                     amount: (contract.ratePerPersonPerMonth / 30) * days
+                  });
+                  totalBillableDays += days;
+               }
+            }
 
-             if (days > 0) {
-                workerBreakdown.push({
-                   workerId: worker.id,
-                   name: worker.name,
-                   days,
-                   amount: (contract.ratePerPersonPerMonth / 30) * days
-                });
-                totalBillableDays += days;
-             }
+            if (totalBillableDays === 0) {
+               console.log(`No billable days for contract ${contract.id} residence ${residenceId}`);
+               continue;
+            }
+
+            const totalAmount = workerBreakdown.reduce((sum, w) => sum + w.amount, 0);
+
+            // Generate short invoice ID: inv_CityAbbr_ResAbbr_YYMM
+            const residenceObj = residences.find(r => r.id === residenceId);
+            const cityAbbr = (residenceObj?.city || 'UNK').substring(0, 3).toUpperCase();
+            const resAbbr = (residenceObj?.name || residenceId).substring(0, 4).replace(/[^a-zA-Z0-9]/g, '');
+            const yearMonth = month.replace('-', '').substring(2); // YYMM from YYYYMM
+            
+            const invoice: Invoice = {
+              id: `inv_${cityAbbr}_${resAbbr}_${yearMonth}`,
+              contractId: contract.id,
+              companyId: contract.companyId,
+              residenceId: residenceId,
+              month,
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              numberOfWorkers: workerBreakdown.length,
+              numberOfDays: totalBillableDays,
+              ratePerPerson: contract.ratePerPersonPerMonth,
+              totalAmount: Math.round(totalAmount * 100) / 100,
+              status: 'Pending',
+              generatedAt: new Date().toISOString(),
+              notes: JSON.stringify(workerBreakdown),
+            };
+
+            await saveInvoice(invoice);
+            result.generated++;
+          } catch (e) {
+            console.error(`Failed to generate invoice for contract ${contract.id} residence ${residenceId}:`, e);
+            result.errors++;
           }
-
-          if (totalBillableDays === 0) {
-             console.log(`No billable days for contract ${contract.id}`);
-             continue;
-          }
-
-          const totalAmount = workerBreakdown.reduce((sum, w) => sum + w.amount, 0);
-
-          const invoice: Invoice = {
-            id: `inv_${contract.id}_${month.replace('-', '')}`,
-            contractId: contract.id,
-            companyId: contract.companyId,
-            residenceId: contract.residenceId,
-            month,
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            numberOfWorkers: workerBreakdown.length,
-            numberOfDays: totalBillableDays,
-            ratePerPerson: contract.ratePerPersonPerMonth,
-            totalAmount: Math.round(totalAmount * 100) / 100,
-            status: 'Pending',
-            generatedAt: new Date().toISOString(),
-            notes: JSON.stringify(workerBreakdown),
-          };
-
-          await saveInvoice(invoice);
-          result.generated++;
-        } catch (e) {
-          console.error(`Failed to generate invoice for contract ${contract.id}:`, e);
-          result.errors++;
-        }
-      }
+        } // end for each residence
+      } // end for each contract
 
       toast({ 
         title: 'Invoice Generation Complete', 
@@ -1941,6 +2228,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   // ============ UTILITY FUNCTIONS ============
+  
+  // Helper to get effective residence IDs from a contract
+  function getContractResidenceIds(contract: Contract): string[] {
+    // If residenceIds is set, use it
+    if (contract.residenceIds && contract.residenceIds.length > 0) {
+      // If 'all' is in the array, return all residence IDs
+      if (contract.residenceIds.includes('all')) {
+        return residences.map(r => r.id);
+      }
+      return contract.residenceIds;
+    }
+    // Fallback to legacy single residenceId
+    if (contract.residenceId) {
+      // If 'all', return all residence IDs
+      if (contract.residenceId === 'all') {
+        return residences.map(r => r.id);
+      }
+      return [contract.residenceId];
+    }
+    return [];
+  }
+  
   function getContractsByCompany(companyId: string): Contract[] {
     return contracts.filter(c => c.companyId === companyId);
   }
@@ -2050,6 +2359,232 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       console.error('Failed to create history record:', e);
       // Don't throw - allow operation to continue without history
       return id;
+    }
+  }
+
+  // Delete history record
+  async function deleteHistoryRecord(historyId: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      if (!db) return { ok: false, error: 'Database not available' };
+      
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'accommodationHistory', historyId));
+      
+      // Update local state
+      setAccommodationHistory(prev => prev.filter(h => h.id !== historyId));
+      
+      // Update localStorage
+      if (typeof window !== 'undefined') {
+        const existing = localStorage.getItem('ac_history');
+        if (existing) {
+          const historyList = JSON.parse(existing);
+          const filtered = historyList.filter((h: AccommodationHistory) => h.id !== historyId);
+          localStorage.setItem('ac_history', JSON.stringify(filtered));
+        }
+      }
+      
+      toast({
+        title: "تم حذف السجل ✅",
+        description: "تم حذف السجل من التاريخ بنجاح",
+      });
+      
+      return { ok: true };
+    } catch (e: any) {
+      console.error('Failed to delete history record:', e);
+      toast({
+        title: "فشل حذف السجل ❌",
+        description: e.message || 'حدث خطأ غير متوقع',
+        variant: "destructive",
+      });
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Update history record
+  async function updateHistoryRecord(historyId: string, updates: Partial<AccommodationHistory>): Promise<{ ok: boolean; error?: string }> {
+    try {
+      if (!db) return { ok: false, error: 'Database not available' };
+      
+      // Update in Firestore
+      await updateDoc(doc(db, 'accommodationHistory', historyId), updates);
+      
+      // Update local state
+      setAccommodationHistory(prev => prev.map(h => 
+        h.id === historyId ? { ...h, ...updates } : h
+      ));
+      
+      // Update localStorage
+      if (typeof window !== 'undefined') {
+        const existing = localStorage.getItem('ac_history');
+        if (existing) {
+          const historyList = JSON.parse(existing);
+          const updated = historyList.map((h: AccommodationHistory) => 
+            h.id === historyId ? { ...h, ...updates } : h
+          );
+          localStorage.setItem('ac_history', JSON.stringify(updated));
+        }
+      }
+      
+      toast({
+        title: "تم تحديث السجل ✅",
+        description: "تم تحديث السجل بنجاح",
+      });
+      
+      return { ok: true };
+    } catch (e: any) {
+      console.error('Failed to update history record:', e);
+      toast({
+        title: "فشل تحديث السجل ❌",
+        description: e.message || 'حدث خطأ غير متوقع',
+        variant: "destructive",
+      });
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Undo last action for a worker
+  async function undoLastAction(workerId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
+    try {
+      if (!db) return { ok: false, error: 'Database not available' };
+      
+      // Get worker's last action
+      const workerHistory = accommodationHistory
+        .filter(h => h.workerId === workerId)
+        .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+      
+      if (workerHistory.length === 0) {
+        return { ok: false, error: 'No history found for this worker' };
+      }
+      
+      const lastAction = workerHistory[0];
+      const now = new Date();
+      const actionDate = new Date(lastAction.actionDate);
+      const diffMinutes = (now.getTime() - actionDate.getTime()) / (1000 * 60);
+      
+      // Only allow undo within 30 minutes
+      if (diffMinutes > 30) {
+        return { 
+          ok: false, 
+          error: 'Cannot undo actions older than 30 minutes',
+          message: `هذه العملية تمت منذ ${Math.round(diffMinutes)} دقيقة. يمكن التراجع فقط عن العمليات خلال 30 دقيقة.`
+        };
+      }
+      
+      const currentUser = auth?.currentUser?.uid || 'system';
+      
+      // Handle different action types
+      if (lastAction.actionType === 'CHECK_IN') {
+        // Undo check-in: remove from occupants
+        const occQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', workerId),
+          where('residenceId', '==', lastAction.residenceId),
+          where('roomId', '==', lastAction.roomId),
+          where('until', '==', null)
+        );
+        
+        const occSnap = await getDocs(occQuery);
+        if (!occSnap.empty) {
+          await deleteDoc(occSnap.docs[0].ref);
+        }
+        
+        // Delete history record
+        await deleteDoc(doc(db, 'accommodationHistory', lastAction.id));
+        setAccommodationHistory(prev => prev.filter(h => h.id !== lastAction.id));
+        
+        toast({
+          title: "تم التراجع عن التسكين ✅",
+          description: `تم إلغاء تسكين العامل في ${lastAction.residenceName} / ${lastAction.roomName}`,
+        });
+        
+        return { ok: true, message: 'تم التراجع عن عملية التسكين بنجاح' };
+        
+      } else if (lastAction.actionType === 'CHECK_OUT') {
+        // Undo check-out: restore occupant record
+        const occQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', workerId),
+          where('residenceId', '==', lastAction.residenceId),
+          where('roomId', '==', lastAction.roomId),
+          where('until', '!=', null)
+        );
+        
+        const occSnap = await getDocs(occQuery);
+        if (!occSnap.empty) {
+          // Restore the occupant by removing check-out date
+          await updateDoc(occSnap.docs[0].ref, {
+            until: null,
+            checkOutBy: null,
+            checkoutType: null,
+          });
+        }
+        
+        // Delete history record
+        await deleteDoc(doc(db, 'accommodationHistory', lastAction.id));
+        setAccommodationHistory(prev => prev.filter(h => h.id !== lastAction.id));
+        
+        toast({
+          title: "تم التراجع عن الإخراج ✅",
+          description: `تم إلغاء إخراج العامل من ${lastAction.residenceName} / ${lastAction.roomName}`,
+        });
+        
+        return { ok: true, message: 'تم التراجع عن عملية الإخراج بنجاح' };
+        
+      } else if (lastAction.actionType === 'TRANSFER') {
+        // Undo transfer: revert to previous location
+        // This is more complex - need to check-out from new location and check-in to old location
+        
+        if (!lastAction.fromResidenceId || !lastAction.fromRoomId) {
+          return { ok: false, error: 'Cannot undo transfer - missing original location data' };
+        }
+        
+        // Check out from current (new) location
+        const currentOccQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', workerId),
+          where('until', '==', null)
+        );
+        
+        const currentOccSnap = await getDocs(currentOccQuery);
+        if (!currentOccSnap.empty) {
+          await deleteDoc(currentOccSnap.docs[0].ref);
+        }
+        
+        // Check back in to original location
+        const occupantData: Occupant = {
+          workerId,
+          residenceId: lastAction.fromResidenceId,
+          roomId: lastAction.fromRoomId,
+          buildingId: lastAction.buildingId,
+          floorId: lastAction.floorId,
+          since: lastAction.actionDate, // Use original date
+          checkInBy: currentUser,
+        };
+        
+        await addDoc(collection(db, 'occupants'), occupantData);
+        
+        // Delete transfer history record
+        await deleteDoc(doc(db, 'accommodationHistory', lastAction.id));
+        setAccommodationHistory(prev => prev.filter(h => h.id !== lastAction.id));
+        
+        toast({
+          title: "تم التراجع عن النقل ✅",
+          description: `تم إلغاء نقل العامل وإعادته إلى ${lastAction.fromResidenceName} / ${lastAction.fromRoomName}`,
+        });
+        
+        return { ok: true, message: 'تم التراجع عن عملية النقل بنجاح' };
+      }
+      
+      return { ok: false, error: 'Unsupported action type for undo' };
+      
+    } catch (e: any) {
+      console.error('Failed to undo last action:', e);
+      toast({
+        title: "فشل التراجع عن العملية ❌",
+        description: e.message || 'حدث خطأ غير متوقع',
+        variant: "destructive",
+      });
+      return { ok: false, error: e.message };
     }
   }
 
@@ -2696,7 +3231,53 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const residence = residences.find(r => r.id === params.residenceId);
       const isEmergency = params.emergencyMode || residence?.isEmergencyMode;
 
+      // AUTO-CHECKOUT: For Transferring workers, check them out from previous residence one day before
+      const checkInDate = params.checkInDate || new Date().toISOString();
+      const newCheckInDate = new Date(checkInDate);
+      const autoCheckOutDate = new Date(newCheckInDate);
+      autoCheckOutDate.setDate(autoCheckOutDate.getDate() - 1);
+      const autoCheckOutISO = autoCheckOutDate.toISOString();
+
       for (const worker of workersToProcess) {
+        // AUTO-CHECKOUT: If worker is Transferring, find and checkout from previous residence
+        if (worker.status === 'Transferring') {
+          try {
+            const currentOccupancyQuery = query(
+              collection(db, 'occupants'),
+              where('workerId', '==', worker.id),
+              where('until', '==', null)
+            );
+            const currentOccSnap = await getDocs(currentOccupancyQuery);
+            
+            if (!currentOccSnap.empty) {
+              const currentOcc = currentOccSnap.docs[0];
+              const currentOccData = currentOcc.data();
+              
+              console.log(`🔄 [Auto-Checkout Bulk] Worker ${worker.id} is Transferring. Auto-checking out from residence ${currentOccData.residenceId} on ${autoCheckOutISO.split('T')[0]}`);
+              
+              // Add to batch: Update the current occupancy with checkout date
+              batch.update(currentOcc.ref, {
+                until: autoCheckOutISO,
+                checkOutBy: params.performedBy,
+                checkoutType: 'Transfer',
+                notes: 'تم الإخراج تلقائياً عند التسكين في السكن الجديد'
+              });
+              
+              // Update local state
+              setOccupants(prev => prev.map(o => 
+                o.id === currentOcc.id 
+                  ? { ...o, until: autoCheckOutISO, checkOutBy: params.performedBy, checkoutType: 'Transfer' }
+                  : o
+              ));
+              
+              console.log(`✅ [Auto-Checkout Bulk] Worker ${worker.id} will be checked out from previous residence`);
+            }
+          } catch (e) {
+            console.warn(`⚠️ [Auto-Checkout Bulk] Failed to auto-checkout worker ${worker.id} (non-critical):`, e);
+            // Continue with check-in even if auto-checkout fails
+          }
+        }
+
         // SKIP CHECKS IF EMERGENCY MODE
         if (!isEmergency) {
           // Rule 1: Nationality
@@ -2754,6 +3335,21 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           isEmergency: isEmergency || false
         };
         batch.set(doc(db, 'occupants', occId), newOcc);
+
+        // Update worker status to Active if they were Transferring
+        if (worker.status === 'Transferring') {
+          batch.update(doc(db, 'workers', worker.id), {
+            status: 'Active',
+            transferDestination: null
+          });
+          
+          // Update local state
+          setWorkers(prev => prev.map(w => 
+            w.id === worker.id 
+              ? { ...w, status: 'Active', transferDestination: undefined }
+              : w
+          ));
+        }
 
         // History Doc
         const newHist: AccommodationHistory = {
@@ -3092,6 +3688,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // Async History Fetching
     fetchWorkerHistory,
     fetchRoomHistory,
+    // History Management
+    deleteHistoryRecord,
+    updateHistoryRecord,
+    undoLastAction,
     // 🚨 EMERGENCY: Manual sync function to replace real-time listeners
     manualSyncFromFirestore,
     // 🧹 Auto Archive
@@ -3100,6 +3700,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     findWorkerAsync,
     getWorkersByIds,
     checkWorkerOccupancy,
+    getTransferringWorkers,
     checkInWorkerAsync,
     checkOutWorkerAsync,
     getRoomOccupantsAsync,

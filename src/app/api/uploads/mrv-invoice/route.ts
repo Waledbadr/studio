@@ -1,5 +1,25 @@
 import { NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
+
+let cachedPut: null | ((...args: any[]) => Promise<any>) = null;
+
+async function getBlobPut() {
+  if (cachedPut) return cachedPut;
+
+  if (typeof (globalThis as any).File === 'undefined') {
+    try {
+      const undici = await import('undici');
+      (globalThis as any).File = (undici as any).File;
+      (globalThis as any).Blob = (undici as any).Blob;
+      (globalThis as any).FormData = (undici as any).FormData;
+    } catch {
+      // ignore
+    }
+  }
+
+  const mod = await import('@vercel/blob');
+  cachedPut = (mod as any).put;
+  return cachedPut;
+}
 
 export const runtime = 'nodejs';
 
@@ -7,10 +27,12 @@ export async function POST(req: Request) {
   try {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
     if (!token) {
+      console.error('[MRV Invoice Upload] BLOB_READ_WRITE_TOKEN not found');
       return NextResponse.json(
         {
-          error: 'BLOB_READ_WRITE_TOKEN is not configured',
-          hint: 'Set BLOB_READ_WRITE_TOKEN in your Render environment variables.',
+          error: 'تكوين التخزين غير مكتمل - BLOB_READ_WRITE_TOKEN is not configured',
+          hint: 'يجب إضافة BLOB_READ_WRITE_TOKEN في متغيرات البيئة في Render Dashboard',
+          docs: 'راجع RENDER_UPLOAD_FIX_AR.md',
         },
         { status: 500 }
       );
@@ -44,6 +66,8 @@ export async function POST(req: Request) {
     const arrayBuffer = await (fileValue as any).arrayBuffer();
     const body = Buffer.from(arrayBuffer);
 
+    const put = await getBlobPut();
+
     const { url } = await put(blobPath, body, {
       access: 'public',
       contentType: detectedType,
@@ -52,7 +76,15 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url, path: blobPath });
   } catch (err: any) {
-    console.error('Upload error', err);
-    return NextResponse.json({ error: err?.message || 'Upload failed' }, { status: 500 });
+    console.error('[MRV Invoice Upload Error]', {
+      message: err?.message,
+      stack: err?.stack,
+      hasToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    });
+    return NextResponse.json({
+      error: err?.message || 'فشل رفع الملف - Upload failed',
+      hint: 'تحقق من إعدادات Vercel Blob وصلاحية Token',
+      details: err?.stack?.split('\n').slice(0, 3).join('\n'),
+    }, { status: 500 });
   }
 }

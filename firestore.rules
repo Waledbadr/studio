@@ -94,7 +94,8 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Admins and Finance roles can manage invoices
       allow create, update: if isAdmin() || isSupervisor();
-      allow delete: if isAdmin();
+      // Allow Supervisors to delete for regeneration purposes
+      allow delete: if isAdmin() || isSupervisor();
     }
 
     // Accommodation Occupants (worker assignments to rooms)

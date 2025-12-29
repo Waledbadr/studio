@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -164,6 +164,14 @@ export function AppSidebar() {
                   <Link href="/accommodation/reports" onClick={handleNavigate}>
                     <AreaChart />
                     <span className="group-data-[collapsible=icon]:hidden">Reports</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/worker-certificate'} tooltip="Worker Certificate">
+                  <Link href="/accommodation/worker-certificate" onClick={handleNavigate}>
+                    <FileText />
+                    <span className="group-data-[collapsible=icon]:hidden">Worker Certificate</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

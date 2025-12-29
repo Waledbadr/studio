@@ -1,19 +1,30 @@
 import { format } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 
-export const FISCAL_START_DAY = 20;
+// FISCAL_START_DAY = 20 means the fiscal month ENDS on day 20
+// The next fiscal month STARTS on day 21 (FISCAL_START_DAY + 1)
+export const FISCAL_START_DAY = 20; // End day of fiscal month
 
 export interface FiscalPeriod {
   startDate: Date;
   endDate: Date;
   labelEn: string;
   labelAr: string;
+  numberOfDays: number;
 }
 
 /**
  * Returns the fiscal period for a given month string (YYYY-MM).
- * The fiscal month for "2025-10" starts on Sep 20, 2025 and ends on Oct 19, 2025.
- * (Adjust logic if the user meant 20th to 20th inclusive, but usually it's non-overlapping)
+ * Fiscal month logic:
+ * - First month of fiscal year (January) starts on day 21 of previous December
+ * - Each subsequent month starts the day after the previous month ends
+ * - Each month duration = number of days in that calendar month
+ * 
+ * Examples from actual table:
+ * - Jan 2025: 21/12/2024 to 20/01/2025 (31 days)
+ * - Feb 2025: 21/01/2025 to 17/02/2025 (28 days) 
+ * - Mar 2025: 18/02/2025 to 20/03/2025 (31 days)
+ * - Apr 2025: 21/03/2025 to 19/04/2025 (30 days)
  */
 export function getFiscalMonthPeriod(monthStr: string, startDay: number = FISCAL_START_DAY): FiscalPeriod {
   if (!monthStr) {
@@ -21,7 +32,8 @@ export function getFiscalMonthPeriod(monthStr: string, startDay: number = FISCAL
       startDate: new Date(),
       endDate: new Date(),
       labelEn: '',
-      labelAr: ''
+      labelAr: '',
+      numberOfDays: 0
     };
   }
 
@@ -34,36 +46,60 @@ export function getFiscalMonthPeriod(monthStr: string, startDay: number = FISCAL
       startDate: new Date(),
       endDate: new Date(),
       labelEn: 'Invalid Date',
-      labelAr: 'تاريخ غير صالح'
+      labelAr: 'تاريخ غير صالح',
+      numberOfDays: 0
     };
   }
   
-  // Fiscal month X covers:
-  // Start: startDay of (X-1)
-  // End: (startDay - 1) of X
+  // Get number of days in the current month
+  const numberOfDays = new Date(year, month, 0).getDate();
   
-  // Note: Month in Date constructor is 0-indexed.
-  // month is 1-based (e.g. 10 for Oct).
-  // Prev month index: month - 2.
-  // Current month index: month - 1.
+  // Calculate start date:
+  // For January (month=1): starts on day 21 of previous December
+  // For other months: calculate based on previous month's end
+  let startDate: Date;
   
-  const startDate = new Date(Date.UTC(year, month - 2, startDay));
-  const endDate = new Date(Date.UTC(year, month - 1, startDay)); // Using startDay as end date (exclusive)
+  if (month === 1) {
+    // January starts on 21st of previous December
+    startDate = new Date(Date.UTC(year - 1, 11, startDay + 1, 0, 0, 0, 0));
+  } else {
+    // Get the end date of previous month and add 1 day
+    const prevMonthPeriod = getFiscalMonthPeriod(`${year}-${String(month - 1).padStart(2, '0')}`, startDay);
+    startDate = new Date(prevMonthPeriod.endDate.getTime());
+    // Add 1 day and reset to start of day
+    startDate.setUTCDate(startDate.getUTCDate() + 1);
+    startDate.setUTCHours(0, 0, 0, 0);
+  }
+  
+  // Calculate end date: start date + numberOfDays - 1 day (at end of day)
+  const endDate = new Date(startDate.getTime());
+  endDate.setUTCDate(endDate.getUTCDate() + numberOfDays - 1);
+  endDate.setUTCHours(23, 59, 59, 999);
   
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
      return {
       startDate: new Date(),
       endDate: new Date(),
       labelEn: 'Invalid Date',
-      labelAr: 'تاريخ غير صالح'
+      labelAr: 'تاريخ غير صالح',
+      numberOfDays: 0
     };
   }
+
+  // Format dates using UTC to avoid timezone issues
+  const formatUTC = (date: Date) => {
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   return {
     startDate,
     endDate,
-    labelEn: `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`,
-    labelAr: `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`,
+    labelEn: `${formatUTC(startDate)} - ${formatUTC(endDate)}`,
+    labelAr: `${formatUTC(startDate)} - ${formatUTC(endDate)}`,
+    numberOfDays
   };
 }
 
