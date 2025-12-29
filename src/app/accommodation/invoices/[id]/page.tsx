@@ -43,6 +43,7 @@ export default function InvoicePrintPage() {
   } = useAccommodation();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [invoiceType, setInvoiceType] = useState<'detailed' | 'grouped'>('detailed');
 
   useEffect(() => {
     // Give context time to load
@@ -93,10 +94,19 @@ export default function InvoicePrintPage() {
         h.residenceId === invoice.residenceId
       ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
 
-      // Check current occupancy
+      // Check current occupancy (no checkout date)
       const currentOccupancy = occupants.find(o => 
         o.workerId === worker.id && o.residenceId === invoice.residenceId && !o.until
       );
+
+      // Check all occupancy records (including checked out) that overlap with billing period
+      const allWorkerOccupancy = occupants.filter(o => {
+        if (o.workerId !== worker.id || o.residenceId !== invoice.residenceId) return false;
+        const occStart = new Date(o.since);
+        const occEnd = o.until ? new Date(o.until) : endDate;
+        // Check if occupancy overlaps with billing period
+        return occStart <= endDate && occEnd >= startDate;
+      });
 
       // Determine initial state and room info
       let isInside = false;
@@ -119,6 +129,16 @@ export default function InvoicePrintPage() {
       } else if (currentOccupancy) {
         if (new Date(currentOccupancy.since) < startDate) {
           isInside = true;
+        }
+      } else if (allWorkerOccupancy.length > 0) {
+        // Check if worker was inside at period start based on any occupancy record
+        for (const occ of allWorkerOccupancy) {
+          const occStart = new Date(occ.since);
+          const occEnd = occ.until ? new Date(occ.until) : endDate;
+          if (occStart < startDate && occEnd > startDate) {
+            isInside = true;
+            break;
+          }
         }
       }
 
@@ -144,6 +164,24 @@ export default function InvoicePrintPage() {
         originalCheckOut = checkOutEvent.actionDate;
       }
 
+      // If we have room name but missing building/floor info, try to get it from residence structure
+      if (roomName && (!buildingName || !floorName)) {
+        const res = residences.find(r => r.id === invoice.residenceId);
+        if (res) {
+          for (const building of res.buildings || []) {
+            for (const floor of building.floors || []) {
+              const room = floor.rooms?.find(r => r.name === roomName || r.id === roomName);
+              if (room) {
+                if (!buildingName) buildingName = building.name || '';
+                if (!floorName) floorName = floor.name || '';
+                break;
+              }
+            }
+            if (buildingName && floorName) break;
+          }
+        }
+      }
+
       if (!roomName && currentOccupancy) {
         // Try to get room name from residence structure
         const res = residences.find(r => r.id === invoice.residenceId);
@@ -166,34 +204,97 @@ export default function InvoicePrintPage() {
         originalCheckOut = currentOccupancy.until || null;
       }
 
+      // Get room info and dates from any occupancy record if not found yet
+      if (!roomName && allWorkerOccupancy.length > 0) {
+        const occ = allWorkerOccupancy[0];
+        const res = residences.find(r => r.id === invoice.residenceId);
+        if (res) {
+          for (const building of res.buildings || []) {
+            for (const floor of building.floors || []) {
+              const room = floor.rooms?.find(r => r.id === occ.roomId);
+              if (room) {
+                roomName = room.name || occ.roomId;
+                buildingName = building.name || '';
+                floorName = floor.name || '';
+                break;
+              }
+            }
+            if (roomName) break;
+          }
+        }
+        if (!roomName) roomName = occ.roomId;
+        originalCheckIn = occ.since;
+        originalCheckOut = occ.until || null;
+      }
+      
+      // Final fallback: if we still have room name but missing building/floor, search again
+      if (roomName && (!buildingName || !floorName)) {
+        const res = residences.find(r => r.id === invoice.residenceId);
+        if (res) {
+          for (const building of res.buildings || []) {
+            for (const floor of building.floors || []) {
+              const room = floor.rooms?.find(r => r.name === roomName || r.id === roomName);
+              if (room) {
+                if (!buildingName) buildingName = building.name || '';
+                if (!floorName) floorName = floor.name || '';
+                break;
+              }
+            }
+            if (buildingName && floorName) break;
+          }
+        }
+      }
+
       // Calculate days
       let days = 0;
       let currentStatus = isInside;
       let lastDate = startDate;
 
-      for (const event of workerMovements) {
-        const eventDate = new Date(event.actionDate);
-        if (eventDate < startDate) continue;
-        if (eventDate > endDate) break;
+      // If no movements but worker has occupancy records, calculate from occupancy
+      if (workerMovements.length === 0 && allWorkerOccupancy.length > 0) {
+        for (const occ of allWorkerOccupancy) {
+          const occStart = new Date(occ.since);
+          const occEnd = occ.until ? new Date(occ.until) : endDate;
+          
+          // Calculate overlap with billing period
+          const effectiveStart = occStart > startDate ? occStart : startDate;
+          const effectiveEnd = occEnd < endDate ? occEnd : endDate;
+          
+          if (effectiveStart <= effectiveEnd) {
+            // +1 to include both start and end days (same day = 1, consecutive = 2)
+            const diff = differenceInDays(effectiveEnd, effectiveStart) + 1;
+            days += Math.max(0, diff);
+          }
+        }
+      } else {
+        // Use movement-based calculation
+        for (const event of workerMovements) {
+          const eventDate = new Date(event.actionDate);
+          if (eventDate < startDate) continue;
+          if (eventDate > endDate) break;
 
+          if (currentStatus) {
+            // +1 to include both start and end days (same day = 1, consecutive = 2)
+            const diff = differenceInDays(eventDate, lastDate) + 1;
+            days += diff;
+          }
+
+          const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === invoice.residenceId;
+
+          if (event.actionType === 'CHECK_IN' || isTransferIn) {
+            currentStatus = true;
+          } else {
+            currentStatus = false;
+          }
+          lastDate = eventDate;
+        }
+
+        // After last event, if still inside, add days until endDate
         if (currentStatus) {
-          const diff = differenceInDays(eventDate, lastDate);
+          // +1 to include both start and end days (same day = 1, consecutive = 2)
+          const diff = differenceInDays(endDate, lastDate) + 1;
           days += diff;
         }
-
-        const isTransferIn = event.actionType === 'TRANSFER' && event.toResidenceId === invoice.residenceId;
-
-        if (event.actionType === 'CHECK_IN' || isTransferIn) {
-          currentStatus = true;
-        } else {
-          currentStatus = false;
-        }
-        lastDate = eventDate;
-      }
-
-      if (currentStatus) {
-        const diff = differenceInDays(endDate, lastDate) + 1; // +1 to include last day
-        days += diff;
       }
 
       if (days > 0) {
@@ -280,6 +381,89 @@ export default function InvoicePrintPage() {
       return extractNumber(a.roomName) - extractNumber(b.roomName);
     });
   }, [displayDetailsUnsorted, invoice]);
+  
+  // For grouped invoice: show detailed workers + one summary row for stable workers
+  const groupedDisplayDetails = useMemo(() => {
+    if (invoiceType === 'detailed' || !invoice) return displayDetails;
+    
+    const startDate = new Date(invoice.startDate);
+    const endDate = new Date(invoice.endDate);
+    
+    const withMovements: typeof displayDetails = [];
+    const withoutMovements: typeof displayDetails = [];
+    
+    for (const worker of displayDetails) {
+      // Check if worker has any movements during the invoice period
+      const workerCheckIn = new Date(worker.checkInDate);
+      const workerCheckOut = worker.checkOutDate ? new Date(worker.checkOutDate) : null;
+      
+      // Worker has movement if:
+      // 1. Check-in is within the period
+      // 2. Check-out is within the period
+      const hasCheckInDuringPeriod = workerCheckIn >= startDate && workerCheckIn <= endDate;
+      const hasCheckOutDuringPeriod = workerCheckOut && workerCheckOut >= startDate && workerCheckOut <= endDate;
+      
+      if (hasCheckInDuringPeriod || hasCheckOutDuringPeriod) {
+        withMovements.push(worker);
+      } else {
+        withoutMovements.push(worker);
+      }
+    }
+    
+    const result = [...withMovements];
+    
+    // Add summary row for workers without movements
+    if (withoutMovements.length > 0) {
+      const totalDaysStable = withoutMovements.reduce((sum, w) => sum + w.days, 0);
+      const totalAmountStable = withoutMovements.reduce((sum, w) => sum + w.amount, 0);
+      
+      result.push({
+        workerId: 'grouped-summary',
+        name: `عمال ثابتون (${withoutMovements.length} عامل)`,
+        employeeId: '—',
+        idNumber: '',
+        nationality: '—',
+        roomName: '—',
+        buildingName: '',
+        floorName: '',
+        checkInDate: invoice.startDate,
+        checkOutDate: null,
+        effectiveCheckIn: invoice.startDate,
+        effectiveCheckOut: invoice.endDate,
+        days: totalDaysStable,
+        amount: totalAmountStable,
+      });
+    }
+    
+    return result;
+  }, [invoiceType, displayDetails, invoice]);
+  
+  // Calculate stats for grouped workers
+  const groupedWorkerDetails = useMemo(() => {
+    if (!invoice) return { withMovements: [], withoutMovements: [] };
+    
+    const startDate = new Date(invoice.startDate);
+    const endDate = new Date(invoice.endDate);
+    
+    const withMovements: typeof displayDetails = [];
+    const withoutMovements: typeof displayDetails = [];
+    
+    for (const worker of displayDetails) {
+      const workerCheckIn = new Date(worker.checkInDate);
+      const workerCheckOut = worker.checkOutDate ? new Date(worker.checkOutDate) : null;
+      
+      const hasCheckInDuringPeriod = workerCheckIn >= startDate && workerCheckIn <= endDate;
+      const hasCheckOutDuringPeriod = workerCheckOut && workerCheckOut >= startDate && workerCheckOut <= endDate;
+      
+      if (hasCheckInDuringPeriod || hasCheckOutDuringPeriod) {
+        withMovements.push(worker);
+      } else {
+        withoutMovements.push(worker);
+      }
+    }
+    
+    return { withMovements, withoutMovements };
+  }, [displayDetails, invoice]);
 
   const handlePrint = () => window.print();
 
@@ -315,8 +499,8 @@ export default function InvoicePrintPage() {
     );
   }
 
-  const totalAmount = displayDetails.reduce((sum, w) => sum + w.amount, 0);
-  const totalDays = displayDetails.reduce((sum, w) => sum + w.days, 0);
+  const totalAmount = groupedDisplayDetails.reduce((sum, w) => sum + w.amount, 0);
+  const totalDays = groupedDisplayDetails.reduce((sum, w) => sum + w.days, 0);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 print:bg-white print:min-h-0">
@@ -542,10 +726,28 @@ export default function InvoicePrintPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button onClick={handlePrint} className="gap-2">
-          <Printer className="h-4 w-4" />
-          Print Invoice
-        </Button>
+        <div className="flex gap-2">
+          <div className="flex gap-1 border rounded-lg p-1">
+            <Button 
+              variant={invoiceType === 'detailed' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setInvoiceType('detailed')}
+            >
+              فاتورة تفصيلية
+            </Button>
+            <Button 
+              variant={invoiceType === 'grouped' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setInvoiceType('grouped')}
+            >
+              فاتورة مجمعة
+            </Button>
+          </div>
+          <Button onClick={handlePrint} className="gap-2">
+            <Printer className="h-4 w-4" />
+            {invoiceType === 'detailed' ? 'طباعة التفصيلية' : 'طباعة المجمعة'}
+          </Button>
+        </div>
       </div>
 
       {/* Printable Invoice */}
@@ -605,10 +807,10 @@ export default function InvoicePrintPage() {
             </div>
             <div className="print-info-value text-base font-bold text-gray-900">
               {residence?.name || invoice.residenceId}
+              {residence?.city && residence.city !== residence?.name && (
+                <span className="text-sm font-normal text-gray-600 ml-2">({residence.city})</span>
+              )}
             </div>
-            {residence?.city && residence.city !== residence?.name && (
-              <div className="text-xs text-gray-500">{residence.city}</div>
-            )}
           </div>
         </div>
 
@@ -636,7 +838,10 @@ export default function InvoicePrintPage() {
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2 text-gray-700 font-semibold">
             <Users className="h-4 w-4" />
-            <span>Worker Details / تفاصيل العمال ({displayDetails.length})</span>
+            <span>Worker Details / تفاصيل العمال ({invoiceType === 'grouped' ? groupedDisplayDetails.length : displayDetails.length})</span>
+            {invoiceType === 'grouped' && groupedWorkerDetails.withoutMovements.length > 0 && (
+              <span className="text-xs text-green-600">({groupedWorkerDetails.withoutMovements.length} عامل مجمعين)</span>
+            )}
           </div>
           
           <table className="print-table w-full border-collapse text-sm">
@@ -644,7 +849,7 @@ export default function InvoicePrintPage() {
               <tr className="bg-gray-100">
                 <th className="border border-gray-300 px-2 py-1.5 text-center w-8">#</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center">رقم الموظف</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-right">الاسم / Name</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-center">الاسم / Name</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center">الجنسية</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center">الغرفة / Room</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center">من / From</th>
@@ -653,43 +858,50 @@ export default function InvoicePrintPage() {
               </tr>
             </thead>
             <tbody>
-              {displayDetails.map((worker, index) => (
-                <tr key={worker.workerId} className={index % 2 === 0 ? '' : 'bg-gray-50'}>
-                  <td className="border border-gray-200 px-2 py-1 text-center text-gray-500">
-                    {index + 1}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center font-mono text-xs">
-                    {worker.employeeId || '—'}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 font-medium text-left" dir="ltr">
-                    {worker.name}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center text-xs">
-                    {worker.nationality || '—'}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center text-xs">
-                    {worker.roomName || '—'}
-                    {worker.buildingName && (
-                      <span className="text-gray-400 text-[10px] block">
-                        {worker.buildingName}{worker.floorName ? ` / ${worker.floorName}` : ''}
-                      </span>
-                    )}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center text-xs">
-                    {formatDate(worker.effectiveCheckIn)}
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center text-xs">
-                    {/* Show empty if worker is still in residence (no checkout or checkout after invoice period) */}
-                    {worker.checkOutDate && invoice && new Date(worker.checkOutDate) < new Date(invoice.endDate)
-                      ? formatDate(worker.effectiveCheckOut)
-                      : ''
-                    }
-                  </td>
-                  <td className="border border-gray-200 px-2 py-1 text-center font-semibold">
-                    {worker.days}
-                  </td>
-                </tr>
-              ))}
+              {groupedDisplayDetails.map((worker, index) => {
+                const isGroupedRow = worker.workerId === 'grouped-summary';
+                return (
+                  <tr key={worker.workerId} className={isGroupedRow ? 'bg-green-50 font-semibold' : (index % 2 === 0 ? '' : 'bg-gray-50')}>
+                    <td className="border border-gray-200 px-2 py-1 text-center text-gray-500">
+                      {isGroupedRow ? '📊' : index + 1}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center font-mono text-xs">
+                      {worker.employeeId || '—'}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 font-medium text-center">
+                      {worker.name}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center text-xs">
+                      {worker.nationality || '—'}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center text-xs">
+                      {(() => {
+                        // Build room display based on available data
+                        if (worker.buildingName && worker.floorName && worker.roomName) {
+                          return `${worker.buildingName}-${worker.floorName}-${worker.roomName}`;
+                        } else if (worker.buildingName && worker.roomName) {
+                          return `${worker.buildingName}-${worker.roomName}`;
+                        } else {
+                          return worker.roomName || '—';
+                        }
+                      })()}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center text-xs">
+                      {isGroupedRow ? '—' : formatDate(worker.checkInDate)}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center text-xs">
+                      {/* Show empty if worker is still in residence (no checkout or checkout after invoice period) */}
+                      {!isGroupedRow && worker.checkOutDate && invoice && new Date(worker.checkOutDate) < new Date(invoice.endDate)
+                        ? formatDate(worker.effectiveCheckOut)
+                        : ''
+                      }
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-center font-semibold">
+                      {worker.days}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-gray-200 font-bold">
@@ -709,7 +921,10 @@ export default function InvoicePrintPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="text-sm text-gray-600">
-                <span className="font-semibold">Number of Workers:</span> {displayDetails.length}
+                <span className="font-semibold">Number of Workers:</span> {invoiceType === 'grouped' 
+                  ? `${groupedWorkerDetails.withMovements.length + groupedWorkerDetails.withoutMovements.length} (${groupedWorkerDetails.withoutMovements.length} مجمعين)`
+                  : displayDetails.length
+                }
               </div>
               <div className="text-sm text-gray-600">
                 <span className="font-semibold">Total Person-Days:</span> {totalDays}

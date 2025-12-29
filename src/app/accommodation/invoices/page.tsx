@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus, Printer, RefreshCw, Edit2, Trash2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus, Printer, RefreshCw, Edit2, Trash2, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getFiscalMonthPeriod, formatFiscalDate, FISCAL_START_DAY } from '@/lib/fiscal-month-utils';
 import { Calendar } from '@/components/ui/calendar';
@@ -25,10 +26,20 @@ export default function InvoicesPage() {
   const { invoices, contracts, companies, residences, generateMonthlyInvoices, saveInvoice, deleteInvoice } = useAccommodation();
   const { currentUser } = useUsers();
   const { toast } = useToast();
+  
+  // Helper to format UTC dates correctly
+  const formatUTCDate = (date: Date) => {
+    const month = date.toLocaleString('en', { month: 'short', timeZone: 'UTC' });
+    const day = date.getUTCDate();
+    const year = date.getUTCFullYear();
+    return `${month} ${String(day).padStart(2, '0')}, ${year}`;
+  };
+  
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [fiscalStartDay, setFiscalStartDay] = useState(FISCAL_START_DAY);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -97,6 +108,38 @@ export default function InvoicesPage() {
       .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
   }, [invoices, statusFilter, searchTerm, companies, residences]);
 
+  // Group invoices by month
+  const groupedInvoices = useMemo(() => {
+    const groups: Record<string, Invoice[]> = {};
+    filteredInvoices.forEach(invoice => {
+      if (!groups[invoice.month]) {
+        groups[invoice.month] = [];
+      }
+      groups[invoice.month].push(invoice);
+    });
+    
+    // Sort months in descending order (newest first)
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filteredInvoices]);
+  
+  // Track which months are open (latest/newest month open by default)
+  const [openMonths, setOpenMonths] = useState<Set<string>>(() => {
+    const latestMonth = groupedInvoices.length > 0 ? groupedInvoices[0][0] : currentMonth;
+    return new Set([latestMonth]);
+  });
+  
+  const toggleMonth = (month: string) => {
+    setOpenMonths(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(month)) {
+        newSet.delete(month);
+      } else {
+        newSet.add(month);
+      }
+      return newSet;
+    });
+  };
+
   const handleGenerateInvoices = async () => {
     if (!selectedMonth) {
       toast({ title: 'Error', description: 'Please select a month', variant: 'destructive' });
@@ -142,16 +185,15 @@ export default function InvoicesPage() {
   };
 
   const months = useMemo(() => {
-    const currentYear = new Date().getFullYear();
     return Array.from({ length: 12 }, (_, i) => {
       const monthNum = i + 1;
-      const monthStr = `${currentYear}-${String(monthNum).padStart(2, '0')}`;
+      const monthStr = `${selectedYear}-${String(monthNum).padStart(2, '0')}`;
       return {
         value: monthStr,
-        label: new Date(currentYear, i).toLocaleString('default', { month: 'long' })
+        label: new Date(selectedYear, i).toLocaleString('default', { month: 'long' })
       };
     });
-  }, []);
+  }, [selectedYear]);
 
   const handleMarkAsPaid = async (invoice: Invoice) => {
     try {
@@ -220,11 +262,15 @@ export default function InvoicesPage() {
       // before generateMonthlyInvoices checks for existing invoices
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Regenerate for the same period
+      // Regenerate for the same period with the same company and residence
+      // Use forceRegenerate=true to skip existing invoice check since we just deleted it
       const result = await generateMonthlyInvoices(invoiceData.month, undefined, {
         startDate: new Date(invoiceData.startDate),
         endDate: new Date(invoiceData.endDate)
-      });
+      }, {
+        companyId: invoiceData.companyId,
+        residenceId: invoiceData.residenceId
+      }, true);
       
       if (result.generated > 0) {
         toast({ title: 'Success / تم بنجاح', description: `تم إعادة توليد الفاتورة بنجاح (${result.generated} فاتورة)` });
@@ -292,19 +338,50 @@ export default function InvoicesPage() {
             
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Quick Select Month</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {months.map((m) => (
+                <Label>اختر السنة</Label>
+                <div className="flex gap-2">
+                  {[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => (
                     <Button
-                      key={m.value}
-                      variant={selectedMonth === m.value ? "default" : "outline"}
+                      key={year}
+                      variant={selectedYear === year ? "default" : "outline"}
                       size="sm"
-                      onClick={() => handleMonthSelect(m.value)}
-                      className="w-full"
+                      onClick={() => {
+                        setSelectedYear(year);
+                        setSelectedMonth(''); // Clear selected month when year changes
+                        setDateRange({ from: undefined, to: undefined }); // Clear date range
+                      }}
+                      className="flex-1"
                     >
-                      {m.label}
+                      {year}
                     </Button>
                   ))}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Quick Select Month</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {months.map((m) => {
+                    const monthInvoices = userInvoices.filter(inv => inv.month === m.value);
+                    return (
+                      <Button
+                        key={m.value}
+                        variant={selectedMonth === m.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleMonthSelect(m.value)}
+                        className="w-full relative"
+                      >
+                        <span className="flex flex-col items-center w-full">
+                          <span>{m.label}</span>
+                          {monthInvoices.length > 0 && (
+                            <span className="text-[10px] opacity-70">
+                              {monthInvoices.length} invoices
+                            </span>
+                          )}
+                        </span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -325,11 +402,11 @@ export default function InvoicesPage() {
                         {dateRange.from ? (
                           dateRange.to ? (
                             <>
-                              {format(dateRange.from, "LLL dd, y")} -{" "}
-                              {format(dateRange.to, "LLL dd, y")}
+                              {formatUTCDate(dateRange.from)} -{" "}
+                              {formatUTCDate(dateRange.to)}
                             </>
                           ) : (
-                            format(dateRange.from, "LLL dd, y")
+                            formatUTCDate(dateRange.from)
                           )
                         ) : (
                           <span>Pick a date range</span>
@@ -518,120 +595,150 @@ export default function InvoicesPage() {
               </Button>
             </div>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice ID</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Residence</TableHead>
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Workers</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice) => {
-                    const company = companies.find(c => c.id === invoice.companyId);
-                    const residence = residences.find(r => r.id === invoice.residenceId);
-                    
-                    return (
-                      <TableRow key={invoice.id}>
-                        <TableCell>
-                          <div className="font-mono text-sm">{invoice.id}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{company?.name || invoice.companyId}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">{residence?.name || invoice.residenceId}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm">
-                            <CalendarIcon className="h-3 w-3" />
-                            {invoice.month}
+            <div className="space-y-6">
+              {groupedInvoices.map(([month, invoices]) => {
+                const monthTotal = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+                const firstInvoice = invoices[0];
+                const isOpen = openMonths.has(month);
+                
+                return (
+                  <Collapsible key={month} open={isOpen} onOpenChange={() => toggleMonth(month)}>
+                    <div className="space-y-3">
+                      {/* Month Header */}
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors">
+                          <div className="flex items-center gap-3">
+                            <ChevronDown className={cn(
+                              "h-5 w-5 text-muted-foreground transition-transform",
+                              isOpen && "transform rotate-180"
+                            )} />
+                            <CalendarIcon className="h-5 w-5 text-primary" />
+                            <div>
+                              <h3 className="font-semibold text-lg">{month}</h3>
+                              <p className="text-xs text-muted-foreground">
+                                {formatUTCDate(new Date(firstInvoice.startDate))} - {formatUTCDate(new Date(firstInvoice.endDate))}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatFiscalDate(invoice.startDate)} - {formatFiscalDate(invoice.endDate)}
+                          <div className="text-right">
+                            <div className="text-sm text-muted-foreground">{invoices.length} invoices</div>
+                            <div className="font-bold text-lg">{monthTotal.toFixed(2)} SAR</div>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="font-medium">{invoice.numberOfWorkers}</div>
-                          <div className="text-xs text-muted-foreground">
-                            @ {invoice.ratePerPerson} SAR/mo
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="font-bold">{invoice.totalAmount.toFixed(2)} SAR</div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(invoice.status)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleViewDetails(invoice)}
-                              title="View Details"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleOpenStatusDialog(invoice)}
-                              title="Change Status"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/accommodation/invoices/${invoice.id}`)}
-                              title="Print Invoice"
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            {/* Delete button - Admin only */}
-                            {currentUser?.role === 'Admin' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setInvoiceToDelete(invoice);
-                                  setDeleteDialogOpen(true);
-                                }}
-                                title="Delete / Regenerate"
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {/* Regenerate button - Admin & Supervisor */}
-                            {(currentUser?.role === 'Admin' || currentUser?.role === 'Supervisor') && currentUser?.role !== 'Admin' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setInvoiceToDelete(invoice);
-                                  setDeleteDialogOpen(true);
-                                }}
-                                title="Regenerate Invoice"
-                                className="text-blue-600 hover:text-blue-700"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        </div>
+                      </CollapsibleTrigger>
+                      
+                      {/* Invoices Table */}
+                      <CollapsibleContent className="space-y-3">
+                        <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Invoice ID</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Residence</TableHead>
+                            <TableHead className="text-right">Workers</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices.map((invoice) => {
+                            const company = companies.find(c => c.id === invoice.companyId);
+                            const residence = residences.find(r => r.id === invoice.residenceId);
+                            
+                            return (
+                              <TableRow key={invoice.id}>
+                                <TableCell>
+                                  <div className="font-mono text-sm">{invoice.id}</div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-medium">{company?.name || invoice.companyId}</div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="text-sm">{residence?.name || invoice.residenceId}</div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="font-medium">{invoice.numberOfWorkers}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    @ {invoice.ratePerPerson} SAR/mo
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="font-bold">{invoice.totalAmount.toFixed(2)} SAR</div>
+                                </TableCell>
+                                <TableCell>
+                                  {getStatusBadge(invoice.status)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleViewDetails(invoice)}
+                                      title="View Details"
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleOpenStatusDialog(invoice)}
+                                      title="Change Status"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => router.push(`/accommodation/invoices/${invoice.id}`)}
+                                      title="Print Invoice"
+                                    >
+                                      <Printer className="h-4 w-4" />
+                                    </Button>
+                                    {/* Delete button - Admin only */}
+                                    {currentUser?.role === 'Admin' && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setInvoiceToDelete(invoice);
+                                          setDeleteDialogOpen(true);
+                                        }}
+                                        title="Delete / Regenerate"
+                                        className="text-destructive hover:text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {/* Regenerate button - Admin & Supervisor */}
+                                    {(currentUser?.role === 'Admin' || currentUser?.role === 'Supervisor') && currentUser?.role !== 'Admin' && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setInvoiceToDelete(invoice);
+                                          setDeleteDialogOpen(true);
+                                        }}
+                                        title="Regenerate Invoice"
+                                        className="text-blue-600 hover:text-blue-700"
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                );
+              })}
             </div>
           )}
         </CardContent>
