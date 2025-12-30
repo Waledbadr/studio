@@ -75,7 +75,7 @@ export function BatchOperationsDialog({
     switch (operationType) {
       case 'CHECK_IN': return 'تسكين جماعي';
       case 'CHECK_OUT': return 'إخراج جماعي';
-      case 'TRANSFER': return 'نقل جماعي';
+      case 'TRANSFER': return 'تبديل جماعي';
     }
   };
 
@@ -271,7 +271,7 @@ export function BatchOperationsDialog({
               <Label htmlFor="date">
                 {operationType === 'CHECK_IN' && 'تاريخ التسكين'}
                 {operationType === 'CHECK_OUT' && 'تاريخ الإخراج'}
-                {operationType === 'TRANSFER' && 'تاريخ النقل'}
+                {operationType === 'TRANSFER' && 'تاريخ التبديل'}
               </Label>
               <Input
                 id="date"

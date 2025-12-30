@@ -116,10 +116,11 @@ export function WorkerHistoryDialog({ workerId, workerName, trigger }: WorkerHis
 
   const getActionLabel = (type: string) => {
     switch (type) {
-      case 'CHECK_IN': return 'Check In';
-      case 'CHECK_OUT': return 'Check Out';
-      case 'TRANSFER': return 'Transfer';
-      case 'SWAP': return 'Swap';
+      case 'CHECK_IN': return locale === 'ar' ? 'تسكين' : 'Check In';
+      case 'CHECK_OUT': return locale === 'ar' ? 'إخراج' : 'Check Out';
+      case 'TRANSFER':
+      case 'SWAP':
+        return locale === 'ar' ? 'تبديل' : 'Swap';
       default: return type;
     }
   };
@@ -143,17 +144,30 @@ export function WorkerHistoryDialog({ workerId, workerName, trigger }: WorkerHis
                   {locale === 'ar' ? `السجل: ${workerName}` : `History: ${workerName}`}
                 </DialogTitle>
               </div>
-              {isAdmin && canUndoLastAction() && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleUndo}
-                  className="flex items-center gap-1"
+              <div className="flex items-center gap-2">
+                {/* Print certificate shortcut */}
+                <a
+                  href={`/accommodation/worker-certificate?workerId=${workerId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  <Undo2 className="h-4 w-4" />
-                  {locale === 'ar' ? 'تراجع عن آخر عملية' : 'Undo Last Action'}
-                </Button>
-              )}
+                  <Button variant="outline" size="sm" className="flex items-center gap-1" title={locale === 'ar' ? 'طباعة الشهادة' : 'Print Certificate'}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 0v4h8v-4m-8 0h8" /></svg>
+                    {locale === 'ar' ? 'طباعة الشهادة' : 'Print Certificate'}
+                  </Button>
+                </a>
+                {isAdmin && canUndoLastAction() && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    {locale === 'ar' ? 'تراجع عن آخر عملية' : 'Undo Last Action'}
+                  </Button>
+                )}
+              </div>
             </div>
             <DialogDescription>
               {locale === 'ar' ? 'سجل حركة هذا العامل' : 'Movement history for this worker'}
@@ -238,7 +252,7 @@ export function WorkerHistoryDialog({ workerId, workerName, trigger }: WorkerHis
                           </div>
                         )}
                         
-                        {item.actionType === 'TRANSFER' && (
+                        {(item.actionType === 'TRANSFER' || item.actionType === 'SWAP') && (
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 text-muted-foreground line-through text-xs">
                               <Home className="h-3 w-3" />
@@ -246,7 +260,7 @@ export function WorkerHistoryDialog({ workerId, workerName, trigger }: WorkerHis
                             </div>
                             <div className="flex items-center gap-2">
                               <ArrowRight className="h-4 w-4 text-blue-500" />
-                              <span>Transferred to </span>
+                              <span>{locale === 'ar' ? 'تبديل إلى' : 'Swapped to'}</span>
                               <span className="font-medium">{item.toResidenceName || item.residenceName}</span>
                               <span className="text-muted-foreground">/</span>
                               <span className="font-medium">{item.toRoomName || item.roomName}</span>

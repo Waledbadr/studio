@@ -24,7 +24,22 @@ export default function WorkerPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Worker {id}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Worker {id}</h1>
+        {worker && (
+          <a
+            href={`/accommodation/worker-certificate?workerId=${worker.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Print Certificate"
+          >
+            <button className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 border text-sm font-medium" style={{lineHeight:1}}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-6 0v4m0 0h4m-4 0H8" /></svg>
+              <span>Print Certificate</span>
+            </button>
+          </a>
+        )}
+      </div>
       {worker ? (
         <div className="rounded-md border p-4 bg-white/80">
           <div className="font-semibold">{worker.name}</div>

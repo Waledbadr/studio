@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAccommodation, Worker, AccommodationHistory } from '@/context/accommodation-context';
 import { useLanguage } from '@/context/language-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -81,13 +81,15 @@ const translations = {
     summary: 'Summary',
     checkIns: 'Check-ins',
     checkOuts: 'Check-outs',
-    transfers: 'Transfers',
+    transfers: 'Swaps',
     totalDays: 'Total Days',
     recentHistory: 'Recent Movement History',
     moreRecords: 'more records',
     checkIn: 'Check In',
     checkOut: 'Check Out',
-    transfer: 'Transfer',
+    checkInNotes: 'Check-in Notes',
+    checkOutNotes: 'Check-out Notes',
+    transfer: 'Swap',
     swap: 'Swap',
     from: 'From',
     to: 'To',
@@ -146,13 +148,15 @@ const translations = {
     summary: 'ملخص',
     checkIns: 'تسكين',
     checkOuts: 'إخراج',
-    transfers: 'نقل',
+    transfers: 'تبديلات',
     totalDays: 'إجمالي الأيام',
     recentHistory: 'سجل الحركات الأخيرة',
     moreRecords: 'سجلات إضافية',
     checkIn: 'تسكين',
     checkOut: 'إخراج',
-    transfer: 'نقل',
+    checkInNotes: 'ملاحظات التسكين',
+    checkOutNotes: 'ملاحظات الإخراج',
+    transfer: 'تبديل',
     swap: 'تبديل',
     from: 'من',
     to: 'إلى',
@@ -176,7 +180,10 @@ export default function WorkerCertificatePage() {
   const t = translations[locale] || translations.en;
   const dateLocale = locale === 'ar' ? ar : enUS;
   const isRTL = locale === 'ar';
-  
+
+  const searchParams = useSearchParams();
+  const workerIdFromQuery = searchParams.get('workerId');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [searchResults, setSearchResults] = useState<Worker[]>([]);
@@ -189,8 +196,38 @@ export default function WorkerCertificatePage() {
     fetchWorkerHistory,
     occupants,
     residences,
-    companies
+    companies,
+    getWorkerByIdOrEmployeeId
   } = useAccommodation();
+
+  // إذا كان workerId موجود في الرابط، ابحث تلقائياً عن الموظف وعرض الشهادة
+  useEffect(() => {
+    const fetchByWorkerId = async () => {
+      if (workerIdFromQuery && !selectedWorker) {
+        setLoading(true);
+        try {
+          const worker = await getWorkerByIdOrEmployeeId(workerIdFromQuery);
+          if (worker) {
+            setSelectedWorker(worker);
+            setSearchResults([]);
+            setSearchQuery('');
+            setHistoryLoading(true);
+            try {
+              const history = await fetchWorkerHistory(worker.id);
+              setWorkerHistory(history);
+            } finally {
+              setHistoryLoading(false);
+            }
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    fetchByWorkerId();
+    // فقط عند تغيّر workerIdFromQuery
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerIdFromQuery, getWorkerByIdOrEmployeeId]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -278,33 +315,244 @@ export default function WorkerCertificatePage() {
   const stats = useMemo(() => {
     const checkIns = workerHistory.filter(h => h.actionType === 'CHECK_IN').length;
     const checkOuts = workerHistory.filter(h => h.actionType === 'CHECK_OUT').length;
-    const transfers = workerHistory.filter(h => h.actionType === 'TRANSFER').length;
+    const swaps = workerHistory.filter(h => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
     
     let totalDays = 0;
-    workerHistory.filter(h => h.actionType === 'CHECK_OUT' && h.duration).forEach(h => {
-      totalDays += h.duration || 0;
-    });
-
-    if (currentOccupancy) {
-      const days = Math.ceil((new Date().getTime() - new Date(currentOccupancy.since).getTime()) / (1000 * 60 * 60 * 24));
-      totalDays += days;
+    
+    // ترتيب السجلات حسب التاريخ (الأقدم أولاً)
+    const sortedHistory = [...workerHistory].sort((a, b) => 
+      new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime()
+    );
+    
+    // حساب الأيام بين كل CHECK_IN و CHECK_OUT المقابل له
+    let lastCheckInDate: Date | null = null;
+    
+    for (const record of sortedHistory) {
+      if (record.actionType === 'CHECK_IN') {
+        lastCheckInDate = new Date(record.actionDate);
+        lastCheckInDate.setHours(0, 0, 0, 0);
+      } else if (record.actionType === 'CHECK_OUT' && lastCheckInDate) {
+        const checkOutDate = new Date(record.actionDate);
+        checkOutDate.setHours(0, 0, 0, 0);
+        const diffTime = checkOutDate.getTime() - lastCheckInDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        // +1 لاحتساب يوم الدخول
+        totalDays += Math.max(diffDays + 1, 1);
+        lastCheckInDate = null;
+      }
     }
 
-    return { checkIns, checkOuts, transfers, totalDays };
+    // إضافة أيام الإقامة الحالية إذا كان مُسكّناً
+    if (currentOccupancy) {
+      const sinceDate = new Date(currentOccupancy.since);
+      const today = new Date();
+      sinceDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - sinceDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      // +1 لاحتساب يوم الدخول
+      totalDays += diffDays + 1;
+    }
+
+    return { checkIns, checkOuts, swaps, totalDays };
   }, [workerHistory, currentOccupancy]);
 
   // Get condensed history for print (first 2 + last 4)
   const condensedHistory = useMemo(() => {
     if (workerHistory.length <= 6) return { items: workerHistory, skipped: 0 };
-    const first2 = workerHistory.slice(-2); // oldest 2
-    const last4 = workerHistory.slice(0, 4); // newest 4
+    const first4 = workerHistory.slice(-4); // oldest 4
+    const last2 = workerHistory.slice(0, 2); // newest 2
     return { 
-      items: [...last4, ...first2],
+      items: [...last2, ...first4],
       skipped: workerHistory.length - 6 
     };
   }, [workerHistory]);
 
+  // Group check-in / check-out periods for visual grouping
+  const groupedHistory = useMemo(() => {
+    // Use chronological order (oldest first) to find CHECK_IN -> next CHECK_OUT pairs
+    const asc = [...workerHistory].slice().sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+    const groups: Array<any> = [];
+    let i = 0;
+    while (i < asc.length) {
+      const cur = asc[i];
+      if (cur.actionType === 'CHECK_IN') {
+        // find the next CHECK_OUT (skip TRANSFER and other events between)
+        let j = i + 1;
+        while (j < asc.length && asc[j].actionType !== 'CHECK_OUT') j++;
+        if (j < asc.length) {
+          // group from i..j (inclusive)
+          groups.push({ type: 'period', items: asc.slice(i, j + 1) });
+          i = j + 1;
+        } else {
+          // open period (no checkout found) - include remaining items
+          groups.push({ type: 'period', items: asc.slice(i) });
+          break;
+        }
+      } else {
+        // single record (CHECK_OUT without prior CHECK_IN or TRANSFER outside periods)
+        groups.push({ type: 'single', item: cur });
+        i += 1;
+      }
+    }
+    return groups;
+  }, [workerHistory]);
+
+  // Utility: checkout label translation (defined before summarization to avoid temporal dead zone)
+  function getCheckoutLabel(checkoutType?: string | null) {
+    if (!checkoutType) return null;
+    let label = checkoutType;
+    // Normalize room-transfer naming: treat 'Transfer' and 'Swap' as the same concept
+    if (checkoutType === 'Transfer' || checkoutType === 'Swap') {
+      return t.transfer; // already localized (Swap / تبديل)
+    }
+    if (locale === 'ar') {
+      if (checkoutType === 'Exit') return 'خروج';
+      else if (checkoutType === 'Vacation') return 'إجازة';
+    }
+    return label;
+  }
+
+  // Summarize grouped periods into single-row summaries for Recent Movement History
+  const summarizedHistory = useMemo(() => {
+    const summaries: Array<any> = [];
+    const fmtResidence = (rName?: string, roomName?: string) => rName ? (roomName ? `${rName} • ${roomName}` : rName) : t.notSpecified;
+
+    for (const g of groupedHistory) {
+      if (g.type === 'single') {
+        const item = g.item as AccommodationHistory;
+        const startNotes = item.actionType === 'CHECK_IN' ? [item.reason ? `(${item.reason})` : null, item.notes ? `"${item.notes}"` : null].filter(Boolean).join(' ') : '—';
+        const endNotes = item.actionType === 'CHECK_OUT' ? [getCheckoutLabel((item as any).checkoutType), item.reason ? `(${item.reason})` : null, item.notes ? `"${item.notes}"` : null].filter(Boolean).join(' ') : '—';
+        summaries.push({
+          id: item.id,
+          startDate: new Date(item.actionDate),
+          endDate: null,
+          actionLabel: getActionLabel(item.actionType),
+          residence: fmtResidence(item.residenceName, item.roomName),
+          startNotes,
+          endNotes,
+          duration: item.actionType === 'CHECK_OUT' ? getFormattedDuration(item) : '—'
+        });
+      } else if (g.type === 'period') {
+        const items = g.items as AccommodationHistory[];
+        const start = items[0];
+        const end = items[items.length - 1];
+        const transfers = items.filter(i => i.actionType === 'TRANSFER' || i.actionType === 'SWAP');
+        const hasCheckout = end && end.actionType === 'CHECK_OUT';
+
+        // Build residence summary: include transfers and destination room when available
+        const fmtTransferPath = () => {
+          if (transfers.length === 0) return null;
+          // map to last transfer destination that has a room; if missing, try to infer from following CHECK_IN (period or global)
+          const last = transfers[transfers.length - 1];
+
+          // attempt direct fields first
+          let destResidence: string | null = last.toResidenceName || last.residenceName || null;
+          let destRoom: string | null = last.toRoomName || last.roomName || null;
+
+          // if no destRoom, try to find a CHECK_IN record after this transfer inside the period
+          if (!destRoom) {
+            const transferIndex = items.indexOf(last);
+            if (transferIndex >= 0) {
+              for (let k = transferIndex + 1; k < items.length; k++) {
+                const next = items[k];
+                if (next.actionType === 'CHECK_IN' && next.roomName) {
+                  destRoom = next.roomName;
+                  destResidence = destResidence || (next.residenceName || null);
+                  break;
+                }
+              }
+            }
+          }
+
+          // still no destRoom: search the full workerHistory for the next CHECK_IN after the transfer time
+          if (!destRoom) {
+            const transferTime = new Date(last.actionDate).getTime();
+            const futureCheckIn = workerHistory.find(h => new Date(h.actionDate).getTime() > transferTime && h.actionType === 'CHECK_IN' && h.roomName);
+            if (futureCheckIn) {
+              destRoom = futureCheckIn.roomName || null;
+              destResidence = destResidence || (futureCheckIn.residenceName || null);
+            }
+          }
+
+          // Build final string: if destination residence equals start residence, show only room number on right side
+          const startRes = fmtResidence(start.residenceName, start.roomName);
+          if (destResidence && destResidence === start.residenceName) {
+            // show only room number if available
+            return destRoom ? `${startRes} → ${destRoom}` : startRes;
+          }
+
+          // otherwise show full dest residence/room; if no dest found, show start only
+          if (!destResidence && !destRoom) return startRes;
+          const dest = fmtResidence(destResidence || undefined, destRoom || undefined);
+          return `${startRes} → ${dest}`;
+        };
+
+        let residenceSummary: string;
+        if (hasCheckout) {
+          residenceSummary = transfers.length > 0 ? `${fmtResidence(start.residenceName, start.roomName)} → ${fmtResidence(end.residenceName, end.roomName)}` : fmtResidence(start.residenceName, start.roomName);
+        } else {
+          // No checkout: if there is a transfer, show start → last transfer destination; otherwise show start only
+          if (transfers.length > 0) {
+            residenceSummary = fmtTransferPath()!; // e.g. "Gypsum • 11 → Gypsum • 12"
+          } else {
+            residenceSummary = fmtResidence(start.residenceName, start.roomName);
+          }
+        }
+
+        // start notes: from start record
+        const startParts = [] as string[];
+        if (start.reason) startParts.push(`(${start.reason})`);
+        if (start.notes) startParts.push(`"${start.notes}"`);
+        const startNotes = startParts.length ? startParts.join(' ') : '—';
+
+        // end notes: checkout label + end record notes + include transfer notes count
+        const endParts = [] as string[];
+        if (hasCheckout) {
+          const checkoutLabel = getCheckoutLabel((end as any).checkoutType);
+          if (checkoutLabel) endParts.push(checkoutLabel);
+          if (end.reason) endParts.push(`(${end.reason})`);
+          if (end.notes) endParts.push(`"${end.notes}"`);
+        }
+        if (transfers.length > 0) endParts.push(`(${transfers.length} ${t.transfers})`);
+        const endNotes = endParts.length ? endParts.join(' ') : '—';
+
+        // compute duration: if checkout exists, use end; otherwise use current date
+        let duration = '—';
+        if (start) {
+          const s = new Date(start.actionDate); s.setHours(0,0,0,0);
+          const e = hasCheckout ? (new Date((end as AccommodationHistory).actionDate)) : new Date();
+          e.setHours(0,0,0,0);
+          const diff = Math.floor((e.getTime() - s.getTime()) / (1000*60*60*24));
+          duration = `${Math.max(diff + 1, 1)}d`;
+        }
+
+        summaries.push({
+          id: start.id + '_' + (hasCheckout ? end.id : 'open'),
+          startDate: new Date(start.actionDate),
+          endDate: hasCheckout ? new Date(end.actionDate) : null,
+          actionLabel: `${t.checkIn} → ${t.checkOut}`,
+          residence: residenceSummary,
+          startNotes,
+          endNotes,
+          duration
+        });
+      }
+    }
+    return summaries;
+  }, [groupedHistory]);
+
   const handlePrint = () => window.print();
+
+  // Use the latest CHECK_IN date (if available) as the 'last entry' date to show on the certificate
+  const lastCheckIn = useMemo(() => {
+    if (!workerHistory || workerHistory.length === 0) return null;
+    const checkIns = [...workerHistory].filter(h => h.actionType === 'CHECK_IN');
+    if (checkIns.length === 0) return null;
+    // newest first
+    checkIns.sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+    return checkIns[0].actionDate;
+  }, [workerHistory]);
 
   const getRoleLabel = (role?: string) => {
     switch (role) {
@@ -349,9 +597,93 @@ export default function WorkerCertificatePage() {
     }
   };
 
+
+
   const calculateDays = (since: string) => {
-    const days = Math.ceil((new Date().getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
-    return `${days} ${t.days}`;
+    // احتساب عدد الأيام بما في ذلك يوم الدخول ويوم اليوم الحالي
+    const sinceDate = new Date(since);
+    const today = new Date();
+    // تصفير الوقت للحصول على فرق الأيام فقط
+    sinceDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const diffTime = today.getTime() - sinceDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    // +1 لاحتساب يوم الدخول نفسه
+    const days = diffDays + 1;
+    return `${days} ${days === 1 ? t.day : t.days}`;
+  };
+
+  // تنسيق المدة بالسنوات والشهور والأيام
+  const formatDuration = (totalDays: number): string => {
+    if (totalDays <= 0) return '—';
+    
+    const years = Math.floor(totalDays / 365);
+    const remainingAfterYears = totalDays % 365;
+    const months = Math.floor(remainingAfterYears / 30);
+    const days = remainingAfterYears % 30;
+    
+    const parts: string[] = [];
+    
+    if (years > 0) {
+      parts.push(locale === 'ar' ? `${years}س` : `${years}y`);
+    }
+    if (months > 0) {
+      parts.push(locale === 'ar' ? `${months}ش` : `${months}m`);
+    }
+    if (days > 0 || parts.length === 0) {
+      parts.push(locale === 'ar' ? `${days}ي` : `${days}d`);
+    }
+    
+    return parts.join(' ');
+  };
+
+  // حساب المدة لكل CHECK_OUT من سجلات CHECK_IN المقابلة
+  const historyWithDurations = useMemo(() => {
+    // ترتيب السجلات حسب التاريخ (الأقدم أولاً)
+    const sortedHistory = [...workerHistory].sort((a, b) => 
+      new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime()
+    );
+    
+    // Map لتخزين آخر تاريخ دخول
+    let lastCheckInDate: Date | null = null;
+    
+    // Map لتخزين المدة لكل CHECK_OUT
+    const durationsMap = new Map<string, number>();
+    
+    for (const record of sortedHistory) {
+      if (record.actionType === 'CHECK_IN') {
+        lastCheckInDate = new Date(record.actionDate);
+        lastCheckInDate.setHours(0, 0, 0, 0);
+      } else if (record.actionType === 'CHECK_OUT' && lastCheckInDate) {
+        const checkOutDate = new Date(record.actionDate);
+        checkOutDate.setHours(0, 0, 0, 0);
+        const diffTime = checkOutDate.getTime() - lastCheckInDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const duration = Math.max(diffDays + 1, 1); // +1 لاحتساب يوم الدخول
+        durationsMap.set(record.id, duration);
+        lastCheckInDate = null;
+      }
+    }
+    
+    return durationsMap;
+  }, [workerHistory]);
+
+  // دالة للحصول على المدة المنسقة لسجل معين
+  const getFormattedDuration = (item: AccommodationHistory): string | null => {
+    if (item.actionType !== 'CHECK_OUT') return null;
+    
+    // أولاً نحاول الحصول على المدة المحسوبة دينامياً
+    const calculatedDuration = historyWithDurations.get(item.id);
+    if (calculatedDuration) {
+      return formatDuration(calculatedDuration);
+    }
+    
+    // ثانياً نحاول استخدام المدة المخزنة
+    if (item.duration) {
+      return formatDuration(item.duration);
+    }
+    
+    return null;
   };
 
   const documentNo = useMemo(() => {
@@ -439,65 +771,64 @@ export default function WorkerCertificatePage() {
           </div>
 
           {/* Printable Certificate - Single Page Design */}
-          <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
-            <div className="bg-white text-black print:bg-white rounded-lg border-2 border-gray-300 print:border-2 print:border-gray-400 overflow-hidden" style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
+          <div className="max-w-4xl mx-auto p-4 print:p-0 print:max-w-none print:m-0">
+            <div className="bg-white text-black print:bg-white rounded-lg border-2 border-gray-300 print:border print:border-gray-400 overflow-hidden flex flex-col print:min-h-[277mm] print:h-[277mm]" style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
               
               {/* Header */}
-              <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-6 py-4 print:bg-slate-800" style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
+              <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-4 py-2.5 print:px-3 print:py-2 print:bg-slate-800 flex-shrink-0" style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                      <Building2 className="h-7 w-7 text-white" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+                      <Building2 className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <h1 className="text-xl font-bold tracking-wide">{t.certificateTitle}</h1>
-                      <p className="text-slate-300 text-sm">{t.certificateSubtitle}</p>
+                      <h1 className="text-base font-bold tracking-wide">{t.certificateTitle}</h1>
+                      <p className="text-slate-300 text-xs">{t.certificateSubtitle}</p>
                     </div>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-xs">
                     <div className="text-slate-300">{t.documentNo}</div>
-                    <div className="font-mono font-bold">{documentNo}</div>
-                    <div className="text-slate-300 mt-1">{t.issueDate}</div>
-                    <div className="font-medium">{format(new Date(), 'dd/MM/yyyy')}</div>
+                    <div className="font-mono font-bold text-sm">{documentNo}</div>
+                    <div className="text-slate-300">{t.issueDate}: {format(new Date(), 'dd/MM/yyyy')}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Body */}
-              <div className="p-5 space-y-4">
+              {/* Body - Grows to fill available space */}
+              <div className="p-3 print:p-2 space-y-2 print:space-y-1.5 flex-grow">
                 
                 {/* Worker Info + Status Row */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 print:gap-1.5">
                   
                   {/* Worker Info */}
-                  <div className="col-span-2 border rounded-lg p-4">
-                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <User className="h-3.5 w-3.5" />
+                  <div className="col-span-2 border rounded-lg p-2.5 print:p-2">
+                    <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <User className="h-3 w-3" />
                       {t.workerData}
                     </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between border-b border-dashed pb-1.5">
+                    <div className="space-y-1 text-xs print:text-[11px]">
+                      <div className="flex justify-between border-b border-dashed pb-1">
                         <span className="text-slate-500">{t.fullName}</span>
                         <span className="font-semibold">{selectedWorker.name}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                        <div className="flex justify-between border-b border-dashed pb-1">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.idNumber}</span>
-                          <span className="font-mono">{selectedWorker.idNumber || t.notRegistered}</span>
+                          <span className="font-mono text-[10px]">{selectedWorker.idNumber || t.notRegistered}</span>
                         </div>
-                        <div className="flex justify-between border-b border-dashed pb-1">
+                        <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.employeeNumber}</span>
-                          <span className="font-mono">{selectedWorker.employeeId || t.notRegistered}</span>
+                          <span className="font-mono text-[10px]">{selectedWorker.employeeId || t.notRegistered}</span>
                         </div>
-                        <div className="flex justify-between border-b border-dashed pb-1">
+                        <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.nationality}</span>
                           <span>{selectedWorker.nationaliy || t.notSpecified}</span>
                         </div>
-                        <div className="flex justify-between border-b border-dashed pb-1">
+                        <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.jobTitle}</span>
                           <span>{getRoleLabel(selectedWorker.role)}</span>
                         </div>
-                        <div className="flex justify-between border-b border-dashed pb-1 col-span-2">
+                        <div className="flex justify-between border-b border-dashed pb-0.5 col-span-2">
                           <span className="text-slate-500">{t.company}</span>
                           <span>{getCompanyName(selectedWorker.company)}</span>
                         </div>
@@ -506,206 +837,156 @@ export default function WorkerCertificatePage() {
                   </div>
 
                   {/* Current Status */}
-                  <div className="border rounded-lg p-4">
-                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Home className="h-3.5 w-3.5" />
+                  <div className="border rounded-lg p-2 print:p-1.5 bg-gradient-to-br from-slate-50 to-white">
+                    <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <Home className="h-3 w-3" />
                       {t.currentStatus}
                     </h3>
                     {currentOccupancy ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-green-700 font-semibold">
-                          <CheckCircle2 className="h-5 w-5" />
-                          {t.currentlyAccommodated}
+                      <div className="space-y-1.5">
+                        {/* Status Badge */}
+                        <div className="flex items-center gap-1.5 bg-green-100 text-green-800 font-semibold px-2 py-1 rounded border border-green-200 text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span>{t.currentlyAccommodated}</span>
                         </div>
-                        <div className="text-xs space-y-1.5 text-slate-600">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {getResidenceName(currentOccupancy.residenceId)}
-                          </div>
-                          <div className="space-y-1.5">
-                            {(() => {
-                              const roomPath = getRoomFullPath(currentOccupancy.residenceId, currentOccupancy.roomId);
-                              return (
-                                <>
-                                  {/* Row 1: City & Housing */}
-                                  <div className="grid grid-cols-2 gap-1.5">
-                                    <div className="flex items-center gap-1.5 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                                      <MapPin className="h-3 w-3 text-amber-600 flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] text-amber-600 font-medium uppercase leading-tight">{t.city}</div>
-                                        <div className="text-[11px] font-semibold text-amber-900 truncate">{roomPath.city || '—'}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 bg-sky-50 px-2 py-1 rounded border border-sky-100">
-                                      <Home className="h-3 w-3 text-sky-600 flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] text-sky-600 font-medium uppercase leading-tight">{t.housing}</div>
-                                        <div className="text-[11px] font-semibold text-sky-900 truncate">{roomPath.housing}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Row 2: Building - Floor - Room */}
-                                  <div className="grid grid-cols-3 gap-1.5">
-                                    <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                                      <Building className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] text-blue-600 font-medium uppercase leading-tight">{t.building}</div>
-                                        <div className="text-[11px] font-semibold text-blue-900 truncate">{roomPath.building || '—'}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded border border-purple-100">
-                                      <Layers className="h-3 w-3 text-purple-600 flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] text-purple-600 font-medium uppercase leading-tight">{t.floor}</div>
-                                        <div className="text-[11px] font-semibold text-purple-900 truncate">{roomPath.floor || '—'}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
-                                      <DoorOpen className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] text-emerald-600 font-medium uppercase leading-tight">{t.room}</div>
-                                        <div className="text-[11px] font-semibold text-emerald-900 truncate">{roomPath.room}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {format(new Date(currentOccupancy.since), 'dd/MM/yyyy')}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {calculateDays(currentOccupancy.since)}
-                          </div>
+                        
+                        {/* Location Details */}
+                        {(() => {
+                          const roomPath = getRoomFullPath(currentOccupancy.residenceId, currentOccupancy.roomId);
+                          return (
+                            <div className="grid grid-cols-2 gap-1">
+                              <div className="bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-center">
+                                <div className="text-[7px] text-amber-600 font-semibold uppercase">{t.city}</div>
+                                <div className="text-[10px] font-bold text-amber-900 truncate">{roomPath.city || '—'}</div>
+                              </div>
+                              <div className="bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 text-center">
+                                <div className="text-[7px] text-sky-600 font-semibold uppercase">{t.housing}</div>
+                                <div className="text-[10px] font-bold text-sky-900 truncate">{roomPath.housing}</div>
+                              </div>
+                              <div className="bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-center">
+                                <div className="text-[7px] text-indigo-600 font-semibold uppercase">{t.building}</div>
+                                <div className="text-[10px] font-bold text-indigo-900">{roomPath.building || '—'}</div>
+                              </div>
+                              <div className="bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200 text-center">
+                                <div className="text-[7px] text-violet-600 font-semibold uppercase">{t.floor}</div>
+                                <div className="text-[10px] font-bold text-violet-900">{roomPath.floor || '—'}</div>
+                              </div>
+                              <div className="col-span-2 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-center">
+                                <div className="text-[7px] text-emerald-600 font-semibold uppercase">{t.room}</div>
+                                <div className="text-[10px] font-bold text-emerald-900">{roomPath.room}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        
+                        {/* Date & Duration */}
+                        <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200">
+                          <span className="flex items-center gap-0.5">
+                            <Calendar className="h-2.5 w-2.5" />
+                            {lastCheckIn ? format(new Date(lastCheckIn), 'dd/MM/yyyy') : format(new Date(currentOccupancy.since), 'dd/MM/yyyy')}
+                          </span>
+                          <span className="flex items-center gap-0.5 bg-slate-100 px-1 py-0.5 rounded-full font-medium">
+                            <Clock className="h-2.5 w-2.5" />
+                            {calculateDays(lastCheckIn || currentOccupancy.since)}
+                          </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-orange-700 font-semibold">
-                        <AlertCircle className="h-5 w-5" />
-                        {t.notCurrentlyAccommodated}
+                      <div className="flex items-center gap-1.5 bg-orange-100 text-orange-800 font-semibold px-2 py-1.5 rounded border border-orange-200 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span>{t.notCurrentlyAccommodated}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Statistics Row */}
-                <div className="border rounded-lg p-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <TrendingUp className="h-3.5 w-3.5" />
+                <div className="border rounded-lg p-2 print:p-1.5">
+                  <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
                     {t.summary}
                   </h3>
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="text-center p-3 bg-green-50 rounded-lg border border-green-100">
-                      <div className="text-2xl font-bold text-green-700">{stats.checkIns}</div>
-                      <div className="text-xs text-green-600">{t.checkIns}</div>
+                  <div className="grid grid-cols-4 gap-2 print:gap-1.5">
+                    <div className="text-center p-1.5 bg-green-50 rounded border border-green-100">
+                      <div className="text-lg font-bold text-green-700">{stats.checkIns}</div>
+                      <div className="text-[9px] text-green-600">{t.checkIns}</div>
                     </div>
-                    <div className="text-center p-3 bg-red-50 rounded-lg border border-red-100">
-                      <div className="text-2xl font-bold text-red-700">{stats.checkOuts}</div>
-                      <div className="text-xs text-red-600">{t.checkOuts}</div>
+                    <div className="text-center p-1.5 bg-red-50 rounded border border-red-100">
+                      <div className="text-lg font-bold text-red-700">{stats.checkOuts}</div>
+                      <div className="text-[9px] text-red-600">{t.checkOuts}</div>
                     </div>
-                    <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-100">
-                      <div className="text-2xl font-bold text-blue-700">{stats.transfers}</div>
-                      <div className="text-xs text-blue-600">{t.transfers}</div>
+                    <div className="text-center p-1.5 bg-blue-50 rounded border border-blue-100">
+                      <div className="text-lg font-bold text-blue-700">{stats.swaps}</div>
+                      <div className="text-[9px] text-blue-600">{t.transfers}</div>
                     </div>
-                    <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-100">
-                      <div className="text-2xl font-bold text-purple-700">{stats.totalDays}</div>
-                      <div className="text-xs text-purple-600">{t.totalDays}</div>
+                    <div className="text-center p-1.5 bg-purple-50 rounded border border-purple-100">
+                      <div className="text-lg font-bold text-purple-700">{stats.totalDays}</div>
+                      <div className="text-[9px] text-purple-600">{t.totalDays}</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Movement History - Condensed */}
-                <div className="border rounded-lg p-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5" />
+                {/* Movement History - Organized */}
+                <div className="border rounded-lg p-2 print:p-1.5">
+                  <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
                     {t.recentHistory}
-                    {condensedHistory.skipped > 0 && (
-                      <span className="text-slate-400 font-normal">({condensedHistory.skipped} {t.moreRecords})</span>
-                    )}
                   </h3>
                   {historyLoading ? (
-                    <div className="text-center text-slate-400 py-4 text-sm">Loading...</div>
+                    <div className="text-center text-slate-400 py-2 text-xs">Loading...</div>
                   ) : workerHistory.length === 0 ? (
-                    <div className="text-center text-slate-400 py-4 text-sm">No records</div>
+                    <div className="text-center text-slate-400 py-2 text-xs">No records</div>
                   ) : (
-                    <div className="space-y-1">
-                      {/* Show newest 4 */}
-                      {condensedHistory.items.slice(0, 4).map((item, idx) => (
-                        <div key={item.id} className="flex items-center gap-3 text-xs py-1.5 border-b border-dashed last:border-0">
-                          <span className={`px-2 py-0.5 rounded font-medium ${getActionColor(item.actionType)}`}>
-                            {getActionLabel(item.actionType)}
-                          </span>
-                          <span className="text-slate-500 font-mono">
-                            {format(new Date(item.actionDate), 'dd/MM/yyyy')}
-                          </span>
-                          <span className="flex-1 truncate text-slate-700">
-                            {item.actionType === 'TRANSFER' ? (
-                              <>{item.fromResidenceName || t.from} → {item.toResidenceName || t.to}</>
-                            ) : (
-                              <>{item.residenceName || getResidenceName(item.residenceId)} {item.roomName && `• ${item.roomName}`}</>
-                            )}
-                          </span>
-                          {item.duration && (
-                            <span className="text-slate-400">{item.duration}d</span>
-                          )}
-                        </div>
-                      ))}
-                      
-                      {/* Separator if there are skipped records */}
-                      {condensedHistory.skipped > 0 && (
-                        <div className="flex items-center gap-2 py-2 text-slate-400">
-                          <div className="flex-1 border-t border-dashed"></div>
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="text-xs">{condensedHistory.skipped} {t.moreRecords}</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                          <div className="flex-1 border-t border-dashed"></div>
-                        </div>
-                      )}
-                      
-                      {/* Show oldest 2 if there are more than 6 */}
-                      {condensedHistory.skipped > 0 && condensedHistory.items.slice(4).map((item, idx) => (
-                        <div key={item.id} className="flex items-center gap-3 text-xs py-1.5 border-b border-dashed last:border-0">
-                          <span className={`px-2 py-0.5 rounded font-medium ${getActionColor(item.actionType)}`}>
-                            {getActionLabel(item.actionType)}
-                          </span>
-                          <span className="text-slate-500 font-mono">
-                            {format(new Date(item.actionDate), 'dd/MM/yyyy')}
-                          </span>
-                          <span className="flex-1 truncate text-slate-700">
-                            {item.actionType === 'TRANSFER' ? (
-                              <>{item.fromResidenceName || t.from} → {item.toResidenceName || t.to}</>
-                            ) : (
-                              <>{item.residenceName || getResidenceName(item.residenceId)} {item.roomName && `• ${item.roomName}`}</>
-                            )}
-                          </span>
-                          {item.duration && (
-                            <span className="text-slate-400">{item.duration}d</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <table className="w-full text-[10px]">
+                      <thead>
+                        <tr className="text-left text-slate-500">
+                          <th className="px-2 py-1">{t.checkIn}</th>
+                          <th className="px-2 py-1">Date</th>
+                          <th className="px-2 py-1">Details</th>
+                          <th className="px-2 py-1">{t.checkInNotes}</th>
+                          <th className="px-2 py-1">{t.checkOut}</th>
+                          <th className="px-2 py-1">Date</th>
+                          <th className="px-2 py-1">{t.checkOutNotes}</th>
+                          <th className="px-2 py-1">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Summarized view: one row per period or single event — newest first */}
+                        {[...summarizedHistory].reverse().map((s) => (
+                          <tr key={s.id} className="border-b border-dashed last:border-0">
+                            <td className="px-2 py-1"><span className={`px-2 py-0.5 rounded font-medium ${getActionColor('CHECK_IN')}`}>{t.checkIn}</span></td>
+                            <td className="px-2 py-1 text-slate-500 font-mono">{format(s.startDate, 'dd/MM/yyyy')}</td>
+                            <td className="px-2 py-1 text-slate-700 truncate">{s.residence}</td>
+                            <td className="px-2 py-1 text-slate-700 truncate">{s.startNotes}</td>
+                            <td className="px-2 py-1">{s.endDate ? <span className={`px-2 py-0.5 rounded font-medium ${getActionColor('CHECK_OUT')}`}>{t.checkOut}</span> : <span className="text-slate-400">—</span>}</td>
+                            <td className="px-2 py-1 text-slate-500 font-mono">{s.endDate ? format(s.endDate, 'dd/MM/yyyy') : '—'}</td>
+                            <td className="px-2 py-1 text-left text-slate-700 truncate">{s.endNotes}</td>
+                            <td className="px-2 py-1 text-orange-600 font-medium bg-orange-50 rounded text-right">{s.duration}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
+              </div>
 
-                {/* Footer - Signature Area */}
-                <div className="grid grid-cols-2 gap-8 pt-4">
+              {/* Footer - Always at bottom */}
+              <div className="p-3 print:p-2 border-t border-slate-200 flex-shrink-0 mt-auto">
+                {/* Signature Area */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="text-center">
-                    <div className="h-16 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 mb-2">
-                      <span className="text-xs uppercase tracking-wider">{t.stamp}</span>
+                    <div className="h-10 print:h-8 border-2 border-dashed border-slate-300 rounded flex items-center justify-center text-slate-400">
+                      <span className="text-[9px] uppercase tracking-wider">{t.stamp}</span>
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="h-16 border-b-2 border-slate-400 mb-2"></div>
-                    <span className="text-xs text-slate-500 uppercase tracking-wider">{t.signature}</span>
+                    <div className="h-10 print:h-8 border-b-2 border-slate-400"></div>
+                    <span className="text-[9px] text-slate-500 uppercase tracking-wider">{t.signature}</span>
                   </div>
                 </div>
 
                 {/* Generated By Footer */}
-                <div className="text-center text-xs text-slate-400 pt-2 border-t border-dashed">
+                <div className="text-center text-[9px] text-slate-400 pt-2 mt-2 border-t border-dashed">
                   {t.generatedBy} • {format(new Date(), 'dd/MM/yyyy HH:mm')}
                 </div>
               </div>
@@ -744,13 +1025,14 @@ export default function WorkerCertificatePage() {
         @media print {
           @page {
             size: A4;
-            margin: 10mm;
+            margin: 5mm;
           }
           
           body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background: white !important;
+            font-size: 10px !important;
           }
           
           .print\\:hidden {

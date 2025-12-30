@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer, startAfter } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
@@ -241,6 +241,7 @@ type AccommodationContextValue = {
   // ⚡ Optimized Async Operations (Direct Firestore)
   findWorkerAsync: (queryStr: string) => Promise<Worker[]>;
   getWorkersByIds: (ids: string[]) => Promise<Worker[]>; // NEW
+  getWorkerByIdOrEmployeeId: (identifier: string) => Promise<Worker | null>; // NEW
   checkWorkerOccupancy: (workerId: string) => Promise<Occupant | null>; // NEW
   getTransferringWorkers: () => Promise<Worker[]>; // NEW: Get all workers with status 'Transferring'
   checkInWorkerAsync: (params: {
@@ -1243,12 +1244,27 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const findWorkerAsync = useCallback(async (queryStr: string) => {
     if (!db || !queryStr.trim()) return [];
     const term = queryStr.trim();
+    const termLower = term.toLowerCase();
     
     console.log('🔍 [Search] Looking for:', term);
     const startTime = Date.now();
     
+    // Helper function to check if worker matches search term (partial name match)
+    const workerMatchesTerm = (w: any): boolean => {
+      // Check name field (main field)
+      if (w.name?.toLowerCase().includes(termLower)) return true;
+      // Check any other name-related fields that might exist
+      if (w.nameAr?.toLowerCase().includes(termLower)) return true;
+      if (w.nameEn?.toLowerCase().includes(termLower)) return true;
+      if (w.fullName?.toLowerCase().includes(termLower)) return true;
+      // Check ID fields too
+      if (w.idNumber?.toLowerCase().includes(termLower)) return true;
+      if (w.employeeId?.toLowerCase().includes(termLower)) return true;
+      return false;
+    };
+    
     // 1. Try ID Number (Prefix/Range)
-    const qId = query(collection(db, 'workers'), where('idNumber', '>=', term), where('idNumber', '<=', term + '\uf8ff'), limit(5));
+    const qId = query(collection(db, 'workers'), where('idNumber', '>=', term), where('idNumber', '<=', term + '\uf8ff'), limit(10));
     const snapId = await getDocs(qId);
     if (!snapId.empty) {
       console.log(`✅ [Search] Found ${snapId.size} by ID in ${Date.now() - startTime}ms (${snapId.size} reads)`);
@@ -1256,24 +1272,74 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     // 2. Try Employee ID (Prefix/Range)
-    const qEmp = query(collection(db, 'workers'), where('employeeId', '>=', term), where('employeeId', '<=', term + '\uf8ff'), limit(5));
+    const qEmp = query(collection(db, 'workers'), where('employeeId', '>=', term), where('employeeId', '<=', term + '\uf8ff'), limit(10));
     const snapEmp = await getDocs(qEmp);
     if (!snapEmp.empty) {
       console.log(`✅ [Search] Found ${snapEmp.size} by EmployeeID in ${Date.now() - startTime}ms (${snapEmp.size} reads)`);
       return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
     }
 
-    // 3. Try Name (Prefix) - efficient range query
-    const qName = query(collection(db, 'workers'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'), limit(5));
+    // 3. Try Name (Prefix) - efficient range query for names starting with term
+    const qName = query(collection(db, 'workers'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'), limit(10));
     const snapName = await getDocs(qName);
     if (!snapName.empty) {
-      console.log(`✅ [Search] Found ${snapName.size} by Name in ${Date.now() - startTime}ms (${snapName.size} reads)`);
+      console.log(`✅ [Search] Found ${snapName.size} by Name (prefix) in ${Date.now() - startTime}ms (${snapName.size} reads)`);
       return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
     }
 
-    console.log(`❌ [Search] No results in ${Date.now() - startTime}ms (${snapId.size + snapEmp.size + snapName.size} reads total)`);
+    // 4. Search in cached workers for partial name match (contains any part of name)
+    if (workers.length > 0) {
+      const partialMatches = workers.filter(workerMatchesTerm).slice(0, 15);
+      
+      if (partialMatches.length > 0) {
+        console.log(`✅ [Search] Found ${partialMatches.length} by Name (partial) from cache in ${Date.now() - startTime}ms`);
+        return partialMatches;
+      }
+    }
+
+    // 5. Fallback: Fetch all workers and search for partial name match
+    // This handles searching by last name or any part of the name
+    console.log('🔄 [Search] Fetching all workers for partial match...');
+    const allWorkersFromDb: Worker[] = [];
+    let lastDoc: any = null;
+    const batchSize = 1000;
+    let totalReads = 0;
+    
+    // Paginate through all workers until we find matches
+    while (true) {
+      let q = lastDoc 
+        ? query(collection(db, 'workers'), limit(batchSize), startAfter(lastDoc))
+        : query(collection(db, 'workers'), limit(batchSize));
+      
+      const snap = await getDocs(q);
+      if (snap.empty) break;
+      
+      totalReads += snap.size;
+      const batchWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      
+      // Check for matches in this batch
+      const batchMatches = batchWorkers.filter(workerMatchesTerm);
+      
+      if (batchMatches.length > 0) {
+        console.log(`✅ [Search] Found ${batchMatches.length} by Name (partial) in ${Date.now() - startTime}ms (${totalReads} reads)`);
+        return batchMatches.slice(0, 15);
+      }
+      
+      allWorkersFromDb.push(...batchWorkers);
+      
+      if (snap.docs.length < batchSize) break;
+      lastDoc = snap.docs[snap.docs.length - 1];
+      
+      // Safety limit to prevent too many reads
+      if (totalReads >= 5000) {
+        console.log(`⚠️ [Search] Reached safety limit of 5000 reads`);
+        break;
+      }
+    }
+
+    console.log(`❌ [Search] No results in ${Date.now() - startTime}ms (${totalReads} reads total)`);
     return [];
-  }, [db]);
+  }, [db, workers]);
 
   // Fetch multiple workers by ID (for display)
   const getWorkersByIds = useCallback(async (ids: string[]) => {
@@ -1319,6 +1385,41 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
     
     return fetchedWorkers;
+  }, [db, workers]);
+
+  // NEW: Get worker by ID or Employee ID
+  const getWorkerByIdOrEmployeeId = useCallback(async (identifier: string): Promise<Worker | null> => {
+    if (!db || !identifier?.trim()) return null;
+    
+    const term = identifier.trim();
+    
+    // First try to find in cached workers
+    const cachedWorker = workers.find(w => w.id === term || w.employeeId === term);
+    if (cachedWorker) return cachedWorker;
+    
+    // Try to get by document ID (UUID)
+    try {
+      const docRef = doc(db, 'workers', term);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Worker;
+      }
+    } catch (error) {
+      // Not a valid document ID, continue
+    }
+    
+    // Try to find by employeeId
+    try {
+      const q = query(collection(db, 'workers'), where('employeeId', '==', term), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return { id: snap.docs[0].id, ...snap.docs[0].data() } as Worker;
+      }
+    } catch (error) {
+      console.error('Error searching by employeeId:', error);
+    }
+    
+    return null;
   }, [db, workers]);
 
   const checkWorkerOccupancy = useCallback(async (workerId: string) => {
@@ -2265,7 +2366,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // ============ NEW: HISTORY QUERY FUNCTIONS ============
   function getWorkerHistory(workerId: string): AccommodationHistory[] {
     return accommodationHistory
-      .filter(h => h.workerId === workerId)
+      .filter(h => h.workerId === workerId && h.notes !== 'Auto-archived from occupants collection')
       .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
   }
 
@@ -2296,7 +2397,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       const q = query(collection(db, 'accommodationHistory'), where('workerId', '==', workerId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+      return snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+        .filter(h => h.notes !== 'Auto-archived from occupants collection')
         .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
     } catch (e) {
       console.error("Failed to fetch worker history", e);
@@ -2689,12 +2792,27 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     transferCity?: string; // NEW
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
+      // Helper function to calculate duration (including check-in day)
+      const calculateDuration = (sinceDate: string, untilDate: string): number => {
+        const since = new Date(sinceDate);
+        const until = new Date(untilDate);
+        since.setHours(0, 0, 0, 0);
+        until.setHours(0, 0, 0, 0);
+        const diffTime = until.getTime() - since.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        return Math.max(diffDays + 1, 1); // +1 to include check-in day, minimum 1 day
+      };
+
       // Find current occupancy
       const occ = occupants.find(o => o.workerId === params.workerId && !o.until);
       if (!occ) {
         // Try async check if not in local state
         const asyncOcc = await checkWorkerOccupancy(params.workerId);
         if (!asyncOcc) return { ok: false, error: 'occupant-not-found' };
+        
+        // Calculate duration
+        const checkOutDate = params.checkOutDate || new Date().toISOString();
+        const duration = asyncOcc.since ? calculateDuration(asyncOcc.since, checkOutDate) : undefined;
         
         // Use async result
         const result = await checkOutWorkerAsync({
@@ -2709,21 +2827,26 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         
         if (!result.ok) return { ok: false, error: result.error };
 
-        // Create history
+        // Create history with duration
         const historyId = await createHistoryRecord({
           workerId: params.workerId,
           actionType: 'CHECK_OUT',
-          actionDate: params.checkOutDate || new Date().toISOString(),
+          actionDate: checkOutDate,
           actionBy: params.performedBy,
           residenceId: asyncOcc.residenceId,
           roomId: asyncOcc.roomId,
           reason: params.reason,
           notes: params.notes,
+          duration: duration,
           createdAt: new Date().toISOString()
         });
 
         return { ok: true, historyId };
       }
+
+      // Calculate duration for local occ
+      const checkOutDateLocal = params.checkOutDate || new Date().toISOString();
+      const durationLocal = occ.since ? calculateDuration(occ.since, checkOutDateLocal) : undefined;
 
       // Use local occ
       const result = await checkOutWorkerAsync({
@@ -2738,15 +2861,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       if (!result.ok) return { ok: false, error: result.error };
 
+      // Create history with duration
       const historyId = await createHistoryRecord({
         workerId: params.workerId,
         actionType: 'CHECK_OUT',
-        actionDate: params.checkOutDate || new Date().toISOString(),
+        actionDate: checkOutDateLocal,
         actionBy: params.performedBy,
         residenceId: occ.residenceId,
         roomId: occ.roomId,
         reason: params.reason,
         notes: params.notes,
+        duration: durationLocal,
         createdAt: new Date().toISOString()
       });
 
@@ -2846,6 +2971,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         roomId: params.toRoomId,
         reason: params.reason,
         notes: params.notes,
+        checkoutType: params.reason || 'Transfer',
         createdAt: new Date().toISOString(),
       });
 
@@ -3628,6 +3754,18 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       for (const docSnap of snapshot.docs) {
         const occ = docSnap.data() as Occupant;
         
+        // Calculate duration if both dates exist
+        let duration: number | undefined;
+        if (occ.since && occ.until) {
+          const sinceDate = new Date(occ.since);
+          const untilDate = new Date(occ.until);
+          sinceDate.setHours(0, 0, 0, 0);
+          untilDate.setHours(0, 0, 0, 0);
+          const diffTime = untilDate.getTime() - sinceDate.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          duration = Math.max(diffDays + 1, 1); // +1 to include check-in day
+        }
+        
         // Create history record
         const historyRef = doc(collection(db, 'accommodationHistory'));
         batch.set(historyRef, {
@@ -3640,6 +3778,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           roomId: occ.roomId,
           buildingId: occ.buildingId,
           floorId: occ.floorId,
+          duration: duration,
           notes: 'Auto-archived from occupants collection',
           createdAt: new Date().toISOString()
         });
@@ -3699,6 +3838,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // ⚡ Optimized Async Operations
     findWorkerAsync,
     getWorkersByIds,
+    getWorkerByIdOrEmployeeId,
     checkWorkerOccupancy,
     getTransferringWorkers,
     checkInWorkerAsync,

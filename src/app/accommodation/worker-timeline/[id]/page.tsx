@@ -50,22 +50,47 @@ export default function WorkerTimelinePage() {
   const stats = useMemo(() => {
     const checkIns = history.filter(h => h.actionType === 'CHECK_IN').length;
     const checkOuts = history.filter(h => h.actionType === 'CHECK_OUT').length;
-    const transfers = history.filter(h => h.actionType === 'TRANSFER').length;
-    const swaps = history.filter(h => h.actionType === 'SWAP').length;
+    const transfers = history.filter(h => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
     
-    // Calculate total days stayed
+    // Calculate total days stayed dynamically from dates
     let totalDays = 0;
-    history.filter(h => h.actionType === 'CHECK_OUT' && h.duration).forEach(h => {
-      totalDays += h.duration || 0;
-    });
+    
+    // Sort history by date (oldest first)
+    const sortedHistory = [...history].sort((a, b) => 
+      new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime()
+    );
+    
+    // Calculate days between each CHECK_IN and corresponding CHECK_OUT
+    let lastCheckInDate: Date | null = null;
+    
+    for (const record of sortedHistory) {
+      if (record.actionType === 'CHECK_IN') {
+        lastCheckInDate = new Date(record.actionDate);
+        lastCheckInDate.setHours(0, 0, 0, 0);
+      } else if (record.actionType === 'CHECK_OUT' && lastCheckInDate) {
+        const checkOutDate = new Date(record.actionDate);
+        checkOutDate.setHours(0, 0, 0, 0);
+        const diffTime = checkOutDate.getTime() - lastCheckInDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        // +1 to include check-in day
+        totalDays += Math.max(diffDays + 1, 1);
+        lastCheckInDate = null;
+      }
+    }
 
     // Add current occupancy days if active
     if (currentOccupancy) {
-      const days = Math.ceil((new Date().getTime() - new Date(currentOccupancy.since).getTime()) / (1000 * 60 * 60 * 24));
-      totalDays += days;
+      const sinceDate = new Date(currentOccupancy.since);
+      const today = new Date();
+      sinceDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - sinceDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      // +1 to include check-in day
+      totalDays += diffDays + 1;
     }
 
-    return { checkIns, checkOuts, transfers, swaps, totalDays };
+    return { checkIns, checkOuts, transfers, totalDays };
   }, [history, currentOccupancy]);
 
   const getActionIcon = (type: string) => {
@@ -82,7 +107,7 @@ export default function WorkerTimelinePage() {
     switch (type) {
       case 'CHECK_IN': return 'تسكين';
       case 'CHECK_OUT': return 'إخراج';
-      case 'TRANSFER': return 'نقل';
+      case 'TRANSFER': return 'تبديل';
       case 'SWAP': return 'تبديل';
       default: return type;
     }

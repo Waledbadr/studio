@@ -92,10 +92,40 @@ export default function TimelineReportsPage() {
     const transfers = filteredHistory.filter(h => h.actionType === 'TRANSFER').length;
     const swaps = filteredHistory.filter(h => h.actionType === 'SWAP').length;
     
-    // Average stay duration
-    const staysWithDuration = filteredHistory.filter(h => h.actionType === 'CHECK_OUT' && h.duration);
-    const avgStayDuration = staysWithDuration.length > 0
-      ? Math.round(staysWithDuration.reduce((sum, h) => sum + (h.duration || 0), 0) / staysWithDuration.length)
+    // Calculate average stay duration from dates dynamically
+    // Group history by worker and calculate durations
+    const workerStays: Record<string, { checkIn: Date | null; durations: number[] }> = {};
+    
+    // Sort by date
+    const sortedHistory = [...filteredHistory].sort((a, b) => 
+      new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime()
+    );
+    
+    for (const record of sortedHistory) {
+      if (!workerStays[record.workerId]) {
+        workerStays[record.workerId] = { checkIn: null, durations: [] };
+      }
+      
+      if (record.actionType === 'CHECK_IN') {
+        const checkInDate = new Date(record.actionDate);
+        checkInDate.setHours(0, 0, 0, 0);
+        workerStays[record.workerId].checkIn = checkInDate;
+      } else if (record.actionType === 'CHECK_OUT' && workerStays[record.workerId].checkIn) {
+        const checkOutDate = new Date(record.actionDate);
+        checkOutDate.setHours(0, 0, 0, 0);
+        const checkInDate = workerStays[record.workerId].checkIn!;
+        const diffTime = checkOutDate.getTime() - checkInDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const duration = Math.max(diffDays + 1, 1); // +1 to include check-in day
+        workerStays[record.workerId].durations.push(duration);
+        workerStays[record.workerId].checkIn = null;
+      }
+    }
+    
+    // Calculate average
+    const allDurations = Object.values(workerStays).flatMap(w => w.durations);
+    const avgStayDuration = allDurations.length > 0
+      ? Math.round(allDurations.reduce((sum, d) => sum + d, 0) / allDurations.length)
       : 0;
 
     // Activity by residence

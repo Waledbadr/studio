@@ -46,6 +46,9 @@ export function RoomHistoryDialog({ roomId, roomName, trigger }: RoomHistoryDial
     }
   };
 
+  // Extract workerId from history if available
+  const workerId = history.length > 0 ? history[0].workerId : undefined;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -57,9 +60,11 @@ export function RoomHistoryDialog({ roomId, roomName, trigger }: RoomHistoryDial
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            History: {roomName}
+          <DialogTitle asChild>
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              <span className="font-semibold">History: {roomName}</span>
+            </div>
           </DialogTitle>
           <DialogDescription>
             Occupancy history for this room
