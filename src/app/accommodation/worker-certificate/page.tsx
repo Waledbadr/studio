@@ -554,6 +554,150 @@ export default function WorkerCertificatePage() {
     return checkIns[0].actionDate;
   }, [workerHistory]);
 
+  // Monthly timeline: from first check-in to today, compute days per calendar month and associated reasons
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const monthlyTimeline = useMemo(() => {
+    if (!workerHistory || workerHistory.length === 0) return [];
+
+    // Helper: normalize date to start of day
+    const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+    const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23,59,59,999); return x; };
+
+    // Build occupancy periods (pair CHECK_IN -> next CHECK_OUT; open period end = today)
+    const sorted = [...workerHistory].slice().sort((a,b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
+    const periods: Array<{start: Date, end: Date | null, startRecord?: any, endRecord?: any}> = [];
+    let i = 0;
+    while (i < sorted.length) {
+      const rec = sorted[i];
+      if (rec.actionType === 'CHECK_IN') {
+        const start = startOfDay(new Date(rec.actionDate));
+        // find next CHECK_OUT after i
+        let j = i+1; let foundEnd = null; let endRec = null;
+        while (j < sorted.length) {
+          if (sorted[j].actionType === 'CHECK_OUT') { foundEnd = startOfDay(new Date(sorted[j].actionDate)); endRec = sorted[j]; break; }
+          j++;
+        }
+        periods.push({ start, end: foundEnd, startRecord: rec, endRecord: endRec });
+        i = j >= i+1 ? j+1 : i+1;
+      } else {
+        i++;
+      }
+    }
+    // If last period has null end or there are no periods, handle open occupancy: if currentOccupancy exists, use today for end
+    const today = startOfDay(new Date());
+    for (const p of periods) {
+      if (p.end === null) p.end = null; // keep open
+    }
+
+    // Determine firstCheckIn date
+    const firstCheckInRec = sorted.find(s => s.actionType === 'CHECK_IN');
+    const firstDate = firstCheckInRec ? startOfDay(new Date(firstCheckInRec.actionDate)) : startOfDay(new Date(sorted[0].actionDate));
+
+    // iterate months from firstDate month to current month
+    const months: Array<{key:string, year:number, month:number, start:Date, end:Date}> = [];
+    const cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+    const endCursor = new Date(today.getFullYear(), today.getMonth(), 1);
+    while (cursor.getFullYear() < endCursor.getFullYear() || (cursor.getFullYear() === endCursor.getFullYear() && cursor.getMonth() <= endCursor.getMonth())) {
+      const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0); // last day
+      months.push({ key: `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`, year: cursor.getFullYear(), month: cursor.getMonth()+1, start: monthStart, end: monthEnd });
+      cursor.setMonth(cursor.getMonth()+1);
+    }
+
+    // Helper to compute overlap days inclusive
+    const daysBetweenInclusive = (a: Date, b: Date) => {
+      const s = startOfDay(new Date(a)); const e = startOfDay(new Date(b));
+      const diff = Math.floor((e.getTime() - s.getTime())/(1000*60*60*24));
+      return diff + 1;
+    };
+
+    const result = months.map(m => {
+      let days = 0;
+      const reasonsIn: string[] = [];
+      const reasonsOut: string[] = [];
+      const eventsInMonth: any[] = [];
+
+      // sum overlap with periods
+      for (const p of periods) {
+        const pStart = p.start;
+        const pEnd = p.end ? p.end : today; // open period -> up to today
+        const overlapStart = pStart > m.start ? pStart : m.start;
+        const overlapEnd = pEnd < m.end ? pEnd : m.end;
+        if (overlapEnd >= overlapStart) {
+          days += daysBetweenInclusive(overlapStart, overlapEnd);
+        }
+        // collect any events inside this month
+        if (p.startRecord && new Date(p.startRecord.actionDate) >= m.start && new Date(p.startRecord.actionDate) <= m.end) {
+          eventsInMonth.push(p.startRecord);
+        }
+        if (p.endRecord && new Date(p.endRecord.actionDate) >= m.start && new Date(p.endRecord.actionDate) <= m.end) {
+          eventsInMonth.push(p.endRecord);
+        }
+      }
+
+      // also include standalone events (e.g., transfers) inside month
+      const others = sorted.filter(s => new Date(s.actionDate) >= m.start && new Date(s.actionDate) <= m.end && s.actionType !== 'CHECK_IN' && s.actionType !== 'CHECK_OUT');
+      for (const o of others) eventsInMonth.push(o);
+
+      // record reasons from events
+      for (const ev of eventsInMonth) {
+        if (ev.actionType === 'CHECK_IN') {
+          if (ev.reason) reasonsIn.push(ev.reason);
+          if (ev.notes) reasonsIn.push(`"${ev.notes}"`);
+        } else if (ev.actionType === 'CHECK_OUT') {
+          if (ev.reason) reasonsOut.push(ev.reason);
+          if (ev.notes) reasonsOut.push(`"${ev.notes}"`);
+        } else if (ev.actionType === 'TRANSFER' || ev.actionType === 'SWAP') {
+          // show transfer target if available
+          if (ev.toRoomName) reasonsIn.push(`→ ${ev.toRoomName}`);
+          else if (ev.notes) reasonsIn.push(ev.notes);
+        }
+      }
+
+      // For months with zero days, find last CHECK_OUT before month start and use its reason
+      if (days === 0) {
+        const lastCheckoutBefore = [...sorted].reverse().find(s => new Date(s.actionDate) < m.start && s.actionType === 'CHECK_OUT');
+        if (lastCheckoutBefore) {
+          if (lastCheckoutBefore.reason) reasonsOut.push(lastCheckoutBefore.reason);
+          if (lastCheckoutBefore.notes) reasonsOut.push(`"${lastCheckoutBefore.notes}"`);
+        }
+      }
+
+      return {
+        key: m.key,
+        label: `${m.year}-${String(m.month).padStart(2,'0')}`,
+        year: m.year,
+        month: m.month,
+        start: m.start,
+        end: m.end,
+        days,
+        reasonsIn: reasonsIn.join(' | '),
+        reasonsOut: reasonsOut.join(' | '),
+        events: eventsInMonth.sort((a,b)=>new Date(a.actionDate).getTime()-new Date(b.actionDate).getTime())
+      };
+    });
+
+    return result;
+  }, [workerHistory, currentOccupancy]);
+
+  // compress consecutive empty months into runs for compact timeline
+  const compressedTimeline = useMemo(() => {
+    const elems: any[] = [];
+    let run: any[] = [];
+    const pushRun = () => {
+      if (run.length === 0) return;
+      if (run.length === 1) elems.push({ type: 'month', m: run[0] });
+      else elems.push({ type: 'gap', months: [...run] });
+      run = [];
+    };
+    for (const m of monthlyTimeline) {
+      if (m.days === 0) run.push(m);
+      else { pushRun(); elems.push({ type: 'month', m }); }
+    }
+    pushRun();
+    return elems;
+  }, [monthlyTimeline]);
+
   const getRoleLabel = (role?: string) => {
     switch (role) {
       case 'Supervisor': return t.supervisor;
@@ -596,6 +740,18 @@ export default function WorkerCertificatePage() {
       default: return 'text-gray-700 bg-gray-50';
     }
   };
+
+  // Short helper to truncate long notes for compact display with full text in title
+  const truncate = (s?: string, n = 36) => {
+    if (!s) return '';
+    return s.length > n ? `${s.slice(0, n-1)}…` : s;
+  };
+
+  const shortLabels = {
+    in: locale === 'ar' ? 'دخول' : 'In',
+    out: locale === 'ar' ? 'خروج' : 'Out'
+  };
+
 
 
 
@@ -924,6 +1080,127 @@ export default function WorkerCertificatePage() {
                       <div className="text-[9px] text-purple-600">{t.totalDays}</div>
                     </div>
                   </div>
+
+                  {/* Monthly timeline summary */}
+                    <div className="mt-3 border rounded-lg p-2 print:p-1.5 bg-gradient-to-br from-slate-50 to-white">
+                      <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-gradient-to-br from-green-400 to-green-700 mr-1"></span>
+                        {t.recentHistory} — Luxury Timeline
+                        <span className="ml-2 text-xs font-normal text-slate-400">({locale === 'ar' ? 'مخطط زمني احترافي' : 'Elegant Timeline'})</span>
+                      </h3>
+                      {/* Legend */}
+                      <div className="flex items-center gap-6 mb-4 px-2">
+                        <div className="flex items-center gap-1 text-xs text-green-700"><LogIn className="h-4 w-4" /> {locale==='ar'?'عودة':'Return'}</div>
+                        <div className="flex items-center gap-1 text-xs text-red-700"><LogOut className="h-4 w-4" /> {locale==='ar'?'خروج':'Exit'}</div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500"><span className="w-3 h-3 rounded-full bg-gradient-to-br from-green-400 to-green-700 inline-block"></span> {locale==='ar'?'إقامة':'Stay'}</div>
+                      </div>
+                      <div className="relative w-full py-8">
+                        {/* Timeline line */}
+                        <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-3 bg-gradient-to-r from-green-200 via-slate-200 to-red-200 rounded-full shadow-md" style={{zIndex:1}}></div>
+                        <div
+                          className="relative flex flex-row flex-wrap items-end justify-between gap-2 px-2"
+                          style={{zIndex:2, flexWrap:'nowrap', overflow:'visible'}}
+                        >
+                          {compressedTimeline.map((e:any, idx:number) => {
+                            // Shrink size if too many events
+                            const total = compressedTimeline.length;
+                            const minW = total > 18 ? 48 : total > 12 ? 64 : 90;
+                            const nodeSize = total > 18 ? 18 : total > 12 ? 22 : 32;
+                            if (e.type === 'month') {
+                              const m = e.m;
+                              const hasReturn = (m.events || []).some((ev:any) => ev.actionType === 'CHECK_IN');
+                              const inShort = truncate(m.reasonsIn, 38) || '';
+                              return (
+                                <div key={m.key} className="flex flex-col items-center" style={{minWidth:minW}}>
+                                  {/* Connector */}
+                                  <div className="h-6 w-0.5 bg-gradient-to-b from-green-400 to-slate-300 mx-auto" style={{marginBottom:-2}}></div>
+                                  {/* Timeline node */}
+                                  <div className={`relative z-10 flex items-center justify-center rounded-full shadow border-2 ${hasReturn ? 'border-green-400 bg-white' : 'border-slate-300 bg-slate-100'}`}
+                                    style={{width:nodeSize, height:nodeSize}}>
+                                    {hasReturn ? <LogIn className="h-4 w-4 text-green-600" /> : <span className="w-2 h-2 rounded-full bg-slate-300"></span>}
+                                  </div>
+                                  {/* Floating card for return */}
+                                  {hasReturn && (
+                                    <div className="-mt-2 mb-1 px-2 py-1 rounded-lg shadow bg-white/90 border-l-2 border-green-400 max-w-xs text-left text-slate-800 text-[11px]" style={{backdropFilter:'blur(1px)'}}>
+                                      <div className="font-bold flex items-center gap-1"><LogIn className="h-3 w-3 text-green-600" /> {locale==='ar' ? 'عودة' : 'Return'} <span className="text-slate-400 font-normal">{(() => {
+                                        const ev = (m.events||[]).find((ev:any)=>ev.actionType==='CHECK_IN');
+                                        return ev ? format(new Date(ev.actionDate),'dd/MM/yyyy') : '';
+                                      })()}</span></div>
+                                      <div className="text-[10px] text-slate-600 italic truncate" title={m.reasonsIn || ''}>{inShort || (locale==='ar' ? 'لا ملاحظات' : 'No notes')}</div>
+                                    </div>
+                                  )}
+                                  {/* Month label */}
+                                  <div className="mt-1 text-[11px] font-semibold text-slate-700">{m.label}</div>
+                                  <div className="text-[10px] text-slate-500">{m.days} {t.days}</div>
+                                </div>
+                              );
+                            }
+                            // Gap segment (exit)
+                            const months = e.months as any[];
+                            const key = `${months[0].key}_gap_${months.length}`;
+                            const reasons = months.map(x => x.reasonsOut).filter(Boolean).join(' | ');
+                            const outShort = truncate(reasons, 120) || '';
+                            return (
+                              <div key={key} className="flex flex-col items-center" style={{minWidth:minW}}>
+                                {/* Connector */}
+                                <div className="h-6 w-0.5 bg-gradient-to-b from-red-400 to-slate-300 mx-auto" style={{marginBottom:-2}}></div>
+                                {/* Timeline node */}
+                                <div className="relative z-10 flex items-center justify-center rounded-full shadow border-2 border-red-400 bg-white"
+                                  style={{width:nodeSize, height:nodeSize}}>
+                                  <LogOut className="h-4 w-4 text-red-600" />
+                                </div>
+                                {/* Floating card for exit */}
+                                {reasons && (
+                                  <div className="-mt-2 mb-1 px-2 py-1 rounded-lg shadow bg-white/90 border-l-2 border-red-400 max-w-xs text-left text-slate-800 text-[11px]" style={{backdropFilter:'blur(1px)'}}>
+                                    <div className="font-bold flex items-center gap-1"><LogOut className="h-3 w-3 text-red-600" /> {locale==='ar' ? 'خروج' : 'Exit'}</div>
+                                    <div className="text-[10px] text-slate-600 italic truncate" title={reasons}>{outShort}</div>
+                                  </div>
+                                )}
+                                {/* Range label */}
+                                <div className="mt-1 text-[11px] font-semibold text-slate-700">{months[0].label}–{months[months.length-1].label}</div>
+                                <div className="text-[10px] text-slate-500">{months.length} {locale==='ar' ? 'شهر' : 'mo'}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {/* Details popover (unchanged) */}
+                      {expandedMonth && (
+                        <div className="mt-3 bg-white border rounded p-3">
+                          <div className="text-sm font-semibold mb-2">Details for {expandedMonth}</div>
+                          <div className="space-y-1 text-[13px]">
+                            {(() => {
+                              if (expandedMonth.includes('_gap_')) {
+                                const parts = expandedMonth.split('_gap_');
+                                const startKey = parts[0];
+                                const count = Number(parts[1]);
+                                const idx = monthlyTimeline.findIndex(m => m.key === startKey);
+                                if (idx === -1) return <div className="text-sm text-muted-foreground">No details available.</div>;
+                                const gap = monthlyTimeline.slice(idx, idx + count);
+                                return gap.flatMap(g => g.events).map((ev:any) => (
+                                  <div key={ev.id} className="flex items-center gap-2">
+                                    <div className="text-xs text-muted-foreground w-24">{format(new Date(ev.actionDate),'dd/MM/yyyy')}</div>
+                                    <div className="flex-1">{getActionLabel(ev.actionType)} — <span className="font-medium">{ev.residenceName || ev.toResidenceName || ev.residenceName}</span> / <span className="font-medium">{ev.roomName || ev.toRoomName || '-'}</span></div>
+                                    <div className="text-xs text-muted-foreground">{ev.reason || ev.notes || ''}</div>
+                                  </div>
+                                ));
+                              }
+                              const group = monthlyTimeline.find(m => m.key === expandedMonth);
+                              if (group) {
+                                return group.events.map((ev:any) => (
+                                  <div key={ev.id} className="flex items-center gap-2">
+                                    <div className="text-xs text-muted-foreground w-24">{format(new Date(ev.actionDate),'dd/MM/yyyy')}</div>
+                                    <div className="flex-1">{getActionLabel(ev.actionType)} — <span className="font-medium">{ev.residenceName || ev.toResidenceName || ev.residenceName}</span> / <span className="font-medium">{ev.roomName || ev.toRoomName || '-'}</span></div>
+                                    <div className="text-xs text-muted-foreground">{ev.reason || ev.notes || ''}</div>
+                                  </div>
+                                ));
+                              }
+                              return <div className="text-sm text-muted-foreground">No details available.</div>;
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                 </div>
 
                 {/* Movement History - Organized */}
