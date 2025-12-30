@@ -30,7 +30,9 @@ import {
   Home,
   TrendingUp,
   AlertCircle,
-  MoreHorizontal
+  MoreHorizontal,
+  Layers,
+  DoorOpen
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -67,6 +69,11 @@ const translations = {
     notCurrentlyAccommodated: 'Not Accommodated',
     accommodationLocation: 'Location',
     roomNumber: 'Room',
+    city: 'City',
+    housing: 'Housing',
+    building: 'Building',
+    floor: 'Floor',
+    room: 'Room',
     checkInDate: 'Check-in',
     stayDuration: 'Duration',
     days: 'days',
@@ -127,6 +134,11 @@ const translations = {
     notCurrentlyAccommodated: 'غير مُسكّن',
     accommodationLocation: 'الموقع',
     roomNumber: 'الغرفة',
+    city: 'المدينة',
+    housing: 'المسكن',
+    building: 'المبنى',
+    floor: 'الطابق',
+    room: 'الغرفة',
     checkInDate: 'تاريخ التسكين',
     stayDuration: 'المدة',
     days: 'يوم',
@@ -215,6 +227,41 @@ export default function WorkerCertificatePage() {
 
   const getResidenceName = (residenceId: string) => {
     return residences.find(r => r.id === residenceId)?.name || residenceId;
+  };
+
+  const getRoomFullPath = (residenceId: string, roomId: string) => {
+    const residence = residences.find(r => r.id === residenceId);
+    if (!residence) return { city: '', housing: '', building: '', floor: '', room: roomId, fullPath: roomId };
+
+    const city = residence.city || '';
+    const housing = residence.name || '';
+
+    // Try hierarchical structure (buildings -> floors -> rooms)
+    if (residence.buildings) {
+      for (const building of residence.buildings) {
+        for (const floor of building.floors || []) {
+          const room = floor.rooms?.find(r => r.id === roomId);
+          if (room) {
+            return {
+              city,
+              housing,
+              building: building.name || '',
+              floor: floor.name || '',
+              room: room.name || roomId,
+              fullPath: [building.name, floor.name, room.name].filter(Boolean).join(' > ') || roomId
+            };
+          }
+        }
+      }
+    }
+
+    // Fallback to flat structure
+    if (residence.rooms) {
+      const room = residence.rooms.find(r => r.id === roomId);
+      if (room?.name) return { city, housing, building: '', floor: '', room: room.name, fullPath: room.name };
+    }
+
+    return { city, housing, building: '', floor: '', room: roomId, fullPath: roomId };
   };
 
   const getCompanyName = (companyName?: string) => {
@@ -428,30 +475,32 @@ export default function WorkerCertificatePage() {
                       <User className="h-3.5 w-3.5" />
                       {t.workerData}
                     </h3>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div className="flex justify-between border-b border-dashed pb-1">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between border-b border-dashed pb-1.5">
                         <span className="text-slate-500">{t.fullName}</span>
                         <span className="font-semibold">{selectedWorker.name}</span>
                       </div>
-                      <div className="flex justify-between border-b border-dashed pb-1">
-                        <span className="text-slate-500">{t.idNumber}</span>
-                        <span className="font-mono">{selectedWorker.idNumber || t.notRegistered}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed pb-1">
-                        <span className="text-slate-500">{t.employeeNumber}</span>
-                        <span className="font-mono">{selectedWorker.employeeId || t.notRegistered}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed pb-1">
-                        <span className="text-slate-500">{t.nationality}</span>
-                        <span>{selectedWorker.nationaliy || t.notSpecified}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed pb-1">
-                        <span className="text-slate-500">{t.jobTitle}</span>
-                        <span>{getRoleLabel(selectedWorker.role)}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed pb-1">
-                        <span className="text-slate-500">{t.company}</span>
-                        <span>{getCompanyName(selectedWorker.company)}</span>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                        <div className="flex justify-between border-b border-dashed pb-1">
+                          <span className="text-slate-500">{t.idNumber}</span>
+                          <span className="font-mono">{selectedWorker.idNumber || t.notRegistered}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed pb-1">
+                          <span className="text-slate-500">{t.employeeNumber}</span>
+                          <span className="font-mono">{selectedWorker.employeeId || t.notRegistered}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed pb-1">
+                          <span className="text-slate-500">{t.nationality}</span>
+                          <span>{selectedWorker.nationaliy || t.notSpecified}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed pb-1">
+                          <span className="text-slate-500">{t.jobTitle}</span>
+                          <span>{getRoleLabel(selectedWorker.role)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed pb-1 col-span-2">
+                          <span className="text-slate-500">{t.company}</span>
+                          <span>{getCompanyName(selectedWorker.company)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -468,14 +517,61 @@ export default function WorkerCertificatePage() {
                           <CheckCircle2 className="h-5 w-5" />
                           {t.currentlyAccommodated}
                         </div>
-                        <div className="text-xs space-y-1 text-slate-600">
+                        <div className="text-xs space-y-1.5 text-slate-600">
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
                             {getResidenceName(currentOccupancy.residenceId)}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Building2 className="h-3 w-3" />
-                            {t.roomNumber}: {currentOccupancy.roomId}
+                          <div className="space-y-1.5">
+                            {(() => {
+                              const roomPath = getRoomFullPath(currentOccupancy.residenceId, currentOccupancy.roomId);
+                              return (
+                                <>
+                                  {/* Row 1: City & Housing */}
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="flex items-center gap-1.5 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                                      <MapPin className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-[9px] text-amber-600 font-medium uppercase leading-tight">{t.city}</div>
+                                        <div className="text-[11px] font-semibold text-amber-900 truncate">{roomPath.city || '—'}</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 bg-sky-50 px-2 py-1 rounded border border-sky-100">
+                                      <Home className="h-3 w-3 text-sky-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-[9px] text-sky-600 font-medium uppercase leading-tight">{t.housing}</div>
+                                        <div className="text-[11px] font-semibold text-sky-900 truncate">{roomPath.housing}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Row 2: Building - Floor - Room */}
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                      <Building className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-[9px] text-blue-600 font-medium uppercase leading-tight">{t.building}</div>
+                                        <div className="text-[11px] font-semibold text-blue-900 truncate">{roomPath.building || '—'}</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded border border-purple-100">
+                                      <Layers className="h-3 w-3 text-purple-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-[9px] text-purple-600 font-medium uppercase leading-tight">{t.floor}</div>
+                                        <div className="text-[11px] font-semibold text-purple-900 truncate">{roomPath.floor || '—'}</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                      <DoorOpen className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-[9px] text-emerald-600 font-medium uppercase leading-tight">{t.room}</div>
+                                        <div className="text-[11px] font-semibold text-emerald-900 truncate">{roomPath.room}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
