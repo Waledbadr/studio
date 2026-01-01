@@ -385,7 +385,19 @@ export default function WorkerCertificatePage() {
 
   const summarizedHistory = useMemo(() => {
     const summaries: Array<any> = [];
-    const fmtResidence = (rName?: string, roomName?: string) => rName ? (roomName ? `${rName} • ${roomName}` : rName) : t.notSpecified;
+    const fmtResidence = (rName?: string, roomName?: string, rId?: string, rmId?: string) => {
+      let finalRName = rName;
+      let finalRoomName = roomName;
+
+      if (!finalRName && rId) {
+        finalRName = getResidenceName(rId);
+      }
+      if (!finalRoomName && rId && rmId) {
+        finalRoomName = getRoomFullPath(rId, rmId).room;
+      }
+
+      return finalRName ? (finalRoomName ? `${finalRName} • ${finalRoomName}` : finalRName) : t.notSpecified;
+    };
 
     for (const g of groupedHistory) {
       if (g.type === 'single') {
@@ -397,7 +409,7 @@ export default function WorkerCertificatePage() {
           startDate: new Date(item.actionDate),
           endDate: null,
           actionLabel: getActionLabel(item.actionType),
-          residence: fmtResidence(item.residenceName, item.roomName),
+          residence: fmtResidence(item.residenceName, item.roomName, item.residenceId, item.roomId),
           startNotes,
           endNotes,
           duration: item.actionType === 'CHECK_OUT' ? getFormattedDuration(item) : '—',
@@ -414,17 +426,17 @@ export default function WorkerCertificatePage() {
         const fmtTransferPath = () => {
           if (transfers.length === 0) return null;
           const last = transfers[transfers.length - 1];
-          let destResidence: string | null = last.toResidenceName || last.residenceName || null;
-          let destRoom: string | null = last.toRoomName || last.roomName || null;
+          let destResidence: string | null = last.toResidenceName || (last.toResidenceId ? getResidenceName(last.toResidenceId) : null) || last.residenceName || (last.residenceId ? getResidenceName(last.residenceId) : null) || null;
+          let destRoom: string | null = last.toRoomName || (last.toResidenceId && last.toRoomId ? getRoomFullPath(last.toResidenceId, last.toRoomId).room : null) || last.roomName || (last.residenceId && last.roomId ? getRoomFullPath(last.residenceId, last.roomId).room : null) || null;
 
           if (!destRoom) {
             const transferIndex = items.indexOf(last);
             if (transferIndex >= 0) {
               for (let k = transferIndex + 1; k < items.length; k++) {
                 const next = items[k];
-                if (next.actionType === 'CHECK_IN' && next.roomName) {
-                  destRoom = next.roomName;
-                  destResidence = destResidence || (next.residenceName || null);
+                if (next.actionType === 'CHECK_IN' && (next.roomName || next.roomId)) {
+                  destRoom = next.roomName || (next.residenceId && next.roomId ? getRoomFullPath(next.residenceId, next.roomId).room : null) || next.roomId || null;
+                  destResidence = destResidence || next.residenceName || (next.residenceId ? getResidenceName(next.residenceId) : null) || (next.residenceId || null);
                   break;
                 }
               }
@@ -433,15 +445,18 @@ export default function WorkerCertificatePage() {
 
           if (!destRoom) {
             const transferTime = new Date(last.actionDate).getTime();
-            const futureCheckIn = workerHistory.find(h => new Date(h.actionDate).getTime() > transferTime && h.actionType === 'CHECK_IN' && h.roomName);
+            const futureCheckIn = workerHistory.find(h => new Date(h.actionDate).getTime() > transferTime && h.actionType === 'CHECK_IN' && (h.roomName || h.roomId));
             if (futureCheckIn) {
-              destRoom = futureCheckIn.roomName || null;
-              destResidence = destResidence || (futureCheckIn.residenceName || null);
+              destRoom = futureCheckIn.roomName || (futureCheckIn.residenceId && futureCheckIn.roomId ? getRoomFullPath(futureCheckIn.residenceId, futureCheckIn.roomId).room : null) || futureCheckIn.roomId || null;
+              destResidence = destResidence || futureCheckIn.residenceName || (futureCheckIn.residenceId ? getResidenceName(futureCheckIn.residenceId) : null) || (futureCheckIn.residenceId || null);
             }
           }
 
-          const startRes = fmtResidence(start.residenceName, start.roomName);
-          if (destResidence && destResidence === start.residenceName) {
+          const startRes = fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId);
+          const isSameRes = (destResidence && (destResidence === start.residenceName || destResidence === start.residenceId)) ||
+            (last.toResidenceId && last.toResidenceId === start.residenceId);
+
+          if (isSameRes) {
             return destRoom ? `${startRes} → ${destRoom}` : startRes;
           }
           if (!destResidence && !destRoom) return startRes;
@@ -451,12 +466,24 @@ export default function WorkerCertificatePage() {
 
         let residenceSummary: string;
         if (hasCheckout) {
-          residenceSummary = transfers.length > 0 ? `${fmtResidence(start.residenceName, start.roomName)} → ${fmtResidence(end.residenceName, end.roomName)}` : fmtResidence(start.residenceName, start.roomName);
+          const isSameRes = (end.residenceName && end.residenceName === start.residenceName) ||
+            (end.residenceId && end.residenceId === start.residenceId);
+
+          if (isSameRes) {
+            const endRoom = end.roomName || (end.residenceId && end.roomId ? getRoomFullPath(end.residenceId, end.roomId).room : end.roomId);
+            residenceSummary = transfers.length > 0
+              ? `${fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId)} → ${endRoom}`
+              : fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId);
+          } else {
+            residenceSummary = transfers.length > 0
+              ? `${fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId)} → ${fmtResidence(end.residenceName, end.roomName, end.residenceId, end.roomId)}`
+              : fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId);
+          }
         } else {
           if (transfers.length > 0) {
             residenceSummary = fmtTransferPath()!;
           } else {
-            residenceSummary = fmtResidence(start.residenceName, start.roomName);
+            residenceSummary = fmtResidence(start.residenceName, start.roomName, start.residenceId, start.roomId);
           }
         }
 
@@ -495,11 +522,15 @@ export default function WorkerCertificatePage() {
           duration,
           startReason: start.reason,
           startActionType: start.actionType,
+          startResidenceId: start.residenceId,
+          startRoomId: start.roomId,
+          endResidenceId: hasCheckout ? end.residenceId : null,
+          endRoomId: hasCheckout ? end.roomId : null,
         });
       }
     }
     return summaries;
-  }, [groupedHistory]);
+  }, [groupedHistory, residences, t]);
 
   const handlePrint = () => window.print();
 
