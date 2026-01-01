@@ -801,26 +801,58 @@ export default function WorkerCertificatePage() {
                         {(() => {
                           const roomPath = getRoomFullPath(currentOccupancy.residenceId, currentOccupancy.roomId);
                           return (
-                            <div className="grid grid-cols-2 gap-1">
-                              <div className="bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-center">
-                                <div className="text-[7px] text-amber-600 font-semibold uppercase">{t.city}</div>
-                                <div className="text-[10px] font-bold text-amber-900 truncate">{roomPath.city || '—'}</div>
+                            <div className="flex flex-col gap-1 mb-1">
+                              {/* Row 1: City & Housing */}
+                              <div className="grid grid-cols-2 gap-1">
+                                <div className="bg-amber-50 px-2 py-1 rounded border border-amber-200 flex items-center gap-2">
+                                  <div className="flex-shrink-0 p-1 bg-amber-100 rounded-md">
+                                    <MapPin className="h-3.5 w-3.5 text-amber-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[7px] text-amber-600 font-semibold uppercase">{t.city}</div>
+                                    <div className="text-[10px] font-bold text-amber-900 truncate leading-tight">{roomPath.city || '—'}</div>
+                                  </div>
+                                </div>
+                                <div className="bg-sky-50 px-2 py-1 rounded border border-sky-200 flex items-center gap-2">
+                                  <div className="flex-shrink-0 p-1 bg-sky-100 rounded-md">
+                                    <Home className="h-3.5 w-3.5 text-sky-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[7px] text-sky-600 font-semibold uppercase">{t.housing}</div>
+                                    <div className="text-[10px] font-bold text-sky-900 truncate leading-tight">{roomPath.housing}</div>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 text-center">
-                                <div className="text-[7px] text-sky-600 font-semibold uppercase">{t.housing}</div>
-                                <div className="text-[10px] font-bold text-sky-900 truncate">{roomPath.housing}</div>
-                              </div>
-                              <div className="bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-center">
-                                <div className="text-[7px] text-indigo-600 font-semibold uppercase">{t.building}</div>
-                                <div className="text-[10px] font-bold text-indigo-900">{roomPath.building || '—'}</div>
-                              </div>
-                              <div className="bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200 text-center">
-                                <div className="text-[7px] text-violet-600 font-semibold uppercase">{t.floor}</div>
-                                <div className="text-[10px] font-bold text-violet-900">{roomPath.floor || '—'}</div>
-                              </div>
-                              <div className="col-span-2 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-center">
-                                <div className="text-[7px] text-emerald-600 font-semibold uppercase">{t.room}</div>
-                                <div className="text-[10px] font-bold text-emerald-900">{roomPath.room}</div>
+
+                              {/* Row 2: Building, Floor, Room */}
+                              <div className="grid grid-cols-3 gap-1">
+                                <div className="bg-indigo-50 px-2 py-1 rounded border border-indigo-200 flex items-center gap-2">
+                                  <div className="flex-shrink-0 p-1 bg-indigo-100 rounded-md">
+                                    <Building2 className="h-3.5 w-3.5 text-indigo-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[7px] text-indigo-600 font-semibold uppercase">{t.building}</div>
+                                    <div className="text-[10px] font-bold text-indigo-900 truncate leading-tight">{roomPath.building || '—'}</div>
+                                  </div>
+                                </div>
+                                <div className="bg-violet-50 px-2 py-1 rounded border border-violet-200 flex items-center gap-2">
+                                  <div className="flex-shrink-0 p-1 bg-violet-100 rounded-md">
+                                    <Layers className="h-3.5 w-3.5 text-violet-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[7px] text-violet-600 font-semibold uppercase">{t.floor}</div>
+                                    <div className="text-[10px] font-bold text-violet-900 truncate leading-tight">{roomPath.floor || '—'}</div>
+                                  </div>
+                                </div>
+                                <div className="bg-emerald-50 px-2 py-1 rounded border border-emerald-200 flex items-center gap-2">
+                                  <div className="flex-shrink-0 p-1 bg-emerald-100 rounded-md">
+                                    <DoorOpen className="h-3.5 w-3.5 text-emerald-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[7px] text-emerald-600 font-semibold uppercase">{t.room}</div>
+                                    <div className="text-[10px] font-bold text-emerald-900 truncate leading-tight">{roomPath.room}</div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           );
@@ -920,26 +952,52 @@ export default function WorkerCertificatePage() {
                     ];
 
                     // Config: [Near-Top, Far-Bottom, Far-Top, Near-Bottom, Mid-Top]
-                    // ADJUSTED OFFSETS TO FIX OVERLAP: Shorter bottom stems, slightly shorter top stems
                     const offsetConfig = [
-                      { type: 'top', height: '2.0rem' },      // Near Top
-                      { type: 'bottom', height: '2.5rem' },   // Far Bottom (Reduced from 3.5rem to fix overlap)
-                      { type: 'top', height: '3.5rem' },      // Far Top  (Reduced from 4.5rem to balance)
-                      { type: 'bottom', height: '1.5rem' },   // Near Bottom (Reduced from 2.0rem)
-                      { type: 'top', height: '2.5rem' },      // Mid Top
+                      { type: 'top', height: '1.8rem' },      // Near Top
+                      { type: 'bottom', height: '2.4rem' },   // Far Bottom
+                      { type: 'top', height: '3.2rem' },      // Far Top
+                      { type: 'bottom', height: '1.4rem' },   // Near Bottom
+                      { type: 'top', height: '2.4rem' },      // Mid Top
+                      { type: 'bottom', height: '3.4rem' },   // Deep Bottom
                     ];
+
+                    const minDate = new Date(source[0].startDate);
+                    minDate.setDate(minDate.getDate() - 30);
+                    const maxDate = new Date(source[source.length - 1].endDate || new Date());
+                    maxDate.setDate(maxDate.getDate() + 30);
+                    const totalMs = maxDate.getTime() - minDate.getTime();
+                    const getPos = (d: Date) => Math.max(0, Math.min(100, ((d.getTime() - minDate.getTime()) / totalMs) * 100));
+
+                    // To avoid overlap, we'll keep track of the last pos for top and bottom separately
+                    let lastTopPos = -20;
+                    let lastBottomPos = -20;
+                    let offsetIdx = 0;
 
                     for (let i = 0; i < source.length; i++) {
                       const curr = source[i] as any;
                       const currStart = new Date(curr.startDate);
                       const currEnd = curr.endDate ? new Date(curr.endDate) : new Date();
 
-                      // Assign color based on RESIDENCE NAME only (grouping rooms together)
                       const resName = getResName(curr.residence);
                       const resIndex = uniqueResNames.indexOf(resName);
                       const style = colorPalette[resIndex % colorPalette.length];
 
-                      const offset = offsetConfig[i % offsetConfig.length];
+                      const startPos = getPos(currStart);
+                      const endPos = getPos(currEnd);
+                      const midPos = (startPos + endPos) / 2;
+
+                      // Collision avoidance: if midPos is too close to last label on the same side, switch side
+                      let config = offsetConfig[offsetIdx % offsetConfig.length];
+
+                      // If this is top and too close to last top, OR bottom and too close to last bottom
+                      // We prefer alternating, but if the space is very tight, we might need more logic
+                      // For now, let's just use the index and ensure enough variety
+                      if (config.type === 'top' && midPos - lastTopPos < 12) {
+                        // Keep top but use a different height if possible? Or just hope the height variety helps
+                      }
+
+                      if (config.type === 'top') lastTopPos = midPos;
+                      else lastBottomPos = midPos;
 
                       items.push({
                         id: curr.id,
@@ -953,20 +1011,15 @@ export default function WorkerCertificatePage() {
                         bgColor: style.bg,
                         borderColor: style.border,
                         textColor: style.text,
-                        offset
+                        offset: config,
+                        midPos // store for later use if needed
                       });
+
+                      offsetIdx++;
                     }
 
                     if (items.length === 0) return null;
 
-                    // Time Range Padding
-                    const minDate = new Date(items[0].startDate);
-                    minDate.setDate(minDate.getDate() - 25);
-                    const maxDate = new Date(items[items.length - 1].endDate);
-                    maxDate.setDate(maxDate.getDate() + 25);
-
-                    const totalMs = maxDate.getTime() - minDate.getTime();
-                    const getPos = (d: Date) => Math.max(0, Math.min(100, ((d.getTime() - minDate.getTime()) / totalMs) * 100));
                     const getWidth = (s: Date, e: Date) => Math.max(getPos(e) - getPos(s), 0.5);
 
                     // Axis Ticks (Months) logic optimization for long durations
@@ -1012,7 +1065,7 @@ export default function WorkerCertificatePage() {
                           <div className="absolute top-[45%] left-0 right-0 h-[1.5px] bg-slate-800 z-0 opacity-80 rounded-full"></div>
 
                           {/* 2. Bottom Axis Line (For Dates) - Very thin */}
-                          <div className="absolute bottom-6 left-0 right-0 h-[0.5px] bg-slate-300 z-0"></div>
+                          <div className="absolute bottom-6 left-0 right-0 h-[0.8px] bg-slate-200 z-0"></div>
 
                           {/* Month Ticks on Bottom Axis */}
                           {months.map(m => {
@@ -1021,10 +1074,10 @@ export default function WorkerCertificatePage() {
                             return (
                               <div key={m.getTime()} className="absolute bottom-6 flex flex-col items-center" style={{ left: `${left}%`, transform: 'translate(-50%, 0)' }}>
                                 {/* Tick Mark */}
-                                <div className="w-[0.5px] h-2 bg-slate-400 mb-1"></div>
+                                <div className="w-[1px] h-1.5 bg-slate-300 mb-1"></div>
                                 {/* Label */}
-                                <div className="absolute top-2 text-[9px] font-medium text-slate-400 whitespace-nowrap">
-                                  {format(m, 'MMM yyyy', { locale: dateLocale })}
+                                <div className="absolute top-1 text-[8px] font-medium text-slate-400 whitespace-nowrap">
+                                  {format(m, 'MMM yy', { locale: dateLocale })}
                                 </div>
                               </div>
                             );
