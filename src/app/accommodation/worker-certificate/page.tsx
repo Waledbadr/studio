@@ -821,31 +821,40 @@ export default function WorkerCertificatePage() {
                     {t.summary}
                   </h3>
                   <div className="grid grid-cols-4 gap-2 print:gap-1.5">
-                    <div className="text-center p-1.5 bg-green-50 rounded border border-green-100 flex flex-col items-center justify-center">
-                      <LogIn className="h-4 w-4 text-green-600 mb-1 opacity-70" />
-                      <div className="text-lg font-bold text-green-700">{stats.checkIns}</div>
-                      <div className="text-[9px] text-green-600">{t.checkIns}</div>
+                    <div className="p-1.5 bg-green-50 rounded border border-green-100 flex items-center justify-center gap-2">
+                      <LogIn className="h-5 w-5 text-green-600 opacity-80" />
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-green-700 leading-none">{stats.checkIns}</div>
+                        <div className="text-[9px] text-green-600">{t.checkIns}</div>
+                      </div>
                     </div>
-                    <div className="text-center p-1.5 bg-red-50 rounded border border-red-100 flex flex-col items-center justify-center">
-                      <LogOut className="h-4 w-4 text-red-600 mb-1 opacity-70" />
-                      <div className="text-lg font-bold text-red-700">{stats.checkOuts}</div>
-                      <div className="text-[9px] text-red-600">{t.checkOuts}</div>
+                    <div className="p-1.5 bg-red-50 rounded border border-red-100 flex items-center justify-center gap-2">
+                      <LogOut className="h-5 w-5 text-red-600 opacity-80" />
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-red-700 leading-none">{stats.checkOuts}</div>
+                        <div className="text-[9px] text-red-600">{t.checkOuts}</div>
+                      </div>
                     </div>
-                    <div className="text-center p-1.5 bg-blue-50 rounded border border-blue-100 flex flex-col items-center justify-center">
-                      <ArrowRightLeft className="h-4 w-4 text-blue-600 mb-1 opacity-70" />
-                      <div className="text-lg font-bold text-blue-700">{stats.swaps}</div>
-                      <div className="text-[9px] text-blue-600">{t.transfers}</div>
+                    <div className="p-1.5 bg-blue-50 rounded border border-blue-100 flex items-center justify-center gap-2">
+                      <ArrowRightLeft className="h-4 w-4 text-blue-600 opacity-80" />
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-700 leading-none">{stats.swaps}</div>
+                        <div className="text-[9px] text-blue-600">{t.transfers}</div>
+                      </div>
                     </div>
-                    <div className="text-center p-1.5 bg-purple-50 rounded border border-purple-100 flex flex-col items-center justify-center">
-                      <Calendar className="h-4 w-4 text-purple-600 mb-1 opacity-70" />
-                      <div className="text-lg font-bold text-purple-700">{stats.totalDays}</div>
-                      <div className="text-[9px] text-purple-600">{t.totalDays}</div>
+                    <div className="p-1.5 bg-purple-50 rounded border border-purple-100 flex items-center justify-center gap-2">
+                      <Calendar className="h-4 w-4 text-purple-600 opacity-80" />
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-purple-700 leading-none">{stats.totalDays}</div>
+                        <div className="text-[9px] text-purple-600">{t.totalDays}</div>
+                      </div>
                     </div>
                   </div>
                 </div>{/* End of Summary Section Container (Closed here to separate Timeline) */}
 
                 {/* Monthly timeline summary */}
-                <div className="mt-8 mb-8 border-t pt-8 print:border-t print:pt-4">
+                {/* Removed border-t and reduced spacing as requested */}
+                <div className="mt-2 mb-4">
 
                   {(() => {
                     // Timeline Data Calculation
@@ -855,8 +864,20 @@ export default function WorkerCertificatePage() {
                     const source = [...summarizedHistory];
 
                     // 1. DYNAMIC COLOR MAPPING FOR RESIDENCES
-                    // User Request: "Distinguish each residence with a color"
-                    const uniqueResidences = Array.from(new Set(source.map((s: any) => s.residence)));
+                    // User Request: "Distinguish each residence with a color" & "Just residence names without room numbers"
+                    // Extract just the residence name part (before '•') relative to the full string for mapping
+                    const getResName = (fullStr: string) => fullStr.split(' • ')[0].trim();
+
+                    // We need to map the FULL residence string (from items) to a color, 
+                    // but we want the Legend to only show unique residence NAMES.
+
+                    // Create a map of "Residence Name" -> Color Index
+                    // This ensures "Redsea • 101" and "Redsea • 102" get the SAME color if we want that,
+                    // OR we keep unique colors per room? 
+                    // User said: "Excellent, make it just residence names without room numbers" -> Implies grouping by Residence Name.
+
+                    const uniqueResNames = Array.from(new Set(source.map((s: any) => getResName(s.residence))));
+
                     const colorPalette = [
                       { hex: '#2E7D32', bg: 'bg-[#2E7D32]', border: 'border-[#2E7D32]', text: 'text-[#2E7D32]' }, // Green
                       { hex: '#1565C0', bg: 'bg-[#1565C0]', border: 'border-[#1565C0]', text: 'text-[#1565C0]' }, // Blue
@@ -868,13 +889,13 @@ export default function WorkerCertificatePage() {
                     ];
 
                     // Config: [Near-Top, Far-Bottom, Far-Top, Near-Bottom, Mid-Top]
-                    // Reduced heights significantly to fix overlap with axis and reduce gaps
+                    // ADJUSTED OFFSETS TO FIX OVERLAP: Shorter bottom stems, slightly shorter top stems
                     const offsetConfig = [
                       { type: 'top', height: '2.0rem' },      // Near Top
-                      { type: 'bottom', height: '3.5rem' },   // Far Bottom (Fixed Overlap)
-                      { type: 'top', height: '4.5rem' },      // Far Top
-                      { type: 'bottom', height: '2.0rem' },   // Near Bottom
-                      { type: 'top', height: '3.5rem' },      // Mid Top
+                      { type: 'bottom', height: '2.5rem' },   // Far Bottom (Reduced from 3.5rem to fix overlap)
+                      { type: 'top', height: '3.5rem' },      // Far Top  (Reduced from 4.5rem to balance)
+                      { type: 'bottom', height: '1.5rem' },   // Near Bottom (Reduced from 2.0rem)
+                      { type: 'top', height: '2.5rem' },      // Mid Top
                     ];
 
                     for (let i = 0; i < source.length; i++) {
@@ -882,8 +903,9 @@ export default function WorkerCertificatePage() {
                       const currStart = new Date(curr.startDate);
                       const currEnd = curr.endDate ? new Date(curr.endDate) : new Date();
 
-                      // Assign color based on residence index
-                      const resIndex = uniqueResidences.indexOf(curr.residence);
+                      // Assign color based on RESIDENCE NAME only (grouping rooms together)
+                      const resName = getResName(curr.residence);
+                      const resIndex = uniqueResNames.indexOf(resName);
                       const style = colorPalette[resIndex % colorPalette.length];
 
                       const offset = offsetConfig[i % offsetConfig.length];
@@ -916,162 +938,190 @@ export default function WorkerCertificatePage() {
                     const getPos = (d: Date) => Math.max(0, Math.min(100, ((d.getTime() - minDate.getTime()) / totalMs) * 100));
                     const getWidth = (s: Date, e: Date) => Math.max(getPos(e) - getPos(s), 0.5);
 
-                    // Axis Ticks (Months)
+                    // Axis Ticks (Months) logic optimization for long durations
+                    const totalDaysSpan = totalMs / (1000 * 60 * 60 * 24);
+                    let tickIntervalMonth = 1;
+
+                    if (totalDaysSpan > 365 * 3) { // > 3 Years
+                      tickIntervalMonth = 6;
+                    } else if (totalDaysSpan > 365 * 1.5) { // > 1.5 Years
+                      tickIntervalMonth = 3;
+                    }
+
                     const months = [];
                     const cursor = new Date(minDate);
                     cursor.setDate(1);
+                    // Align cursor to a clean interval if needed, but simple iteration is usually fine
+
                     while (cursor <= maxDate) {
                       months.push(new Date(cursor));
-                      cursor.setMonth(cursor.getMonth() + 1);
+                      cursor.setMonth(cursor.getMonth() + tickIntervalMonth);
                     }
 
                     return (
-                      <div className="relative w-full h-[200px] mt-4 mb-4 select-none font-sans bg-white text-[#333]">
-
-                        {/* 1. Main Event Track Line (Center) - Thinner and Lighter */}
-                        <div className="absolute top-[55%] left-0 right-0 h-[1.5px] bg-slate-800 z-0 opacity-80 rounded-full"></div>
-
-                        {/* 2. Bottom Axis Line (For Dates) - Very thin */}
-                        <div className="absolute bottom-6 left-0 right-0 h-[0.5px] bg-slate-300 z-0"></div>
-
-                        {/* Month Ticks on Bottom Axis */}
-                        {months.map(m => {
-                          const left = getPos(m);
-                          if (left < 0 || left > 100) return null;
-                          return (
-                            <div key={m.getTime()} className="absolute bottom-6 flex flex-col items-center" style={{ left: `${left}%`, transform: 'translate(-50%, 0)' }}>
-                              {/* Tick Mark */}
-                              <div className="w-[0.5px] h-2 bg-slate-400 mb-1"></div>
-                              {/* Label */}
-                              <div className="absolute top-2 text-[9px] font-medium text-slate-400 whitespace-nowrap">
-                                {format(m, 'MMM yyyy', { locale: dateLocale })}
+                      <div className="w-full mt-2 mb-4">
+                        {/* RESIDENCE LEGEND - Added as requested */}
+                        <div className="flex flex-wrap gap-3 mb-6 justify-center px-4">
+                          {uniqueResNames.map((res, idx) => {
+                            if (!res) return null;
+                            const style = colorPalette[idx % colorPalette.length];
+                            return (
+                              <div key={idx} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: style.hex }}></div>
+                                <span className="text-[10px] font-semibold text-slate-600">{res}</span>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
 
-                        {/* Timeline Items */}
-                        {items.map((item, idx) => {
-                          const left = getPos(item.startDate);
-                          const width = getWidth(item.startDate, item.endDate);
-                          const mid = left + width / 2;
+                        <div className="relative w-full h-[200px] select-none font-sans bg-white text-[#333]">
 
-                          const isTop = item.offset.type === 'top';
-                          const stemHeight = item.offset.height;
+                          {/* 1. Main Event Track Line (Center) - Thinner and Lighter */}
+                          {/* MOVED UP TO 45% TO GIVE MORE ROOM AT BOTTOM */}
+                          <div className="absolute top-[45%] left-0 right-0 h-[1.5px] bg-slate-800 z-0 opacity-80 rounded-full"></div>
 
-                          return (
-                            <React.Fragment key={item.id}>
-                              {/* EVENT PERIOD BAR - Lighter (6px height) */}
-                              <div
-                                className="absolute top-[55%] h-[6px] z-10"
-                                style={{
-                                  left: `${left}%`,
-                                  width: `${width}%`,
-                                  backgroundColor: item.color,
-                                  transform: 'translateY(-50%)',
-                                  opacity: 0.85,
-                                  borderRadius: '3px',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                }}
-                              ></div>
+                          {/* 2. Bottom Axis Line (For Dates) - Very thin */}
+                          <div className="absolute bottom-6 left-0 right-0 h-[0.5px] bg-slate-300 z-0"></div>
 
-                              {/* DURATION TEXT - ABOVE THE COLORED LINE */}
-                              <div
-                                className="absolute top-[55%] text-[9px] font-bold z-20 pointer-events-none transform -translate-y-[18px] -translate-x-1/2"
-                                style={{
-                                  left: `${mid}%`,
-                                  color: item.color
-                                }}
-                              >
-                                {item.duration}
-                              </div>
-
-                              {/* START DOT - NO WHITE BORDER */}
-                              <div
-                                className="absolute top-[55%] w-[10px] h-[10px] rounded-full z-20 shadow-sm"
-                                style={{
-                                  left: `${left}%`,
-                                  backgroundColor: item.color,
-                                  transform: 'translate(-50%, -50%)',
-                                }}
-                              ></div>
-
-                              {/* END DOT - NO WHITE BORDER */}
-                              <div
-                                className="absolute top-[55%] w-[10px] h-[10px] rounded-full z-20 shadow-sm"
-                                style={{
-                                  left: `${left + width}%`,
-                                  backgroundColor: item.color,
-                                  transform: 'translate(-50%, -50%)',
-                                }}
-                              ></div>
-
-                              {/* START DATE LABEL - RAISED ABOVE DURATION */}
-                              {/* Shifted up significantly (-24px) so the slanted text starts above the duration level */}
-                              <div
-                                className="absolute top-[55%] text-[8px] text-zinc-500 font-medium z-0 pointer-events-none"
-                                style={{
-                                  left: `${left}%`,
-                                  transformOrigin: 'left bottom',
-                                  transform: 'translate(0px, -24px) rotate(-45deg)',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {format(item.startDate, 'dd MMM', { locale: dateLocale })}
-                              </div>
-
-                              {/* END DATE LABEL - SHIFTED RIGHT */}
-                              {/* Shifted X by 4px as requested */}
-                              <div
-                                className="absolute top-[55%] text-[8px] text-zinc-500 font-medium z-0 pointer-events-none"
-                                style={{
-                                  left: `${left + width}%`,
-                                  transformOrigin: 'left top',
-                                  transform: 'translate(4px, 8px) rotate(45deg)',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {format(item.endDate, 'dd MMM', { locale: dateLocale })}
-                              </div>
-
-                              {/* DASHED CONNECTOR - Thinner dashed line */}
-                              <div
-                                className="absolute left-0 border-l-[1px] border-dashed opacity-40 pointer-events-none"
-                                style={{
-                                  left: `${mid}%`,
-                                  top: isTop ? 'auto' : '55%',
-                                  bottom: isTop ? '45%' : 'auto',
-                                  height: stemHeight,
-                                  width: '0px',
-                                  borderColor: item.color
-                                }}
-                              ></div>
-
-                              {/* CALLOUT BOX - REPLACED TEXT WITH COLOR */}
-                              {/* User Request: "Replace residence name with line colors" */}
-                              <div
-                                className={`absolute flex flex-col items-center z-30`}
-                                style={{
-                                  left: `${mid}%`,
-                                  top: isTop ? 'auto' : '55%',
-                                  bottom: isTop ? '45%' : 'auto',
-                                  transform: isTop ? `translate(-50%, -${stemHeight})` : `translate(-50%, ${stemHeight})`
-                                }}
-                              >
-                                <div
-                                  className={`bg-white px-2.5 py-1.5 rounded-lg border shadow-sm text-center min-w-[100px]`}
-                                  style={{ borderColor: item.color, borderWidth: '1px' }}
-                                >
-                                  {/* Removed Residence Title - Just showing Reason as implied by 'Replace' */}
-                                  <div className="text-[9px] text-slate-500 leading-tight font-medium">
-                                    {item.subtitle}
-                                  </div>
+                          {/* Month Ticks on Bottom Axis */}
+                          {months.map(m => {
+                            const left = getPos(m);
+                            if (left < 0 || left > 100) return null;
+                            return (
+                              <div key={m.getTime()} className="absolute bottom-6 flex flex-col items-center" style={{ left: `${left}%`, transform: 'translate(-50%, 0)' }}>
+                                {/* Tick Mark */}
+                                <div className="w-[0.5px] h-2 bg-slate-400 mb-1"></div>
+                                {/* Label */}
+                                <div className="absolute top-2 text-[9px] font-medium text-slate-400 whitespace-nowrap">
+                                  {format(m, 'MMM yyyy', { locale: dateLocale })}
                                 </div>
                               </div>
+                            );
+                          })}
 
-                            </React.Fragment>
-                          );
-                        })}
+                          {/* Timeline Items */}
+                          {items.map((item, idx) => {
+                            const left = getPos(item.startDate);
+                            const width = getWidth(item.startDate, item.endDate);
+                            const mid = left + width / 2;
+
+                            const isTop = item.offset.type === 'top';
+                            const stemHeight = item.offset.height;
+
+                            return (
+                              <React.Fragment key={item.id}>
+                                {/* EVENT PERIOD BAR - Lighter (6px height) */}
+                                <div
+                                  className="absolute top-[45%] h-[6px] z-10"
+                                  style={{
+                                    left: `${left}%`,
+                                    width: `${width}%`,
+                                    backgroundColor: item.color,
+                                    transform: 'translateY(-50%)',
+                                    opacity: 0.85,
+                                    borderRadius: '3px',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                  }}
+                                ></div>
+
+                                {/* DURATION TEXT - ABOVE THE COLORED LINE */}
+                                <div
+                                  className="absolute top-[45%] text-[9px] font-bold z-20 pointer-events-none transform -translate-y-[18px] -translate-x-1/2"
+                                  style={{
+                                    left: `${mid}%`,
+                                    color: item.color
+                                  }}
+                                >
+                                  {item.duration}
+                                </div>
+
+                                {/* START DOT - NO WHITE BORDER */}
+                                <div
+                                  className="absolute top-[45%] w-[10px] h-[10px] rounded-full z-20 shadow-sm"
+                                  style={{
+                                    left: `${left}%`,
+                                    backgroundColor: item.color,
+                                    transform: 'translate(-50%, -50%)',
+                                  }}
+                                ></div>
+
+                                {/* END DOT - NO WHITE BORDER */}
+                                <div
+                                  className="absolute top-[45%] w-[10px] h-[10px] rounded-full z-20 shadow-sm"
+                                  style={{
+                                    left: `${left + width}%`,
+                                    backgroundColor: item.color,
+                                    transform: 'translate(-50%, -50%)',
+                                  }}
+                                ></div>
+
+                                {/* START DATE LABEL - RAISED ABOVE DURATION */}
+                                {/* Shifted up significantly (-24px) so the slanted text starts above the duration level */}
+                                <div
+                                  className="absolute top-[45%] text-[8px] text-zinc-500 font-medium z-0 pointer-events-none"
+                                  style={{
+                                    left: `${left}%`,
+                                    transformOrigin: 'left bottom',
+                                    transform: 'translate(0px, -24px) rotate(-45deg)',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {format(item.startDate, 'dd MMM', { locale: dateLocale })}
+                                </div>
+
+                                {/* END DATE LABEL - SHIFTED RIGHT */}
+                                {/* Shifted X by 4px as requested */}
+                                <div
+                                  className="absolute top-[45%] text-[8px] text-zinc-500 font-medium z-0 pointer-events-none"
+                                  style={{
+                                    left: `${left + width}%`,
+                                    transformOrigin: 'left top',
+                                    transform: 'translate(4px, 8px) rotate(45deg)',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {format(item.endDate, 'dd MMM', { locale: dateLocale })}
+                                </div>
+
+                                {/* DASHED CONNECTOR - Thinner dashed line */}
+                                <div
+                                  className="absolute left-0 border-l-[1px] border-dashed opacity-40 pointer-events-none"
+                                  style={{
+                                    left: `${mid}%`,
+                                    top: isTop ? 'auto' : '45%',
+                                    bottom: isTop ? '55%' : 'auto',
+                                    height: stemHeight,
+                                    width: '0px',
+                                    borderColor: item.color
+                                  }}
+                                ></div>
+
+                                {/* CALLOUT BOX - REPLACED TEXT WITH COLOR */}
+                                {/* User Request: "Replace residence name with line colors" */}
+                                <div
+                                  className={`absolute flex flex-col items-center z-30`}
+                                  style={{
+                                    left: `${mid}%`,
+                                    top: isTop ? 'auto' : '45%',
+                                    bottom: isTop ? '55%' : 'auto',
+                                    transform: isTop ? `translate(-50%, -${stemHeight})` : `translate(-50%, ${stemHeight})`
+                                  }}
+                                >
+                                  <div
+                                    className={`bg-white px-2.5 py-1.5 rounded-lg border shadow-sm text-center min-w-[100px]`}
+                                    style={{ borderColor: item.color, borderWidth: '1px' }}
+                                  >
+                                    {/* Removed Residence Title - Just showing Reason as implied by 'Replace' */}
+                                    <div className="text-[9px] text-slate-500 leading-tight font-medium">
+                                      {item.subtitle}
+                                    </div>
+                                  </div>
+                                </div>
+
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })()}
