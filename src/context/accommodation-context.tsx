@@ -26,12 +26,14 @@ export type Floor = {
   id: string;
   name?: string;
   rooms?: Room[];
+  facilities?: any[]; // Added for reporting
 };
 
 export type Building = {
   id: string;
   name?: string;
   floors?: Floor[];
+  facilities?: any[]; // Added for reporting
 };
 
 export type Residence = {
@@ -44,6 +46,7 @@ export type Residence = {
   isEmergencyMode?: boolean; // Added isEmergencyMode
   buildings?: Building[]; // optional — some APIs return nested buildings/floors
   rooms?: Room[]; // fallback when buildings are not present
+  facilities?: any[]; // Added for reporting
 };
 
 // New domain types
@@ -434,6 +437,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const contractsUnsubRef = useRef<Unsubscribe | null>(null);
   const invoicesUnsubRef = useRef<Unsubscribe | null>(null);
   const lastMutationTimeRef = useRef<number>(0); // Track last mutation time to prevent stale fetches
+  const workersRef = useRef<Worker[]>([]);
+
+  // Keep workersRef in sync
+  useEffect(() => {
+    workersRef.current = workers;
+  }, [workers]);
 
   const loadWorkersFromLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -690,9 +699,15 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       managerId: complex.managerId,
       isEmergencyMode: complex.isEmergencyMode,
       buildings: Array.isArray(complex.buildings)
-        ? complex.buildings.map((b: any) => ({ id: b.id, name: b.name, floors: b.floors }))
+        ? complex.buildings.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          floors: b.floors,
+          facilities: b.facilities
+        }))
         : undefined,
       rooms: undefined,
+      facilities: complex.facilities,
     };
   }
 
@@ -1289,8 +1304,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     // 4. Search in cached workers for partial name match (contains any part of name)
-    if (workers.length > 0) {
-      const partialMatches = workers.filter(workerMatchesTerm).slice(0, 15);
+    if (workersRef.current.length > 0) {
+      const partialMatches = workersRef.current.filter(workerMatchesTerm).slice(0, 15);
 
       if (partialMatches.length > 0) {
         console.log(`✅ [Search] Found ${partialMatches.length} by Name (partial) from cache in ${Date.now() - startTime}ms`);
@@ -1340,14 +1355,14 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     console.log(`❌ [Search] No results in ${Date.now() - startTime}ms (${totalReads} reads total)`);
     return [];
-  }, [db, workers]);
+  }, [db]);
 
   // Fetch multiple workers by ID (for display)
   const getWorkersByIds = useCallback(async (ids: string[]) => {
     if (!db || ids.length === 0) return [];
 
     // Filter out IDs we already have in state
-    const missingIds = ids.filter(id => !workers.find(w => w.id === id));
+    const missingIds = ids.filter(id => !workersRef.current.find(w => w.id === id));
     if (missingIds.length === 0) return [];
 
     // Fetch missing
@@ -1386,7 +1401,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     return fetchedWorkers;
-  }, [db, workers]);
+  }, [db]);
 
   // NEW: Get worker by ID or Employee ID
   const getWorkerByIdOrEmployeeId = useCallback(async (identifier: string): Promise<Worker | null> => {
@@ -1395,7 +1410,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     const term = identifier.trim();
 
     // First try to find in cached workers
-    const cachedWorker = workers.find(w => w.id === term || w.employeeId === term);
+    const cachedWorker = workersRef.current.find(w => w.id === term || w.employeeId === term);
     if (cachedWorker) return cachedWorker;
 
     // Try to get by document ID (UUID)
@@ -1421,7 +1436,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     return null;
-  }, [db, workers]);
+  }, [db]);
 
   const checkWorkerOccupancy = useCallback(async (workerId: string) => {
     if (!db) return null;
@@ -3743,8 +3758,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     } catch (error) {
       console.error('❌ [Dashboard] Failed to refresh stats:', error);
-      // Do not throw, just return null to prevent UI crash
-      return null;
+      // Do not return null to match return type Promise<DashboardStats>
+      return {
+        totalWorkers: 0,
+        assignedWorkers: 0,
+        unassignedWorkers: 0,
+        occupancyRate: 0,
+        activeContracts: 0,
+        totalCompanies: 0,
+        pendingTransfers: 0,
+        unpaidInvoices: 0,
+        overdueInvoices: 0,
+        residenceOccupancy: {},
+        lastUpdated: Date.now()
+      };
     }
   }, [db, residences]);
 

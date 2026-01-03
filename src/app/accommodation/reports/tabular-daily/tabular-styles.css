@@ -1,0 +1,210 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Outfit:wght@300;400;600;800&display=swap');
+
+:root {
+    --matrix-bg: #020617;
+    --matrix-glass: rgba(30, 41, 59, 0.7);
+    --matrix-border: rgba(148, 163, 184, 0.1);
+    --matrix-accent: #10b981;
+    --matrix-text: #f8fafc;
+    --matrix-text-muted: #94a3b8;
+}
+
+@media screen {
+    .matrix-container {
+        background: var(--matrix-bg);
+        padding: 60px 20px;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-family: 'Outfit', 'Cairo', sans-serif;
+        color: var(--matrix-text);
+    }
+
+    .matrix-page {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        width: 297mm;
+        min-height: 210mm;
+        padding: 15mm;
+        border-radius: 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--matrix-border);
+    }
+}
+
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 0;
+    }
+
+    body {
+        margin: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        background: white;
+    }
+
+    .matrix-container {
+        padding: 0;
+        background: white;
+    }
+
+    .matrix-page {
+        width: 297mm;
+        height: 210mm;
+        padding: 10mm;
+        border-radius: 0;
+        border: none;
+        background: white !important;
+        color: #0f172a !important;
+    }
+
+    .no-print {
+        display: none;
+    }
+
+    .matrix-table th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    .matrix-table td {
+        border: 1px solid #e2e8f0 !important;
+        color: #0f172a !important;
+    }
+
+    .bg-glass {
+        background: #f8fafc !important;
+    }
+
+    .text-accent {
+        color: #059669 !important;
+    }
+}
+
+/* Table Design */
+.matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    table-layout: fixed;
+}
+
+.matrix-table th,
+.matrix-table td {
+    border: 1px solid var(--matrix-border);
+    padding: 8px 4px;
+    text-align: center;
+}
+
+.bg-glass {
+    background: var(--matrix-glass);
+    backdrop-filter: blur(10px);
+}
+
+.header-tier-1 {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--matrix-accent);
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.header-tier-2 {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 700;
+    color: #fff;
+    font-size: 12px;
+}
+
+.header-tier-3 {
+    background: rgba(255, 255, 255, 0.02);
+    font-weight: 600;
+    color: var(--matrix-text-muted);
+    font-size: 10px;
+}
+
+.side-label-total {
+    background: rgba(255, 255, 255, 0.03);
+    font-weight: 900;
+    color: var(--matrix-accent);
+    font-size: 14px;
+    width: 60px;
+}
+
+.side-label-project {
+    text-align: right;
+    padding-right: 15px !important;
+    font-family: 'Cairo';
+    font-weight: 700;
+    color: #fff;
+    width: 180px;
+}
+
+.row-total {
+    background: rgba(16, 185, 129, 0.1) !important;
+    font-weight: 900;
+    color: var(--matrix-accent);
+}
+
+.row-occupancy {
+    background: rgba(255, 255, 255, 0.02);
+    font-weight: 700;
+}
+
+.text-accent {
+    color: var(--matrix-accent);
+}
+
+.watermark-matrix {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    font-size: 180px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.02);
+    pointer-events: none;
+    z-index: 0;
+    white-space: nowrap;
+}
+
+.matrix-content {
+    position: relative;
+    z-index: 1;
+}
+
+.matrix-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--matrix-accent);
+    padding-bottom: 10px;
+}
+
+.matrix-header h1 {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin: 0;
+    color: #fff;
+}
+
+.matrix-header .arabic {
+    font-family: 'Cairo';
+    font-size: 28px;
+}
+
+.matrix-footer {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--matrix-text-muted);
+    border-top: 1px solid var(--matrix-border);
+    padding-top: 10px;
+}
