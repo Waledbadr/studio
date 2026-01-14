@@ -10,26 +10,26 @@ export async function POST(request: Request) {
     const body = await request.json();
     // Expected body: { workerId | workerIds, residenceId, roomId }
     const { workerId, workerIds, residenceId, roomId } = body || {};
-    
+
     if ((!workerId && !Array.isArray(workerIds)) || !residenceId || !roomId) {
       return NextResponse.json({ ok: false, error: 'missing-params' }, { status: 400 });
     }
 
     const adminDb = getAdminDb();
     if (!adminDb) {
-      return NextResponse.json({ 
-        ok: false, 
-        error: 'Firebase Admin not configured' 
+      return NextResponse.json({
+        ok: false,
+        error: 'Firebase Admin not configured'
       }, { status: 500 });
     }
 
     try {
       const toAssign = Array.isArray(workerIds) ? workerIds : [workerId];
       const assigned: any[] = [];
-      
+
       // Get ONLY the specific workers we need using cache
       const workers: any[] = [];
-      
+
       // Try to get all workers from cache first
       const allWorkers = await serverCache.get(
         'workers:all',
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         },
         10 * 60 * 1000 // 10 min cache
       );
-      
+
       // Filter only the workers we need from cached data
       for (const wid of toAssign) {
         const worker = allWorkers.find((w: any) => w.id === wid);
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
           workers.push(worker);
         }
       }
-      
+
       // Get occupants from cache and filter
       const allOccupants = await serverCache.get(
         'occupants:all',
@@ -59,25 +59,25 @@ export async function POST(request: Request) {
         },
         2 * 60 * 1000 // 2 min cache (occupants change frequently)
       );
-      
+
       // Filter occupants for this room from cached data
-      const existingOccupants = allOccupants.filter((o: any) => 
+      const existingOccupants = allOccupants.filter((o: any) =>
         o.roomId === roomId && o.residenceId === residenceId
       );
-      
+
       // Check if workers are already assigned (from cached data)
       const alreadyAssignedWorkers = toAssign.filter(wid =>
         allOccupants.some((o: any) => o.workerId === wid)
       );
-      
+
       // Get residence data to check room capacity
       const residenceDoc = await adminDb.collection('residences').doc(residenceId).get();
       const residence = residenceDoc.data();
-      
+
       if (!residence) {
         return NextResponse.json({ ok: false, error: 'Residence not found' }, { status: 404 });
       }
-      
+
       // Find the room in the residence structure
       let roomData: any = null;
       if (residence.rooms) {
@@ -94,73 +94,73 @@ export async function POST(request: Request) {
           if (roomData) break;
         }
       }
-      
+
       if (!roomData) {
         return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
       }
-      
+
       // Check room capacity
       const currentOccupants = existingOccupants.filter((o: any) => o.roomId === roomId);
       const roomCapacity = roomData.capacity || 0;
-      
+
       if (currentOccupants.length + toAssign.length > roomCapacity) {
-        return NextResponse.json({ 
-          ok: false, 
-          error: `Room capacity exceeded. Current: ${currentOccupants.length}, Capacity: ${roomCapacity}` 
+        return NextResponse.json({
+          ok: false,
+          error: `Room capacity exceeded. Current: ${currentOccupants.length}, Capacity: ${roomCapacity}`
         }, { status: 400 });
       }
-      
+
       // Check if any workers are already assigned
       if (alreadyAssignedWorkers.length > 0) {
         const workerIds = alreadyAssignedWorkers.join(', ');
-        return NextResponse.json({ 
-          ok: false, 
-          error: `Workers already assigned: ${workerIds}` 
+        return NextResponse.json({
+          ok: false,
+          error: `Workers already assigned: ${workerIds}`
         }, { status: 400 });
       }
-      
+
       // Check nationality rule (all occupants in same room must have same nationality)
       if (currentOccupants.length > 0) {
         const firstOccupant = currentOccupants[0] as any;
         // Get the first occupant's worker from cached workers
         const firstWorker: any = allWorkers.find((w: any) => w.id === firstOccupant.workerId);
-        const firstNationality = firstWorker?.nationaliy;
-        
+        const firstNationality = firstWorker?.nationality;
+
         for (const worker of workers) {
           const w = worker as any;
           if (!w) {
             return NextResponse.json({ ok: false, error: `Worker ${w?.id} not found` }, { status: 404 });
           }
-          
+
           // Check nationality match
-          if (firstNationality && w.nationaliy !== firstNationality) {
-            return NextResponse.json({ 
-              ok: false, 
-              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationaliy}` 
+          if (firstNationality && w.nationality !== firstNationality) {
+            return NextResponse.json({
+              ok: false,
+              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationality}`
             }, { status: 400 });
           }
         }
       } else {
         // If no existing occupants, verify all workers to assign have same nationality
         if (workers.length > 1) {
-          const firstNationality = (workers[0] as any).nationaliy;
+          const firstNationality = (workers[0] as any).nationality;
           for (const worker of workers.slice(1)) {
             const w = worker as any;
-            if (w.nationaliy !== firstNationality) {
-              return NextResponse.json({ 
-                ok: false, 
-                error: `Cannot assign workers with different nationalities to the same room` 
+            if (w.nationality !== firstNationality) {
+              return NextResponse.json({
+                ok: false,
+                error: `Cannot assign workers with different nationalities to the same room`
               }, { status: 400 });
             }
           }
         }
       }
-      
+
       // Assign workers to room
       for (const wid of toAssign) {
         const worker = workers.find((w: any) => w.id === wid);
         if (!worker) continue;
-        
+
         await adminDb.collection('occupants').add({
           workerId: wid,
           residenceId,
@@ -168,10 +168,10 @@ export async function POST(request: Request) {
           since: new Date().toISOString(),
           createdAt: new Date().toISOString()
         });
-        
+
         assigned.push(wid);
       }
-      
+
       return NextResponse.json({ ok: true, assigned, count: assigned.length });
     } catch (e) {
       console.error('assign route error', e);

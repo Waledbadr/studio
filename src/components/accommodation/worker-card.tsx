@@ -30,7 +30,7 @@ interface WorkerCardProps {
     id: string;
     name: string;
     employeeId?: string;
-    nationaliy?: string;
+    nationality?: string;
     company?: string;
     role?: string;
     isAssigned: boolean;
@@ -76,9 +76,8 @@ export function WorkerCard({
 
             <div className="flex-shrink-0">
               <div
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md ${
-                  worker.isAssigned ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-gray-400 to-gray-500'
-                }`}
+                className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md ${worker.isAssigned ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                  }`}
               >
                 {worker.name.charAt(0).toUpperCase()}
               </div>

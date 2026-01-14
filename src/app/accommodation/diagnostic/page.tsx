@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from '@/lib/firestore-shim';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -129,7 +129,7 @@ export default function DiagnosticPage() {
                 <div key={w.id} className="p-2 border rounded">
                   <div className="font-medium">{w.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {w.id} • {w.nationaliy} • {w.role}
+                    {w.id} • {w.nationality} • {w.role}
                   </div>
                 </div>
               ))}
@@ -151,7 +151,7 @@ export default function DiagnosticPage() {
                 <div key={w.id} className="p-2 border rounded">
                   <div className="font-medium">{w.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {w.id} • {w.nationaliy} • {w.role}
+                    {w.id} • {w.nationality} • {w.role}
                   </div>
                 </div>
               ))}
@@ -173,7 +173,7 @@ export default function DiagnosticPage() {
                 <div key={w.id} className="p-2 border rounded">
                   <div className="font-medium">{w.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {w.id} • {w.nationaliy} • {w.role}
+                    {w.id} • {w.nationality} • {w.role}
                   </div>
                 </div>
               ))}
@@ -189,10 +189,10 @@ export default function DiagnosticPage() {
         <CardContent className="space-y-2 text-sm">
           <p>✅ إذا كان Firestore = 0 واللوكال ستوريج &gt; 0:</p>
           <p className="ml-4">→ العمال موجودون محلياً فقط، استخدم صفحة Workers للمزامنة</p>
-          
+
           <p className="mt-3">✅ إذا كان Firestore &gt; 0 والـ Context = 0:</p>
           <p className="ml-4">→ مشكلة في تحميل البيانات، أعد تحميل الصفحة</p>
-          
+
           <p className="mt-3">✅ إذا كانت جميع القيم = 0:</p>
           <p className="ml-4">→ أضف عمال من <a href="/accommodation/quick-add-workers" className="text-primary underline">هنا</a></p>
         </CardContent>

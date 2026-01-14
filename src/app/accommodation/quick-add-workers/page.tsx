@@ -13,14 +13,14 @@ export default function QuickAddWorkersPage() {
 
   // Sample workers data
   const sampleWorkers = [
-    { name: 'أحمد محمد', nationaliy: 'Egyptian', role: 'Worker' },
-    { name: 'محمد علي', nationaliy: 'Egyptian', role: 'Worker' },
-    { name: 'عبدالله سعيد', nationaliy: 'Egyptian', role: 'Supervisor' },
-    { name: 'خالد حسن', nationaliy: 'Pakistani', role: 'Worker' },
-    { name: 'علي رضا', nationaliy: 'Pakistani', role: 'Worker' },
-    { name: 'حسن محمود', nationaliy: 'Indian', role: 'Worker' },
-    { name: 'راج كومار', nationaliy: 'Indian', role: 'Worker' },
-    { name: 'سمير يوسف', nationaliy: 'Bangladeshi', role: 'Worker' },
+    { name: 'أحمد محمد', nationality: 'Egyptian', role: 'Worker' },
+    { name: 'محمد علي', nationality: 'Egyptian', role: 'Worker' },
+    { name: 'عبدالله سعيد', nationality: 'Egyptian', role: 'Supervisor' },
+    { name: 'خالد حسن', nationality: 'Pakistani', role: 'Worker' },
+    { name: 'علي رضا', nationality: 'Pakistani', role: 'Worker' },
+    { name: 'حسن محمود', nationality: 'Indian', role: 'Worker' },
+    { name: 'راج كومار', nationality: 'Indian', role: 'Worker' },
+    { name: 'سمير يوسف', nationality: 'Bangladeshi', role: 'Worker' },
   ];
 
   const addSampleWorkers = async () => {
@@ -68,7 +68,7 @@ export default function QuickAddWorkersPage() {
               <div key={worker.id} className="p-3 border rounded-lg">
                 <div className="font-semibold">{worker.name}</div>
                 <div className="text-sm text-muted-foreground">
-                  {worker.nationaliy} • {worker.role}
+                  {worker.nationality} • {worker.role}
                 </div>
               </div>
             ))}
@@ -102,7 +102,7 @@ export default function QuickAddWorkersPage() {
               <div key={idx} className="p-3 border rounded-lg bg-muted/50">
                 <div className="font-medium">{worker.name}</div>
                 <div className="text-sm text-muted-foreground">
-                  {worker.nationaliy} • {worker.role}
+                  {worker.nationality} • {worker.role}
                 </div>
               </div>
             ))}

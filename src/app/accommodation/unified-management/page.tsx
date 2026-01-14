@@ -5,7 +5,7 @@ import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
 import { useToast } from "@/hooks/use-toast";
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from '@/lib/auth-shim';
 import { doc, getDoc } from "firebase/firestore";
 import {
   Building2,
@@ -60,7 +60,7 @@ interface WorkerWithStatus {
   id: string;
   name: string;
   employeeId?: string;
-  nationaliy?: string;
+  nationality?: string;
   company?: string;
   role?: string;
   isAssigned: boolean;
@@ -73,10 +73,10 @@ interface WorkerWithStatus {
 
 export default function UnifiedManagementPage() {
   const { residences } = useResidences();
-  const { 
-    workers, 
-    occupants, 
-    checkInWorker, 
+  const {
+    workers,
+    occupants,
+    checkInWorker,
     checkOutWorkerEnhanced,
     transferWorker,
     swapWorkers,
@@ -131,21 +131,21 @@ export default function UnifiedManagementPage() {
       currentUserId,
       userRole,
     });
-    
+
     // Log detailed residence structure for debugging room issues
     if (residences.length > 0) {
-      console.log('🏘️ [UnifiedManagement] Residences Structure:', 
+      console.log('🏘️ [UnifiedManagement] Residences Structure:',
         residences.map(r => ({
           id: r.id,
           name: r.name,
           buildings: r.buildings?.length || 0,
-          totalRooms: r.buildings?.reduce((sum, b) => 
+          totalRooms: r.buildings?.reduce((sum, b) =>
             sum + (b.floors?.reduce((fsum, f) => fsum + (f.rooms?.length || 0), 0) || 0), 0
           ) || r.rooms?.length || 0
         }))
       );
     }
-    
+
     // Log a sample worker and occupant for debugging
     if (workers.length > 0) {
       console.log('👷 [UnifiedManagement] Sample Worker:', workers[0]);
@@ -192,7 +192,7 @@ export default function UnifiedManagementPage() {
   const nationalities = useMemo(() => {
     const nats = new Set<string>();
     workers.forEach(w => {
-      if (w.nationaliy) nats.add(w.nationaliy);
+      if (w.nationality) nats.add(w.nationality);
     });
     return Array.from(nats).sort();
   }, [workers]);
@@ -203,7 +203,7 @@ export default function UnifiedManagementPage() {
       console.warn('⚠️ [findRoom] Residence not found:', residenceId);
       return null;
     }
-    
+
     // Try hierarchical structure first (Complex -> Building -> Floor -> Room)
     if (residence.buildings && residence.buildings.length > 0) {
       for (const building of residence.buildings) {
@@ -212,15 +212,15 @@ export default function UnifiedManagementPage() {
             if (floor.rooms && floor.rooms.length > 0) {
               const room = floor.rooms.find(r => r.id === roomId);
               if (room) {
-                console.log('✅ [findRoom] Found in hierarchy:', { 
-                  residenceId, 
+                console.log('✅ [findRoom] Found in hierarchy:', {
+                  residenceId,
                   residenceName: residence.name,
-                  buildingId: building.id, 
+                  buildingId: building.id,
                   buildingName: building.name,
-                  floorId: floor.id, 
+                  floorId: floor.id,
                   floorName: floor.name,
                   roomId,
-                  roomName: room.name 
+                  roomName: room.name
                 });
                 return room;
               }
@@ -229,26 +229,26 @@ export default function UnifiedManagementPage() {
         }
       }
     }
-    
+
     // Fallback to flat structure (Complex -> Rooms directly)
     if (residence.rooms && residence.rooms.length > 0) {
       const room = residence.rooms.find(r => r.id === roomId);
       if (room) {
-        console.log('✅ [findRoom] Found in flat structure:', { 
-          residenceId, 
+        console.log('✅ [findRoom] Found in flat structure:', {
+          residenceId,
           residenceName: residence.name,
           roomId,
-          roomName: room.name 
+          roomName: room.name
         });
         return room;
       }
     }
-    
-    console.warn('⚠️ [findRoom] Room not found:', { 
-      residenceId, 
-      roomId, 
+
+    console.warn('⚠️ [findRoom] Room not found:', {
+      residenceId,
+      roomId,
       residenceName: residence.name,
-      hasBuildings: !!residence.buildings, 
+      hasBuildings: !!residence.buildings,
       buildingsCount: residence.buildings?.length || 0,
       hasRooms: !!residence.rooms,
       roomsCount: residence.rooms?.length || 0
@@ -261,7 +261,7 @@ export default function UnifiedManagementPage() {
     console.log('[UnifiedManagement] Workers count:', workers.length);
     console.log('[UnifiedManagement] Occupants count:', occupants.length);
     console.log('[UnifiedManagement] Residences count:', residences.length);
-    
+
     return workers.map(worker => {
       const occupant = occupants.find(o => o.workerId === worker.id && !o.until);
       if (occupant) {
@@ -284,7 +284,7 @@ export default function UnifiedManagementPage() {
     });
   }, [workers, occupants, residences]);
 
-  
+
 
   // Filter workers
   const filteredWorkers = useMemo(() => {
@@ -296,14 +296,14 @@ export default function UnifiedManagementPage() {
       filtered = filtered.filter(w =>
         w.name.toLowerCase().includes(q) ||
         w.employeeId?.toLowerCase().includes(q) ||
-        w.nationaliy?.toLowerCase().includes(q) ||
+        w.nationality?.toLowerCase().includes(q) ||
         w.company?.toLowerCase().includes(q)
       );
     }
 
     // Nationality filter
     if (nationalityFilter !== 'all') {
-      filtered = filtered.filter(w => w.nationaliy === nationalityFilter);
+      filtered = filtered.filter(w => w.nationality === nationalityFilter);
     }
 
     // Status filter
@@ -326,7 +326,7 @@ export default function UnifiedManagementPage() {
     const totalWorkers = workers.length;
     const assignedWorkers = workersWithStatus.filter(w => w.isAssigned).length;
     const unassignedWorkers = totalWorkers - assignedWorkers;
-    
+
     const totalRooms = residences.reduce((sum, r) => {
       let count = r.rooms?.length || 0;
       if (r.buildings) {
@@ -348,13 +348,13 @@ export default function UnifiedManagementPage() {
         const baseArea = roomType === "Worker" ? 4 : roomType === "Supervisor" ? 6 : 8;
         return Math.floor(spaceSqm / baseArea);
       };
-      
+
       r.rooms?.forEach(room => {
         if ((room as any).spaceSqm && (room as any).roomType) {
           cap += room.capacity || calcCap((room as any).spaceSqm, (room as any).roomType);
         }
       });
-      
+
       r.buildings?.forEach(b => {
         b.floors?.forEach(f => {
           f.rooms?.forEach(room => {
@@ -364,7 +364,7 @@ export default function UnifiedManagementPage() {
           });
         });
       });
-      
+
       return sum + cap;
     }, 0);
 
@@ -424,12 +424,12 @@ export default function UnifiedManagementPage() {
 
     const addRoom = (room: any, buildingId?: string, floorId?: string) => {
       const capacity = room.capacity || calcCap(room.spaceSqm || 20, room.roomType || 'Worker');
-      const occupied = occupants.filter(o => 
-        o.roomId === room.id && 
-        o.residenceId === residenceId && 
+      const occupied = occupants.filter(o =>
+        o.roomId === room.id &&
+        o.residenceId === residenceId &&
         !o.until
       ).length;
-      
+
       rooms.push({
         id: room.id,
         name: room.name || `Room ${room.id}`,
@@ -836,39 +836,39 @@ export default function UnifiedManagementPage() {
               <ScrollArea className="h-[600px] pr-4">
                 <div className="space-y-3">
                   {/* Debug Info */}
-        {workers.length === 0 && (
-          <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <div className="flex items-center gap-3 text-yellow-700 dark:text-yellow-300">
-              <AlertCircle className="h-6 w-6 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="font-semibold text-base mb-2">⚠️ لا توجد بيانات عمال</p>
-                <p className="text-sm mb-2">يرجى التحقق من:</p>
-                <ul className="text-sm space-y-1 list-disc list-inside mr-2">
-                  <li>تسجيل الدخول بحساب صحيح</li>
-                  <li>وجود اتصال بالإنترنت</li>
-                  <li>صلاحيات Firestore (افتح Console واضغط F12)</li>
-                  <li>وجود بيانات عمال في قاعدة البيانات</li>
-                </ul>
-                <div className="mt-3 flex gap-3">
-                  <a
-                    href="/accommodation/quick-add-workers"
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium transition-colors"
-                  >
-                    <Users className="h-4 w-4" />
-                    إضافة عمال جدد
-                  </a>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition-colors"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    تحديث الصفحة
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}                  {filteredWorkers.length === 0 && workers.length > 0 ? (
+                  {workers.length === 0 && (
+                    <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <div className="flex items-center gap-3 text-yellow-700 dark:text-yellow-300">
+                        <AlertCircle className="h-6 w-6 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-base mb-2">⚠️ لا توجد بيانات عمال</p>
+                          <p className="text-sm mb-2">يرجى التحقق من:</p>
+                          <ul className="text-sm space-y-1 list-disc list-inside mr-2">
+                            <li>تسجيل الدخول بحساب صحيح</li>
+                            <li>وجود اتصال بالإنترنت</li>
+                            <li>صلاحيات Firestore (افتح Console واضغط F12)</li>
+                            <li>وجود بيانات عمال في قاعدة البيانات</li>
+                          </ul>
+                          <div className="mt-3 flex gap-3">
+                            <a
+                              href="/accommodation/quick-add-workers"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium transition-colors"
+                            >
+                              <Users className="h-4 w-4" />
+                              إضافة عمال جدد
+                            </a>
+                            <button
+                              onClick={() => window.location.reload()}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition-colors"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              تحديث الصفحة
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}                  {filteredWorkers.length === 0 && workers.length > 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
                       <p>لا توجد نتائج تطابق البحث</p>
@@ -988,13 +988,13 @@ export default function UnifiedManagementPage() {
                     floorId: actionForm.targetFloorId,
                     roomId: actionForm.targetRoomId,
                   }}
-                onChange={(value) => setActionForm(prev => ({
-                  ...prev,
-                  targetResidenceId: value.residenceId,
-                  targetBuildingId: value.buildingId || '',
-                  targetFloorId: value.floorId || '',
-                  targetRoomId: value.roomId,
-                }))}
+                  onChange={(value) => setActionForm(prev => ({
+                    ...prev,
+                    targetResidenceId: value.residenceId,
+                    targetBuildingId: value.buildingId || '',
+                    targetFloorId: value.floorId || '',
+                    targetRoomId: value.roomId,
+                  }))}
                   showOnlyAvailable={true}
                   label="اختر المسكن والغرفة الجديدة"
                 />

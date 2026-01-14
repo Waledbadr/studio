@@ -17,8 +17,8 @@ import {
   signInWithEmailLink,
   signInWithRedirect,
   getRedirectResult,
-} from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, deleteDoc } from "firebase/firestore";
+} from '@/lib/auth-shim';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, deleteDoc } from '@/lib/firestore-shim';
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,8 +89,8 @@ export default function LoginForm() {
   };
 
   useEffect(() => {
-    if (!auth) return;
-    const unsub = onAuthStateChanged(auth, (u) => {
+    if (typeof onAuthStateChanged !== 'function') return;
+    const unsub = onAuthStateChanged(null as any, (u) => {
       if (u) redirectAfterLogin();
     });
     return () => unsub();
@@ -98,8 +98,8 @@ export default function LoginForm() {
 
   // Handle OAuth redirect result if popup fallback was used
   useEffect(() => {
-    if (!auth) return;
-    getRedirectResult(auth)
+    if (typeof getRedirectResult !== 'function') return;
+    getRedirectResult(null as any)
       .then(async (res) => {
         if (res && res.user) {
           await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
@@ -117,12 +117,12 @@ export default function LoginForm() {
 
   // Complete magic link sign-in if applicable
   useEffect(() => {
-    if (!auth) return;
+    if (typeof isSignInWithEmailLink !== 'function') return;
     if (typeof window === 'undefined') return;
-    if (isSignInWithEmailLink(auth, window.location.href)) {
+    if (isSignInWithEmailLink(null as any, window.location.href)) {
       const savedEmail = window.localStorage.getItem('pendingEmailForLink');
       if (savedEmail) {
-        signInWithEmailLink(auth, savedEmail, window.location.href)
+        signInWithEmailLink(null as any, savedEmail, window.location.href)
           .then(() => {
             window.localStorage.removeItem('pendingEmailForLink');
             let persisted: "accommodation" | "materials" | null = null;
@@ -138,13 +138,54 @@ export default function LoginForm() {
   }, [router]);
 
   const ensureUserProfile = async (uid: string, data?: { name?: string; email?: string }) => {
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const email = data?.email;
+
+    if (USE_D1) {
+      try {
+        // Look for pre-provisioned user by email
+        if (email) {
+          const users = await (await import('@/lib/d1-client')).getUsers();
+          const pre = (users || []).find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase());
+          if (pre && pre.id !== uid) {
+            // Merge into target UID
+            const merged = {
+              name: data?.name || pre.name || 'User',
+              email,
+              role: pre.role || 'Technician',
+              assignedResidences: pre.assignedResidences || [],
+              themeSettings: pre.themeSettings || { colorTheme: 'blue', mode: 'system' },
+              createdAt: pre.createdAt || new Date().toISOString()
+            };
+            await (await import('@/lib/d1-client')).updateUser(uid, merged).catch(() => {});
+            // Optionally mark old pre-provisioned user as removed (skip delete for safety)
+            return;
+          }
+        }
+        // Ensure ID exists by attempting to create or update
+        const payload = {
+          name: data?.name || 'User',
+          email: data?.email || '',
+          role: 'Technician',
+          assignedResidences: [],
+          themeSettings: { colorTheme: 'blue', mode: 'system' },
+          createdAt: new Date().toISOString()
+        };
+        // Try update first, then create if update didn't create a row (createUser always inserts)
+        await (await import('@/lib/d1-client')).updateUser(uid, payload).catch(() => {});
+        await (await import('@/lib/d1-client')).createUser(uid, payload).catch(() => {});
+        return;
+      } catch (e) {
+        console.warn('D1 ensureUserProfile failed:', e);
+      }
+    }
+
     if (!db) return;
     const uidRef = doc(db, "users", uid);
     const uidSnap = await getDoc(uidRef);
 
     // Try to find any pre-provisioned doc by email (created from Users page) and merge it
     let merged = false;
-    const email = data?.email;
     if (email) {
       const q = query(collection(db, "users"), where("email", "==", email));
       const qs = await getDocs(q);
@@ -180,7 +221,7 @@ export default function LoginForm() {
 
   const handleEmailPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth) {
+    if (typeof signInWithEmailAndPassword !== 'function') {
       setError("Authentication is not configured.");
       return;
     }
@@ -228,7 +269,7 @@ export default function LoginForm() {
   };
 
   const oauthHandler = async (provider: "google" | "microsoft") => {
-    if (!auth) {
+    if (typeof signInWithPopup !== 'function') {
       setError("Authentication is not configured.");
       return;
     }
@@ -259,7 +300,7 @@ export default function LoginForm() {
   };
 
   const handleReset = async () => {
-    if (!auth) return setError("Authentication is not configured.");
+    if (typeof sendPasswordResetEmail !== 'function') return setError("Authentication is not configured.");
     if (!email) return setError("Please enter your email first.");
     setLoading(true);
     setError(null);
@@ -269,7 +310,7 @@ export default function LoginForm() {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: false,
       } as const;
-  await sendPasswordResetEmail(auth, toASCII(email).trim(), actionCodeSettings);
+  await sendPasswordResetEmail(null as any, toASCII(email).trim(), actionCodeSettings);
   setInfo('Password reset email sent.');
   toast({ title: 'Email sent', description: 'Password reset email sent.' });
     } catch (err: any) {
@@ -288,7 +329,7 @@ export default function LoginForm() {
   };
 
   const handleMagicLink = async () => {
-    if (!auth) return setError("Authentication is not configured.");
+    if (typeof sendSignInLinkToEmail !== 'function') return setError("Authentication is not configured.");
     if (!email) return setError("Please enter your email first.");
     setLoading(true);
     setError(null);
@@ -299,7 +340,7 @@ export default function LoginForm() {
         handleCodeInApp: true,
       } as const;
   const asciiEmail = toASCII(email).trim();
-  await sendSignInLinkToEmail(auth, asciiEmail, actionCodeSettings);
+  await sendSignInLinkToEmail(null as any, asciiEmail, actionCodeSettings);
   window.localStorage.setItem('pendingEmailForLink', asciiEmail);
   setInfo('Magic link sent to your email.');
   toast({ title: 'Email sent', description: 'Magic link sent to your email.' });
@@ -313,15 +354,16 @@ export default function LoginForm() {
   };
 
   const handlePasskeyRegister = async () => {
-    if (!auth) return setError('Authentication is not configured.');
     try {
-      const user = auth.currentUser;
+      const meRes = await fetch('/api/auth/me');
+      const meJson = await meRes.json();
+      const user = meJson?.user;
       if (!user) return setError('Sign in once, then register a passkey.');
 
       const challengeRes = await fetch('/api/auth/webauthn-challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'register', user: { id: user.uid, name: user.displayName || 'User', email: user.email || '' } })
+        body: JSON.stringify({ type: 'register', user: { id: user.id, name: user.name || 'User', email: user.email || '' } })
       });
       const options = await challengeRes.json();
       const attResp = await startRegistration(options);
@@ -329,7 +371,7 @@ export default function LoginForm() {
       await fetch('/api/auth/webauthn-verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'register', user: { id: user.uid, name: user.displayName || 'User', email: user.email || '' }, response: attResp })
+        body: JSON.stringify({ type: 'register', user: { id: user.id, name: user.name || 'User', email: user.email || '' }, response: attResp })
       });
   setInfo('Passkey registered successfully.');
   toast({ title: 'Passkey', description: 'Passkey registered successfully.' });
@@ -341,9 +383,8 @@ export default function LoginForm() {
   };
 
   const handlePasskeyLogin = async () => {
-    if (!auth) return setError('Authentication is not configured.');
     try {
-      const provisionalUserId = auth.currentUser?.uid || email || 'anonymous';
+      const provisionalUserId = email || 'anonymous';
       const challengeRes = await fetch('/api/auth/webauthn-challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

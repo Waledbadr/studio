@@ -9,13 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  Database, 
-  Users, 
-  Building2, 
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Database,
+  Users,
+  Building2,
   Bed,
   RefreshCw,
   Home
@@ -43,32 +43,32 @@ export default function DebugDataPage() {
     totalWorkers: workers.length,
     workersWithId: workers.filter(w => w.id).length,
     workersWithName: workers.filter(w => w.name).length,
-    workersWithNationality: workers.filter(w => w.nationaliy).length,
-    
+    workersWithNationality: workers.filter(w => w.nationality).length,
+
     // Occupants
     totalOccupants: occupants.length,
     activeOccupants: occupants.filter(o => !o.until).length,
     inactiveOccupants: occupants.filter(o => o.until).length,
-    
+
     // Residences
     totalResidences: residences.length,
     residencesWithBuildings: residences.filter(r => r.buildings && r.buildings.length > 0).length,
     residencesWithFlatRooms: residences.filter(r => r.rooms && r.rooms.length > 0).length,
-    
+
     // Rooms
     totalRooms: residences.reduce((sum, r) => {
       // Count hierarchical rooms
-      const hierarchicalRooms = r.buildings?.reduce((bsum, b) => 
+      const hierarchicalRooms = r.buildings?.reduce((bsum, b) =>
         bsum + (b.floors?.reduce((fsum, f) => fsum + (f.rooms?.length || 0), 0) || 0), 0
       ) || 0;
       // Count flat rooms
       const flatRooms = r.rooms?.length || 0;
       return sum + hierarchicalRooms + flatRooms;
     }, 0),
-    
+
     totalCapacity: residences.reduce((sum, r) => {
-      const hierarchicalCapacity = r.buildings?.reduce((bsum, b) => 
-        bsum + (b.floors?.reduce((fsum, f) => 
+      const hierarchicalCapacity = r.buildings?.reduce((bsum, b) =>
+        bsum + (b.floors?.reduce((fsum, f) =>
           fsum + (f.rooms?.reduce((rsum, room) => rsum + (room.capacity || 0), 0) || 0), 0
         ) || 0), 0
       ) || 0;
@@ -378,7 +378,7 @@ export default function DebugDataPage() {
           <ScrollArea className="h-[400px]">
             <div className="space-y-4">
               {residences.map((residence) => {
-                const hierarchicalRooms = residence.buildings?.reduce((bsum, b) => 
+                const hierarchicalRooms = residence.buildings?.reduce((bsum, b) =>
                   bsum + (b.floors?.reduce((fsum, f) => fsum + (f.rooms?.length || 0), 0) || 0), 0
                 ) || 0;
                 const flatRooms = residence.rooms?.length || 0;
@@ -392,21 +392,21 @@ export default function DebugDataPage() {
                         {totalRooms} غرفة
                       </Badge>
                     </div>
-                    
+
                     {residence.buildings && residence.buildings.length > 0 && (
                       <div className="text-sm text-muted-foreground mt-2">
                         <div className="font-medium mb-1">بنية هرمية:</div>
                         <ul className="space-y-1 mr-4">
                           {residence.buildings.map((building) => (
                             <li key={building.id}>
-                              • {building.name} ({building.floors?.length || 0} طوابق، 
+                              • {building.name} ({building.floors?.length || 0} طوابق،
                               {building.floors?.reduce((sum, f) => sum + (f.rooms?.length || 0), 0) || 0} غرفة)
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
-                    
+
                     {residence.rooms && residence.rooms.length > 0 && (
                       <div className="text-sm text-muted-foreground mt-2">
                         <div className="font-medium">غرف مباشرة: {flatRooms}</div>
@@ -441,7 +441,7 @@ export default function DebugDataPage() {
             >
               طباعة البيانات في Console
             </Button>
-            
+
             <Button
               variant="outline"
               onClick={() => {
@@ -466,7 +466,7 @@ export default function DebugDataPage() {
             >
               تصدير البيانات JSON
             </Button>
-            
+
             <Button
               onClick={() => window.location.href = '/accommodation/unified-management'}
             >

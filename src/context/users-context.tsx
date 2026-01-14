@@ -3,8 +3,11 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/firestore-shim';
+import { onAuthStateChanged } from '@/lib/auth-shim';
+import * as D1Client from '@/lib/d1-client';
+
+const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true' || false;
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -85,10 +88,27 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     return () => unsub();
   }, []);
 
-  const loadUsers = useCallback(() => {
+  const loadUsers = useCallback(async () => {
     if (isLoaded.current) return;
     
     if (!db) {
+      if (USE_D1) {
+        try {
+          const usersData = await D1Client.getUsers();
+          setUsers(usersData || []);
+          const storedUserId = localStorage.getItem('currentUser');
+          const activeUser = (usersData || []).find((u: User) => u.id === storedUserId) || (usersData || [])[0] || null;
+          setCurrentUser(activeUser || null);
+          if (activeUser?.themeSettings) applyTheme(activeUser.themeSettings);
+        } catch (e) {
+          console.error('Error fetching users from D1:', e);
+          setUsers([]);
+        }
+        setLoading(false);
+        isLoaded.current = true;
+        return;
+      }
+
       console.log("Firebase not configured, using local storage");
       
       // Load from localStorage

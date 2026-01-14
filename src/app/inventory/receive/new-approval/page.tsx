@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
 import { FileUploadArea } from '@/components/ui/file-upload-area';
 import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from '@/lib/firestore-shim';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';

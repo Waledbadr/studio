@@ -9,7 +9,7 @@ import { useUsers } from '@/context/users-context';
 import { formatDistanceToNow } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from '@/lib/firestore-shim';
 
 interface Item {
   id: string;

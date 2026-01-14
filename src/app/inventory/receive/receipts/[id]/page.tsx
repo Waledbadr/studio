@@ -11,7 +11,7 @@ import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { Printer, Edit, Loader2, Upload } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from '@/lib/firestore-shim';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';

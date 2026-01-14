@@ -1,0 +1,12 @@
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25101', '2025-10-20T11:23:41.000Z', 'KA43UwlETuLC7bWffony', 2, 'Gypsum -> A -> Kitchens');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25111', '2025-11-24T07:37:45.000Z', 'L3wLRKW34H2dM2tQaBfI', 7, 'AlZaher -> 1 -> 1 -> 7');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, location_name, item_count) VALUES ('MIV-25112', '2025-11-25T07:16:03.000Z', '4znleAk6l3E1eb1kAEXK', 'Um Al-Salam -> عمارة -> 1 -> حمام 2', 4);
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25121', '2025-12-16T09:24:10.000Z', 'KA43UwlETuLC7bWffony', 2, 'Gypsum -> C -> WareHouse Small');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25122', '2025-12-16T09:27:10.000Z', 'KA43UwlETuLC7bWffony', 3, 'Gypsum -> A -> Bathrooms 14');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25123', '2025-12-16T09:33:30.000Z', 'KA43UwlETuLC7bWffony', 1, 'Gypsum -> A -> Bathrooms 15');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25124', '2025-12-16T09:34:36.000Z', 'KA43UwlETuLC7bWffony', 1, 'Gypsum -> C -> WareHouse Big');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25125', '2025-12-16T09:35:50.000Z', 'KA43UwlETuLC7bWffony', 2, 'Gypsum -> C -> WareHouse Big');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25126', '2025-12-16T09:40:16.000Z', 'KA43UwlETuLC7bWffony', 5, 'Gypsum -> A -> Kitchens');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-25127', '2025-12-16T09:43:53.000Z', 'KA43UwlETuLC7bWffony', 2, 'Gypsum -> C -> K -> 4');
+INSERT OR REPLACE INTO mivs (id, date, residence_id, location_name, item_count) VALUES ('MIV-25128', '2025-12-16T09:49:09.000Z', 'KA43UwlETuLC7bWffony', 'Gypsum -> C -> K -> 1', 11);
+INSERT OR REPLACE INTO mivs (id, date, residence_id, item_count, location_name) VALUES ('MIV-2591', '2025-09-21T13:26:53.000Z', 'DkivDvDBirmX4HIHU3cW', 2, 'Test Complex -> Test Building 1 -> 0');

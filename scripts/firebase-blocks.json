@@ -1,0 +1,1242 @@
+[
+  {
+    "start": 201,
+    "lines": [
+      "    if (!db) {\r",
+      "      console.log(\"Firebase not configured, using local storage\");\r",
+      "      try {\r",
+      "        const storedResidences = localStorage.getItem('estatecare_residences');\r",
+      "        const residencesData = storedResidences ? JSON.parse(storedResidences) : [];\r",
+      "        setResidences(residencesData);\r",
+      "      } catch (error) {\r",
+      "        console.error(\"Error loading from localStorage:\", error);\r",
+      "        setResidences([]);\r",
+      "      }\r",
+      "      setLoading(false);\r",
+      "      isLoaded.current = true;\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 213
+  },
+  {
+    "start": 224,
+    "lines": [
+      "    const residencesCollection = collection(db, \"residences\");\r",
+      "\r",
+      "    unsubscribeRef.current = safeOnSnapshot(residencesCollection, (snapshot) => {\r",
+      "      const residencesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Complex));\r",
+      "      setResidences(residencesData);\r",
+      "      setLoading(false);\r",
+      "    }, (error) => {\r",
+      "      console.error(\"Error fetching residences:\", error);\r",
+      "      toast({ title: \"Firestore Error\", description: \"Could not fetch residences data.\", variant: \"destructive\" });\r",
+      "      setLoading(false);\r",
+      "    }, { retryOnClose: true });\r",
+      "\r",
+      "    return () => {\r",
+      "      if (unsubscribeRef.current) unsubscribeRef.current();\r",
+      "    };\r"
+    ],
+    "type": "firebase",
+    "end": 238
+  },
+  {
+    "start": 275,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Use localStorage when Firebase is not available\r",
+      "      try {\r",
+      "        const newComplex: Complex = {\r",
+      "          id: `complex-${Date.now()}`,\r",
+      "          name: trimmedName,\r",
+      "          city: city.trim(),\r",
+      "          managerId,\r",
+      "          buildings: [],\r",
+      "          facilities: [],\r",
+      "          disabled: false\r",
+      "        };\r"
+    ],
+    "type": "firebase",
+    "end": 286
+  },
+  {
+    "start": 315,
+    "lines": [
+      "    const docRef = doc(collection(db, \"residences\"));\r",
+      "    const newComplex: Complex = { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [], disabled: false };\r",
+      "\r",
+      "    if (USE_D1) {\r",
+      "      try {\r",
+      "        await D1Actions.createResidence(newComplex);\r",
+      "        if (managerId) {\r",
+      "          // We need to fetch the user first to append? Or can we just append in D1 if we had atomic push...\r",
+      "          // Drizzle/SQLite doesn't have arrayUnion easily.\r",
+      "          // We should probably fetch the user assignedResidences first?\r",
+      "          // For now, let's assume we rely on the UI to have the user loaded? No, users context might have it.\r",
+      "          // Safest is to just ignore the user update here for now?\r",
+      "          // The plan said: \"Sync user's assignedResidences with this new residence\"\r",
+      "          // Let's rely on the UsersContext or separate action effectively?\r",
+      "          // Or better: Let's read the user from localStorage or just skip it if it's complicated for this step?\r",
+      "          // No, I added updateUser action. I should use it.\r",
+      "          // But I don't have the current assignedResidences of that user here easily without fetching.\r",
+      "          // I'll skip the user update for this moment to avoid race condition/complexity, \r",
+      "          // as managerId on the complex is the source of truth for \"who manages this\".\r",
+      "          // The assignedResidences on user is simpler for quick lookup but maybe redundant?\r",
+      "          // Wait, the existing code does it.\r",
+      "          // Let's try to do it if we can access the user data?\r",
+      "          // I'll skip it for now and add a TODO. The `managerId` on residence is what matters most for permission checks usually.\r",
+      "        }\r",
+      "        // Optimistic update\r",
+      "        setResidences(prev => [...prev, newComplex]);\r",
+      "        toast({ title: \"Success\", description: \"New residential complex added (D1).\" });\r",
+      "      } catch (e) {\r",
+      "        console.error(e);\r",
+      "        toast({ title: \"Error\", description: \"Failed to add complex to D1.\", variant: \"destructive\" });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 346
+  },
+  {
+    "start": 349,
+    "lines": [
+      "    await setDoc(docRef, newComplex);\r",
+      "    // Sync user's assignedResidences with this new residence\r",
+      "    try {\r",
+      "      if (managerId) {\r",
+      "        const userRef = doc(db, 'users', managerId);\r",
+      "        // Use set with merge to create if missing\r",
+      "        await setDoc(userRef, { assignedResidences: arrayUnion(docRef.id) } as any, { merge: true });\r",
+      "      }\r",
+      "    } catch (e) {\r",
+      "      console.warn('User sync failed (addComplex):', e);\r",
+      "    }\r",
+      "    toast({ title: \"Success\", description: \"New residential complex added.\" });\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 361
+  },
+  {
+    "start": 407,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          return {\r",
+      "            ...c,\r",
+      "            buildings: c.buildings.map(b => {\r",
+      "              if (b.id !== buildingId) return b;\r",
+      "              return {\r",
+      "                ...b,\r",
+      "                floors: b.floors.map(f => {\r",
+      "                  if (f.id !== floorId) return f;\r",
+      "                  if (f.rooms.some(r => r.id !== roomId && r.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "                    toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم.', variant: 'destructive' });\r",
+      "                    return f;\r",
+      "                  }\r",
+      "                  return { ...f, rooms: f.rooms.map(r => r.id === roomId ? { ...r, name: trimmed } : r) };\r",
+      "                })\r",
+      "              };\r"
+    ],
+    "type": "firebase",
+    "end": 425
+  },
+  {
+    "start": 440,
+    "lines": [
+      "      const snap = await getDoc(ref);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const b = data.buildings.find(x => x.id === buildingId);\r",
+      "      const f = b?.floors.find(x => x.id === floorId);\r",
+      "      if (!b || !f) throw new Error('Not found');\r",
+      "      if (f.rooms.some(r => r.id !== roomId && r.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "        toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم.', variant: 'destructive' });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 448
+  },
+  {
+    "start": 457,
+    "lines": [
+      "      await updateDoc(ref, { buildings });\r",
+      "      toast({ title: 'تم', description: 'تم تحديث اسم الغرفة.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('updateRoomName error:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to update room name.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 463
+  },
+  {
+    "start": 519,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => c.id === complexId ? updateInComplex(c) : c);\r",
+      "        setResidences(updated);\r",
+      "        saveToLocalStorage(updated);\r",
+      "        toast({ title: 'تم', description: 'تم تحديث اسم التجهيز.' });\r",
+      "      } catch (e) {\r",
+      "        console.error('updateFacilityName local error:', e);\r",
+      "        toast({ title: 'خطأ', description: 'فشل تحديث الاسم محلياً.', variant: 'destructive' });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 529
+  },
+  {
+    "start": 533,
+    "lines": [
+      "      const snap = await getDoc(ref);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const buildings = updateInComplex(data).buildings;\r",
+      "      const facilities = updateInComplex(data).facilities || [];\r",
+      "      await updateDoc(ref, { buildings, facilities });\r",
+      "      toast({ title: 'تم', description: 'تم تحديث اسم التجهيز.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('updateFacilityName error:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to update facility name.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 544
+  },
+  {
+    "start": 580,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          return {\r",
+      "            ...c,\r",
+      "            buildings: c.buildings.map(b => {\r",
+      "              if (b.id !== buildingId) return b;\r",
+      "              if (b.floors.some(f => f.id !== floorId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "                toast({ title: 'مكرر', description: 'يوجد طابق بنفس الاسم.', variant: 'destructive' });\r",
+      "                return b;\r",
+      "              }\r",
+      "              return { ...b, floors: b.floors.map(f => f.id === floorId ? { ...f, name: trimmed } : f) };\r",
+      "            })\r",
+      "          };\r"
+    ],
+    "type": "firebase",
+    "end": 594
+  },
+  {
+    "start": 607,
+    "lines": [
+      "      const snap = await getDoc(ref);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const b = data.buildings.find(x => x.id === buildingId);\r",
+      "      if (!b) throw new Error('Building not found');\r",
+      "      if (b.floors.some(f => f.id !== floorId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "        toast({ title: 'مكرر', description: 'يوجد طابق بنفس الاسم.', variant: 'destructive' });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 614
+  },
+  {
+    "start": 620,
+    "lines": [
+      "      await updateDoc(ref, { buildings });\r",
+      "      toast({ title: 'تم', description: 'تم تحديث اسم الطابق.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('updateFloorName error:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to update floor name.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 626
+  },
+  {
+    "start": 659,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          if (c.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "            toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });\r",
+      "            return c;\r",
+      "          }\r",
+      "          return {\r",
+      "            ...c,\r",
+      "            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b)\r",
+      "          };\r"
+    ],
+    "type": "firebase",
+    "end": 670
+  },
+  {
+    "start": 683,
+    "lines": [
+      "      const snap = await getDoc(ref);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      if (data.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {\r",
+      "        toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 688
+  },
+  {
+    "start": 691,
+    "lines": [
+      "      await updateDoc(ref, { buildings });\r",
+      "      toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('updateBuildingName error:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to update building name.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 697
+  },
+  {
+    "start": 711,
+    "lines": [
+      "      if (!db) {\r",
+      "        try {\r",
+      "          const compIndex = residences.findIndex(r => r.id === from.complexId);\r",
+      "          if (compIndex < 0) return;\r",
+      "          const comp = residences[compIndex];\r",
+      "          const srcB = comp.buildings.find(b => b.id === from.buildingId);\r",
+      "          const dstB = comp.buildings.find(b => b.id === to.buildingId);\r",
+      "          const srcF = srcB?.floors.find(f => f.id === from.floorId);\r",
+      "          const dstF = dstB?.floors.find(f => f.id === to.floorId);\r",
+      "          const room = srcF?.rooms.find(r => r.id === roomId);\r",
+      "          if (!srcB || !dstB || !srcF || !dstF || !room) return;\r",
+      "          if (dstF.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {\r",
+      "            toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الطابق الهدف. النقل مرفوض.', variant: 'destructive' });\r",
+      "            return;\r"
+    ],
+    "type": "firebase",
+    "end": 724
+  },
+  {
+    "start": 756,
+    "lines": [
+      "        const snap = await getDoc(ref);\r",
+      "        if (!snap.exists()) throw new Error('Complex not found');\r",
+      "        const data = snap.data() as Complex;\r",
+      "        const srcB = data.buildings.find(b => b.id === from.buildingId);\r",
+      "        const dstB = data.buildings.find(b => b.id === to.buildingId);\r",
+      "        const srcF = srcB?.floors.find(f => f.id === from.floorId);\r",
+      "        const dstF = dstB?.floors.find(f => f.id === to.floorId);\r",
+      "        const room = srcF?.rooms.find(r => r.id === roomId);\r",
+      "        if (!srcB || !dstB || !srcF || !dstF || !room) throw new Error('Room/building/floor not found');\r",
+      "        if (dstF.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {\r",
+      "          toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الطابق الهدف. النقل مرفوض.', variant: 'destructive' });\r",
+      "          return;\r"
+    ],
+    "type": "firebase",
+    "end": 767
+  },
+  {
+    "start": 784,
+    "lines": [
+      "        await updateDoc(ref, { buildings });\r",
+      "        toast({ title: 'Success', description: 'Room moved.' });\r",
+      "      } catch (e) {\r",
+      "        console.error('Error moving room same-complex cross-building:', e);\r",
+      "        toast({ title: 'Error', description: 'Failed to move room.', variant: 'destructive' });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 790
+  },
+  {
+    "start": 794,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const src = residences.find(r => r.id === from.complexId);\r",
+      "        const dst = residences.find(r => r.id === to.complexId);\r",
+      "        if (!src || !dst) return;\r",
+      "        const srcB = src.buildings.find(b => b.id === from.buildingId);\r",
+      "        const dstB = dst.buildings.find(b => b.id === to.buildingId);\r",
+      "        const srcF = srcB?.floors.find(f => f.id === from.floorId);\r",
+      "        const dstF = dstB?.floors.find(f => f.id === to.floorId);\r",
+      "        const room = srcF?.rooms.find(r => r.id === roomId);\r",
+      "        if (!room || !dstF) return;\r",
+      "        if (dstF.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {\r",
+      "          toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الوجهة. النقل مرفوض.', variant: 'destructive' });\r",
+      "          return;\r"
+    ],
+    "type": "firebase",
+    "end": 807
+  },
+  {
+    "start": 992,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const srcIndex = residences.findIndex(r => r.id === fromComplexId);\r",
+      "        const dstIndex = residences.findIndex(r => r.id === toComplexId);\r",
+      "        if (srcIndex < 0 || dstIndex < 0) return;\r",
+      "        const src = residences[srcIndex];\r",
+      "        const dst = residences[dstIndex];\r",
+      "        // locate facility\r",
+      "        const getFrom = (): Facility | undefined => {\r",
+      "          if (from.level === 'complex') return (src.facilities || []).find(f => f.id === facilityId);\r",
+      "          const b = src.buildings.find(b => b.id === from.buildingId);\r",
+      "          if (!b) return undefined;\r",
+      "          if (from.level === 'building') return (b.facilities || []).find(f => f.id === facilityId);\r",
+      "          const fl = b.floors.find(fl => fl.id === from.floorId);\r",
+      "          return (fl?.facilities || []).find(f => f.id === facilityId);\r",
+      "        };\r"
+    ],
+    "type": "firebase",
+    "end": 1007
+  },
+  {
+    "start": 1174,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const current = residences.find(r => r.id === complexId);\r",
+      "        if (current) {\r",
+      "          const building = current.buildings.find(b => b.id === buildingId);\r",
+      "          const toFloor = building?.floors.find(f => f.id === toFloorId);\r",
+      "          const room = building?.floors.find(f => f.id === fromFloorId)?.rooms.find(r => r.id === roomId);\r",
+      "          if (toFloor && room && toFloor.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {\r",
+      "            toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الطابق الهدف. النقل مرفوض.', variant: 'destructive' });\r",
+      "            return;\r"
+    ],
+    "type": "firebase",
+    "end": 1183
+  },
+  {
+    "start": 1226,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      // Duplicate guard on target floor\r",
+      "      const b = data.buildings.find(b => b.id === buildingId);\r",
+      "      const toFloor = b?.floors.find(f => f.id === toFloorId);\r",
+      "      const room = b?.floors.find(f => f.id === fromFloorId)?.rooms.find(r => r.id === roomId);\r",
+      "      if (toFloor && room && toFloor.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {\r",
+      "        toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الطابق الهدف. النقل مرفوض.', variant: 'destructive' });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 1235
+  },
+  {
+    "start": 1263,
+    "lines": [
+      "      await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: 'Success', description: 'Room moved.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error moving room:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to move room.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1269
+  },
+  {
+    "start": 1312,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Local mode: update residences and sync local users manager linkage\r",
+      "      try {\r",
+      "        const prev = residences.find(r => r.id === id);\r",
+      "        const updatedList = residences.map(r => r.id === id ? { ...r, ...payload } : r);\r",
+      "        setResidences(updatedList);\r",
+      "        saveToLocalStorage(updatedList);\r",
+      "        // Sync users: remove from old manager, add to new manager\r",
+      "        try {\r",
+      "          const storedUsers = localStorage.getItem('estatecare_users');\r",
+      "          if (storedUsers) {\r",
+      "            const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;\r",
+      "            const updatedUsers = usersData.map(u => {\r",
+      "              let assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];\r",
+      "              // Remove from previous manager\r",
+      "              if (prev && prev.managerId && u.id === prev.managerId && prev.managerId !== payload.managerId) {\r",
+      "                assigned = assigned.filter(rid => rid !== id);\r",
+      "              }\r",
+      "              // Add to new manager\r",
+      "              if (payload.managerId && u.id === payload.managerId) {\r",
+      "                assigned = Array.from(new Set([...assigned, id]));\r",
+      "              }\r",
+      "              return { ...u, assignedResidences: assigned };\r",
+      "            });\r",
+      "            localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));\r",
+      "          }\r",
+      "        } catch (e) {\r",
+      "          console.warn('Local users sync failed (updateComplex):', e);\r",
+      "        }\r",
+      "        toast({ title: \"Success\", description: \"Complex details updated (locally).\" });\r",
+      "      } catch (e) {\r",
+      "        console.error('updateComplex local error:', e);\r",
+      "        toast({ title: 'Error', description: 'Failed to update complex locally.', variant: 'destructive' });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1346
+  },
+  {
+    "start": 1351,
+    "lines": [
+      "      const prevSnap = await getDoc(complexDocRef);\r",
+      "      const prevData = prevSnap.exists() ? (prevSnap.data() as Complex) : undefined;\r",
+      "      await updateDoc(complexDocRef, payload);\r",
+      "      // Sync user documents if manager changed\r",
+      "      const prevManagerId = prevData?.managerId;\r",
+      "      const newManagerId = payload.managerId;\r",
+      "      if (prevManagerId && prevManagerId !== newManagerId) {\r",
+      "        try {\r",
+      "          await updateDoc(doc(db, 'users', prevManagerId), { assignedResidences: arrayRemove(id) } as any);\r",
+      "        } catch (e) {\r",
+      "          console.warn('Failed to remove residence from previous manager:', e);\r",
+      "        }\r",
+      "      }\r",
+      "      if (newManagerId && newManagerId !== prevManagerId) {\r",
+      "        try {\r",
+      "          // Use set with merge to handle missing user doc\r",
+      "          await setDoc(doc(db, 'users', newManagerId), { assignedResidences: arrayUnion(id) } as any, { merge: true });\r",
+      "        } catch (e) {\r",
+      "          console.warn('Failed to add residence to new manager:', e);\r",
+      "        }\r",
+      "      }\r",
+      "      toast({ title: \"Success\", description: \"Complex details updated.\" });\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error updating complex:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to update complex.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1377
+  },
+  {
+    "start": 1412,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };\r",
+      "        const updatedResidences = residences.map(c =>\r",
+      "          c.id === complexId\r",
+      "            ? { ...c, buildings: [...c.buildings, newBuilding] }\r",
+      "            : c\r",
+      "        );\r",
+      "\r",
+      "        setResidences(updatedResidences);\r",
+      "        saveToLocalStorage(updatedResidences);\r",
+      "        toast({ title: \"Success\", description: \"New building added to the complex (locally).\" });\r",
+      "      } catch (error) {\r",
+      "        console.error(\"Error saving to localStorage:\", error);\r",
+      "        toast({ title: \"Error\", description: \"Failed to add building locally.\", variant: \"destructive\" });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1428
+  },
+  {
+    "start": 1433,
+    "lines": [
+      "      const complexDoc = await getDoc(complexDocRef);\r",
+      "\r",
+      "      if (!complexDoc.exists()) throw new Error(\"Complex not found\");\r",
+      "\r",
+      "      const complexData = complexDoc.data() as Complex;\r",
+      "      const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };\r",
+      "      const updatedBuildings = [...complexData.buildings, newBuilding];\r",
+      "\r",
+      "      await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: \"Success\", description: \"New building added to the complex.\" });\r",
+      "\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error adding building:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to add building.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1448
+  },
+  {
+    "start": 1478,
+    "lines": [
+      "    if (!db) {\r",
+      "      toast({ title: \"Error\", description: firebaseErrorMessage, variant: \"destructive\" });\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1480
+  },
+  {
+    "start": 1485,
+    "lines": [
+      "      const complexDoc = await getDoc(complexDocRef);\r",
+      "\r",
+      "      if (!complexDoc.exists()) throw new Error(\"Complex not found\");\r",
+      "\r",
+      "      const complexData = complexDoc.data() as Complex;\r",
+      "      const targetBuilding = complexData.buildings.find(b => b.id === buildingId);\r",
+      "\r",
+      "      if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {\r",
+      "        toast({ title: \"Error\", description: \"A floor with this name already exists in this building.\", variant: \"destructive\" });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 1494
+  },
+  {
+    "start": 1505,
+    "lines": [
+      "      await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: \"Success\", description: \"New floor added to the building.\" });\r",
+      "\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error adding floor:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to add floor.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1512
+  },
+  {
+    "start": 1564,
+    "lines": [
+      "    if (!db) {\r",
+      "      toast({ title: \"Error\", description: firebaseErrorMessage, variant: \"destructive\" });\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1566
+  },
+  {
+    "start": 1571,
+    "lines": [
+      "      const complexDoc = await getDoc(complexDocRef);\r",
+      "\r",
+      "      if (!complexDoc.exists()) throw new Error(\"Complex not found\");\r",
+      "\r",
+      "      const complexData = complexDoc.data() as Complex;\r",
+      "\r",
+      "      const building = complexData.buildings.find(b => b.id === buildingId);\r",
+      "      const floor = building?.floors.find(f => f.id === floorId);\r",
+      "\r",
+      "      if (floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {\r",
+      "        toast({ title: \"Error\", description: \"A room with this name already exists on this floor.\", variant: \"destructive\" });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 1582
+  },
+  {
+    "start": 1607,
+    "lines": [
+      "      await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: \"Success\", description: \"New room added to the floor.\" });\r",
+      "\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error adding room:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to add room.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1614
+  },
+  {
+    "start": 1695,
+    "lines": [
+      "    if (!db) {\r",
+      "      toast({ title: \"Error\", description: firebaseErrorMessage, variant: \"destructive\" });\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1697
+  },
+  {
+    "start": 1701,
+    "lines": [
+      "      const complexDoc = await getDoc(complexDocRef);\r",
+      "\r",
+      "      if (!complexDoc.exists()) throw new Error(\"Complex not found\");\r",
+      "\r",
+      "      const complexData = complexDoc.data() as Complex;\r",
+      "\r",
+      "      const building = complexData.buildings.find(b => b.id === buildingId);\r",
+      "      const floor = building?.floors.find(f => f.id === floorId);\r",
+      "\r",
+      "      if (!floor) {\r",
+      "        toast({ title: \"Error\", description: \"Target floor not found.\", variant: \"destructive\" });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 1712
+  },
+  {
+    "start": 1766,
+    "lines": [
+      "      await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "\r",
+      "      let toastDescription = `Added ${addedCount} new rooms.`;\r",
+      "      if (skippedCount > 0) {\r",
+      "        toastDescription += ` Skipped ${skippedCount} duplicate rooms.`\r",
+      "      }\r",
+      "\r",
+      "      toast({ title: \"Success\", description: toastDescription });\r",
+      "\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error adding multiple rooms:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to add rooms.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1779
+  },
+  {
+    "start": 1835,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Local storage implementation\r",
+      "      try {\r",
+      "        const updated = residences.map(complex => {\r",
+      "          if (complex.id !== complexId) return complex;\r",
+      "\r",
+      "          if (level === 'complex') {\r",
+      "            const existingFacilities = complex.facilities || [];\r",
+      "            return { ...complex, facilities: [...existingFacilities, ...newFacilities] };\r",
+      "          }\r",
+      "\r",
+      "          return {\r",
+      "            ...complex,\r",
+      "            buildings: complex.buildings.map(building => {\r",
+      "              if (building.id !== buildingId) return building;\r",
+      "\r",
+      "              if (level === 'building') {\r",
+      "                const existingFacilities = building.facilities || [];\r",
+      "                return { ...building, facilities: [...existingFacilities, ...newFacilities] };\r",
+      "              }\r",
+      "\r",
+      "              // level === 'floor'\r",
+      "              return {\r",
+      "                ...building,\r",
+      "                floors: building.floors.map(floor => {\r",
+      "                  if (floor.id !== floorId) return floor;\r",
+      "                  const existingFacilities = floor.facilities || [];\r",
+      "                  return { ...floor, facilities: [...existingFacilities, ...newFacilities] };\r",
+      "                })\r",
+      "              };\r"
+    ],
+    "type": "firebase",
+    "end": 1864
+  },
+  {
+    "start": 1882,
+    "lines": [
+      "      const complexDoc = await getDoc(complexDocRef);\r",
+      "\r",
+      "      if (!complexDoc.exists()) throw new Error(\"Complex not found\");\r",
+      "      const complexData = complexDoc.data() as Complex;\r",
+      "\r",
+      "      const newFacilitiesForFirebase: Facility[] = [];\r",
+      "      for (let i = 1; i <= quantity; i++) {\r",
+      "        const facilityName = quantity > 1 ? `${name} ${i}` : name;\r",
+      "        newFacilitiesForFirebase.push({\r",
+      "          id: `facility-${Date.now()}-${Math.random()}`,\r",
+      "          name: facilityName,\r",
+      "          type: type.trim()\r",
+      "        });\r",
+      "      }\r",
+      "\r",
+      "      if (level === 'complex') {\r",
+      "        const existingFacilities = complexData.facilities || [];\r",
+      "        const updatedFacilities = [...existingFacilities, ...newFacilitiesForFirebase];\r",
+      "        await updateDoc(complexDocRef, { facilities: updatedFacilities });\r",
+      "      } else if (level === 'building' && buildingId) {\r",
+      "        const updatedBuildings = complexData.buildings.map(b => {\r",
+      "          if (b.id === buildingId) {\r",
+      "            const existingFacilities = b.facilities || [];\r",
+      "            return { ...b, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };\r",
+      "          }\r",
+      "          return b;\r",
+      "        });\r",
+      "        await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "      } else if (level === 'floor' && buildingId && floorId) {\r",
+      "        const updatedBuildings = complexData.buildings.map(b => {\r",
+      "          if (b.id === buildingId) {\r",
+      "            return {\r",
+      "              ...b,\r",
+      "              floors: b.floors.map(f => {\r",
+      "                if (f.id === floorId) {\r",
+      "                  const existingFacilities = f.facilities || [];\r",
+      "                  return { ...f, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };\r",
+      "                }\r",
+      "                return f;\r",
+      "              })\r",
+      "            };\r"
+    ],
+    "type": "firebase",
+    "end": 1922
+  },
+  {
+    "start": 1926,
+    "lines": [
+      "        await updateDoc(complexDocRef, { buildings: updatedBuildings });\r",
+      "      }\r",
+      "\r",
+      "      toast({ title: \"Success\", description: `Added ${quantity} new facility/facilities.` });\r",
+      "\r",
+      "    } catch (error) {\r",
+      "      console.error(\"Error adding facility:\", error);\r",
+      "      toast({ title: \"Error\", description: \"Failed to add facility.\", variant: \"destructive\" });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 1935
+  },
+  {
+    "start": 1951,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updatedResidences = residences.filter(r => r.id !== id);\r",
+      "        setResidences(updatedResidences);\r",
+      "        saveToLocalStorage(updatedResidences);\r",
+      "        toast({ title: \"Success\", description: \"Complex deleted successfully (locally).\" });\r",
+      "      } catch (error) {\r",
+      "        console.error(\"Error deleting from localStorage:\", error);\r",
+      "        toast({ title: \"Error\", description: \"Failed to delete complex locally.\", variant: \"destructive\" });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1961
+  },
+  {
+    "start": 1963,
+    "lines": [
+      "    await deleteDoc(doc(db, \"residences\", id));\r",
+      "    toast({ title: \"Success\", description: \"Complex deleted successfully.\" });\r",
+      "  }\r",
+      "\r",
+      "  const deleteBuilding = async (complexId: string, buildingId: string) => {\r",
+      "    if (USE_D1) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);\r",
+      "        setResidences(updated);\r",
+      "        const changed = updated.find(c => c.id === complexId);\r",
+      "        if (changed) await D1Actions.updateResidence(complexId, changed);\r",
+      "        toast({ title: 'Success', description: 'Building deleted (D1).' });\r",
+      "      } catch (e) {\r",
+      "        console.error(e);\r",
+      "        toast({ title: 'Error', description: 'Failed to delete building from D1.', variant: \"destructive\" });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1979
+  },
+  {
+    "start": 1981,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);\r",
+      "        setResidences(updated);\r",
+      "        saveToLocalStorage(updated);\r",
+      "        toast({ title: 'Success', description: 'Building deleted (locally).' });\r",
+      "      } catch (error) {\r",
+      "        console.error('Error deleting building locally:', error);\r",
+      "        toast({ title: 'Error', description: 'Failed to delete building locally.', variant: 'destructive' });\r",
+      "      }\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 1991
+  },
+  {
+    "start": 1995,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const updatedBuildings = (data.buildings || []).filter(b => b.id !== buildingId);\r",
+      "      await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: 'Success', description: 'Building deleted.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error deleting building:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to delete building.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2005
+  },
+  {
+    "start": 2027,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          return {\r",
+      "            ...c,\r",
+      "            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, floors: b.floors.filter(f => f.id !== floorId) } : b)\r",
+      "          };\r"
+    ],
+    "type": "firebase",
+    "end": 2034
+  },
+  {
+    "start": 2047,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const updatedBuildings = data.buildings.map(b => b.id === buildingId ? { ...b, floors: b.floors.filter(f => f.id !== floorId) } : b);\r",
+      "      await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: 'Success', description: 'Floor deleted.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error deleting floor:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to delete floor.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2057
+  },
+  {
+    "start": 2085,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          return {\r",
+      "            ...c,\r",
+      "            buildings: c.buildings.map(b => {\r",
+      "              if (b.id !== buildingId) return b;\r",
+      "              return {\r",
+      "                ...b,\r",
+      "                floors: b.floors.map(f => f.id === floorId ? { ...f, rooms: f.rooms.filter(r => r.id !== roomId) } : f)\r",
+      "              };\r"
+    ],
+    "type": "firebase",
+    "end": 2096
+  },
+  {
+    "start": 2111,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      const updatedBuildings = data.buildings.map(b => {\r",
+      "        if (b.id !== buildingId) return b;\r",
+      "        return {\r",
+      "          ...b,\r",
+      "          floors: b.floors.map(f => f.id === floorId ? { ...f, rooms: f.rooms.filter(r => r.id !== roomId) } : f)\r",
+      "        };\r"
+    ],
+    "type": "firebase",
+    "end": 2119
+  },
+  {
+    "start": 2121,
+    "lines": [
+      "      await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      toast({ title: 'Success', description: 'Room deleted.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error deleting room:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to delete room.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2127
+  },
+  {
+    "start": 2170,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(c => {\r",
+      "          if (c.id !== complexId) return c;\r",
+      "          if (level === 'complex') {\r",
+      "            return { ...c, facilities: (c.facilities || []).filter(f => f.id !== facilityId) };\r",
+      "          }\r",
+      "          if (level === 'building' && buildingId) {\r",
+      "            return {\r",
+      "              ...c,\r",
+      "              buildings: c.buildings.map(b => b.id === buildingId ? { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) } : b)\r",
+      "            };\r"
+    ],
+    "type": "firebase",
+    "end": 2181
+  },
+  {
+    "start": 2206,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "\r",
+      "      if (level === 'complex') {\r",
+      "        const updatedFacilities = (data.facilities || []).filter(f => f.id !== facilityId);\r",
+      "        await updateDoc(complexRef, { facilities: updatedFacilities });\r",
+      "      } else if (level === 'building' && buildingId) {\r",
+      "        const updatedBuildings = data.buildings.map(b => b.id === buildingId ? { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) } : b);\r",
+      "        await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      } else if (level === 'floor' && buildingId && floorId) {\r",
+      "        const updatedBuildings = data.buildings.map(b => b.id === buildingId ? {\r",
+      "          ...b,\r",
+      "          floors: b.floors.map(f => f.id === floorId ? { ...f, facilities: (f.facilities || []).filter(fc => fc.id !== facilityId) } : f)\r",
+      "        } : b);\r",
+      "        await updateDoc(complexRef, { buildings: updatedBuildings });\r",
+      "      }\r",
+      "\r",
+      "      toast({ title: 'Success', description: 'Facility deleted.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error deleting facility:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to delete facility.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2229
+  },
+  {
+    "start": 2350,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        // First check duplicate on current local state\r",
+      "        const current = residences.find(r => r.id === complexId);\r",
+      "        const toMove = current ? getFacilityById(current) : undefined;\r",
+      "        if (current && targetHasDuplicate(current, toMove?.name)) {\r",
+      "          toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم في الوجهة. النقل مرفوض.', variant: 'destructive' });\r",
+      "          return;\r"
+    ],
+    "type": "firebase",
+    "end": 2357
+  },
+  {
+    "start": 2372,
+    "lines": [
+      "      const snap = await getDoc(complexRef);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "      const data = snap.data() as Complex;\r",
+      "      // Duplicate guard on DB snapshot\r",
+      "      const facToMove = getFacilityById(data);\r",
+      "      if (targetHasDuplicate(data, facToMove?.name)) {\r",
+      "        toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم في الوجهة. النقل مرفوض.', variant: 'destructive' });\r",
+      "        return;\r"
+    ],
+    "type": "firebase",
+    "end": 2379
+  },
+  {
+    "start": 2382,
+    "lines": [
+      "      await updateDoc(complexRef, { buildings: updated.buildings, facilities: updated.facilities || [] });\r",
+      "      toast({ title: 'Success', description: 'Facility moved.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('Error moving facility:', e);\r",
+      "      toast({ title: 'Error', description: 'Failed to move facility.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2388
+  },
+  {
+    "start": 2407,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Cannot check without DB; assume no stock\r",
+      "      return false;\r",
+      "    }\r",
+      "    try {\r",
+      "      const invSnap = await getDocs(collection(db, 'inventory'));\r",
+      "      for (const d of invSnap.docs) {\r",
+      "        const data: any = d.data();\r",
+      "        const stockByResidence = data.stockByResidence || {};\r",
+      "        const val = Number(stockByResidence[residenceId] || 0);\r",
+      "        if (!isNaN(val) && val > 0) return true;\r",
+      "      }\r",
+      "      return false;\r",
+      "    } catch (e) {\r",
+      "      console.error('Error checking residence stock:', e);\r",
+      "      return true; // fail-safe: prevent disabling on error\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2424
+  },
+  {
+    "start": 2447,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Local storage path\r",
+      "      const updated = residences.map(r => r.id === id ? { ...r, disabled } : r);\r",
+      "      setResidences(updated);\r",
+      "      saveToLocalStorage(updated);\r",
+      "      toast({ title: 'Success', description: disabled ? 'Residence disabled (local).' : 'Residence enabled (local).' });\r",
+      "      return;\r"
+    ],
+    "type": "firebase",
+    "end": 2453
+  },
+  {
+    "start": 2458,
+    "lines": [
+      "      await updateDoc(complexDocRef, { disabled });\r",
+      "      toast({ title: 'Success', description: disabled ? 'Residence disabled.' : 'Residence enabled.' });\r",
+      "    } catch (error) {\r",
+      "      console.error('Error updating residence disabled flag:', error);\r",
+      "      toast({ title: 'Error', description: 'Failed to update residence status.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2464
+  },
+  {
+    "start": 2527,
+    "lines": [
+      "    if (!db) {\r",
+      "      // Local storage implementation\r",
+      "      try {\r",
+      "        const updated = residences.map(complex => {\r",
+      "          if (complex.id !== complexId) return complex;\r",
+      "\r",
+      "          if (level === 'complex') {\r",
+      "            return {\r",
+      "              ...complex,\r",
+      "              facilities: (complex.facilities || []).map(f =>\r",
+      "                f.id === facilityId\r",
+      "                  ? { ...f, components: [...(f.components || []), newComponent] }\r",
+      "                  : f\r",
+      "              )\r",
+      "            };\r"
+    ],
+    "type": "firebase",
+    "end": 2541
+  },
+  {
+    "start": 2596,
+    "lines": [
+      "      const snap = await getDoc(ref);\r",
+      "      if (!snap.exists()) throw new Error('Complex not found');\r",
+      "\r",
+      "      const data = snap.data() as Complex;\r",
+      "      let updated: Complex = { ...data };\r",
+      "\r",
+      "      const addComponentToFacility = (facility: Facility): Facility => ({\r",
+      "        ...facility,\r",
+      "        components: [...(facility.components || []), newComponent]\r",
+      "      });\r",
+      "\r",
+      "      if (level === 'complex') {\r",
+      "        updated = {\r",
+      "          ...updated,\r",
+      "          facilities: (updated.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f)\r",
+      "        };\r"
+    ],
+    "type": "firebase",
+    "end": 2611
+  },
+  {
+    "start": 2642,
+    "lines": [
+      "      await updateDoc(ref, {\r",
+      "        facilities: updated.facilities || [],\r",
+      "        buildings: updated.buildings || [],\r",
+      "      } as any);\r",
+      "\r",
+      "      // Update local state immediately for responsive UI\r",
+      "      setResidences(prev => prev.map(c => c.id === complexId ? updated : c));\r",
+      "\r",
+      "      toast({ title: 'تم', description: 'تم إضافة المكون بنجاح.' });\r",
+      "    } catch (e) {\r",
+      "      console.error('addFacilityComponent Firebase error:', e);\r",
+      "      toast({ title: 'خطأ', description: 'فشل إضافة المكون.', variant: 'destructive' });\r",
+      "    }\r",
+      "  };\r"
+    ],
+    "type": "firebase",
+    "end": 2655
+  },
+  {
+    "start": 2666,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(complex => {\r",
+      "          if (complex.id !== complexId) return complex;\r",
+      "\r",
+      "          const updateComponentInFacility = (facility: Facility) => ({\r",
+      "            ...facility,\r",
+      "            components: (facility.components || []).map(c =>\r",
+      "              c.id === componentId ? { ...c, ...updates } : c\r",
+      "            )\r",
+      "          });\r",
+      "\r",
+      "          if (level === 'complex') {\r",
+      "            return {\r",
+      "              ...complex,\r",
+      "              facilities: (complex.facilities || []).map(f =>\r",
+      "                f.id === facilityId ? updateComponentInFacility(f) : f\r",
+      "              )\r",
+      "            };\r"
+    ],
+    "type": "firebase",
+    "end": 2684
+  },
+  {
+    "start": 2739,
+    "lines": [
+      "    if (!db) {\r",
+      "      try {\r",
+      "        const updated = residences.map(complex => {\r",
+      "          if (complex.id !== complexId) return complex;\r",
+      "\r",
+      "          const removeComponentFromFacility = (facility: Facility) => ({\r",
+      "            ...facility,\r",
+      "            components: (facility.components || []).filter(c => c.id !== componentId)\r",
+      "          });\r",
+      "\r",
+      "          if (level === 'complex') {\r",
+      "            return {\r",
+      "              ...complex,\r",
+      "              facilities: (complex.facilities || []).map(f =>\r",
+      "                f.id === facilityId ? removeComponentFromFacility(f) : f\r",
+      "              )\r",
+      "            };\r"
+    ],
+    "type": "firebase",
+    "end": 2755
+  }
+]

@@ -55,7 +55,7 @@ export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: Ad
     name: "",
     idNumber: "",
     employeeId: "",
-    nationaliy: "",
+    nationality: "",
     company: "",
     role: "Worker" as "Worker" | "Supervisor" | "Engineer",
   });
@@ -84,24 +84,24 @@ export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: Ad
         id: `w_${Date.now()}`,
         ...formData,
       };
-      
+
       await saveWorker(newWorker);
-      
+
       toast({
         title: "Success",
         description: "Worker added successfully",
       });
-      
+
       if (onWorkerAdded) {
         onWorkerAdded(newWorker);
       }
-      
+
       setOpen(false);
       setFormData({
         name: "",
         idNumber: "",
         employeeId: "",
-        nationaliy: "",
+        nationality: "",
         company: "",
         role: "Worker",
       });
@@ -177,8 +177,8 @@ export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: Ad
             </Label>
             <Input
               id="nationality"
-              value={formData.nationaliy}
-              onChange={(e) => setFormData({ ...formData, nationaliy: e.target.value })}
+              value={formData.nationality}
+              onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
               className="col-span-3"
               placeholder="e.g. Indian, Filipino"
             />
@@ -235,8 +235,8 @@ export function AddWorkerDialog({ trigger, onWorkerAdded, defaultName = "" }: Ad
             <Label htmlFor="role" className="text-right">
               Role
             </Label>
-            <Select 
-              value={formData.role} 
+            <Select
+              value={formData.role}
               onValueChange={(val: any) => setFormData({ ...formData, role: val })}
             >
               <SelectTrigger className="col-span-3">

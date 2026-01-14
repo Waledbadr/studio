@@ -30,7 +30,7 @@ export default function InvoicePrintPage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
-  
+
   const {
     invoices,
     companies,
@@ -81,7 +81,7 @@ export default function InvoicePrintPage() {
     const periodHistory = getHistoryByDateRange(invoice.startDate, invoice.endDate);
 
     // Find workers for this company
-    const companyWorkers = workers.filter(w => 
+    const companyWorkers = workers.filter(w =>
       w.company === company.name || w.company === company.id
     );
 
@@ -89,13 +89,13 @@ export default function InvoicePrintPage() {
 
     for (const worker of companyWorkers) {
       // Get worker movements in this residence during the period
-      const workerMovements = periodHistory.filter(h => 
-        h.workerId === worker.id && 
+      const workerMovements = periodHistory.filter(h =>
+        h.workerId === worker.id &&
         h.residenceId === invoice.residenceId
       ).sort((a, b) => new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime());
 
       // Check current occupancy (no checkout date)
-      const currentOccupancy = occupants.find(o => 
+      const currentOccupancy = occupants.find(o =>
         o.workerId === worker.id && o.residenceId === invoice.residenceId && !o.until
       );
 
@@ -119,7 +119,7 @@ export default function InvoicePrintPage() {
       if (workerMovements.length > 0) {
         const firstEvent = workerMovements[0];
         const isTransferOut = firstEvent.actionType === 'TRANSFER' && firstEvent.fromResidenceId === invoice.residenceId;
-        
+
         if (firstEvent.actionType === 'CHECK_OUT' || isTransferOut) {
           isInside = true;
           roomName = firstEvent.roomName || firstEvent.fromRoomName || '';
@@ -143,13 +143,13 @@ export default function InvoicePrintPage() {
       }
 
       // Find room info from movements or occupancy
-      const checkInEvent = workerMovements.find(h => 
-        h.actionType === 'CHECK_IN' || 
+      const checkInEvent = workerMovements.find(h =>
+        h.actionType === 'CHECK_IN' ||
         (h.actionType === 'TRANSFER' && h.toResidenceId === invoice.residenceId)
       );
-      
-      const checkOutEvent = workerMovements.find(h => 
-        h.actionType === 'CHECK_OUT' || 
+
+      const checkOutEvent = workerMovements.find(h =>
+        h.actionType === 'CHECK_OUT' ||
         (h.actionType === 'TRANSFER' && h.fromResidenceId === invoice.residenceId)
       );
 
@@ -226,7 +226,7 @@ export default function InvoicePrintPage() {
         originalCheckIn = occ.since;
         originalCheckOut = occ.until || null;
       }
-      
+
       // Final fallback: if we still have room name but missing building/floor, search again
       if (roomName && (!buildingName || !floorName)) {
         const res = residences.find(r => r.id === invoice.residenceId);
@@ -255,11 +255,11 @@ export default function InvoicePrintPage() {
         for (const occ of allWorkerOccupancy) {
           const occStart = new Date(occ.since);
           const occEnd = occ.until ? new Date(occ.until) : endDate;
-          
+
           // Calculate overlap with billing period
           const effectiveStart = occStart > startDate ? occStart : startDate;
           const effectiveEnd = occEnd < endDate ? occEnd : endDate;
-          
+
           if (effectiveStart <= effectiveEnd) {
             // +1 to include both start and end days (same day = 1, consecutive = 2)
             const diff = differenceInDays(effectiveEnd, effectiveStart) + 1;
@@ -312,7 +312,7 @@ export default function InvoicePrintPage() {
           name: worker.name,
           employeeId: worker.employeeId,
           idNumber: worker.idNumber,
-          nationality: worker.nationaliy,
+          nationality: worker.nationality,
           roomName,
           buildingName,
           floorName,
@@ -352,27 +352,27 @@ export default function InvoicePrintPage() {
           amount: Number(w.amount) || 0,
         }));
       }
-    } catch (e) {}
+    } catch (e) { }
     return [];
   }, [invoice, workerDetails]);
 
   const displayDetailsUnsorted = workerDetails.length > 0 ? workerDetails : fallbackBreakdown;
-  
+
   // Sort: 1) Workers still in residence first, 2) Checked-out workers at bottom, 3) Then by room number ascending
   const displayDetails = useMemo(() => {
     if (!invoice) return displayDetailsUnsorted;
-    
+
     const invoiceEndDate = new Date(invoice.endDate);
-    
+
     return [...displayDetailsUnsorted].sort((a, b) => {
       // Check if worker is still in residence (checkout date is null or after invoice end date)
       const aStillIn = !a.checkOutDate || new Date(a.checkOutDate) >= invoiceEndDate;
       const bStillIn = !b.checkOutDate || new Date(b.checkOutDate) >= invoiceEndDate;
-      
+
       // Workers still in residence come first
       if (aStillIn && !bStillIn) return -1;
       if (!aStillIn && bStillIn) return 1;
-      
+
       // Then sort by room number
       const extractNumber = (name: string) => {
         const match = name?.match(/\d+/);
@@ -381,42 +381,42 @@ export default function InvoicePrintPage() {
       return extractNumber(a.roomName) - extractNumber(b.roomName);
     });
   }, [displayDetailsUnsorted, invoice]);
-  
+
   // For grouped invoice: show detailed workers + one summary row for stable workers
   const groupedDisplayDetails = useMemo(() => {
     if (invoiceType === 'detailed' || !invoice) return displayDetails;
-    
+
     const startDate = new Date(invoice.startDate);
     const endDate = new Date(invoice.endDate);
-    
+
     const withMovements: typeof displayDetails = [];
     const withoutMovements: typeof displayDetails = [];
-    
+
     for (const worker of displayDetails) {
       // Check if worker has any movements during the invoice period
       const workerCheckIn = new Date(worker.checkInDate);
       const workerCheckOut = worker.checkOutDate ? new Date(worker.checkOutDate) : null;
-      
+
       // Worker has movement if:
       // 1. Check-in is within the period
       // 2. Check-out is within the period
       const hasCheckInDuringPeriod = workerCheckIn >= startDate && workerCheckIn <= endDate;
       const hasCheckOutDuringPeriod = workerCheckOut && workerCheckOut >= startDate && workerCheckOut <= endDate;
-      
+
       if (hasCheckInDuringPeriod || hasCheckOutDuringPeriod) {
         withMovements.push(worker);
       } else {
         withoutMovements.push(worker);
       }
     }
-    
+
     const result = [...withMovements];
-    
+
     // Add summary row for workers without movements
     if (withoutMovements.length > 0) {
       const totalDaysStable = withoutMovements.reduce((sum, w) => sum + w.days, 0);
       const totalAmountStable = withoutMovements.reduce((sum, w) => sum + w.amount, 0);
-      
+
       result.push({
         workerId: 'grouped-summary',
         name: `عمال ثابتون (${withoutMovements.length} عامل)`,
@@ -434,34 +434,34 @@ export default function InvoicePrintPage() {
         amount: totalAmountStable,
       });
     }
-    
+
     return result;
   }, [invoiceType, displayDetails, invoice]);
-  
+
   // Calculate stats for grouped workers
   const groupedWorkerDetails = useMemo(() => {
     if (!invoice) return { withMovements: [], withoutMovements: [] };
-    
+
     const startDate = new Date(invoice.startDate);
     const endDate = new Date(invoice.endDate);
-    
+
     const withMovements: typeof displayDetails = [];
     const withoutMovements: typeof displayDetails = [];
-    
+
     for (const worker of displayDetails) {
       const workerCheckIn = new Date(worker.checkInDate);
       const workerCheckOut = worker.checkOutDate ? new Date(worker.checkOutDate) : null;
-      
+
       const hasCheckInDuringPeriod = workerCheckIn >= startDate && workerCheckIn <= endDate;
       const hasCheckOutDuringPeriod = workerCheckOut && workerCheckOut >= startDate && workerCheckOut <= endDate;
-      
+
       if (hasCheckInDuringPeriod || hasCheckOutDuringPeriod) {
         withMovements.push(worker);
       } else {
         withoutMovements.push(worker);
       }
     }
-    
+
     return { withMovements, withoutMovements };
   }, [displayDetails, invoice]);
 
@@ -728,14 +728,14 @@ export default function InvoicePrintPage() {
         </Button>
         <div className="flex gap-2">
           <div className="flex gap-1 border rounded-lg p-1">
-            <Button 
+            <Button
               variant={invoiceType === 'detailed' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setInvoiceType('detailed')}
             >
               فاتورة تفصيلية
             </Button>
-            <Button 
+            <Button
               variant={invoiceType === 'grouped' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setInvoiceType('grouped')}
@@ -752,7 +752,7 @@ export default function InvoicePrintPage() {
 
       {/* Printable Invoice */}
       <div className="invoice-content print-page max-w-[210mm] mx-auto bg-white shadow-xl p-6 m-4 print:m-0 print:shadow-none rounded-lg print:rounded-none">
-        
+
         {/* Header */}
         <div className="print-header border-b-2 border-gray-800 pb-3 mb-3">
           <div className="flex justify-between items-start">
@@ -773,7 +773,7 @@ export default function InvoicePrintPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-3 flex justify-between items-end">
             <div className="bg-gray-100 px-3 py-1.5 rounded text-sm">
               <span className="text-gray-500">Invoice #:</span>
@@ -799,7 +799,7 @@ export default function InvoicePrintPage() {
               {company?.nameAr || company?.name || invoice.companyId}
             </div>
           </div>
-          
+
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-gray-700 font-semibold text-sm">
               <Building2 className="h-4 w-4" />
@@ -843,7 +843,7 @@ export default function InvoicePrintPage() {
               <span className="text-xs text-green-600">({groupedWorkerDetails.withoutMovements.length} عامل مجمعين)</span>
             )}
           </div>
-          
+
           <table className="print-table w-full border-collapse text-sm">
             <thead>
               <tr className="bg-gray-100">
@@ -921,7 +921,7 @@ export default function InvoicePrintPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="text-sm text-gray-600">
-                <span className="font-semibold">Number of Workers:</span> {invoiceType === 'grouped' 
+                <span className="font-semibold">Number of Workers:</span> {invoiceType === 'grouped'
                   ? `${groupedWorkerDetails.withMovements.length + groupedWorkerDetails.withoutMovements.length} (${groupedWorkerDetails.withoutMovements.length} مجمعين)`
                   : displayDetails.length
                 }

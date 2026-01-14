@@ -5,9 +5,16 @@
 //   2) Run: npm run lookup:uid -- email1@example.com email2@example.com
 
 import 'dotenv/config';
-import admin from 'firebase-admin';
 
 function initAdmin() {
+  let admin;
+  try {
+    admin = require('firebase-admin');
+  } catch (e) {
+    console.error('firebase-admin is not installed. To use this script install firebase-admin or re-enable Firebase admin support.');
+    process.exit(1);
+  }
+
   if (admin.apps.length) return admin.app();
   // Prefer Application Default Credentials if available
   try {

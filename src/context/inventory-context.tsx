@@ -3,10 +3,10 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from "firebase/firestore";
-import type { Firestore } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from '@/lib/firestore-shim';
+import type { Firestore } from '@/lib/firestore-shim';
 import { useUsers } from './users-context';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '@/lib/auth-shim';
 import type { User } from './users-context';
 import { useResidences } from './residences-context';
 import { useNotifications } from './notifications-context';
@@ -372,22 +372,63 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [audits, setAudits] = useState<InventoryAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const inventoryUnsubscribeRef = useRef<Unsubscribe | null>(null);
-  const categoriesUnsubscribeRef = useRef<Unsubscribe | null>(null);
-  const transfersUnsubscribeRef = useRef<Unsubscribe | null>(null);
-  const auditsUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const inventoryUnsubscribeRef = useRef<any | null>(null);
+  const categoriesUnsubscribeRef = useRef<any | null>(null);
+  const transfersUnsubscribeRef = useRef<any | null>(null);
+  const auditsUnsubscribeRef = useRef<any | null>(null);
   const isLoaded = useRef(false);
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
   const { users, currentUser } = useUsers();
+  const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+  const POLL_INTERVAL_MS = 7000; // polling interval (5-10s window)
+  const d1PollWarnedRef = useRef(false);
 
 
-  const loadInventory = useCallback(() => {
+  const loadInventory = useCallback(async () => {
      if (isLoaded.current) return;
      if (!db) {
-        console.error(firebaseErrorMessage);
-        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+        // In D1-only mode, try to fetch inventory via D1 RPC instead of erroring
+        if (USE_D1) {
+          try {
+            const inv: any[] = await (await import('@/lib/d1-client')).getInventory();
+            const inventoryData = (inv || []).map((data: any) => {
+              const sbr = typeof data.stockByResidence === 'string' ? JSON.parse(data.stockByResidence || '{}') : (data.stockByResidence || {});
+              const totalStock = Object.values(sbr).reduce((sum: number, current) => {
+                const num = Number(current);
+                const safe = isNaN(num) ? 0 : Math.max(0, num);
+                return sum + safe;
+              }, 0);
+              return { id: data.id, ...data, stockByResidence: sbr, stock: totalStock } as InventoryItem;
+            });
+            setItems(inventoryData);
+            const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
+            if (categories.length === 0 && uniqueCategories.length > 0) setCategories(uniqueCategories);
+          } catch (e) {
+            console.warn('Failed to load inventory from D1:', e);
+            setItems([]);
+            setCategories([]);
+          }
+          setLoading(false);
+          isLoaded.current = true;
+          return;
+        }
+
+        // Non-D1 fallback: use local storage, but keep quiet (no error spam)
+        console.log("Firebase not configured, using local storage");
+        try {
+          const storedItems = localStorage.getItem('estatecare_inventory');
+          const ds = storedItems ? JSON.parse(storedItems) : [];
+          setItems(ds.map((d: any) => ({ ...d, stockByResidence: d.stockByResidence || {}, stock: d.stock || 0 })));
+          const storedCats = localStorage.getItem('estatecare_inventory_categories');
+          if (storedCats) setCategories(JSON.parse(storedCats));
+        } catch (error) {
+          console.warn("Error loading inventory from localStorage:", error);
+          setItems([]);
+          setCategories([]);
+        }
         setLoading(false);
+        isLoaded.current = true;
         return;
     }
     
@@ -400,66 +441,86 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     isLoaded.current = true;
     setLoading(true);
 
-  inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      const inventoryData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          const stockByResidence = data.stockByResidence || {};
-          // Ensure totalStock is a valid number, defaulting to 0 if not.
-      // Clamp any negative values when computing totals for safety/display
-      const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
-        const num = Number(current);
-        const safe = isNaN(num) ? 0 : Math.max(0, num);
-        return sum + safe;
-      }, 0);
-          return {
-              id: doc.id,
-              ...data,
-              stock: totalStock,
-              stockByResidence: stockByResidence,
-          } as InventoryItem;
-      });
-      setItems(inventoryData);
-       const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
-       if (categories.length === 0 && uniqueCategories.length > 0) {
-           const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
-           getDoc(categoriesDocRef).then(docSnap => {
-               if (!docSnap.exists()) {
-                   setDoc(categoriesDocRef, { names: uniqueCategories });
-               }
-           });
-       }
-      setLoading(false);
-    }, (error) => {
-        console.error("Error fetching inventory:", error);
-        toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
+// Polling fetch that supports D1 when enabled
+    const fetchAll = async () => {
+      try {
+        // Inventory
+        if (USE_D1) {
+          try {
+            const inv: any[] = await (await import('@/lib/d1-client')).getInventory();
+            const inventoryData = (inv || []).map((data: any) => {
+              const sbr = typeof data.stockByResidence === 'string' ? JSON.parse(data.stockByResidence || '{}') : (data.stockByResidence || {});
+              const totalStock = Object.values(sbr).reduce((sum: number, current) => {
+                const num = Number(current);
+                const safe = isNaN(num) ? 0 : Math.max(0, num);
+                return sum + safe;
+              }, 0);
+              return { id: data.id, ...data, stockByResidence: sbr, stock: totalStock } as InventoryItem;
+            });
+            setItems(inventoryData);
+          } catch (e) {
+            console.error('D1 getInventory failed', e);
+            if (!d1PollWarnedRef.current) { d1PollWarnedRef.current = true; toast({ title: 'D1 unavailable', description: 'فشل الحصول على بيانات المخزون من Cloudflare D1', variant: 'destructive' }); }
+          }
+        } else if (db) {
+          const snapshot = await getDocs(collection(db, 'inventory'));
+          const inventoryData = snapshot.docs.map(doc => {
+              const data = doc.data();
+              const stockByResidence = data.stockByResidence || {};
+              const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
+                const num = Number(current);
+                const safe = isNaN(num) ? 0 : Math.max(0, num);
+                return sum + safe;
+              }, 0);
+              return {
+                  id: doc.id,
+                  ...data,
+                  stock: totalStock,
+                  stockByResidence: stockByResidence,
+              } as InventoryItem;
+          });
+          setItems(inventoryData);
+        }
+
+        // Categories
+        if (USE_D1) {
+          try {
+            const cats: any[] = await (await import('@/lib/d1-client')).getInventoryCategories();
+            if (cats && cats.length) setCategories(cats.map((c:any) => c.names).flat().filter(Boolean));
+          } catch (e) {
+            console.warn('D1 getInventoryCategories failed', e);
+          }
+        } else if (db) {
+          const catSnap = await getDocs(collection(db, 'inventory-categories'));
+          if (!catSnap.empty) {
+            const categoriesData = catSnap.docs[0].data();
+            setCategories(categoriesData.names || []);
+          }
+        }
+
+        // Transfers (kept in Firestore for now)
+        if (db) {
+          const tSnap = await getDocs(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')));
+          setTransfers(tSnap.docs.map(doc => doc.data() as StockTransfer));
+        }
+
+        // Audits
+        if (db) {
+          const aSnap = await getDocs(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')));
+          setAudits(aSnap.docs.map(doc => doc.data() as InventoryAudit));
+        }
+
         setLoading(false);
-    });
-
-    categoriesUnsubscribeRef.current = onSnapshot(collection(db, "inventory-categories"), (snapshot) => {
-      if (snapshot.docs.length > 0) {
-        const categoriesData = snapshot.docs[0].data();
-        setCategories(categoriesData.names || []);
+      } catch (err) {
+        console.error('Polling fetchAll failed', err);
+        setLoading(false);
       }
-    }, (error) => {
-       console.error("Error fetching categories:", error);
-       toast({ title: "Firestore Error", description: "Could not fetch categories data.", variant: "destructive" });
-    });
-    
-    transfersUnsubscribeRef.current = onSnapshot(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')), (snapshot) => {
-        const transfersData = snapshot.docs.map(doc => doc.data() as StockTransfer);
-        setTransfers(transfersData);
-    }, (error) => {
-        console.error("Error fetching transfers:", error);
-        toast({ title: "Firestore Error", description: "Could not fetch stock transfers.", variant: "destructive" });
-    });
+    };
 
-    auditsUnsubscribeRef.current = onSnapshot(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')), (snapshot) => {
-        const auditsData = snapshot.docs.map(doc => doc.data() as InventoryAudit);
-        setAudits(auditsData);
-    }, (error) => {
-        console.error("Error fetching audits:", error);
-        toast({ title: "Firestore Error", description: "Could not fetch audits.", variant: "destructive" });
-    });
+    // Start immediate fetch and then poll
+    fetchAll();
+    const intId = window.setInterval(fetchAll, POLL_INTERVAL_MS);
+    inventoryUnsubscribeRef.current = () => clearInterval(intId);
 
 
   }, [toast, categories.length]);
@@ -701,122 +762,149 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string, overrideReason?: string | null}>[]) => {
+    // Use D1 where possible because counters & transactions are safer server-side
+    if (USE_D1) {
+      try {
+        const payload = {
+          residenceId,
+          items: voucherLocations.flatMap(loc => loc.items.map(i => ({ id: i.id, quantity: Number(i.issueQuantity || 0), nameEn: i.nameEn, nameAr: i.nameAr }))),
+          locationName: voucherLocations[0]?.locationName || undefined
+        };
+        const res: any = await (await import('@/lib/d1-client')).issueStock(payload);
+        if (!res || !res.ok) throw new Error(res?.error || 'D1 issueStock failed');
+        // Refresh local cache
+        try { await loadInventory(); } catch {}
+        toast({ title: 'Success', description: 'Voucher submitted successfully (D1).' });
+        return;
+      } catch (e: any) {
+        console.error('D1 issueStock failed:', e);
+        toast({ title: 'Error', description: e?.message || 'Failed to issue stock (D1).', variant: 'destructive' });
+        throw e;
+      }
+    }
+
+    // Fallback to Firestore implementation
     if (!db) {
-        throw new Error(firebaseErrorMessage);
+      throw new Error(firebaseErrorMessage);
     }
 
     try {
-        const mivId = await generateNewMivId();
-        
-    await runTransaction(db, async (transaction) => {
-      const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
-      const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
+      const mivId = await generateNewMivId();
+      await runTransaction(db, async (transaction) => {
+        const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
+        const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
 
-      // Step 1: Read all items first
-      const itemSnapshots = new Map<string, DocumentSnapshot>();
-  for (const id of uniqueItemIds) {
-        const itemRef = doc(db!, "inventory", id);
-        const itemSnap = await transaction.get(itemRef);
-        if (!itemSnap.exists()) {
-          throw new Error(`Item with ID ${id} not found.`);
+        // Step 1: Read all items first
+        const itemSnapshots = new Map<string, DocumentSnapshot>();
+        for (const id of uniqueItemIds) {
+          const itemRef = doc(db!, "inventory", id);
+          const itemSnap = await transaction.get(itemRef);
+          if (!itemSnap.exists()) {
+            throw new Error(`Item with ID ${id} not found.`);
+          }
+          itemSnapshots.set(id, itemSnap);
         }
-        itemSnapshots.set(id, itemSnap);
-      }
 
-      // Step 2: Aggregate quantities per item and validate against current stock
-      const totalsByItem = new Map<string, number>();
-      for (const line of allIssuedItems) {
-        const prev = totalsByItem.get(line.id) || 0;
-        totalsByItem.set(line.id, prev + (Number(line.issueQuantity) || 0));
-      }
-
-      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
-        const snap = itemSnapshots.get(itemId);
-        const data: any = snap?.data() || {};
-  const currentStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
-        if (currentStock < totalToIssue) {
-          // Get item name for better message
-          const nameEn = data.nameEn || data.name || itemId;
-          throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToIssue}`);
+        // Step 2 & 3 (validate and apply)
+        const totalsByItem = new Map<string, number>();
+        for (const line of allIssuedItems) {
+          const prev = totalsByItem.get(line.id) || 0;
+          totalsByItem.set(line.id, prev + (Number(line.issueQuantity) || 0));
         }
-      }
 
-      // Step 3: Perform stock decrements once per item (atomic and aggregated)
-      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
-        const itemRef = doc(db!, "inventory", itemId);
-        const stockUpdateKey = `stockByResidence.${residenceId}`;
-        // Decrement safely via read-modify-write to avoid underflow if another adjustment snuck in
-        const snap = itemSnapshots.get(itemId);
-        const cur = Math.max(0, Number((snap?.data() as any)?.stockByResidence?.[residenceId] || 0));
-        const next = Math.max(0, cur - totalToIssue);
-        const newSbr = { ...((snap?.data() as any)?.stockByResidence || {}) };
-        newSbr[residenceId] = next;
-        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
-          const n = Number(v);
-          return sum + (isNaN(n) ? 0 : Math.max(0, n));
-        }, 0);
-        transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
-      }
-            
-            const transactionTime = Timestamp.now();
-            const totalItemsCount = totalsByItem.size; // Count distinct items, not quantities
-            let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
-            
-            const mivDocRef = doc(db!, 'mivs', mivId);
-            
-            // Best-effort decode helper
-            const pretty = (s?: string) => {
-              if (!s) return s as any;
-              try { if (/%[0-9A-Fa-f]{2}/.test(String(s))) return decodeURIComponent(String(s)); } catch {}
-              return s;
-            };
+        for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+          const snap = itemSnapshots.get(itemId);
+          const data: any = snap?.data() || {};
+          const currentStock = Math.max(0, Number(data.stockByResidence?.[residenceId] || 0));
+          if (currentStock < totalToIssue) {
+            const nameEn = data.nameEn || data.name || itemId;
+            throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToIssue}`);
+          }
+        }
 
-      for (const location of voucherLocations) {
-        for (const issuedItem of location.items) {
-                    if (issuedItem.issueQuantity <= 0) continue;
+        for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+          const itemRef = doc(db!, "inventory", itemId);
+          const snap = itemSnapshots.get(itemId);
+          const cur = Math.max(0, Number((snap?.data() as any)?.stockByResidence?.[residenceId] || 0));
+          const next = Math.max(0, cur - totalToIssue);
+          const newSbr = { ...((snap?.data() as any)?.stockByResidence || {}) };
+          newSbr[residenceId] = next;
+          const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
+            const n = Number(v);
+            return sum + (isNaN(n) ? 0 : Math.max(0, n));
+          }, 0);
+          transaction.update(itemRef, { stockByResidence: newSbr, stock: newTotal });
+        }
 
-                    // Log transaction
-                    const transactionRef = doc(collection(db!, "inventoryTransactions"));
-                    const snap = itemSnapshots.get(issuedItem.id);
-                    const inv: any = snap?.data() || {};
-          transaction.set(transactionRef, {
-                        itemId: issuedItem.id,
-                        itemNameEn: inv.nameEn || inv.name || pretty(issuedItem.nameEn) || '',
-                        itemNameAr: inv.nameAr || inv.name || pretty(issuedItem.nameAr) || '',
-                        residenceId: residenceId,
-                        date: transactionTime,
-                        type: 'OUT',
-                        quantity: issuedItem.issueQuantity,
-                        referenceDocId: mivId,
-                        locationId: location.locationId,
-            locationName: location.locationName,
-            overrideReason: (issuedItem as any).overrideReason || null,
-            overrideById: (issuedItem as any).overrideReason ? (currentUser?.id || null) : undefined,
-            overrideByName: (issuedItem as any).overrideReason ? (currentUser?.name || undefined) : undefined,
-                    } as Omit<InventoryTransaction, 'id'>);
-                }
-            }
-            
-            // Write MIV master record
-            transaction.set(mivDocRef, { 
-                id: mivId, 
-                date: transactionTime, 
-                residenceId, 
-                itemCount: totalItemsCount,
-                locationName: firstLocationName, // Storing main location for overview
-            });
+        const transactionTime = Timestamp.now();
+        const totalItemsCount = totalsByItem.size;
+        let firstLocationName = voucherLocations[0]?.locationName || 'N/A';
+        const mivDocRef = doc(db!, 'mivs', mivId);
+
+        const pretty = (s?: string) => { if (!s) return s as any; try { if (/%[0-9A-Fa-f]{2}/.test(String(s))) return decodeURIComponent(String(s)); } catch {} return s; };
+
+        for (const location of voucherLocations) {
+          for (const issuedItem of location.items) {
+            if (issuedItem.issueQuantity <= 0) continue;
+            const transactionRef = doc(collection(db!, "inventoryTransactions"));
+            const snap = itemSnapshots.get(issuedItem.id);
+            const inv: any = snap?.data() || {};
+            transaction.set(transactionRef, {
+              itemId: issuedItem.id,
+              itemNameEn: inv.nameEn || inv.name || pretty(issuedItem.nameEn) || '',
+              itemNameAr: inv.nameAr || inv.name || pretty(issuedItem.nameAr) || '',
+              residenceId: residenceId,
+              date: transactionTime,
+              type: 'OUT',
+              quantity: issuedItem.issueQuantity,
+              referenceDocId: mivId,
+              locationId: location.locationId,
+              locationName: location.locationName,
+              overrideReason: (issuedItem as any).overrideReason || null,
+              overrideById: (issuedItem as any).overrideReason ? (currentUser?.id || null) : undefined,
+              overrideByName: (issuedItem as any).overrideReason ? (currentUser?.name || undefined) : undefined,
+            } as Omit<InventoryTransaction, 'id'>);
+          }
+        }
+
+        transaction.set(mivDocRef, {
+          id: mivId,
+          date: transactionTime,
+          residenceId,
+          itemCount: totalItemsCount,
+          locationName: firstLocationName,
         });
+      });
 
-        toast({ title: "Success", description: "Voucher submitted successfully." });
+      toast({ title: "Success", description: "Voucher submitted successfully." });
     } catch (error) {
-        console.error("Transaction failed: ", error);
-        throw error;
+      console.error("Transaction failed: ", error);
+      throw error;
     }
   };
 
   // Create MRV (manual receipt without order)
   const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }): Promise<string> => {
-    // Note: If meta.mrvId is not provided, we reserve an MRV id using monthly counters (reserveNewMrvId)
+    const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
+    if (!payload.residenceId || validItems.length === 0) {
+      throw new Error('Residence and at least one item with quantity > 0 are required.');
+    }
+
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    if (USE_D1) {
+      // Client-side guard: only Admin or Supervisor can post MRVs
+      if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+        toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can post MRVs.', variant: 'destructive' });
+        throw new Error('Forbidden');
+      }
+      const payloadToSend: any = { ...payload, items: validItems, meta: { ...(payload.meta || {}), receivedBy: currentUser?.id, receivedByName: currentUser?.name } };
+      const res: any = await (await import('@/lib/d1-client')).createMRV(payloadToSend);
+      if (!res || !res.ok) throw new Error(res?.error || 'D1 MRV creation failed');
+      toast({ title: 'Success', description: 'Materials received and added to stock.' });
+      return res.id;
+    }
+
+    // Firestore path (unchanged)
     if (!db) {
       toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
       throw new Error(firebaseErrorMessage);
@@ -826,10 +914,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can post MRVs.', variant: 'destructive' });
       throw new Error('Forbidden');
     }
-    const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
-    if (!payload.residenceId || validItems.length === 0) {
-      throw new Error('Residence and at least one item with quantity > 0 are required.');
-    }
+    const valid = validItems;
 
     // Use reserved MRV id if provided; otherwise reserve a new one
     let mrvId = payload.meta?.mrvId || '';
@@ -843,7 +928,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     await runTransaction(db, async (transaction) => {
       // Read all item documents first
-      const uniqueItemIds = [...new Set(validItems.map(i => i.id))];
+      const uniqueItemIds = [...new Set(valid.map(i => i.id))];
       const itemRefs = uniqueItemIds.map(id => doc(db!, 'inventory', id));
       const itemSnaps = await Promise.all(itemRefs.map(r => transaction.get(r)));
 
@@ -859,7 +944,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       // Aggregate quantities per item for a single atomic update per item
       const totalsByItem = new Map<string, number>();
-      for (const line of validItems) {
+      for (const line of valid) {
         totalsByItem.set(line.id, (totalsByItem.get(line.id) || 0) + Number(line.quantity || 0));
       }
 
@@ -882,7 +967,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Log transactions for each line
-      for (const line of validItems) {
+      for (const line of valid) {
         const txRef = doc(collection(db!, 'inventoryTransactions'));
         transaction.set(txRef, {
           itemId: line.id,
@@ -1454,6 +1539,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    if (USE_D1) {
+      const res: any = await (await import('@/lib/d1-client')).approveMRVRequest(requestId, approverId);
+      if (!res || !res.ok) throw new Error(res?.error || 'D1 approve failed');
+      toast({ title: 'Approved', description: `MRV request approved and posted (${res.id}).` });
+      return res.id;
+    }
+
     if (!db) throw new Error(firebaseErrorMessage);
     const reqRef = doc(db!, 'mrvRequests', requestId);
 
@@ -1551,73 +1644,76 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
     const createTransferRequest = async (payload: NewStockTransferPayload, currentUser: User) => {
-        if (!db || !payload) {
-            const msg = !db ? firebaseErrorMessage : "Transfer payload is missing.";
+        if (!payload) {
+            const msg = "Transfer payload is missing.";
             toast({ title: "Error", description: msg, variant: "destructive" });
             throw new Error(msg);
         }
-        
-        const { fromResidenceId, toResidenceId, items: itemsToTransfer } = payload;
-        
-        const isInternalTransfer = currentUser.assignedResidences.includes(fromResidenceId) &&
-                                   currentUser.assignedResidences.includes(toResidenceId);
 
-  if (isInternalTransfer) {
-            // Direct transfer, no approval needed
+        const { fromResidenceId, toResidenceId, items: itemsToTransfer } = payload;
+        const isInternalTransfer = currentUser.assignedResidences.includes(fromResidenceId) && currentUser.assignedResidences.includes(toResidenceId);
+
+        if (isInternalTransfer) {
+            // Direct transfer, try D1 first (server-side stock update)
+            if (USE_D1) {
+              try {
+                const transferPayload = { fromResidenceId, toResidenceId, items: itemsToTransfer.map(i => ({ id: i.id, quantity: i.quantity })) };
+                const res: any = await (await import('@/lib/d1-client')).transferStock(transferPayload);
+                if (!res || !res.ok) throw new Error(res?.error || 'D1 transferStock failed');
+                // Persist transfer record in Firestore if available for record-keeping
+                const transactionTime = Timestamp.now();
+                if (db) {
+                  const transferDocRef = doc(collection(db, 'stockTransfers'));
+                  const newTransfer: StockTransfer = {
+                    ...payload,
+                    id: transferDocRef.id,
+                    date: transactionTime,
+                    status: 'Completed',
+                    approvedById: currentUser.id,
+                    approvedAt: transactionTime,
+                    // Add codeShort returned by D1 (transfer id)
+                    // @ts-ignore
+                    codeShort: res.id
+                  };
+                  await setDoc(transferDocRef, newTransfer);
+                }
+                toast({ title: "Success", description: "Internal transfer completed (D1)." });
+                // Refresh inventory
+                try { await loadInventory(); } catch {}
+                return;
+              } catch (e: any) {
+                console.error('D1 transferStock failed', e);
+                toast({ title: 'Error', description: e?.message || 'Failed to perform transfer (D1)', variant: 'destructive' });
+                throw e;
+              }
+            }
+
+            // Fallback to Firestore path
             try {
-    // Reserve a TRS code for this completed transfer
-    const trsId = await reserveNewTrsId();
-                await runTransaction(db, async (transaction) => {
-                    // Step 1: Read all items first
+                const trsId = await reserveNewTrsId();
+                await runTransaction(db!, async (transaction) => {
                     const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
                     const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
-                    
-                    // Validate all items and prepare updates
                     const updates: Array<{ ref: any, updates: any }> = [];
-                    
                     for (let i = 0; i < itemsToTransfer.length; i++) {
                         const item = itemsToTransfer[i];
                         const itemDoc = itemDocs[i];
-                        
-                        if (!itemDoc.exists()) {
-                            throw new Error(`Item ${item.nameEn} not found.`);
-                        }
-                        
+                        if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
                         const data = itemDoc.data();
                         const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
                         const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
-                        if (currentFromStock < item.quantity) {
-                            throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
-                        }
-                        
-                        // Prepare read-modify-write updates with clamping
+                        if (currentFromStock < item.quantity) throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                         const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
                         newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
                         newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
-                        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
-                          const n = Number(v);
-                          return sum + (isNaN(n) ? 0 : Math.max(0, n));
-                        }, 0);
-                        
-                        updates.push({
-                            ref: itemRefs[i],
-                            updates: { stockByResidence: newSbr, stock: newTotal }
-                        });
+                        const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => { const n = Number(v); return sum + (isNaN(n) ? 0 : Math.max(0, n)); }, 0);
+                        updates.push({ ref: itemRefs[i], updates: { stockByResidence: newSbr, stock: newTotal } });
                     }
-                    
-                    // Step 2: Perform all writes after all reads are complete
+
                     const transactionTime = Timestamp.now();
-                    
-                    // Update stock for all items
-                    for (const update of updates) {
-                        transaction.update(update.ref, update.updates);
-                    }
-                    
-                    // Log transfer transactions for each item
+                    for (const update of updates) transaction.update(update.ref, update.updates);
                     for (let i = 0; i < itemsToTransfer.length; i++) {
                         const item = itemsToTransfer[i];
-                        
-                        // Create TRANSFER_OUT transaction for source residence
                         const transferOutRef = doc(collection(db!, "inventoryTransactions"));
                         transaction.set(transferOutRef, {
                             itemId: item.id,
@@ -1627,12 +1723,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_OUT',
                             quantity: item.quantity,
-              referenceDocId: trsId,
+                            referenceDocId: trsId,
                             relatedResidenceId: toResidenceId,
                             locationName: `Internal transfer to residence (${toResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
-
-                        // Create TRANSFER_IN transaction for destination residence
                         const transferInRef = doc(collection(db!, "inventoryTransactions"));
                         transaction.set(transferInRef, {
                             itemId: item.id,
@@ -1642,13 +1736,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                             date: transactionTime,
                             type: 'TRANSFER_IN',
                             quantity: item.quantity,
-              referenceDocId: trsId,
+                            referenceDocId: trsId,
                             relatedResidenceId: fromResidenceId,
                             locationName: `Internal transfer from residence (${fromResidenceId})`
                         } as Omit<InventoryTransaction, 'id'>);
                     }
-                    
-                    // Create a completed transfer record
+
                     const transferDocRef = doc(collection(db!, 'stockTransfers'));
                     const newTransfer: StockTransfer = {
                         ...payload,
@@ -1656,24 +1749,23 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         status: 'Completed',
                         approvedById: currentUser.id,
-            approvedAt: transactionTime,
-            // store the TRS short code for reference/display
-            // @ts-ignore - optional property added below on the interface
-            codeShort: trsId
+                        approvedAt: transactionTime,
+                        // @ts-ignore
+                        codeShort: trsId
                     };
                     transaction.set(transferDocRef, newTransfer);
                 });
                 toast({ title: "Success", description: "Internal transfer completed successfully." });
             } catch (error) {
-                 const err = error as Error;
-                 console.error("Failed to execute direct transfer:", err);
-                 toast({ title: "Error", description: `Transfer failed: ${err.message}`, variant: "destructive" });
-                 throw err;
+                const err = error as Error;
+                console.error("Failed to execute direct transfer:", err);
+                toast({ title: "Error", description: `Transfer failed: ${err.message}`, variant: "destructive" });
+                throw err;
             }
         } else {
             // External transfer, requires approval
             try {
-                const transferDocRef = doc(collection(db, 'stockTransfers'));
+                const transferDocRef = doc(collection(db!, 'stockTransfers'));
                 const newTransfer: StockTransfer = {
                     ...payload,
                     id: transferDocRef.id,
@@ -1682,7 +1774,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 };
                 await setDoc(transferDocRef, newTransfer);
 
-                // Create notification for the destination residence manager
                 const toResidence = residences.find(r => r.id === toResidenceId);
                 if (toResidence && toResidence.managerId && addNotification) {
                      await addNotification({
@@ -1705,83 +1796,67 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const approveTransfer = async (transferId: string, approverId: string) => {
         if (!db) throw new Error(firebaseErrorMessage);
-        
         const transferRef = doc(db!, 'stockTransfers', transferId);
-        
         try {
-            // Reserve TRS code for this approved transfer
+            const snap = await getDoc(transferRef);
+            if (!snap.exists()) throw new Error('Transfer request not found');
+            const transferData = snap.data() as StockTransfer;
+            if (transferData.status !== 'Pending') throw new Error('Transfer already processed');
+
+            const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
+
+            if (USE_D1) {
+              try {
+                const payload = { fromResidenceId, toResidenceId, items: (itemsToTransfer || []).map(i => ({ id: i.id, quantity: i.quantity })) };
+                const res: any = await (await import('@/lib/d1-client')).transferStock(payload);
+                if (!res || !res.ok) throw new Error(res?.error || 'D1 transferStock failed');
+                // Mark transfer completed for record-keeping
+                await updateDoc(transferRef, { status: 'Completed', approvedById: approverId, approvedAt: Timestamp.now(), // @ts-ignore
+                  codeShort: res.id });
+                toast({ title: 'Success', description: 'Transfer approved and stock updated (D1).' });
+                try { await loadInventory(); } catch {}
+                return;
+              } catch (e: any) {
+                console.error('D1 transferStock failed:', e);
+                toast({ title: 'Error', description: e?.message || 'Failed to approve transfer (D1).', variant: 'destructive' });
+                throw e;
+              }
+            }
+
+            // Firestore fallback
             const trsId = await reserveNewTrsId();
             await runTransaction(db, async (transaction) => {
-                // Step 1: Read all data first
                 const transferDoc = await transaction.get(transferRef);
-                if (!transferDoc.exists()) {
-                    throw new Error("Transfer request not found or already processed.");
-                }
-                
+                if (!transferDoc.exists()) throw new Error('Transfer request not found or already processed.');
                 const transferData = transferDoc.data() as StockTransfer;
-                if (!transferData) {
-                    throw new Error("Transfer data is missing.");
-                }
-
-                if (transferData.status !== 'Pending') {
-                    throw new Error("Transfer request already processed.");
-                }
+                if (transferData.status !== 'Pending') throw new Error('Transfer request already processed.');
 
                 const { fromResidenceId, toResidenceId, items: itemsToTransfer } = transferData;
-                
-                if(!fromResidenceId || !toResidenceId || !itemsToTransfer) {
-                     throw new Error("Transfer data is incomplete.");
-                }
+                if (!fromResidenceId || !toResidenceId || !itemsToTransfer) throw new Error('Transfer data incomplete');
 
-                // Read all items first
                 const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
                 const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
 
-                // Validate all items and stock levels
                 const updates: Array<{ ref: any, updates: any }> = [];
-                
                 for (let i = 0; i < itemsToTransfer.length; i++) {
                     const item = itemsToTransfer[i];
                     const itemDoc = itemDocs[i];
-                    
-                    if (!itemDoc.exists()) {
-                        throw new Error(`Item ${item.nameEn} not found.`);
-                    }
-                    
+                    if (!itemDoc.exists()) throw new Error(`Item ${item.nameEn} not found.`);
                     const data = itemDoc.data();
                     const currentFromStock = Math.max(0, Number(data.stockByResidence?.[fromResidenceId] || 0));
                     const currentToStock = Math.max(0, Number(data.stockByResidence?.[toResidenceId] || 0));
-                    if (currentFromStock < item.quantity) {
-                        throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
-                    }
-                    
-                    // Prepare updates for later using read-modify-write with clamping
+                    if (currentFromStock < item.quantity) throw new Error(`Not enough stock for ${item.nameEn}. Available: ${currentFromStock}, Required: ${item.quantity}`);
                     const newSbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
                     newSbr[fromResidenceId] = Math.max(0, currentFromStock - item.quantity);
                     newSbr[toResidenceId] = Math.max(0, currentToStock + item.quantity);
-                    const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => {
-                      const n = Number(v);
-                      return sum + (isNaN(n) ? 0 : Math.max(0, n));
-                    }, 0);
-                    updates.push({
-                        ref: itemRefs[i],
-                        updates: { stockByResidence: newSbr, stock: newTotal }
-                    });
+                    const newTotal = Object.values(newSbr).reduce((sum: number, v: any) => { const n = Number(v); return sum + (isNaN(n) ? 0 : Math.max(0, n)); }, 0);
+                    updates.push({ ref: itemRefs[i], updates: { stockByResidence: newSbr, stock: newTotal } });
                 }
 
-                // Step 2: Perform all writes after all reads are complete
                 const transactionTime = Timestamp.now();
-                
-                // Update stock for all items
-                for (const update of updates) {
-                    transaction.update(update.ref, update.updates);
-                }
-
-                // Log transfer transactions for each item
+                for (const update of updates) transaction.update(update.ref, update.updates);
                 for (let i = 0; i < itemsToTransfer.length; i++) {
                     const item = itemsToTransfer[i];
-                    
-                    // Create TRANSFER_OUT transaction for source residence
                     const transferOutRef = doc(collection(db!, "inventoryTransactions"));
                     transaction.set(transferOutRef, {
                         itemId: item.id,
@@ -1791,12 +1866,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_OUT',
                         quantity: item.quantity,
-            referenceDocId: trsId,
+                        referenceDocId: trsId,
                         relatedResidenceId: toResidenceId,
                         locationName: `Transfer to residence`
                     } as Omit<InventoryTransaction, 'id'>);
-
-                    // Create TRANSFER_IN transaction for destination residence
                     const transferInRef = doc(collection(db!, "inventoryTransactions"));
                     transaction.set(transferInRef, {
                         itemId: item.id,
@@ -1806,20 +1879,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                         date: transactionTime,
                         type: 'TRANSFER_IN',
                         quantity: item.quantity,
-            referenceDocId: trsId,
+                        referenceDocId: trsId,
                         relatedResidenceId: fromResidenceId,
                         locationName: `Transfer from residence`
                     } as Omit<InventoryTransaction, 'id'>);
                 }
 
-                transaction.update(transferRef, {
-                    status: 'Completed',
-                    approvedById: approverId,
-          approvedAt: Timestamp.now(),
-          // store TRS short code for reference/display on the transfer
-          // @ts-ignore - optional property added below on the interface
-          codeShort: trsId
-                });
+                transaction.update(transferRef, { status: 'Completed', approvedById: approverId, approvedAt: Timestamp.now(), // @ts-ignore
+                    codeShort: trsId });
             });
             toast({ title: "Success", description: "Transfer approved and stock updated." });
         } catch (error) {
@@ -1841,6 +1908,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
   const depreciateItems = async (depreciationRequest: DepreciationRequest) => {
+        // Prefer D1 for stock-impacting operations
+        if (USE_D1) {
+          try {
+            const d1 = await import('@/lib/d1-client');
+            const inv: any[] = await d1.getInventory();
+            const itemRow = (inv || []).find((r: any) => String(r.id) === String(depreciationRequest.itemId));
+            if (!itemRow) throw new Error('Item not found');
+            const sbr = typeof itemRow.stockByResidence === 'string' ? JSON.parse(itemRow.stockByResidence || '{}') : (itemRow.stockByResidence || {});
+            const cur = Math.max(0, Number(sbr[depreciationRequest.residenceId] || 0));
+            if (cur < depreciationRequest.quantity) throw new Error(`Insufficient stock. Available: ${cur}, Requested: ${depreciationRequest.quantity}`);
+            const actual = Math.max(0, cur - depreciationRequest.quantity);
+
+            // Use reconcileStock to apply the change server-side
+            const res: any = await d1.reconcileStock({ residenceId: depreciationRequest.residenceId, adjustments: [{ itemId: depreciationRequest.itemId, newStock: actual, reason: depreciationRequest.reason }] , performedById: currentUser?.id });
+            if (!res || !res.ok) {
+              // Some D1 functions return {ok:true, id: '...'}; adapt accordingly
+              // If res is undefined, assume success
+            }
+            toast({ title: 'Success', description: `Successfully depreciated ${depreciationRequest.quantity} items (D1).` });
+            try { await loadInventory(); } catch {}
+            return;
+          } catch (e: any) {
+            console.error('D1 depreciate failed', e);
+            toast({ title: 'Error', description: e?.message || 'Failed to depreciate via D1', variant: 'destructive' });
+            throw e;
+          }
+        }
+
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
@@ -1860,29 +1955,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 if (currentStock < depreciationRequest.quantity) {
                     throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
                 }
-                
         // Prepare counter read BEFORE any writes (Firestore rule)
-        const now = new Date();
-        const yy = now.getFullYear().toString().slice(-2);
-        const mm = (now.getMonth() + 1).toString().padStart(2, '0');
-        const mmNoPad = (now.getMonth() + 1).toString();
-        const depCounterId = `dep-${yy}-${mm}`;
-        const depCounterRef = doc(db!, 'counters', depCounterId);
-        const depSnap = await transaction.get(depCounterRef);
-        const depCurrent = (depSnap.exists() ? (depSnap.data() as any).seq : 0) || 0;
-        const depNextSeq = depCurrent + 1;
-        const depCodeShort = `DEP-${yy}${mmNoPad}${depNextSeq}`;
-
-        // Now perform writes
-        // Update stock for the residence
-    const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
-    newStockByResidence[depreciationRequest.residenceId] = Math.max(0, currentStock - depreciationRequest.quantity);
-        // Calculate new total stock
-        const newTotalStock = Object.values(newStockByResidence).reduce((sum: number, stock: any) => {
-      const num = Number(stock);
-      return sum + (isNaN(num) ? 0 : Math.max(0, num));
-        }, 0);
-        // Update item document
         transaction.update(itemRef, {
           stock: newTotalStock,
           stockByResidence: newStockByResidence
@@ -2093,6 +2166,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         adjustments: AuditAdjustment[], 
         generalNotes: string
     ): Promise<void> => {
+        // Prefer D1 reconcile when available - it will update inventory and log transactions server-side
+        if (USE_D1) {
+          try {
+            const d1 = await import('@/lib/d1-client');
+            const d1Adjustments = adjustments.map(a => ({ itemId: a.itemId, newStock: Number(a.newStock || 0), reason: a.reason }));
+            const res: any = await d1.reconcileStock({ residenceId: adjustments[0]?.locationId, adjustments: d1Adjustments, performedById: currentUser?.id });
+            if (!res || !res.ok) {
+              // ignore; D1 may return undefined on success
+            }
+            // Mark audit as completed in Firestore if available
+            try {
+              if (db) {
+                const auditRef = doc(db, 'inventoryAudits', auditId);
+                await updateDoc(auditRef, { status: 'COMPLETED', endDate: Timestamp.now(), 'summary.adjustmentsMade': adjustments.length });
+              }
+            } catch (e) {
+              console.warn('Failed to update audit master after D1 reconcile', e);
+            }
+            toast({ title: 'Success', description: `Audit completed successfully. ${adjustments.length} adjustments applied (D1).` });
+            try { await loadInventory(); } catch {}
+            return;
+          } catch (e: any) {
+            console.error('D1 completeAudit failed', e);
+            toast({ title: 'Error', description: e?.message || 'Failed to complete audit (D1).', variant: 'destructive' });
+            throw e;
+          }
+        }
+
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {

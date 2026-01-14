@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { useUsers } from '@/context/users-context';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query, updateDoc, doc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, updateDoc, doc, addDoc, serverTimestamp, limit } from '@/lib/firestore-shim';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const PAGE_STEP = 50;

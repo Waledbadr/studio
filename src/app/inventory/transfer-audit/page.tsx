@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, writeBatch, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, writeBatch, query, where, Timestamp } from '@/lib/firestore-shim';
 
 interface TransferAuditResult {
     transferId: string;

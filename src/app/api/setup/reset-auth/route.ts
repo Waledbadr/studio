@@ -19,7 +19,13 @@ function getProjectIdFallback(): string | undefined {
 }
 
 function initAdmin() {
-  const admin = require('firebase-admin');
+  let admin;
+  try {
+    admin = require('firebase-admin');
+  } catch (err) {
+    throw new Error('firebase-admin is not available in this build. Reinstall firebase-admin or enable legacy Firebase admin support if you need this route.');
+  }
+
   if (admin.apps.length) return admin;
   try {
     const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;

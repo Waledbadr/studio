@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Camera, LifeBuoy, Send } from 'lucide-react';
 import { useErrorCapture } from '@/hooks/use-error-capture';
 import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, query, where, getDocs } from '@/lib/firestore-shim';
 import { gitInfo } from '@/lib/git-info';
 
 interface Props {

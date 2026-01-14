@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit & integration tests
+        run: npm test
+
+      - name: Run D1 smoke tests (optional)
+        env:
+          D1_SMOKE_BASE: ${{ secrets.D1_SMOKE_BASE }}
+          D1_SMOKE_TOKEN: ${{ secrets.D1_SMOKE_TOKEN }}
+        run: |
+          if [ -n "${D1_SMOKE_BASE}" ]; then
+            echo "Running smoke tests against $D1_SMOKE_BASE"
+            RUN_D1_SMOKE=true D1_SMOKE_BASE="$D1_SMOKE_BASE" D1_SMOKE_TOKEN="$D1_SMOKE_TOKEN" npm run test:smoke
+          else
+            echo "Skipping D1 smoke tests: secret D1_SMOKE_BASE not provided"
+          fi

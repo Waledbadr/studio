@@ -19,7 +19,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import admin from 'firebase-admin';
+
+function requireAdminOrExit() {
+  try { return require('firebase-admin'); } catch (e) { console.error('firebase-admin is not installed. To run this script install firebase-admin or re-enable Firebase admin support.'); process.exit(1); }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +41,7 @@ console.log('━━━━━━━━━━━━━━━━━━━━━━�
  * Initialize Firebase Admin
  */
 function initializeFirebaseAdmin() {
+  const admin = requireAdminOrExit();
   if (admin.apps.length > 0) {
     console.log('✅ Firebase Admin already initialized');
     return admin.app();

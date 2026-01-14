@@ -10,14 +10,14 @@ export async function POST(request: Request) {
       const occupants = oRaw ? JSON.parse(oRaw) : [];
       const workers = wRaw ? JSON.parse(wRaw) : [];
       const date = dateISO ? new Date(dateISO) : new Date();
-      const dayStr = date.toISOString().slice(0,10);
+      const dayStr = date.toISOString().slice(0, 10);
       const res: Record<string, Record<string, number>> = {};
       for (const occ of occupants) {
-        const sinceDay = occ.since.slice(0,10);
+        const sinceDay = occ.since.slice(0, 10);
         if (sinceDay <= dayStr) {
           res[occ.residenceId] = res[occ.residenceId] || {};
           const w = workers.find((x: any) => x.id === occ.workerId);
-          const nat = w?.nationaliy || 'Unknown';
+          const nat = w?.nationality || 'Unknown';
           res[occ.residenceId][nat] = (res[occ.residenceId][nat] || 0) + 1;
         }
       }

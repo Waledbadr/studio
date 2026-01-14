@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, Timestamp, updateDoc } from '@/lib/firestore-shim';
 import { format } from 'date-fns';
 import { FileUploadArea, type UploadedFile } from '@/components/ui/file-upload-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';

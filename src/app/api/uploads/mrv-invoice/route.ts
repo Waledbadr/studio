@@ -1,42 +1,13 @@
 import { NextResponse } from 'next/server';
 
-let cachedPut: null | ((...args: any[]) => Promise<any>) = null;
+// Using local file storage via src/lib/storage.ts (no external blob provider required)
 
-async function getBlobPut() {
-  if (cachedPut) return cachedPut;
-
-  if (typeof (globalThis as any).File === 'undefined') {
-    try {
-      const undici = await import('undici');
-      (globalThis as any).File = (undici as any).File;
-      (globalThis as any).Blob = (undici as any).Blob;
-      (globalThis as any).FormData = (undici as any).FormData;
-    } catch {
-      // ignore
-    }
-  }
-
-  const mod = await import('@vercel/blob');
-  cachedPut = (mod as any).put;
-  return cachedPut;
-}
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) {
-      console.error('[MRV Invoice Upload] BLOB_READ_WRITE_TOKEN not found');
-      return NextResponse.json(
-        {
-          error: 'تكوين التخزين غير مكتمل - BLOB_READ_WRITE_TOKEN is not configured',
-          hint: 'يجب إضافة BLOB_READ_WRITE_TOKEN في متغيرات البيئة في Render Dashboard',
-          docs: 'راجع RENDER_UPLOAD_FIX_AR.md',
-        },
-        { status: 500 }
-      );
-    }
+    // Using local storage for file uploads (no external blob token required).
 
     const contentType = req.headers.get('content-type') || '';
     if (!contentType.includes('multipart/form-data')) {
@@ -66,15 +37,10 @@ export async function POST(req: Request) {
     const arrayBuffer = await (fileValue as any).arrayBuffer();
     const body = Buffer.from(arrayBuffer);
 
-    const put = await getBlobPut();
+    const { saveBuffer } = await import('@/lib/storage');
+    const saved = await saveBuffer({ buffer: body, dir: 'mrvs/invoices', filename: originalName, contentType: detectedType, maxSize, allowedTypes: ['application/pdf', 'image/'] });
 
-    const { url } = await put(blobPath, body, {
-      access: 'public',
-      contentType: detectedType,
-      token,
-    } as any);
-
-    return NextResponse.json({ url, path: blobPath });
+    return NextResponse.json({ url: saved.url, path: saved.path });
   } catch (err: any) {
     console.error('[MRV Invoice Upload Error]', {
       message: err?.message,

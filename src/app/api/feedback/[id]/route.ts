@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import * as D1Actions from '@/lib/d1-actions';
+import { serverTimestamp } from '@/lib/firestore-shim';
 import { generateMonthlySequentialTicketId } from '@/lib/feedback';
 import { db as _db } from '@/lib/firebase';
 

@@ -1,0 +1,14 @@
+
+ ⛅️ wrangler 4.58.0
+───────────────────
+Resource location: remote 
+
+
+X [ERROR] A request to the Cloudflare API (/accounts/your-account-id/d1/database) failed.
+
+  Could not route to /client/v4/accounts/your-account-id/d1/database, perhaps your object identifier is invalid? [code: 7003]
+  
+  If you think this is a bug, please open an issue at: https://github.com/cloudflare/workers-sdk/issues/new/choose
+
+
+🪵  Logs were written to "C:\Users\abdal\.wrangler\logs\wrangler-2026-01-10_20-57-47_694.log"

@@ -12,22 +12,22 @@ export default function UnassignedWorkersReportPage() {
   const unassignedWorkers = React.useMemo(() => {
     // Create a set of currently occupied worker IDs
     const occupiedWorkerIds = new Set(
-        occupants
-            .filter(occ => !occ.until) // Only active occupants
-            .map(occ => occ.workerId)
+      occupants
+        .filter(occ => !occ.until) // Only active occupants
+        .map(occ => occ.workerId)
     );
 
     return workers.filter(w => !occupiedWorkerIds.has(w.id));
   }, [workers, occupants]);
 
   return (
-    <PrintLayout 
-      title="Unassigned Workers Report" 
+    <PrintLayout
+      title="Unassigned Workers Report"
       description="List of workers currently not assigned to any room."
     >
       <div className="mb-6">
-         <div className="text-2xl font-bold">{unassignedWorkers.length}</div>
-         <p className="text-muted-foreground">Total Unassigned Workers</p>
+        <div className="text-2xl font-bold">{unassignedWorkers.length}</div>
+        <p className="text-muted-foreground">Total Unassigned Workers</p>
       </div>
 
       <div className="border rounded-md">
@@ -54,7 +54,7 @@ export default function UnassignedWorkersReportPage() {
                   <TableCell>{worker.idNumber || '-'}</TableCell>
                   <TableCell>{worker.employeeId || '-'}</TableCell>
                   <TableCell>{worker.company || '-'}</TableCell>
-                  <TableCell>{worker.nationaliy || '-'}</TableCell>
+                  <TableCell>{worker.nationality || '-'}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">Unassigned</Badge>
                   </TableCell>

@@ -1,0 +1,17 @@
+name = "estatecare-studio"
+compatibility_date = "2024-04-03"
+pages_build_output_dir = ".next"
+
+# Replace with your Cloudflare Account ID
+account_id = "your-cloudflare-account-id"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "estatecare-d1"
+database_id = "df5d6fab-efb5-4b09-b3a0-be536d7edaaf"
+migrations_dir = "drizzle/migrations"
+
+# Optional: environment vars for pages / preview envs
+[vars]
+# STORAGE_PATH can be set here or via your deploy platform secrets
+STORAGE_PATH = "/var/estatecare/storage"

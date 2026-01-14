@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, query, orderBy, getDocs, where, limit } from 'firebase/firestore';
+import * as D1Actions from '@/lib/d1-actions';
+import { serverTimestamp } from '@/lib/firestore-shim';
 import { generateMonthlySequentialTicketId } from '@/lib/feedback';
 
 export async function POST(req: NextRequest) {

@@ -1,12 +1,23 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
-import { db, auth } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, Unsubscribe, getDoc, getDocs } from "firebase/firestore";
-import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import safeOnSnapshot from '@/lib/firestore-utils';
-import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from "@/hooks/use-toast";
+import * as D1Client from '@/lib/d1-client';
+import { db, auth } from '@/lib/firebase';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  QueryDocumentSnapshot,
+  DocumentData
+} from '@/lib/firestore-shim';
+import { createPoller } from '@/lib/polling';
+import { onAuthStateChanged } from '@/lib/auth-shim';
+import { safeOnSnapshot } from '@/lib/firestore-utils';
+
+const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true' || false;
 
 // Define types for our data structure
 export interface Room {
@@ -143,110 +154,130 @@ interface ResidencesContextType {
   updateBuildingName: (complexId: string, buildingId: string, newName: string) => Promise<void>;
   // New: Facility Component Management
   addFacilityComponent: (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     component: Omit<FacilityComponent, 'id'>,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => Promise<void>;
   updateFacilityComponent: (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     componentId: string,
     updates: Partial<FacilityComponent>,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => Promise<void>;
   deleteFacilityComponent: (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     componentId: string,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => Promise<void>;
 }
 
 const ResidencesContext = createContext<ResidencesContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Firebase is not configured. Using local storage. To enable cloud sync, please configure Firebase in .env.local";
-
-// Helper function to save residences to localStorage
-const saveToLocalStorage = (residences: Complex[]) => {
-  try {
-    localStorage.setItem('estatecare_residences', JSON.stringify(residences));
-  } catch (error) {
-    console.error("Error saving to localStorage:", error);
-  }
-};
-
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const isLoaded = useRef(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  const loadResidences = useCallback(() => {
+  const POLL_INTERVAL_MS = 7000;
+  const d1PollWarnedRef = useRef(false);
+  const pollerRef = useRef<{ stop?: () => void } | null>(null);
+
+  const loadResidences = useCallback(async () => {
     if (isLoaded.current) return;
-    
+
+    isLoaded.current = true;
+    setLoading(true);
+
     if (!db) {
-        console.log("Firebase not configured, using local storage");
-        
-        // Load from localStorage
-        try {
-            const storedResidences = localStorage.getItem('estatecare_residences');
-            const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
-            setResidences(residencesData);
-        } catch (error) {
-            console.error("Error loading from localStorage:", error);
+      if (USE_D1) {
+        const fetcher = async () => {
+          const r = await D1Client.getResidences();
+          return r || [];
+        };
+        pollerRef.current = createPoller(fetcher, (d: Complex[]) => {
+          setResidences(d as Complex[]);
+          setLoading(false);
+        }, {
+          intervalMs: POLL_INTERVAL_MS,
+          onError: (e) => {
+            console.error('Error polling D1 residences:', e);
+            if (!d1PollWarnedRef.current) {
+              d1PollWarnedRef.current = true;
+              toast({ title: 'D1 Error', description: 'Could not reach D1; falling back to local data.', variant: 'destructive' });
+            }
             setResidences([]);
-        }
-        
-        setLoading(false);
-        isLoaded.current = true;
+            setLoading(false);
+          }
+        }).start();
         return;
+      }
+
+      console.log("Firebase not configured, using local storage");
+      try {
+        const storedResidences = localStorage.getItem('estatecare_residences');
+        const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
+        setResidences(residencesData);
+      } catch (error) {
+        console.error("Error loading from localStorage:", error);
+        setResidences([]);
+      }
+      setLoading(false);
+      return;
     }
-    
-    // If Firebase is configured but user isn't signed in yet, defer loading until auth is ready
+
     if (auth && !auth.currentUser) {
       setLoading(false);
       return;
     }
 
-    isLoaded.current = true;
-    setLoading(true);
+    // db is available -> poll Firestore collection
+    const fetcher = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'residences'));
+        const residencesData = snap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Complex));
+        return residencesData;
+      } catch (e) {
+        throw e;
+      }
+    };
 
-    const residencesCollection = collection(db, "residences");
-
-    // Use safeOnSnapshot to provide clearer logs and a single retry on transient watch closures
-  unsubscribeRef.current = safeOnSnapshot(residencesCollection, (snapshot) => {
-    const residencesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Complex));
-    setResidences(residencesData);
-    setLoading(false);
-  }, (error) => {
-      console.error("Error fetching residences:", error);
-      toast({ title: "Firestore Error", description: "Could not fetch residences data. Check your Firebase config and security rules.", variant: "destructive" });
+    pollerRef.current = createPoller(fetcher, (d: Complex[]) => {
+      setResidences(d);
       setLoading(false);
-    }, { retryOnClose: true });
+    }, {
+      intervalMs: POLL_INTERVAL_MS,
+      onError: (e) => {
+        console.error('Error polling residences Firestore:', e);
+        toast({ title: "Firestore Error", description: "Could not fetch residences data.", variant: "destructive" });
+        setLoading(false);
+      }
+    }).start();
+
+    return;
   }, [toast]);
 
-   useEffect(() => {
-    // Try once on mount (will no-op if waiting for auth)
+  useEffect(() => {
     loadResidences();
-    // Also subscribe to auth changes to trigger loading after sign-in
     let unsubAuth: (() => void) | undefined;
     if (auth) {
       unsubAuth = onAuthStateChanged(auth, (u) => {
         if (u) {
           if (!isLoaded.current) loadResidences();
         } else {
-          // Signed out: clean up listeners and state
-          if (unsubscribeRef.current) {
-            try { unsubscribeRef.current(); } catch {}
-            unsubscribeRef.current = null;
+          if (pollerRef.current) {
+            try { pollerRef.current.stop(); } catch { }
+            pollerRef.current = null;
           }
           isLoaded.current = false;
           setResidences([]);
@@ -255,8 +286,9 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       });
     }
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
+      if (pollerRef.current) {
+        try { pollerRef.current.stop(); } catch { }
+        pollerRef.current = null;
         isLoaded.current = false;
       }
       unsubAuth?.();
@@ -266,67 +298,76 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const addComplex = async (name: string, city: string, managerId: string) => {
     const trimmedName = name.trim();
     if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
-        toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
-        return;
+      toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
+      return;
     }
-    
-  if (!db) {
-        // Use localStorage when Firebase is not available
-        try {
-            const newComplex: Complex = {
-                id: `complex-${Date.now()}`,
-                name: trimmedName,
-                city: city.trim(),
-                managerId,
-                buildings: [],
-                facilities: [],
-                disabled: false
-            };
-            
-            const updatedResidences = [...residences, newComplex];
-            setResidences(updatedResidences);
-            saveToLocalStorage(updatedResidences);
-            // Also update local users assignedResidences for the manager
-            try {
-              const storedUsers = localStorage.getItem('estatecare_users');
-              if (storedUsers) {
-                const usersData = JSON.parse(storedUsers) as Array<{ id: string; assignedResidences?: string[] }>;
-                const updatedUsers = usersData.map(u => {
-                  if (u.id !== managerId) return u;
-                  const assigned = Array.isArray(u.assignedResidences) ? u.assignedResidences : [];
-                  return { ...u, assignedResidences: Array.from(new Set([...assigned, newComplex.id])) };
-                });
-                localStorage.setItem('estatecare_users', JSON.stringify(updatedUsers));
-              }
-            } catch (e) {
-              console.warn('Local users sync failed (addComplex):', e);
-            }
-            toast({ title: "Success", description: "New residential complex added (locally)." });
-        } catch (error) {
-            console.error("Error saving to localStorage:", error);
-            toast({ title: "Error", description: "Failed to add complex locally.", variant: "destructive" });
-        }
-        return;
-    }
-    
-    const docRef = doc(collection(db, "residences"));
-    await setDoc(docRef, { id: docRef.id, name: trimmedName, city: city.trim(), managerId, buildings: [], facilities: [], disabled: false });
-    // Sync user's assignedResidences with this new residence
+
+    // Generate ID for new complex
+    const newComplex: Complex = {
+      id: `complex-${Date.now()}`,
+      name: trimmedName,
+      city: city.trim(),
+      managerId,
+      buildings: [],
+      facilities: [],
+      disabled: false
+    };
+
     try {
-      if (managerId) {
-        const userRef = doc(db, 'users', managerId);
-        // Use set with merge to create if missing
-        await setDoc(userRef, { assignedResidences: arrayUnion(docRef.id) } as any, { merge: true });
-      }
+      await D1Server.createResidence(newComplex);
+      // Optimistic update
+      setResidences(prev => [...prev, newComplex]);
+      toast({ title: "Success", description: "New residential complex added." });
     } catch (e) {
-      console.warn('User sync failed (addComplex):', e);
+      console.error(e);
+      toast({ title: "Error", description: "Failed to add complex.", variant: "destructive" });
     }
-    toast({ title: "Success", description: "New residential complex added." });
   };
 
   const updateRoomName = async (complexId: string, buildingId: string, floorId: string, roomId: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    if (USE_D1) {
+      try {
+        let failed = false;
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              return {
+                ...b,
+                floors: b.floors.map(f => {
+                  if (f.id !== floorId) return f;
+                  if (f.rooms.some(r => r.id !== roomId && r.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+                    failed = true;
+                    return f;
+                  }
+                  return { ...f, rooms: f.rooms.map(r => r.id === roomId ? { ...r, name: trimmed } : r) };
+                })
+              };
+            })
+          };
+        });
+
+        if (failed) {
+          toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم.', variant: 'destructive' });
+          return;
+        }
+
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) {
+          await D1Client.updateResidence(complexId, changed);
+        }
+        toast({ title: 'تم', description: 'تم تحديث اسم الغرفة.' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'خطأ', description: 'فشل التحديث في D1', variant: 'destructive' });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -399,7 +440,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       if (level === 'complex') {
         if ((c.facilities || []).some(f => f.id !== facilityId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {
           toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم.', variant: 'destructive' });
-          return c;
+          throw new Error('Duplicate');
         }
         return { ...c, facilities: (c.facilities || []).map(f => f.id === facilityId ? { ...f, name: trimmed } : f) };
       }
@@ -410,19 +451,35 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           if (level === 'building') {
             if ((b.facilities || []).some(f => f.id !== facilityId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {
               toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم.', variant: 'destructive' });
-              return b;
+              throw new Error('Duplicate');
             }
             return { ...b, facilities: (b.facilities || []).map(f => f.id === facilityId ? { ...f, name: trimmed } : f) };
           }
           const fl = b.floors.find(fl => fl.id === floorId);
           if (fl && (fl.facilities || []).some(f => f.id !== facilityId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {
             toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم.', variant: 'destructive' });
-            return b;
+            throw new Error('Duplicate');
           }
           return { ...b, floors: b.floors.map(fl => fl.id !== floorId ? fl : ({ ...fl, facilities: (fl.facilities || []).map(f => f.id === facilityId ? { ...f, name: trimmed } : f) })) };
         })
       };
     };
+
+    if (USE_D1) {
+      try {
+        const updated = residences.map(c => c.id === complexId ? updateInComplex(c) : c);
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: 'تم', description: 'تم تحديث اسم التجهيز.' });
+      } catch (e: any) {
+        if (e.message !== 'Duplicate') {
+          console.error(e);
+          toast({ title: 'خطأ', description: 'فشل التحديث في D1', variant: 'destructive' });
+        }
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => c.id === complexId ? updateInComplex(c) : c);
@@ -453,6 +510,37 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const updateFloorName = async (complexId: string, buildingId: string, floorId: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    if (USE_D1) {
+      try {
+        let failed = false;
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              if (b.floors.some(f => f.id !== floorId && f.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+                failed = true;
+                return b;
+              }
+              return { ...b, floors: b.floors.map(f => f.id === floorId ? { ...f, name: trimmed } : f) };
+            })
+          };
+        });
+        if (failed) {
+          toast({ title: 'مكرر', description: 'يوجد طابق بنفس الاسم.', variant: 'destructive' });
+          return;
+        }
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: 'تم', description: 'تم تحديث اسم الطابق.' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'خطأ', description: 'فشل التحديث في D1', variant: 'destructive' });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -504,6 +592,34 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const updateBuildingName = async (complexId: string, buildingId: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    if (USE_D1) {
+      try {
+        let failed = false;
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          if (c.buildings.some(b => b.id !== buildingId && b.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+            failed = true;
+            return c;
+          }
+          return {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, name: trimmed } : b)
+          };
+        });
+        if (failed) {
+          toast({ title: 'مكرر', description: 'يوجد مبنى بنفس الاسم.', variant: 'destructive' });
+          return;
+        }
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'تم', description: 'تم تحديث اسم المبنى.' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'خطأ', description: 'فشل التحديث في D1', variant: 'destructive' });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -543,7 +659,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Error', description: 'Failed to update building name.', variant: 'destructive' });
     }
   };
-  
+
   const moveRoomAnywhere = async (
     from: { complexId: string; buildingId: string; floorId: string },
     to: { complexId: string; buildingId: string; floorId: string },
@@ -669,7 +785,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
               ...c,
               buildings: c.buildings.map(b => b.id === to.buildingId ? {
                 ...b,
-                floors: b.floors.map(f => f.id === to.floorId ? { ...f, rooms: [ ...f.rooms, { ...room, floorId: to.floorId } ] } : f)
+                floors: b.floors.map(f => f.id === to.floorId ? { ...f, rooms: [...f.rooms, { ...room, floorId: to.floorId }] } : f)
               } : b)
             };
           }
@@ -713,7 +829,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedToBuildings = toData.buildings.map(b => b.id === to.buildingId ? {
         ...b,
-        floors: b.floors.map(f => f.id === to.floorId ? { ...f, rooms: [ ...f.rooms, { ...room, floorId: to.floorId } ] } : f)
+        floors: b.floors.map(f => f.id === to.floorId ? { ...f, rooms: [...f.rooms, { ...room, floorId: to.floorId }] } : f)
       } : b);
 
       await Promise.all([
@@ -748,6 +864,94 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       const fl = b.floors.find(fl => fl.id === to.floorId);
       return (fl?.facilities || []).some(f => f.name.trim().toLowerCase() === norm);
     };
+
+    if (USE_D1) {
+      try {
+        const fromRes = residences.find(r => r.id === fromComplexId);
+        const toRes = residences.find(r => r.id === toComplexId);
+        if (!fromRes || !toRes) {
+          toast({ title: 'خطأ', description: 'المجمع غير موجود', variant: 'destructive' });
+          return;
+        }
+
+        // Deep copy to modify
+        const newFromRes: Residence = JSON.parse(JSON.stringify(fromRes));
+        const newToRes: Residence = JSON.parse(JSON.stringify(toRes));
+
+        // 1. Locate and remove from source
+        let facility: Facility | undefined;
+        let found = false;
+
+        const removeFromList = (list: Facility[]) => {
+          const idx = list.findIndex(f => f.id === facilityId);
+          if (idx >= 0) {
+            facility = list[idx];
+            list.splice(idx, 1);
+            found = true;
+          }
+        };
+
+        if (from.level === 'complex') {
+          newFromRes.facilities = newFromRes.facilities || [];
+          removeFromList(newFromRes.facilities);
+        } else if (from.level === 'building' && from.buildingId) {
+          const b = newFromRes.buildings.find(b => b.id === from.buildingId);
+          if (b) {
+            b.facilities = b.facilities || [];
+            removeFromList(b.facilities);
+          }
+        } else if (from.level === 'floor' && from.buildingId && from.floorId) {
+          const b = newFromRes.buildings.find(b => b.id === from.buildingId);
+          const f = b?.floors.find(fl => fl.id === from.floorId);
+          if (f) {
+            f.facilities = f.facilities || [];
+            removeFromList(f.facilities);
+          }
+        }
+
+        if (!found || !facility) {
+          toast({ title: 'خطأ', description: 'التجهيز غير موجود', variant: 'destructive' });
+          return;
+        }
+
+        // 2. Check duplicate in target
+        if (duplicateInTarget(newToRes, facility.name)) {
+          toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم في الوجهة.', variant: 'destructive' });
+          return;
+        }
+
+        // 3. Add to target
+        if (to.level === 'complex') {
+          newToRes.facilities = [...(newToRes.facilities || []), facility];
+        } else if (to.level === 'building' && to.buildingId) {
+          const b = newToRes.buildings.find(b => b.id === to.buildingId);
+          if (b) {
+            b.facilities = [...(b.facilities || []), facility];
+          }
+        } else if (to.level === 'floor' && to.buildingId && to.floorId) {
+          const b = newToRes.buildings.find(b => b.id === to.buildingId);
+          const f = b?.floors.find(fl => fl.id === to.floorId);
+          if (f) {
+            f.facilities = [...(f.facilities || []), facility];
+          }
+        }
+
+        // 4. Update State and D1
+        setResidences(prev => prev.map(r => {
+          if (r.id === fromComplexId) return newFromRes;
+          if (r.id === toComplexId) return newToRes;
+          return r;
+        }));
+
+        await D1Server.updateResidence(fromComplexId, newFromRes);
+        await D1Server.updateResidence(toComplexId, newToRes);
+        toast({ title: 'تم', description: 'تم نقل التجهيز بنجاح (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'خطأ', description: 'فشل نقل التجهيز في D1.', variant: 'destructive' });
+      }
+      return;
+    }
 
     if (!db) {
       try {
@@ -791,12 +995,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           if (c.id === toComplexId) {
             // add
             const addTo = (cc: Complex): Complex => {
-              if (to.level === 'complex') return { ...cc, facilities: [ ...(cc.facilities || []), fac! ] };
+              if (to.level === 'complex') return { ...cc, facilities: [...(cc.facilities || []), fac!] };
               return {
                 ...cc,
                 buildings: cc.buildings.map(b => {
-                  if (to.level === 'building' && b.id === to.buildingId) return { ...b, facilities: [ ...(b.facilities || []), fac! ] };
-                  if (to.level === 'floor' && b.id === to.buildingId) return { ...b, floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [ ...(fl.facilities || []), fac! ] } : fl) };
+                  if (to.level === 'building' && b.id === to.buildingId) return { ...b, facilities: [...(b.facilities || []), fac!] };
+                  if (to.level === 'floor' && b.id === to.buildingId) return { ...b, floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [...(fl.facilities || []), fac!] } : fl) };
                   return b;
                 })
               };
@@ -851,12 +1055,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         };
       };
       const addTo = (c: Complex): Complex => {
-        if (to.level === 'complex') return { ...c, facilities: [ ...(c.facilities || []), fac ] };
+        if (to.level === 'complex') return { ...c, facilities: [...(c.facilities || []), fac] };
         return {
           ...c,
           buildings: c.buildings.map(b => {
-            if (to.level === 'building' && b.id === to.buildingId) return { ...b, facilities: [ ...(b.facilities || []), fac ] };
-            if (to.level === 'floor' && b.id === to.buildingId) return { ...b, floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [ ...(fl.facilities || []), fac ] } : fl) };
+            if (to.level === 'building' && b.id === to.buildingId) return { ...b, facilities: [...(b.facilities || []), fac] };
+            if (to.level === 'floor' && b.id === to.buildingId) return { ...b, floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [...(fl.facilities || []), fac] } : fl) };
             return b;
           })
         };
@@ -878,6 +1082,59 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const moveRoom = async (complexId: string, buildingId: string, fromFloorId: string, toFloorId: string, roomId: string) => {
     if (fromFloorId === toFloorId) return; // nothing to do
 
+    if (USE_D1) {
+      try {
+        const current = residences.find(r => r.id === complexId);
+        if (current) {
+          const building = current.buildings.find(b => b.id === buildingId);
+          const toFloor = building?.floors.find(f => f.id === toFloorId);
+          const room = building?.floors.find(f => f.id === fromFloorId)?.rooms.find(r => r.id === roomId);
+          if (toFloor && room && toFloor.rooms.some(r => r.name.trim().toLowerCase() === room.name.trim().toLowerCase())) {
+            toast({ title: 'مكرر', description: 'يوجد غرفة بنفس الاسم في الطابق الهدف. النقل مرفوض.', variant: 'destructive' });
+            return;
+          }
+        }
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              let movingRoom: Room | undefined;
+              const newFloors = b.floors.map(f => {
+                if (f.id === fromFloorId) {
+                  const remaining = f.rooms.filter(r => {
+                    if (r.id === roomId) {
+                      movingRoom = { ...r, floorId: toFloorId };
+                      return false;
+                    }
+                    return true;
+                  });
+                  return { ...f, rooms: remaining };
+                }
+                return f;
+              }).map(f => {
+                if (f.id === toFloorId && movingRoom) {
+                  return { ...f, rooms: [...f.rooms, movingRoom] };
+                }
+                return f;
+              });
+              return { ...b, floors: newFloors };
+            })
+          };
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Room moved (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to move room in D1.', variant: "destructive" });
+      }
+      return;
+    }
+
+
     if (!db) {
       try {
         const current = residences.find(r => r.id === complexId);
@@ -896,12 +1153,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             ...c,
             buildings: c.buildings.map(b => {
               if (b.id !== buildingId) return b;
-      let movingRoom: Room | undefined;
-    const newFloors = b.floors.map(f => {
+              let movingRoom: Room | undefined;
+              const newFloors = b.floors.map(f => {
                 if (f.id === fromFloorId) {
                   const remaining = f.rooms.filter(r => {
                     if (r.id === roomId) {
-          movingRoom = { ...r, floorId: toFloorId };
+                      movingRoom = { ...r, floorId: toFloorId };
                       return false;
                     }
                     return true;
@@ -945,11 +1202,11 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       const updatedBuildings = data.buildings.map(b => {
         if (b.id !== buildingId) return b;
         let roomToMove: Room | undefined;
-  const floorsAfterRemoval = b.floors.map(f => {
+        const floorsAfterRemoval = b.floors.map(f => {
           if (f.id === fromFloorId) {
             const remaining = f.rooms.filter(r => {
               if (r.id === roomId) {
-    roomToMove = { ...r, floorId: toFloorId };
+                roomToMove = { ...r, floorId: toFloorId };
                 return false;
               }
               return true;
@@ -976,6 +1233,46 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateComplex = async (id: string, payload: UpdateComplexPayload) => {
+    if (USE_D1) {
+      try {
+        // Fetch current to identify manager change
+        const currentComplex = residences.find(r => r.id === id);
+        const prevManagerId = currentComplex?.managerId;
+        const newManagerId = payload.managerId;
+
+        const updatedList = residences.map(r => r.id === id ? { ...r, ...payload } : r);
+        setResidences(updatedList);
+        await D1Server.updateResidence(id, payload);
+
+        // Sync users if manager changed
+        if (prevManagerId && prevManagerId !== newManagerId) {
+          try {
+            const prevManager = await D1Server.getUser(prevManagerId);
+            if (prevManager) {
+              const updatedAssigned = (prevManager.assignedResidences || []).filter(rid => rid !== id);
+              await D1Server.updateUser(prevManagerId, { assignedResidences: updatedAssigned });
+            }
+          } catch (e) { console.warn('Failed to remove residence from prev manager (D1)', e); }
+        }
+        if (newManagerId && newManagerId !== prevManagerId) {
+          try {
+            const newManager = await D1Server.getUser(newManagerId);
+            if (newManager) {
+              const currentAssigned = newManager.assignedResidences || [];
+              if (!currentAssigned.includes(id)) {
+                await D1Server.updateUser(newManagerId, { assignedResidences: [...currentAssigned, id] });
+              }
+            }
+          } catch (e) { console.warn('Failed to add residence to new manager (D1)', e); }
+        }
+
+        toast({ title: "Success", description: "Complex updated (D1)." });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to update complex in D1.", variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       // Local mode: update residences and sync local users manager linkage
       try {
@@ -1045,364 +1342,606 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const addBuilding = async (complexId: string, name: string) => {
     const trimmedName = name.trim();
-    
+
     const targetComplex = residences.find(c => c.id === complexId);
     if (!targetComplex) {
-        toast({ title: "Error", description: "Complex not found.", variant: "destructive" });
-        return;
+      toast({ title: "Error", description: "Complex not found.", variant: "destructive" });
+      return;
     }
-    
+
     if (targetComplex.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
-        toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
-        return;
-    }
-     
-    if (!db) {
-        try {
-            const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
-            const updatedResidences = residences.map(c => 
-                c.id === complexId 
-                    ? { ...c, buildings: [...c.buildings, newBuilding] }
-                    : c
-            );
-            
-            setResidences(updatedResidences);
-            saveToLocalStorage(updatedResidences);
-            toast({ title: "Success", description: "New building added to the complex (locally)." });
-        } catch (error) {
-            console.error("Error saving to localStorage:", error);
-            toast({ title: "Error", description: "Failed to add building locally.", variant: "destructive" });
-        }
-        return;
+      toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
+      return;
     }
 
-    try {
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-
-        const complexData = complexDoc.data() as Complex;
+    if (USE_D1) {
+      try {
         const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
-        const updatedBuildings = [...complexData.buildings, newBuilding];
-        
-        await updateDoc(complexDocRef, { buildings: updatedBuildings });
-        toast({ title: "Success", description: "New building added to the complex." });
-
-    } catch (error) {
-        console.error("Error adding building:", error);
-        toast({ title: "Error", description: "Failed to add building.", variant: "destructive" });
+        const updatedResidences = residences.map(c =>
+          c.id === complexId
+            ? { ...c, buildings: [...c.buildings, newBuilding] }
+            : c
+        );
+        setResidences(updatedResidences);
+        const changed = updatedResidences.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: "Success", description: "New building added to the complex (D1)." });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to add building to D1.", variant: "destructive" });
+      }
+      return;
     }
-  };
-  
-  const addFloor = async (complexId: string, buildingId: string, name: string) => {
-     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    try {
-        const trimmedName = name.trim();
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
 
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-
-        const complexData = complexDoc.data() as Complex;
-        const targetBuilding = complexData.buildings.find(b => b.id === buildingId);
-
-        if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
-            toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
-            return;
-        }
-
-        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
-
-        const updatedBuildings = complexData.buildings.map(b => 
-            b.id === buildingId 
-            ? {...b, floors: [...b.floors, newFloor]} 
-            : b
+    if (!db) {
+      try {
+        const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
+        const updatedResidences = residences.map(c =>
+          c.id === complexId
+            ? { ...c, buildings: [...c.buildings, newBuilding] }
+            : c
         );
 
-        await updateDoc(complexDocRef, { buildings: updatedBuildings });
-        toast({ title: "Success", description: "New floor added to the building." });
+        setResidences(updatedResidences);
+        saveToLocalStorage(updatedResidences);
+        toast({ title: "Success", description: "New building added to the complex (locally)." });
+      } catch (error) {
+        console.error("Error saving to localStorage:", error);
+        toast({ title: "Error", description: "Failed to add building locally.", variant: "destructive" });
+      }
+      return;
+    }
+
+    try {
+      const complexDocRef = doc(db, "residences", complexId);
+      const complexDoc = await getDoc(complexDocRef);
+
+      if (!complexDoc.exists()) throw new Error("Complex not found");
+
+      const complexData = complexDoc.data() as Complex;
+      const newBuilding: Building = { id: `building-${Date.now()}`, name: trimmedName, floors: [], facilities: [] };
+      const updatedBuildings = [...complexData.buildings, newBuilding];
+
+      await updateDoc(complexDocRef, { buildings: updatedBuildings });
+      toast({ title: "Success", description: "New building added to the complex." });
 
     } catch (error) {
-        console.error("Error adding floor:", error);
-        toast({ title: "Error", description: "Failed to add floor.", variant: "destructive" });
+      console.error("Error adding building:", error);
+      toast({ title: "Error", description: "Failed to add building.", variant: "destructive" });
+    }
+  };
+
+  const addFloor = async (complexId: string, buildingId: string, name: string) => {
+    if (USE_D1) {
+      try {
+        const trimmedName = name.trim();
+        const complex = residences.find(c => c.id === complexId);
+        if (!complex) throw new Error('Complex not found');
+        const targetBuilding = complex.buildings.find(b => b.id === buildingId);
+        if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+          toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
+          return;
+        }
+        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
+        const updatedResidences = residences.map(c =>
+          c.id === complexId ? {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, floors: [...b.floors, newFloor] } : b)
+          } : c
+        );
+        setResidences(updatedResidences);
+        const changed = updatedResidences.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: "Success", description: "New floor added to the building (D1)." });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to add floor to D1.", variant: "destructive" });
+      }
+      return;
+    }
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    try {
+      const trimmedName = name.trim();
+      const complexDocRef = doc(db, "residences", complexId);
+      const complexDoc = await getDoc(complexDocRef);
+
+      if (!complexDoc.exists()) throw new Error("Complex not found");
+
+      const complexData = complexDoc.data() as Complex;
+      const targetBuilding = complexData.buildings.find(b => b.id === buildingId);
+
+      if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
+        return;
+      }
+
+      const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
+
+      const updatedBuildings = complexData.buildings.map(b =>
+        b.id === buildingId
+          ? { ...b, floors: [...b.floors, newFloor] }
+          : b
+      );
+
+      await updateDoc(complexDocRef, { buildings: updatedBuildings });
+      toast({ title: "Success", description: "New floor added to the building." });
+
+    } catch (error) {
+      console.error("Error adding floor:", error);
+      toast({ title: "Error", description: "Failed to add floor.", variant: "destructive" });
     }
   };
 
   const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string, length?: number, width?: number, area?: number) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    try {
+    if (USE_D1) {
+      try {
         const trimmedName = name.trim();
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-        
-        const complexData = complexDoc.data() as Complex;
-        
-        const building = complexData.buildings.find(b => b.id === buildingId);
+        const complex = residences.find(c => c.id === complexId);
+        if (!complex) throw new Error('Complex not found');
+        const building = complex.buildings.find(b => b.id === buildingId);
         const floor = building?.floors.find(f => f.id === floorId);
 
-        if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
-            toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
-            return;
+        if (floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+          toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
+          return;
         }
 
-    const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
-    // prefer explicit length/width, else accept area
-    if (typeof length === 'number' && typeof width === 'number' && !isNaN(length) && !isNaN(width)) {
-      const computedArea = length * width;
-      newRoom.length = length;
-      newRoom.width = width;
-      newRoom.area = computedArea;
-      newRoom.capacity = Math.max(1, Math.floor(computedArea / 4));
-    } else if (typeof area === 'number' && !isNaN(area)) {
-      newRoom.area = area;
-      newRoom.capacity = Math.max(1, Math.floor(area / 4));
-    }
-        
-        const updatedBuildings = complexData.buildings.map(b => 
-            b.id === buildingId ? {
-                ...b,
-                floors: b.floors.map(f => 
-                    f.id === floorId ? {...f, rooms: [...f.rooms, newRoom]} : f
-                )
-            } : b
-        );
+        const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
+        // prefer explicit length/width, else accept area
+        if (typeof length === 'number' && typeof width === 'number' && !isNaN(length) && !isNaN(width)) {
+          const computedArea = length * width;
+          newRoom.length = length;
+          newRoom.width = width;
+          newRoom.area = computedArea;
+          newRoom.capacity = Math.max(1, Math.floor(computedArea / 4));
+        } else if (typeof area === 'number' && !isNaN(area)) {
+          newRoom.area = area;
+          newRoom.capacity = Math.max(1, Math.floor(area / 4));
+        }
 
-        await updateDoc(complexDocRef, { buildings: updatedBuildings });
-        toast({ title: "Success", description: "New room added to the floor." });
+        const updatedResidences = residences.map(c =>
+          c.id === complexId ? {
+            ...c,
+            buildings: c.buildings.map(b =>
+              b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f =>
+                  f.id === floorId ? { ...f, rooms: [...f.rooms, newRoom] } : f
+                )
+              } : b
+            )
+          } : c
+        );
+        setResidences(updatedResidences);
+        const changed = updatedResidences.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: "Success", description: "New room added to the floor (D1)." });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to add room to D1.", variant: "destructive" });
+      }
+      return;
+    }
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    try {
+      const trimmedName = name.trim();
+      const complexDocRef = doc(db, "residences", complexId);
+      const complexDoc = await getDoc(complexDocRef);
+
+      if (!complexDoc.exists()) throw new Error("Complex not found");
+
+      const complexData = complexDoc.data() as Complex;
+
+      const building = complexData.buildings.find(b => b.id === buildingId);
+      const floor = building?.floors.find(f => f.id === floorId);
+
+      if (floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
+        return;
+      }
+
+      const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
+      // prefer explicit length/width, else accept area
+      if (typeof length === 'number' && typeof width === 'number' && !isNaN(length) && !isNaN(width)) {
+        const computedArea = length * width;
+        newRoom.length = length;
+        newRoom.width = width;
+        newRoom.area = computedArea;
+        newRoom.capacity = Math.max(1, Math.floor(computedArea / 4));
+      } else if (typeof area === 'number' && !isNaN(area)) {
+        newRoom.area = area;
+        newRoom.capacity = Math.max(1, Math.floor(area / 4));
+      }
+
+      const updatedBuildings = complexData.buildings.map(b =>
+        b.id === buildingId ? {
+          ...b,
+          floors: b.floors.map(f =>
+            f.id === floorId ? { ...f, rooms: [...f.rooms, newRoom] } : f
+          )
+        } : b
+      );
+
+      await updateDoc(complexDocRef, { buildings: updatedBuildings });
+      toast({ title: "Success", description: "New room added to the floor." });
 
     } catch (error) {
-        console.error("Error adding room:", error);
-        toast({ title: "Error", description: "Failed to add room.", variant: "destructive" });
+      console.error("Error adding room:", error);
+      toast({ title: "Error", description: "Failed to add room.", variant: "destructive" });
     }
   };
 
   const addMultipleRooms = async (complexId: string, buildingId: string, floorId: string, roomNames: string[]) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    try {
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-        
-        const complexData = complexDoc.data() as Complex;
-        
-        const building = complexData.buildings.find(b => b.id === buildingId);
+    if (USE_D1) {
+      try {
+        const complex = residences.find(c => c.id === complexId);
+        if (!complex) throw new Error('Complex not found');
+        const building = complex.buildings.find(b => b.id === buildingId);
         const floor = building?.floors.find(f => f.id === floorId);
 
         if (!floor) {
-             toast({ title: "Error", description: "Target floor not found.", variant: "destructive" });
-             return;
+          toast({ title: "Error", description: "Target floor not found.", variant: "destructive" });
+          return;
         }
 
         const existingRoomNames = new Set(floor.rooms.map(r => r.name.toLowerCase()));
-        
-    const newRooms: Room[] = roomNames
-            .map(name => name.trim())
-            .filter(name => name)
-            .filter(name => !existingRoomNames.has(name.toLowerCase()))
-      .map(name => {
-        const room: Room = { id: `room-${Date.now()}-${Math.random()}`, name };
-        // support creating rooms with optional area or dimensions specified in the name using syntax
-        // "Room 101|20" -> area, or "Room 101|5x4" -> length x width
-        const parts = name.split('|').map(p => p.trim());
-        if (parts.length === 2) {
-          const spec = parts[1];
-          // dimensions like 5x4 or 5×4
-          const dimMatch = spec.match(/^(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)$/);
-          if (dimMatch) {
-            const l = Number(dimMatch[1]);
-            const w = Number(dimMatch[2]);
-            if (!isNaN(l) && !isNaN(w)) {
-              room.name = parts[0];
-              room.length = l;
-              room.width = w;
-              room.area = l * w;
-              room.capacity = Math.max(1, Math.floor(room.area / 4));
+        const newRooms: Room[] = roomNames
+          .map(name => name.trim())
+          .filter(name => name)
+          .filter(name => !existingRoomNames.has(name.toLowerCase()))
+          .map(name => {
+            const room: Room = { id: `room-${Date.now()}-${Math.random()}`, name };
+            const parts = name.split('|').map(p => p.trim());
+            if (parts.length === 2) {
+              const spec = parts[1];
+              const dimMatch = spec.match(/^(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)$/);
+              if (dimMatch) {
+                const l = Number(dimMatch[1]);
+                const w = Number(dimMatch[2]);
+                if (!isNaN(l) && !isNaN(w)) {
+                  room.name = parts[0];
+                  room.length = l;
+                  room.width = w;
+                  room.area = l * w;
+                  room.capacity = Math.max(1, Math.floor(room.area / 4));
+                }
+              } else if (!isNaN(Number(spec))) {
+                room.name = parts[0];
+                room.area = Number(spec);
+                room.capacity = Math.max(1, Math.floor(room.area / 4));
+              }
             }
-          } else if (!isNaN(Number(spec))) {
-            room.name = parts[0];
-            room.area = Number(spec);
-            room.capacity = Math.max(1, Math.floor(room.area / 4));
-          }
-        }
-        return room;
-      });
-        
+            return room;
+          });
+
         const addedCount = newRooms.length;
         const skippedCount = roomNames.length - addedCount;
 
         if (addedCount === 0) {
-            toast({ title: "No rooms added", description: "All specified rooms already exist on this floor.", variant: "default" });
-            return;
+          toast({ title: "No rooms added", description: "All specified rooms already exist on this floor.", variant: "default" });
+          return;
         }
 
-        const updatedBuildings = complexData.buildings.map(b => 
-            b.id === buildingId ? {
+        const updatedResidences = residences.map(c =>
+          c.id === complexId ? {
+            ...c,
+            buildings: c.buildings.map(b =>
+              b.id === buildingId ? {
                 ...b,
-                floors: b.floors.map(f => 
-                    f.id === floorId ? {...f, rooms: [...f.rooms, ...newRooms]} : f
+                floors: b.floors.map(f =>
+                  f.id === floorId ? { ...f, rooms: [...f.rooms, ...newRooms] } : f
                 )
-            } : b
+              } : b
+            )
+          } : c
         );
+        setResidences(updatedResidences);
+        const changed = updatedResidences.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
 
-        await updateDoc(complexDocRef, { buildings: updatedBuildings });
-        
         let toastDescription = `Added ${addedCount} new rooms.`;
         if (skippedCount > 0) {
-            toastDescription += ` Skipped ${skippedCount} duplicate rooms.`
+          toastDescription += ` Skipped ${skippedCount} duplicate rooms.`
         }
-
         toast({ title: "Success", description: toastDescription });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to add rooms to D1.", variant: "destructive" });
+      }
+      return;
+    }
+    if (!db) {
+      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      return;
+    }
+    try {
+      const complexDocRef = doc(db, "residences", complexId);
+      const complexDoc = await getDoc(complexDocRef);
+
+      if (!complexDoc.exists()) throw new Error("Complex not found");
+
+      const complexData = complexDoc.data() as Complex;
+
+      const building = complexData.buildings.find(b => b.id === buildingId);
+      const floor = building?.floors.find(f => f.id === floorId);
+
+      if (!floor) {
+        toast({ title: "Error", description: "Target floor not found.", variant: "destructive" });
+        return;
+      }
+
+      const existingRoomNames = new Set(floor.rooms.map(r => r.name.toLowerCase()));
+
+      const newRooms: Room[] = roomNames
+        .map(name => name.trim())
+        .filter(name => name)
+        .filter(name => !existingRoomNames.has(name.toLowerCase()))
+        .map(name => {
+          const room: Room = { id: `room-${Date.now()}-${Math.random()}`, name };
+          // support creating rooms with optional area or dimensions specified in the name using syntax
+          // "Room 101|20" -> area, or "Room 101|5x4" -> length x width
+          const parts = name.split('|').map(p => p.trim());
+          if (parts.length === 2) {
+            const spec = parts[1];
+            // dimensions like 5x4 or 5×4
+            const dimMatch = spec.match(/^(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)$/);
+            if (dimMatch) {
+              const l = Number(dimMatch[1]);
+              const w = Number(dimMatch[2]);
+              if (!isNaN(l) && !isNaN(w)) {
+                room.name = parts[0];
+                room.length = l;
+                room.width = w;
+                room.area = l * w;
+                room.capacity = Math.max(1, Math.floor(room.area / 4));
+              }
+            } else if (!isNaN(Number(spec))) {
+              room.name = parts[0];
+              room.area = Number(spec);
+              room.capacity = Math.max(1, Math.floor(room.area / 4));
+            }
+          }
+          return room;
+        });
+
+      const addedCount = newRooms.length;
+      const skippedCount = roomNames.length - addedCount;
+
+      if (addedCount === 0) {
+        toast({ title: "No rooms added", description: "All specified rooms already exist on this floor.", variant: "default" });
+        return;
+      }
+
+      const updatedBuildings = complexData.buildings.map(b =>
+        b.id === buildingId ? {
+          ...b,
+          floors: b.floors.map(f =>
+            f.id === floorId ? { ...f, rooms: [...f.rooms, ...newRooms] } : f
+          )
+        } : b
+      );
+
+      await updateDoc(complexDocRef, { buildings: updatedBuildings });
+
+      let toastDescription = `Added ${addedCount} new rooms.`;
+      if (skippedCount > 0) {
+        toastDescription += ` Skipped ${skippedCount} duplicate rooms.`
+      }
+
+      toast({ title: "Success", description: toastDescription });
 
     } catch (error) {
-        console.error("Error adding multiple rooms:", error);
-        toast({ title: "Error", description: "Failed to add rooms.", variant: "destructive" });
+      console.error("Error adding multiple rooms:", error);
+      toast({ title: "Error", description: "Failed to add rooms.", variant: "destructive" });
     }
   };
 
-    const addFacility = async (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => {
-        const newFacilities: Facility[] = [];
-        for (let i = 1; i <= quantity; i++) {
-            const facilityName = quantity > 1 ? `${name} ${i}` : name;
-            newFacilities.push({
-                id: `facility-${Date.now()}-${Math.random()}`,
-                name: facilityName,
-                type: type.trim()
-            });
-        }
+  const addFacility = async (complexId: string, level: 'complex' | 'building' | 'floor', name: string, type: string, quantity: number, buildingId?: string, floorId?: string) => {
+    const newFacilities: Facility[] = [];
+    for (let i = 1; i <= quantity; i++) {
+      const facilityName = quantity > 1 ? `${name} ${i}` : name;
+      newFacilities.push({
+        id: `facility-${Date.now()}-${Math.random()}`,
+        name: facilityName,
+        type: type.trim()
+      });
+    }
 
-        if (!db) {
-            // Local storage implementation
-            try {
-                const updated = residences.map(complex => {
-                    if (complex.id !== complexId) return complex;
-                    
-                    if (level === 'complex') {
-                        const existingFacilities = complex.facilities || [];
-                        return { ...complex, facilities: [...existingFacilities, ...newFacilities] };
-                    }
-                    
-                    return {
-                        ...complex,
-                        buildings: complex.buildings.map(building => {
-                            if (building.id !== buildingId) return building;
-                            
-                            if (level === 'building') {
-                                const existingFacilities = building.facilities || [];
-                                return { ...building, facilities: [...existingFacilities, ...newFacilities] };
-                            }
-                            
-                            // level === 'floor'
-                            return {
-                                ...building,
-                                floors: building.floors.map(floor => {
-                                    if (floor.id !== floorId) return floor;
-                                    const existingFacilities = floor.facilities || [];
-                                    return { ...floor, facilities: [...existingFacilities, ...newFacilities] };
-                                })
-                            };
-                        })
-                    };
-                });
-                
-                setResidences(updated);
-                saveToLocalStorage(updated);
-                toast({ title: "Success", description: `Added ${quantity} new facility/facilities (locally).` });
-                return;
-            } catch (error) {
-                console.error("Error adding facility locally:", error);
-                toast({ title: "Error", description: "Failed to add facility locally.", variant: "destructive" });
-                return;
-            }
-        }
+    if (USE_D1) {
+      try {
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
 
-        try {
-            const complexDocRef = doc(db, "residences", complexId);
-            const complexDoc = await getDoc(complexDocRef);
+          if (level === 'complex') {
+            const existingFacilities = complex.facilities || [];
+            return { ...complex, facilities: [...existingFacilities, ...newFacilities] };
+          }
 
-            if (!complexDoc.exists()) throw new Error("Complex not found");
-            const complexData = complexDoc.data() as Complex;
-            
-            const newFacilitiesForFirebase: Facility[] = [];
-            for (let i = 1; i <= quantity; i++) {
-                const facilityName = quantity > 1 ? `${name} ${i}` : name;
-                newFacilitiesForFirebase.push({
-                    id: `facility-${Date.now()}-${Math.random()}`,
-                    name: facilityName,
-                    type: type.trim()
-                });
-            }
+          return {
+            ...complex,
+            buildings: complex.buildings.map(building => {
+              if (building.id !== buildingId) return building;
 
-            if (level === 'complex') {
-                const existingFacilities = complexData.facilities || [];
-                const updatedFacilities = [...existingFacilities, ...newFacilitiesForFirebase];
-                await updateDoc(complexDocRef, { facilities: updatedFacilities });
-            } else if (level === 'building' && buildingId) {
-                const updatedBuildings = complexData.buildings.map(b => {
-                    if (b.id === buildingId) {
-                        const existingFacilities = b.facilities || [];
-                        return { ...b, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
-                    }
-                    return b;
-                });
-                await updateDoc(complexDocRef, { buildings: updatedBuildings });
-            } else if (level === 'floor' && buildingId && floorId) {
-                const updatedBuildings = complexData.buildings.map(b => {
-                    if (b.id === buildingId) {
-                        return {
-                            ...b,
-                            floors: b.floors.map(f => {
-                                if (f.id === floorId) {
-                                    const existingFacilities = f.facilities || [];
-                                    return { ...f, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
-                                }
-                                return f;
-                            })
-                        };
-                    }
-                    return b;
-                });
-                await updateDoc(complexDocRef, { buildings: updatedBuildings });
-            }
+              if (level === 'building') {
+                const existingFacilities = building.facilities || [];
+                return { ...building, facilities: [...existingFacilities, ...newFacilities] };
+              }
 
-            toast({ title: "Success", description: `Added ${quantity} new facility/facilities.` });
+              // level === 'floor'
+              return {
+                ...building,
+                floors: building.floors.map(floor => {
+                  if (floor.id !== floorId) return floor;
+                  const existingFacilities = floor.facilities || [];
+                  return { ...floor, facilities: [...existingFacilities, ...newFacilities] };
+                })
+              };
+            })
+          };
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: "Success", description: `Added ${quantity} new facility/facilities (D1).` });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to add facility to D1.", variant: "destructive" });
+      }
+      return;
+    }
 
-        } catch (error) {
-            console.error("Error adding facility:", error);
-            toast({ title: "Error", description: "Failed to add facility.", variant: "destructive" });
-        }
-    };
+    if (!db) {
+      // Local storage implementation
+      try {
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
+
+          if (level === 'complex') {
+            const existingFacilities = complex.facilities || [];
+            return { ...complex, facilities: [...existingFacilities, ...newFacilities] };
+          }
+
+          return {
+            ...complex,
+            buildings: complex.buildings.map(building => {
+              if (building.id !== buildingId) return building;
+
+              if (level === 'building') {
+                const existingFacilities = building.facilities || [];
+                return { ...building, facilities: [...existingFacilities, ...newFacilities] };
+              }
+
+              // level === 'floor'
+              return {
+                ...building,
+                floors: building.floors.map(floor => {
+                  if (floor.id !== floorId) return floor;
+                  const existingFacilities = floor.facilities || [];
+                  return { ...floor, facilities: [...existingFacilities, ...newFacilities] };
+                })
+              };
+            })
+          };
+        });
+
+        setResidences(updated);
+        saveToLocalStorage(updated);
+        toast({ title: "Success", description: `Added ${quantity} new facility/facilities (locally).` });
+        return;
+      } catch (error) {
+        console.error("Error adding facility locally:", error);
+        toast({ title: "Error", description: "Failed to add facility locally.", variant: "destructive" });
+        return;
+      }
+    }
+
+    try {
+      const complexDocRef = doc(db, "residences", complexId);
+      const complexDoc = await getDoc(complexDocRef);
+
+      if (!complexDoc.exists()) throw new Error("Complex not found");
+      const complexData = complexDoc.data() as Complex;
+
+      const newFacilitiesForFirebase: Facility[] = [];
+      for (let i = 1; i <= quantity; i++) {
+        const facilityName = quantity > 1 ? `${name} ${i}` : name;
+        newFacilitiesForFirebase.push({
+          id: `facility-${Date.now()}-${Math.random()}`,
+          name: facilityName,
+          type: type.trim()
+        });
+      }
+
+      if (level === 'complex') {
+        const existingFacilities = complexData.facilities || [];
+        const updatedFacilities = [...existingFacilities, ...newFacilitiesForFirebase];
+        await updateDoc(complexDocRef, { facilities: updatedFacilities });
+      } else if (level === 'building' && buildingId) {
+        const updatedBuildings = complexData.buildings.map(b => {
+          if (b.id === buildingId) {
+            const existingFacilities = b.facilities || [];
+            return { ...b, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
+          }
+          return b;
+        });
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+      } else if (level === 'floor' && buildingId && floorId) {
+        const updatedBuildings = complexData.buildings.map(b => {
+          if (b.id === buildingId) {
+            return {
+              ...b,
+              floors: b.floors.map(f => {
+                if (f.id === floorId) {
+                  const existingFacilities = f.facilities || [];
+                  return { ...f, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
+                }
+                return f;
+              })
+            };
+          }
+          return b;
+        });
+        await updateDoc(complexDocRef, { buildings: updatedBuildings });
+      }
+
+      toast({ title: "Success", description: `Added ${quantity} new facility/facilities.` });
+
+    } catch (error) {
+      console.error("Error adding facility:", error);
+      toast({ title: "Error", description: "Failed to add facility.", variant: "destructive" });
+    }
+  };
 
   const deleteComplex = async (id: string) => {
+    if (USE_D1) {
+      try {
+        const updatedResidences = residences.filter(r => r.id !== id);
+        setResidences(updatedResidences);
+        await D1Server.deleteResidence(id);
+        // TODO: Update users? (remove from assigned). Skipping for now as it's cleaner.
+        toast({ title: "Success", description: "Complex deleted successfully (D1)." });
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to delete complex from D1.", variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
-        try {
-            const updatedResidences = residences.filter(r => r.id !== id);
-            setResidences(updatedResidences);
-            saveToLocalStorage(updatedResidences);
-            toast({ title: "Success", description: "Complex deleted successfully (locally)." });
-        } catch (error) {
-            console.error("Error deleting from localStorage:", error);
-            toast({ title: "Error", description: "Failed to delete complex locally.", variant: "destructive" });
-        }
-        return;
+      try {
+        const updatedResidences = residences.filter(r => r.id !== id);
+        setResidences(updatedResidences);
+        saveToLocalStorage(updatedResidences);
+        toast({ title: "Success", description: "Complex deleted successfully (locally)." });
+      } catch (error) {
+        console.error("Error deleting from localStorage:", error);
+        toast({ title: "Error", description: "Failed to delete complex locally.", variant: "destructive" });
+      }
+      return;
     }
     await deleteDoc(doc(db, "residences", id));
     toast({ title: "Success", description: "Complex deleted successfully." });
   }
 
   const deleteBuilding = async (complexId: string, buildingId: string) => {
+    if (USE_D1) {
+      try {
+        const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Server.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Building deleted (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to delete building from D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);
@@ -1430,6 +1969,25 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteFloor = async (complexId: string, buildingId: string, floorId: string) => {
+    if (USE_D1) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => b.id === buildingId ? { ...b, floors: b.floors.filter(f => f.id !== floorId) } : b)
+          };
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Floor deleted (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to delete floor from D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -1463,6 +2021,31 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteRoom = async (complexId: string, buildingId: string, floorId: string, roomId: string) => {
+    if (USE_D1) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              return {
+                ...b,
+                floors: b.floors.map(f => f.id === floorId ? { ...f, rooms: f.rooms.filter(r => r.id !== roomId) } : f)
+              };
+            })
+          };
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Room deleted (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to delete room from D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -1514,6 +2097,40 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     buildingId?: string,
     floorId?: string
   ) => {
+    if (USE_D1) {
+      try {
+        const updated = residences.map(c => {
+          if (c.id !== complexId) return c;
+          if (level === 'complex') {
+            return { ...c, facilities: (c.facilities || []).filter(f => f.id !== facilityId) };
+          }
+          if (level === 'building' && buildingId) {
+            return {
+              ...c,
+              buildings: c.buildings.map(b => b.id === buildingId ? { ...b, facilities: (b.facilities || []).filter(f => f.id !== facilityId) } : b)
+            };
+          }
+          if (level === 'floor' && buildingId && floorId) {
+            return {
+              ...c,
+              buildings: c.buildings.map(b => b.id === buildingId ? {
+                ...b,
+                floors: b.floors.map(f => f.id === floorId ? { ...f, facilities: (f.facilities || []).filter(fc => fc.id !== facilityId) } : f)
+              } : b)
+            };
+          }
+          return c;
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Facility deleted (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to delete facility from D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       try {
         const updated = residences.map(c => {
@@ -1646,18 +2263,18 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       const addTo = (c: Complex): Complex => {
         if (!moved) return c;
         if (to.level === 'complex') {
-          return { ...c, facilities: [ ...(c.facilities || []), moved ] };
+          return { ...c, facilities: [...(c.facilities || []), moved] };
         }
         return {
           ...c,
           buildings: c.buildings.map(b => {
             if (to.level === 'building' && b.id === to.buildingId) {
-              return { ...b, facilities: [ ...(b.facilities || []), moved! ] };
+              return { ...b, facilities: [...(b.facilities || []), moved!] };
             }
             if (to.level === 'floor' && b.id === to.buildingId) {
               return {
                 ...b,
-                floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [ ...(fl.facilities || []), moved! ] } : fl)
+                floors: b.floors.map(fl => fl.id === to.floorId ? { ...fl, facilities: [...(fl.facilities || []), moved!] } : fl)
               };
             }
             return b;
@@ -1674,6 +2291,26 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return addTo(removeFrom(data));
     };
 
+    if (USE_D1) {
+      try {
+        // First check duplicate on current local state
+        const current = residences.find(r => r.id === complexId);
+        const toMove = current ? getFacilityById(current) : undefined;
+        if (current && targetHasDuplicate(current, toMove?.name)) {
+          toast({ title: 'مكرر', description: 'يوجد تجهيز بنفس الاسم في الوجهة. النقل مرفوض.', variant: 'destructive' });
+          return;
+        }
+        const updated = residences.map(r => r.id === complexId ? applyMove(r) : r);
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'Success', description: 'Facility moved (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to move facility in D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       try {
         // First check duplicate on current local state
@@ -1717,6 +2354,20 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   // Disable/Enable residence with stock check
   const checkResidenceHasStock = async (residenceId: string): Promise<boolean> => {
+    if (USE_D1) {
+      try {
+        const inventory = await D1Server.getInventory();
+        for (const item of inventory) {
+          const stock = item.stockByResidence || {};
+          const val = Number(stock[residenceId] || 0);
+          if (!isNaN(val) && val > 0) return true;
+        }
+        return false;
+      } catch (e) {
+        console.error('Error checking residence stock D1:', e);
+        return true; // fail safe
+      }
+    }
     if (!db) {
       // Cannot check without DB; assume no stock
       return false;
@@ -1745,6 +2396,18 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
+    if (USE_D1) {
+      try {
+        const updated = residences.map(r => r.id === id ? { ...r, disabled } : r);
+        setResidences(updated);
+        await D1Client.updateResidence(id, { ...residences.find(r => r.id === id)!, disabled });
+        toast({ title: 'Success', description: disabled ? 'Residence disabled (D1).' : 'Residence enabled (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Error', description: 'Failed to update residence status in D1.', variant: "destructive" });
+      }
+      return;
+    }
     if (!db) {
       // Local storage path
       const updated = residences.map(r => r.id === id ? { ...r, disabled } : r);
@@ -1766,11 +2429,11 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   // New: Facility Component Management Functions
   const addFacilityComponent = async (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     component: Omit<FacilityComponent, 'id'>,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => {
     const newComponent: FacilityComponent = {
@@ -1778,45 +2441,92 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       id: `component-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
 
+    if (USE_D1) {
+      try {
+        // Create updated structure
+        const updated = residences.map(complex => {
+          if (complex.id !== complexId) return complex;
+          const addComponentToFacility = (facility: Facility): Facility => ({
+            ...facility,
+            components: [...(facility.components || []), newComponent]
+          });
+
+          if (level === 'complex') {
+            return { ...complex, facilities: (complex.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f) };
+          }
+          return {
+            ...complex,
+            buildings: complex.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              if (level === 'building') {
+                return { ...b, facilities: (b.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f) };
+              }
+              if (level === 'floor' && b.id === buildingId) {
+                return {
+                  ...b,
+                  floors: b.floors.map(fl => {
+                    if (fl.id !== floorId) return fl;
+                    return {
+                      ...fl,
+                      facilities: (fl.facilities || []).map(f => f.id === facilityId ? addComponentToFacility(f) : f)
+                    };
+                  })
+                };
+              }
+              return b;
+            })
+          };
+        });
+        setResidences(updated);
+        const changed = updated.find(c => c.id === complexId);
+        if (changed) await D1Client.updateResidence(complexId, changed);
+        toast({ title: 'تم', description: 'تم إضافة المكون بنجاح (D1).' });
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'خطأ', description: 'فشل إضافة المكون في D1.', variant: 'destructive' });
+      }
+      return;
+    }
+
     if (!db) {
       // Local storage implementation
       try {
         const updated = residences.map(complex => {
           if (complex.id !== complexId) return complex;
-          
+
           if (level === 'complex') {
             return {
               ...complex,
-              facilities: (complex.facilities || []).map(f => 
-                f.id === facilityId 
+              facilities: (complex.facilities || []).map(f =>
+                f.id === facilityId
                   ? { ...f, components: [...(f.components || []), newComponent] }
                   : f
               )
             };
           }
-          
+
           return {
             ...complex,
             buildings: complex.buildings.map(building => {
               if (building.id !== buildingId) return building;
-              
+
               if (level === 'building') {
                 return {
                   ...building,
-                  facilities: (building.facilities || []).map(f => 
-                    f.id === facilityId 
+                  facilities: (building.facilities || []).map(f =>
+                    f.id === facilityId
                       ? { ...f, components: [...(f.components || []), newComponent] }
                       : f
                   )
                 };
               }
-              
+
               // level === 'floor'
               return {
                 ...building,
                 floors: building.floors.map(floor => {
                   if (floor.id !== floorId) return floor;
-                  
+
                   const updatedFloor = {
                     ...floor,
                     facilities: (floor.facilities || []).map(f => {
@@ -1826,14 +2536,14 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
                       return f;
                     })
                   };
-                  
+
                   return updatedFloor;
                 })
               };
             })
           };
         });
-        
+
         setResidences(updated);
         saveToLocalStorage(updated);
         toast({ title: 'تم', description: 'تم إضافة المكون بنجاح.' });
@@ -1855,7 +2565,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
       const addComponentToFacility = (facility: Facility): Facility => ({
         ...facility,
-        components: [ ...(facility.components || []), newComponent ]
+        components: [...(facility.components || []), newComponent]
       });
 
       if (level === 'complex') {
@@ -1909,56 +2619,56 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateFacilityComponent = async (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     componentId: string,
     updates: Partial<FacilityComponent>,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => {
     if (!db) {
       try {
         const updated = residences.map(complex => {
           if (complex.id !== complexId) return complex;
-          
+
           const updateComponentInFacility = (facility: Facility) => ({
             ...facility,
-            components: (facility.components || []).map(c => 
+            components: (facility.components || []).map(c =>
               c.id === componentId ? { ...c, ...updates } : c
             )
           });
-          
+
           if (level === 'complex') {
             return {
               ...complex,
-              facilities: (complex.facilities || []).map(f => 
+              facilities: (complex.facilities || []).map(f =>
                 f.id === facilityId ? updateComponentInFacility(f) : f
               )
             };
           }
-          
+
           return {
             ...complex,
             buildings: complex.buildings.map(building => {
               if (building.id !== buildingId) return building;
-              
+
               if (level === 'building') {
                 return {
                   ...building,
-                  facilities: (building.facilities || []).map(f => 
+                  facilities: (building.facilities || []).map(f =>
                     f.id === facilityId ? updateComponentInFacility(f) : f
                   )
                 };
               }
-              
+
               return {
                 ...building,
                 floors: building.floors.map(floor => {
                   if (floor.id !== floorId) return floor;
                   return {
                     ...floor,
-                    facilities: (floor.facilities || []).map(f => 
+                    facilities: (floor.facilities || []).map(f =>
                       f.id === facilityId ? updateComponentInFacility(f) : f
                     )
                   };
@@ -1967,7 +2677,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             })
           };
         });
-        
+
         setResidences(updated);
         saveToLocalStorage(updated);
         toast({ title: 'تم', description: 'تم تحديث المكون بنجاح.' });
@@ -1983,53 +2693,53 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteFacilityComponent = async (
-    complexId: string, 
-    facilityId: string, 
+    complexId: string,
+    facilityId: string,
     level: 'complex' | 'building' | 'floor',
     componentId: string,
-    buildingId?: string, 
+    buildingId?: string,
     floorId?: string
   ) => {
     if (!db) {
       try {
         const updated = residences.map(complex => {
           if (complex.id !== complexId) return complex;
-          
+
           const removeComponentFromFacility = (facility: Facility) => ({
             ...facility,
             components: (facility.components || []).filter(c => c.id !== componentId)
           });
-          
+
           if (level === 'complex') {
             return {
               ...complex,
-              facilities: (complex.facilities || []).map(f => 
+              facilities: (complex.facilities || []).map(f =>
                 f.id === facilityId ? removeComponentFromFacility(f) : f
               )
             };
           }
-          
+
           return {
             ...complex,
             buildings: complex.buildings.map(building => {
               if (building.id !== buildingId) return building;
-              
+
               if (level === 'building') {
                 return {
                   ...building,
-                  facilities: (building.facilities || []).map(f => 
+                  facilities: (building.facilities || []).map(f =>
                     f.id === facilityId ? removeComponentFromFacility(f) : f
                   )
                 };
               }
-              
+
               return {
                 ...building,
                 floors: building.floors.map(floor => {
                   if (floor.id !== floorId) return floor;
                   return {
                     ...floor,
-                    facilities: (floor.facilities || []).map(f => 
+                    facilities: (floor.facilities || []).map(f =>
                       f.id === facilityId ? removeComponentFromFacility(f) : f
                     )
                   };
@@ -2038,7 +2748,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
             })
           };
         });
-        
+
         setResidences(updated);
         saveToLocalStorage(updated);
         toast({ title: 'تم', description: 'تم حذف المكون بنجاح.' });

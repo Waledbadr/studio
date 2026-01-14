@@ -41,7 +41,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
     if (!fromResidenceId) return [];
     const residence = residences?.find(r => r.id === fromResidenceId);
     if (!residence) return [];
-    
+
     const rooms: any[] = [];
     if (residence.rooms) rooms.push(...residence.rooms);
     if (residence.buildings) {
@@ -59,7 +59,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
     if (!toResidenceId) return [];
     const residence = residences?.find(r => r.id === toResidenceId);
     if (!residence) return [];
-    
+
     const rooms: any[] = [];
     if (residence.rooms) rooms.push(...residence.rooms);
     if (residence.buildings) {
@@ -91,12 +91,12 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
   const getRoomName = (roomId: string, residenceId: string) => {
     const residence = residences?.find(r => r.id === residenceId);
     if (!residence) return roomId;
-    
+
     if (residence.rooms) {
       const room = residence.rooms.find(r => r.id === roomId);
       if (room) return room.name || roomId;
     }
-    
+
     if (residence.buildings) {
       for (const building of residence.buildings) {
         for (const floor of building.floors || []) {
@@ -105,7 +105,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
         }
       }
     }
-    
+
     return roomId;
   };
 
@@ -130,7 +130,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
     setIsSubmitting(true);
     try {
-      const transferRequest = createTransferRequest({
+      const transferRequest = await createTransferRequest({
         from: fromResidenceId && fromRoomId ? { residenceId: fromResidenceId, roomId: fromRoomId } : undefined,
         to: { residenceId: toResidenceId, roomId: toRoomId || undefined },
         workerIds: selectedWorkers,
@@ -210,7 +210,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
                 ) : (
                   availableWorkers.map(worker => (
                     <SelectItem key={worker.id} value={worker.id}>
-                      {worker.name} {worker.employeeId ? `(${worker.employeeId})` : ''} - {worker.nationaliy}
+                      {worker.name} {worker.employeeId ? `(${worker.employeeId})` : ''} - {worker.nationality}
                     </SelectItem>
                   ))
                 )}
@@ -224,7 +224,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
               <span className="text-muted-foreground">من:</span>
               <span className="text-sm text-muted-foreground">(اختياري)</span>
             </h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>المسكن الحالي</Label>
@@ -271,7 +271,7 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
               <span className="text-primary">إلى:</span>
               <span className="text-sm text-destructive">*مطلوب</span>
             </h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>المسكن الجديد *</Label>

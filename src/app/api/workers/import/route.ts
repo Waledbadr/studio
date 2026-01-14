@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/workers/import
  * 
  * Imports workers data from JSON file into Firestore 'workers' collection.
- * Accepts JSON array of workers with fields: id, name, nationaliy, role
+ * Accepts JSON array of workers with fields: id, name, nationality, role
  * 
  * Body: { workers: Worker[] } or Worker[]
  */
@@ -16,10 +16,10 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    
+
     // Support both { workers: [...] } and direct array
     const workersData = Array.isArray(body) ? body : (body.workers || []);
-    
+
     if (!Array.isArray(workersData) || workersData.length === 0) {
       return NextResponse.json(
         { error: 'Invalid data format. Expected array of workers.' },
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Process each worker
     for (let i = 0; i < workersData.length; i++) {
       const worker = workersData[i];
-      
+
       try {
         // Validate required fields
         if (!worker.name || typeof worker.name !== 'string') {
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
         // Generate ID if not provided
         const workerId = worker.id || `w_${Date.now()}_${i}`;
-        
+
         // Normalize role
         let role: 'Worker' | 'Supervisor' | 'Engineer' = 'Worker';
         if (worker.role === 'Supervisor' || worker.role === 'Engineer') {
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           name: worker.name.trim(),
           employeeId: worker.employeeId || '',
           idNumber: worker.idNumber || worker.nationalId || '',
-          nationaliy: worker.nationaliy || worker.nationality || '',
+          nationality: worker.nationality || worker.nationality || '',
           company: worker.company || '',
           role,
         };
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Workers import error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to import workers',
         details: error instanceof Error ? error.message : 'Unknown error'
       },

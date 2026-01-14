@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,15 +12,12 @@ export async function POST(req: NextRequest) {
     // Decode base64
     const base64 = dataUrl.split(',')[1];
     const buffer = Buffer.from(base64, 'base64');
-    const filename = `feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.png`;
+    const originalName = `feedback-${Date.now()}.png`;
 
-    const blob = await put(filename, buffer, {
-      access: 'public',
-      contentType: 'image/png',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    } as any);
+    const { saveBuffer } = await import('@/lib/storage');
+    const saved = await saveBuffer({ buffer, dir: 'feedback', filename: originalName, contentType: 'image/png', maxSize: 2 * 1024 * 1024, allowedTypes: ['image/'] });
 
-    return NextResponse.json({ url: blob.url });
+    return NextResponse.json({ url: saved.url, path: saved.path });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Upload failed' }, { status: 500 });
   }

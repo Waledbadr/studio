@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from "firebase/firestore";
-import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from '@/lib/firestore-shim';
+import { onAuthStateChanged } from '@/lib/auth-shim';
 
 export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
 export type MaintenancePriority = 'Low' | 'Medium' | 'High';

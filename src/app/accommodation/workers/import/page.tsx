@@ -94,7 +94,7 @@ export default function ImportWorkersPage() {
         // Best practice: Use Firestore rules or unique indexes, or just overwrite.
         // Here we will overwrite/merge based on ID if we can generate deterministic ID, 
         // otherwise we generate new ID.
-        
+
         // Let's try to generate deterministic ID based on Iqama or EmployeeID to prevent duplicates
         let workerId = '';
         const iqama = row.Iqama_No ? row.Iqama_No.trim() : '';
@@ -114,7 +114,7 @@ export default function ImportWorkersPage() {
           name: row['Employee Name']?.trim(),
           employeeId: empId,
           idNumber: iqama,
-          nationaliy: row.Nationality?.trim(),
+          nationality: row.Nationality?.trim(),
           company: company,
           role: row['W Type'] === 'Supervisor' ? 'Supervisor' : row['W Type'] === 'Engineer' ? 'Engineer' : 'Worker'
         });
@@ -168,7 +168,7 @@ export default function ImportWorkersPage() {
   const handleDeleteAll = async () => {
     if (!confirm('هل أنت متأكد من حذف جميع العمال؟ لا يمكن التراجع عن هذا الإجراء!')) return;
     if (!confirm('تأكيد نهائي: سيتم حذف قاعدة بيانات العمال بالكامل!')) return;
-    
+
     setImporting(true);
     try {
       const result = await deleteAllWorkers();
@@ -195,7 +195,7 @@ export default function ImportWorkersPage() {
           <p className="text-muted-foreground mt-1">Import Workers from Excel/CSV</p>
         </div>
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={handleDeleteAll}
             disabled={importing}
             className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 disabled:opacity-50"
@@ -338,7 +338,7 @@ export default function ImportWorkersPage() {
       {(results.success > 0 || results.failed > 0) && (
         <div className="bg-card border border-border rounded-lg p-4 space-y-3">
           <h3 className="text-lg font-semibold text-foreground">نتائج الاستيراد</h3>
-          
+
           <div className="flex gap-4">
             <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle className="h-5 w-5" />

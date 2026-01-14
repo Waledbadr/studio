@@ -1,0 +1,16 @@
+
+{
+  "error": {
+    "text": "A request to the Cloudflare API (/accounts/65348b9b37e5081ce64a431fcd086bf0/d1/database) failed.",
+    "notes": [
+      {
+        "text": "Authentication error [code: 10000]"
+      }
+    ],
+    "kind": "error",
+    "name": "APIError",
+    "code": 10000,
+    "accountTag": "65348b9b37e5081ce64a431fcd086bf0"
+  }
+}
+Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file c:\ws\deps\uv\src\win\async.c, line 76

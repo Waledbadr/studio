@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X } from 'lucide-react';
-import { updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { updateDoc, doc, Timestamp } from '@/lib/firestore-shim';
 import { db } from '@/lib/firebase';
 import { useUsers } from '@/context/users-context';
 import { FileUploadArea } from '@/components/ui/file-upload-area';

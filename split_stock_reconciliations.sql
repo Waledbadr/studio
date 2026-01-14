@@ -1,0 +1,3 @@
+INSERT OR REPLACE INTO stock_reconciliations (id, residence_id, date, item_count, total_increase, total_decrease, performed_by_id) VALUES ('CON-25101', 'KA43UwlETuLC7bWffony', '2025-10-20T11:28:54.000Z', 6, 425, 0, 'bRpKwXMuelYjNgGOqpEm55PvPTP2');
+INSERT OR REPLACE INTO stock_reconciliations (id, residence_id, date, item_count, total_increase, total_decrease, performed_by_id) VALUES ('CON-25111', '3C1ZgRS2sr2VFMYGdzIN', '2025-11-01T11:09:33.000Z', 7, 123, 0, 'bRpKwXMuelYjNgGOqpEm55PvPTP2');
+INSERT OR REPLACE INTO stock_reconciliations (id, residence_id, date, item_count, total_increase, total_decrease, performed_by_id) VALUES ('CON-25112', '3C1ZgRS2sr2VFMYGdzIN', '2025-11-24T07:56:02.000Z', 1, 500, 0, 'bRpKwXMuelYjNgGOqpEm55PvPTP2');

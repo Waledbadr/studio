@@ -19,46 +19,46 @@ export default function WorkersByCompanyReportPage() {
   }, [workers]);
 
   return (
-    <PrintLayout 
-      title="Workers by Company Report" 
+    <PrintLayout
+      title="Workers by Company Report"
       description="List of workers grouped by their company."
     >
       <div className="space-y-8">
         {Object.keys(groupedWorkers).length === 0 ? (
-             <div className="text-center py-10 text-muted-foreground">No workers found.</div>
+          <div className="text-center py-10 text-muted-foreground">No workers found.</div>
         ) : (
-            Object.entries(groupedWorkers).map(([company, companyWorkers]) => (
+          Object.entries(groupedWorkers).map(([company, companyWorkers]) => (
             <div key={company} className="border rounded-md overflow-hidden break-inside-avoid">
-                <div className="bg-muted/50 px-4 py-3 border-b">
-                    <h3 className="font-bold text-lg flex justify-between">
-                        <span>{company}</span>
-                        <span className="text-sm font-normal text-muted-foreground">{companyWorkers.length} Workers</span>
-                    </h3>
-                </div>
-                <Table>
+              <div className="bg-muted/50 px-4 py-3 border-b">
+                <h3 className="font-bold text-lg flex justify-between">
+                  <span>{company}</span>
+                  <span className="text-sm font-normal text-muted-foreground">{companyWorkers.length} Workers</span>
+                </h3>
+              </div>
+              <Table>
                 <TableHeader>
-                    <TableRow>
+                  <TableRow>
                     <TableHead>ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Employee ID</TableHead>
                     <TableHead>Nationality</TableHead>
                     <TableHead>Role</TableHead>
-                    </TableRow>
+                  </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {companyWorkers.map((worker) => (
+                  {companyWorkers.map((worker) => (
                     <TableRow key={worker.id}>
-                        <TableCell className="font-mono text-xs">{worker.idNumber || worker.id}</TableCell>
-                        <TableCell className="font-medium">{worker.name}</TableCell>
-                        <TableCell>{worker.employeeId || '-'}</TableCell>
-                        <TableCell>{worker.nationaliy || '-'}</TableCell>
-                        <TableCell>{worker.role || 'Worker'}</TableCell>
+                      <TableCell className="font-mono text-xs">{worker.idNumber || worker.id}</TableCell>
+                      <TableCell className="font-medium">{worker.name}</TableCell>
+                      <TableCell>{worker.employeeId || '-'}</TableCell>
+                      <TableCell>{worker.nationality || '-'}</TableCell>
+                      <TableCell>{worker.role || 'Worker'}</TableCell>
                     </TableRow>
-                    ))}
+                  ))}
                 </TableBody>
-                </Table>
+              </Table>
             </div>
-            ))
+          ))
         )}
       </div>
     </PrintLayout>

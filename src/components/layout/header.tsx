@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut } from '@/lib/auth-shim';
 import dynamic from 'next/dynamic';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });

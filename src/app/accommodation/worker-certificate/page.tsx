@@ -699,7 +699,7 @@ export default function WorkerCertificatePage() {
                           <div className="font-medium">{worker.name}</div>
                           <div className="text-sm text-muted-foreground flex items-center gap-2">
                             {worker.employeeId && <span>#{worker.employeeId}</span>}
-                            {worker.nationaliy && <span>• {worker.nationaliy}</span>}
+                            {worker.nationality && <span>• {worker.nationality}</span>}
                           </div>
                         </div>
                       </div>
@@ -772,7 +772,7 @@ export default function WorkerCertificatePage() {
                         </div>
                         <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.nationality}</span>
-                          <span>{selectedWorker.nationaliy || t.notSpecified}</span>
+                          <span>{selectedWorker.nationality || t.notSpecified}</span>
                         </div>
                         <div className="flex justify-between border-b border-dashed pb-0.5">
                           <span className="text-slate-500">{t.jobTitle}</span>

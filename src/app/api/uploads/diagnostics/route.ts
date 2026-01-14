@@ -12,12 +12,10 @@ export async function GET() {
     environment: process.env.NODE_ENV || 'unknown',
     runtime: 'nodejs',
     checks: {
-      blobToken: {
-        configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
-        value: process.env.BLOB_READ_WRITE_TOKEN 
-          ? `${process.env.BLOB_READ_WRITE_TOKEN.substring(0, 20)}...` 
-          : 'NOT SET',
-        status: process.env.BLOB_READ_WRITE_TOKEN ? '✅' : '❌',
+      storageRoot: {
+        configured: Boolean(process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR),
+        root: process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR || 'default ./storage',
+        status: (process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR) ? '✅' : '⚠️ (using ./storage)',
       },
       firebaseConfig: {
         apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
@@ -39,14 +37,13 @@ export async function GET() {
   };
 
   // Add recommendations based on checks
-  if (!diagnostics.checks.blobToken.configured) {
+  if (!diagnostics.checks.storageRoot.configured) {
     diagnostics.recommendations.push(
-      '❌ أضف BLOB_READ_WRITE_TOKEN في متغيرات البيئة في Render Dashboard',
-      '📖 راجع ملف RENDER_UPLOAD_FIX_AR.md للخطوات الكاملة',
-      '🔑 احصل على Token من: Vercel Dashboard → Storage → Blob → Tokens'
+      '⚠️ لم يتم تحديد مجلد التخزين - سيتم استخدام ./storage محلياً. ضع STORAGE_ROOT في متغيرات البيئة للإشارة إلى مسار ثابت مثل /var/estatecare/storage',
+      '📖 راجع وثائق التخزين المحلية لتحديد الصلاحيات إن لزم',
     );
   } else {
-    diagnostics.recommendations.push('✅ BLOB_READ_WRITE_TOKEN محدد بشكل صحيح');
+    diagnostics.recommendations.push(`✅ Storage root: ${diagnostics.checks.storageRoot.root}`);
   }
 
   if (!diagnostics.checks.firebaseConfig.apiKey) {

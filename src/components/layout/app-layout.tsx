@@ -21,6 +21,9 @@ function AppLayoutInner({ children }: PropsWithChildren) {
   useEffect(() => {
     enablePushIfGranted(currentUser?.id);
   }, [currentUser?.id]);
+
+  // Initialize D1 client-side adjustments (suppress Firebase noise in D1-only)
+  const D1Init = dynamic(() => import('@/components/d1/d1-init'), { ssr: false });
   const pathname = usePathname();
 
   // Render bare page for login route (no sidebar/header/guard)
@@ -43,6 +46,7 @@ function AppLayoutInner({ children }: PropsWithChildren) {
      <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-background">
              {children}
            </main>
+           <D1Init />
         </SidebarInset>
       </SidebarProvider>
     </RequireAuth>

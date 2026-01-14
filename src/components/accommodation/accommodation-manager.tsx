@@ -5,8 +5,8 @@ import { useAccommodation } from "@/context/accommodation-context";
 import { useResidences } from "@/context/residences-context";
 import { useUsers } from "@/context/users-context";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Search, Users, Building, Home, ArrowRight, CheckCircle2, 
+import {
+  Search, Users, Building, Home, ArrowRight, CheckCircle2,
   XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,18 +37,18 @@ import { WorkerHistoryDialog } from "./worker-history-dialog";
 import { RoomHistoryDialog } from "./room-history-dialog";
 
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { onAuthStateChanged } from '@/lib/auth-shim';
+import { doc, getDoc, collection, query, where, getDocs } from '@/lib/firestore-shim';
 
 export function AccommodationManager() {
   // const { residences } = useResidences(); // Use residences from AccommodationContext for better type support
-  const { 
+  const {
     residences,
-    workers, 
-    occupants, 
-    findWorkerAsync, 
-    bulkCheckIn, 
-    bulkCheckOut, 
+    workers,
+    occupants,
+    findWorkerAsync,
+    bulkCheckIn,
+    bulkCheckOut,
     bulkTransfer,
     deleteWorker,
     fetchOccupantsForFloor,
@@ -87,7 +87,7 @@ export function AccommodationManager() {
 
   // Global State
   const [activeTab, setActiveTab] = useState("assign");
-  
+
   // Sticky Fields for Check-in
   const [checkInDate, setCheckInDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [checkInType, setCheckInType] = useState<string>("New Recruitment");
@@ -97,7 +97,7 @@ export function AccommodationManager() {
   const [checkoutWorker, setCheckoutWorker] = useState<any>(null);
   const [checkoutReason, setCheckoutReason] = useState<string>("End of Contract");
   const [checkoutCity, setCheckoutCity] = useState<string>("");
-  
+
   // Extract Unique Cities from ALL residences (for transfer destinations)
   const uniqueCities = React.useMemo(() => {
     const cities = new Set<string>();
@@ -106,7 +106,7 @@ export function AccommodationManager() {
     });
     return Array.from(cities).filter(Boolean).sort();
   }, [residences]);
-  
+
   // Selection State
   const [selectedResidenceId, setSelectedResidenceId] = useState<string>("");
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>("");
@@ -128,7 +128,7 @@ export function AccommodationManager() {
   const [manageSearchQuery, setManageSearchQuery] = useState("");
   const [manageSearchResults, setManageSearchResults] = useState<any[]>([]);
   const [isManageSearching, setIsManageSearching] = useState(false);
-  
+
   // Auto Assign State
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [autoAssignResults, setAutoAssignResults] = useState<{
@@ -140,19 +140,19 @@ export function AccommodationManager() {
 
   // Derived State
   const selectedResidence = accessibleResidences.find(r => r.id === selectedResidenceId);
-  
-  const buildings = React.useMemo(() => 
+
+  const buildings = React.useMemo(() =>
     [...(selectedResidence?.buildings || [])].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' })),
-  [selectedResidence]);
+    [selectedResidence]);
 
   const selectedBuilding = buildings.find(b => b.id === selectedBuildingId);
-  
-  const floors = React.useMemo(() => 
+
+  const floors = React.useMemo(() =>
     [...(selectedBuilding?.floors || [])].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' })),
-  [selectedBuilding]);
+    [selectedBuilding]);
 
   const selectedFloor = floors.find(f => f.id === selectedFloorId);
-  
+
   // Handle direct rooms (no buildings/floors)
   const rooms = React.useMemo(() => {
     const raw = selectedFloor?.rooms || (buildings.length === 0 ? selectedResidence?.rooms || [] : []);
@@ -184,18 +184,18 @@ export function AccommodationManager() {
   useEffect(() => {
     const loadOccupantDetails = async () => {
       if (!selectedRoomId) return;
-      
+
       const roomOccs = occupants.filter(o => o.roomId === selectedRoomId);
       const missingWorkerIds = roomOccs
         .map(o => o.workerId)
         .filter(id => !workers.find(w => w.id === id) && !roomOccupantDetails.find(w => w.id === id));
-      
+
       if (missingWorkerIds.length > 0) {
         const newDetails = await getWorkersByIds(missingWorkerIds);
         setRoomOccupantDetails(prev => [...prev, ...newDetails]);
       }
     };
-    
+
     loadOccupantDetails();
   }, [selectedRoomId, occupants, workers, roomOccupantDetails, getWorkersByIds]);
 
@@ -204,19 +204,19 @@ export function AccommodationManager() {
   useEffect(() => {
     const loadMissingWorkersForView = async () => {
       if (!selectedResidenceId) return;
-      
+
       // Filter occupants relevant to current view
-      const currentOccupants = occupants.filter(o => 
-        o.residenceId === selectedResidenceId && 
+      const currentOccupants = occupants.filter(o =>
+        o.residenceId === selectedResidenceId &&
         (!selectedFloorId || o.floorId === selectedFloorId)
       );
-      
+
       if (currentOccupants.length === 0) return;
 
       const missingWorkerIds = currentOccupants
         .map(o => o.workerId)
         .filter(id => !workers.find(w => w.id === id));
-      
+
       // Deduplicate
       const uniqueMissingIds = Array.from(new Set(missingWorkerIds));
 
@@ -225,7 +225,7 @@ export function AccommodationManager() {
         await getWorkersByIds(uniqueMissingIds);
       }
     };
-    
+
     // Debounce to avoid rapid calls during navigation
     const timer = setTimeout(loadMissingWorkersForView, 500);
     return () => clearTimeout(timer);
@@ -244,7 +244,7 @@ export function AccommodationManager() {
     try {
       // Detect multiple terms (space, comma, newline)
       const spaceTerms = query.split(/[\s,]+/).map(t => t.trim()).filter(t => t.length > 0);
-      
+
       let results: any[] = [];
 
       // Heuristic: If multiple terms and they look like IDs (numbers), treat as bulk search
@@ -263,16 +263,16 @@ export function AccommodationManager() {
       } else {
         // Standard Search (try full query first)
         results = await findWorkerAsync(query);
-        
+
         // Fallback: If no results and multiple terms, try searching each term
         // This helps if user pastes "ID1 ID2" but they are alphanumeric or mixed
         if (results.length === 0 && spaceTerms.length > 1) {
-             const promises = spaceTerms.map(term => findWorkerAsync(term));
-             const resultsArrays = await Promise.all(promises);
-             const allResults = resultsArrays.flat();
-             const uniqueMap = new Map();
-             allResults.forEach(w => uniqueMap.set(w.id, w));
-             results = Array.from(uniqueMap.values());
+          const promises = spaceTerms.map(term => findWorkerAsync(term));
+          const resultsArrays = await Promise.all(promises);
+          const allResults = resultsArrays.flat();
+          const uniqueMap = new Map();
+          allResults.forEach(w => uniqueMap.set(w.id, w));
+          results = Array.from(uniqueMap.values());
         }
       }
 
@@ -288,8 +288,8 @@ export function AccommodationManager() {
           const occ = await checkWorkerOccupancy(w.id);
           console.log('[Search] Worker', w.id, w.name, 'occupancy:', occ);
           if (occ) occs[w.id] = occ;
-        } catch (e) { 
-          console.error(`Failed to check occupancy for ${w.id}`, e); 
+        } catch (e) {
+          console.error(`Failed to check occupancy for ${w.id}`, e);
         }
       }
       console.log('[Search] Final occupancies:', occs);
@@ -313,18 +313,18 @@ export function AccommodationManager() {
     setIsManageSearching(true);
     try {
       const results = await findWorkerAsync(query);
-      
+
       // Check occupancy for results to know where they are
       const resultsWithOccupancy = [];
       for (const w of results) {
-         try {
-           const occ = await checkWorkerOccupancy(w.id);
-           if (occ) {
-               resultsWithOccupancy.push({ ...w, occupancy: occ });
-           }
-         } catch (e) {
-           console.error(e);
-         }
+        try {
+          const occ = await checkWorkerOccupancy(w.id);
+          if (occ) {
+            resultsWithOccupancy.push({ ...w, occupancy: occ });
+          }
+        } catch (e) {
+          console.error(e);
+        }
       }
       setManageSearchResults(resultsWithOccupancy);
 
@@ -346,7 +346,7 @@ export function AccommodationManager() {
   // Toggle Worker Selection
   const toggleWorkerSelection = (worker: any) => {
     const workerId = worker.id;
-    
+
     setSelectedWorkerIds(prev => {
       const isSelected = prev.includes(workerId);
       if (isSelected) {
@@ -399,10 +399,10 @@ export function AccommodationManager() {
         // Show detailed error for failures
         // We take unique error messages
         const uniqueErrors = Array.from(new Set(failures.map(f => f.error).filter(Boolean)));
-        toast({ 
-          title: "Assignment Issues", 
-          description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`, 
-          variant: "destructive" 
+        toast({
+          title: "Assignment Issues",
+          description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`,
+          variant: "destructive"
         });
       }
     } catch (error) {
@@ -445,13 +445,13 @@ export function AccommodationManager() {
     if (!confirm("Are you sure you want to delete this worker?")) return;
     await deleteWorker(id);
     toast({ title: "Deleted", description: "Worker deleted successfully" });
-    
+
     setDuplicates(prev => {
       const newDuplicates = prev.map(group => ({
         ...group,
         items: group.items.filter((i: any) => i.id !== id)
       })).filter(group => group.items.length > 1);
-      
+
       if (newDuplicates.length === 0) {
         setDuplicateDialog(false);
       }
@@ -474,39 +474,39 @@ export function AccommodationManager() {
       // This is critical to prevent "Room Full" or "Nationality Mismatch" errors due to UI lag
       let freshOccupants: any[] = [];
       if (db && selectedResidenceId && selectedFloorId) {
-         const q = query(
-            collection(db, 'occupants'),
-            where('residenceId', '==', selectedResidenceId),
-            where('floorId', '==', selectedFloorId),
-            where('until', '==', null)
-         );
-         const snap = await getDocs(q);
-         freshOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const q = query(
+          collection(db, 'occupants'),
+          where('residenceId', '==', selectedResidenceId),
+          where('floorId', '==', selectedFloorId),
+          where('until', '==', null)
+        );
+        const snap = await getDocs(q);
+        freshOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       } else {
-         freshOccupants = occupants.filter(o => o.residenceId === selectedResidenceId && o.floorId === selectedFloorId);
+        freshOccupants = occupants.filter(o => o.residenceId === selectedResidenceId && o.floorId === selectedFloorId);
       }
 
       // Fetch details for all existing occupants on this floor to ensure we know nationalities/roles
       const floorOccupantIds = freshOccupants.map(o => o.workerId);
-      
+
       // ALSO fetch fresh details for the selected workers to ensure we have their Nationality/Role
       // This prevents "nationality-mismatch" errors if the UI state is stale/incomplete
       const selectedIds = selectedWorkers.map(w => w.id);
       const allIdsToFetch = Array.from(new Set([...floorOccupantIds, ...selectedIds]));
-      
+
       // Fetch FRESH data directly from Firestore to bypass local cache
       const allWorkersMap = new Map();
       const chunkSize = 10;
       if (db) {
         for (let i = 0; i < allIdsToFetch.length; i += chunkSize) {
-            const chunk = allIdsToFetch.slice(i, i + chunkSize);
-            const promises = chunk.map(id => getDoc(doc(db!, 'workers', id)));
-            const snaps = await Promise.all(promises);
-            snaps.forEach(snap => {
-                if (snap.exists()) {
-                    allWorkersMap.set(snap.id, { id: snap.id, ...snap.data() });
-                }
-            });
+          const chunk = allIdsToFetch.slice(i, i + chunkSize);
+          const promises = chunk.map(id => getDoc(doc(db!, 'workers', id)));
+          const snaps = await Promise.all(promises);
+          snaps.forEach(snap => {
+            if (snap.exists()) {
+              allWorkersMap.set(snap.id, { id: snap.id, ...snap.data() });
+            }
+          });
         }
       }
 
@@ -518,14 +518,14 @@ export function AccommodationManager() {
       const roomState = new Map();
       rooms.forEach(room => {
         const roomOccs = freshOccupants.filter(o => o.roomId === room.id);
-        
+
         // Fix: Don't filter out occupants if worker details are missing. 
         // Count them as default Workers to ensure capacity is reserved.
         const occWorkers = roomOccs.map(o => {
-            const w = allWorkersMap.get(o.workerId);
-            if (w) return w;
-            // Placeholder for missing worker data to ensure space is counted
-            return { id: o.workerId, role: 'Worker', nationaliy: 'Unknown', name: 'Unknown' };
+          const w = allWorkersMap.get(o.workerId);
+          if (w) return w;
+          // Placeholder for missing worker data to ensure space is counted
+          return { id: o.workerId, role: 'Worker', nationality: 'Unknown', name: 'Unknown' };
         });
 
         roomState.set(room.id, {
@@ -548,7 +548,7 @@ export function AccommodationManager() {
 
       for (const worker of sortedSelected) {
         let assigned = false;
-        
+
         // Find best room
         // Strategy:
         // 1. Filter valid rooms (Capacity & Nationality strict match)
@@ -557,21 +557,21 @@ export function AccommodationManager() {
         //    - Score 2: Occupied + Same Nationality (Good)
         //    - Score 1: Empty (Fallback)
         // 3. Sort by Score DESC, then by Fill Level DESC (Fill vacancies first)
-        
+
         const candidates: { roomId: string; state: any; score: number; usedSqm: number }[] = [];
 
         for (const [roomId, state] of roomState.entries()) {
           const allOccs = [...state.currentOccupants, ...state.virtualOccupants];
-          
+
           // Capacity Check
           // Use spaceSqm if available, otherwise fallback to capacity * 4, or default 16
           const totalSqm = state.spaceSqm || ((state.capacity || 4) * 4);
-          
+
           const usedSqm = allOccs.reduce((sum: number, w: any) => {
             return sum + (w.role === 'Engineer' ? 16 : w.role === 'Supervisor' ? 8 : 4);
           }, 0);
           const requiredSqm = worker.role === 'Engineer' ? 16 : worker.role === 'Supervisor' ? 8 : 4;
-          
+
           // Skip checks if Emergency Mode is ON
           if (!selectedResidence?.isEmergencyMode) {
             if (usedSqm + requiredSqm > totalSqm) continue;
@@ -580,10 +580,10 @@ export function AccommodationManager() {
             let isNatMatch = true;
             if (allOccs.length > 0) {
               // Find the first occupant with a nationality to compare against
-              const firstWithNat = allOccs.find((o: any) => o.nationaliy);
-              if (firstWithNat && firstWithNat.nationaliy && worker.nationaliy) {
-                const roomNat = firstWithNat.nationaliy.trim().toLowerCase();
-                const workerNat = worker.nationaliy.trim().toLowerCase();
+              const firstWithNat = allOccs.find((o: any) => o.nationality);
+              if (firstWithNat && firstWithNat.nationality && worker.nationality) {
+                const roomNat = firstWithNat.nationality.trim().toLowerCase();
+                const workerNat = worker.nationality.trim().toLowerCase();
                 if (roomNat !== workerNat) {
                   isNatMatch = false;
                 }
@@ -601,11 +601,11 @@ export function AccommodationManager() {
             if (allOccs.length > 0) {
               const firstWithRole = allOccs.find((o: any) => o.role);
               if (firstWithRole) {
-                  const roomRole = firstWithRole.role || 'Worker';
-                  const workerRole = worker.role || 'Worker';
-                  if (roomRole !== workerRole) {
-                    isRoleMatch = false;
-                  }
+                const roomRole = firstWithRole.role || 'Worker';
+                const workerRole = worker.role || 'Worker';
+                if (roomRole !== workerRole) {
+                  isRoleMatch = false;
+                }
               }
             }
             if (!isRoleMatch) continue;
@@ -617,13 +617,13 @@ export function AccommodationManager() {
           // 1. Prioritize occupied rooms (same nationality) over empty ones.
           // 2. Among occupied rooms, prioritize the fullest ones (highest occupancy %).
           // 3. Empty rooms get lowest priority.
-          
+
           let score = 0;
-          
+
           if (allOccs.length > 0) {
             // Occupied Room: Base 1000
             score = 1000;
-            
+
             // Add occupancy percentage (0-100)
             // Example: 50% full -> 1050, 75% full -> 1075
             const occupancyPercentage = totalSqm > 0 ? (usedSqm / totalSqm) * 100 : 0;
@@ -648,11 +648,11 @@ export function AccommodationManager() {
         }
 
         if (!assigned) {
-          resultsDetails.push({ 
-            workerName: worker.name, 
-            roomName: 'None', 
-            status: 'error', 
-            message: 'No suitable room found (Capacity/Nationality)' 
+          resultsDetails.push({
+            workerName: worker.name,
+            roomName: 'None',
+            status: 'error',
+            message: 'No suitable room found (Capacity/Nationality)'
           });
           unassigned.push(worker.id);
         }
@@ -681,7 +681,7 @@ export function AccommodationManager() {
             workerIds.forEach(id => {
               const result = res.results[id];
               const w = selectedWorkers.find(w => w.id === id);
-              
+
               if (result && result.success) {
                 resultsDetails.push({
                   workerId: id,
@@ -702,8 +702,8 @@ export function AccommodationManager() {
               }
             });
           } else {
-             // Fallback if results is missing (should not happen)
-             workerIds.forEach(id => {
+            // Fallback if results is missing (should not happen)
+            workerIds.forEach(id => {
               const w = selectedWorkers.find(w => w.id === id);
               resultsDetails.push({
                 workerId: id,
@@ -716,17 +716,17 @@ export function AccommodationManager() {
             });
           }
         } catch (e) {
-           workerIds.forEach(id => {
-              const w = selectedWorkers.find(w => w.id === id);
-              resultsDetails.push({
-                workerId: id,
-                workerName: w?.name || id,
-                roomName,
-                status: 'error',
-                message: 'Exception'
-              });
-              failCount++;
+          workerIds.forEach(id => {
+            const w = selectedWorkers.find(w => w.id === id);
+            resultsDetails.push({
+              workerId: id,
+              workerName: w?.name || id,
+              roomName,
+              status: 'error',
+              message: 'Exception'
             });
+            failCount++;
+          });
         }
       }));
 
@@ -734,7 +734,7 @@ export function AccommodationManager() {
       // Remove successfully assigned workers
       const successfulIds = resultsDetails.filter(r => r.status === 'success').map(r => r.workerId);
       const newSelectedIds = selectedWorkerIds.filter(id => !successfulIds.includes(id));
-      
+
       setSelectedWorkerIds(newSelectedIds);
       setSelectedWorkers(prev => prev.filter(w => newSelectedIds.includes(w.id)));
 
@@ -798,9 +798,9 @@ export function AccommodationManager() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchResults.length > 0) {
                       // If exact match exists for the query, prefer it
-                      const exactMatch = searchResults.find(w => 
-                        w.id === searchQuery.trim() || 
-                        w.employeeId === searchQuery.trim() || 
+                      const exactMatch = searchResults.find(w =>
+                        w.id === searchQuery.trim() ||
+                        w.employeeId === searchQuery.trim() ||
                         w.idNumber === searchQuery.trim()
                       );
 
@@ -816,13 +816,13 @@ export function AccommodationManager() {
                       }
 
                       if (toSelect.length > 0) {
-                          setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
-                          setSelectedWorkers(prev => {
-                              const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
-                              return [...newWorkers, ...prev];
-                          });
-                          setSearchQuery('');
-                          setSearchResults([]);
+                        setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
+                        setSelectedWorkers(prev => {
+                          const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
+                          return [...newWorkers, ...prev];
+                        });
+                        setSearchQuery('');
+                        setSearchResults([]);
                       }
                     }
                   }}
@@ -845,7 +845,7 @@ export function AccommodationManager() {
               <ScrollArea className="flex-1 p-2">
                 {/* Selected Workers List */}
                 {selectedWorkers.length > 0 && (
-                  <div 
+                  <div
                     className="mb-4 border-b pb-2 cursor-grab active:cursor-grabbing"
                     draggable
                     onDragStart={(e) => {
@@ -872,7 +872,7 @@ export function AccommodationManager() {
                           const res = residences.find(r => r.id === occupancy.residenceId);
                           if (res) {
                             residenceName = res.name;
-                            
+
                             if (occupancy.buildingId) {
                               const b = res.buildings?.find(b => b.id === occupancy.buildingId);
                               if (b) {
@@ -882,103 +882,104 @@ export function AccommodationManager() {
                                   if (f) {
                                     floorName = f.name || f.id;
                                     if (occupancy.roomId) {
-                                       const r = f.rooms?.find(r => r.id === occupancy.roomId);
-                                       if (r) roomName = r.name || r.id;
+                                      const r = f.rooms?.find(r => r.id === occupancy.roomId);
+                                      if (r) roomName = r.name || r.id;
                                     }
                                   }
                                 }
                               }
                             } else if (occupancy.roomId) {
-                               const r = res.rooms?.find(r => r.id === occupancy.roomId);
-                               if (r) roomName = r.name || r.id;
+                              const r = res.rooms?.find(r => r.id === occupancy.roomId);
+                              if (r) roomName = r.name || r.id;
                             }
                           }
                         }
 
                         return (
-                        <div 
-                          key={worker.id} 
-                          className={`flex flex-col p-2 rounded border cursor-pointer transition-colors text-sm hover:bg-muted ${isOccupied ? 'bg-amber-50/50 border-amber-200' : 'bg-primary/10 border-primary'}`}
-                        >
-                          {isOccupied ? (
-                            // Occupied Worker Card Layout
-                            <div className="flex justify-between items-start w-full">
-                              <div className="flex items-start gap-2 flex-1">
-                                <Checkbox 
-                                  checked={true}
-                                  onCheckedChange={() => toggleWorkerSelection(worker)}
-                                  className="mt-1 h-3 w-3"
-                                />
-                                <div className="flex-1">
-                                  {/* Line 1: Name */}
-                                  <div className="font-bold text-sm text-amber-950 mb-1">
-                                    {worker.name} <span className="font-normal text-amber-900/70 text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
-                                  </div>
-                                  
-                                  {/* Line 2: Role . Nationality . Company */}
-                                  <div className="text-amber-800 mb-1 flex flex-wrap gap-1 items-center text-xs">
-                                    <span className="font-medium">{worker.role || 'Worker'}</span>
-                                    <span className="text-amber-400">•</span>
-                                    <span>{worker.nationaliy || 'Unknown'}</span>
-                                    <span className="text-amber-400">•</span>
-                                    <span>{worker.company || 'No Company'}</span>
-                                  </div>
+                          <div
+                            key={worker.id}
+                            className={`flex flex-col p-2 rounded border cursor-pointer transition-colors text-sm hover:bg-muted ${isOccupied ? 'bg-amber-50/50 border-amber-200' : 'bg-primary/10 border-primary'}`}
+                          >
+                            {isOccupied ? (
+                              // Occupied Worker Card Layout
+                              <div className="flex justify-between items-start w-full">
+                                <div className="flex items-start gap-2 flex-1">
+                                  <Checkbox
+                                    checked={true}
+                                    onCheckedChange={() => toggleWorkerSelection(worker)}
+                                    className="mt-1 h-3 w-3"
+                                  />
+                                  <div className="flex-1">
+                                    {/* Line 1: Name */}
+                                    <div className="font-bold text-sm text-amber-950 mb-1">
+                                      {worker.name} <span className="font-normal text-amber-900/70 text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                    </div>
 
-                                  {/* Line 3: Residence . Building-Floor-Room . Date . Type */}
-                                  <div className="text-amber-700/80 flex flex-wrap gap-1 items-center text-[10px]">
-                                    <span className="font-medium">{residenceName}</span>
-                                    <span className="text-amber-300">•</span>
-                                    <span>
-                                      {buildingName}-{floorName}-{roomName}
-                                    </span>
-                                    {occupancy.checkInDate && (
+                                    {/* Line 2: Role . Nationality . Company */}
+                                    <div className="text-amber-800 mb-1 flex flex-wrap gap-1 items-center text-xs">
+                                      <span className="font-medium">{worker.role || 'Worker'}</span>
+                                      <span className="text-amber-400">•</span>
+                                      <span>{worker.nationality || 'Unknown'}</span>
+                                      <span className="text-amber-400">•</span>
+                                      <span>{worker.company || 'No Company'}</span>
+                                    </div>
+
+                                    {/* Line 3: Residence . Building-Floor-Room . Date . Type */}
+                                    <div className="text-amber-700/80 flex flex-wrap gap-1 items-center text-[10px]">
+                                      <span className="font-medium">{residenceName}</span>
+                                      <span className="text-amber-300">•</span>
+                                      <span>
+                                        {buildingName}-{floorName}-{roomName}
+                                      </span>
+                                      {occupancy.checkInDate && (
                                         <>
-                                            <span className="text-amber-300">•</span>
-                                            <span>{new Date(occupancy.checkInDate).toLocaleDateString()}</span>
+                                          <span className="text-amber-300">•</span>
+                                          <span>{new Date(occupancy.checkInDate).toLocaleDateString()}</span>
                                         </>
-                                    )}
-                                    {occupancy.notes && (
+                                      )}
+                                      {occupancy.notes && (
                                         <>
-                                            <span className="text-amber-300">•</span>
-                                            <span className="font-medium">{occupancy.notes}</span>
+                                          <span className="text-amber-300">•</span>
+                                          <span className="font-medium">{occupancy.notes}</span>
                                         </>
-                                    )}
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
-                              </div>
-                            </div>
-                          ) : (
-                            // Unoccupied Worker Card Layout
-                            <div className="flex justify-between items-start w-full">
-                              <div className="flex items-start gap-2 flex-1">
-                                <Checkbox 
-                                  checked={true}
-                                  onCheckedChange={() => toggleWorkerSelection(worker)}
-                                  className="mt-1 h-3 w-3"
-                                />
-                                <div className="flex-1">
-                                  <div className="font-bold text-sm mb-1">
-                                    {worker.name} <span className="font-normal text-muted-foreground text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
-                                  </div>
-                                  <div className="text-muted-foreground flex flex-wrap gap-1 items-center text-xs">
-                                    <span className="font-medium text-primary">{worker.role || 'Worker'}</span>
-                                    <span>•</span>
-                                    <span>{worker.nationaliy || 'Unknown'}</span>
-                                    <span>•</span>
-                                    <span>{worker.company || 'No Company'}</span>
-                                  </div>
+                                <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                  <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
                                 </div>
                               </div>
-                              <div onClick={e => e.stopPropagation()}>
-                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                            ) : (
+                              // Unoccupied Worker Card Layout
+                              <div className="flex justify-between items-start w-full">
+                                <div className="flex items-start gap-2 flex-1">
+                                  <Checkbox
+                                    checked={true}
+                                    onCheckedChange={() => toggleWorkerSelection(worker)}
+                                    className="mt-1 h-3 w-3"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="font-bold text-sm mb-1">
+                                      {worker.name} <span className="font-normal text-muted-foreground text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                    </div>
+                                    <div className="text-muted-foreground flex flex-wrap gap-1 items-center text-xs">
+                                      <span className="font-medium text-primary">{worker.role || 'Worker'}</span>
+                                      <span>•</span>
+                                      <span>{worker.nationality || 'Unknown'}</span>
+                                      <span>•</span>
+                                      <span>{worker.company || 'No Company'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div onClick={e => e.stopPropagation()}>
+                                  <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      )})}
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -990,8 +991,8 @@ export function AccommodationManager() {
                     {searchQuery ? (
                       <>
                         <span>No workers found matching "{searchQuery}"</span>
-                        <AddWorkerDialog 
-                          defaultName={searchQuery} 
+                        <AddWorkerDialog
+                          defaultName={searchQuery}
                           onWorkerAdded={(newWorker) => {
                             toggleWorkerSelection(newWorker);
                             setSearchQuery("");
@@ -1012,28 +1013,28 @@ export function AccommodationManager() {
                 ) : (
                   <div className="space-y-1">
                     {searchResults.filter(w => !selectedWorkerIds.includes(w.id)).length > 1 && (
-                        <div className="flex justify-between items-center px-2 pb-2 border-b mb-2">
-                            <span className="text-[10px] text-muted-foreground">Found {searchResults.length} workers</span>
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-6 text-[10px] hover:bg-primary/10 hover:text-primary"
-                                onClick={() => {
-                                    const toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
-                                    if (toSelect.length > 0) {
-                                        setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
-                                        setSelectedWorkers(prev => {
-                                            const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
-                                            return [...newWorkers, ...prev];
-                                        });
-                                    }
-                                    setSearchQuery('');
-                                    setSearchResults([]);
-                                }}
-                            >
-                                Select All
-                            </Button>
-                        </div>
+                      <div className="flex justify-between items-center px-2 pb-2 border-b mb-2">
+                        <span className="text-[10px] text-muted-foreground">Found {searchResults.length} workers</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] hover:bg-primary/10 hover:text-primary"
+                          onClick={() => {
+                            const toSelect = searchResults.filter(w => !selectedWorkerIds.includes(w.id));
+                            if (toSelect.length > 0) {
+                              setSelectedWorkerIds(prev => [...toSelect.map(w => w.id), ...prev]);
+                              setSelectedWorkers(prev => {
+                                const newWorkers = toSelect.filter(nw => !prev.some(pw => pw.id === nw.id));
+                                return [...newWorkers, ...prev];
+                              });
+                            }
+                            setSearchQuery('');
+                            setSearchResults([]);
+                          }}
+                        >
+                          Select All
+                        </Button>
+                      </div>
                     )}
                     {searchResults.filter(w => !selectedWorkerIds.includes(w.id)).map(worker => {
                       const occupancy = searchOccupancies[worker.id];
@@ -1049,7 +1050,7 @@ export function AccommodationManager() {
                         const res = residences.find(r => r.id === occupancy.residenceId);
                         if (res) {
                           residenceName = res.name;
-                          
+
                           if (occupancy.buildingId) {
                             const b = res.buildings?.find(b => b.id === occupancy.buildingId);
                             if (b) {
@@ -1059,134 +1060,135 @@ export function AccommodationManager() {
                                 if (f) {
                                   floorName = f.name || f.id;
                                   if (occupancy.roomId) {
-                                     const r = f.rooms?.find(r => r.id === occupancy.roomId);
-                                     if (r) roomName = r.name || r.id;
+                                    const r = f.rooms?.find(r => r.id === occupancy.roomId);
+                                    if (r) roomName = r.name || r.id;
                                   }
                                 }
                               }
                             } else if (occupancy.roomId) {
-                               const r = res.rooms?.find(r => r.id === occupancy.roomId);
-                               if (r) roomName = r.name || r.id;
+                              const r = res.rooms?.find(r => r.id === occupancy.roomId);
+                              if (r) roomName = r.name || r.id;
                             }
                           }
                         }
                       }
 
                       const canManageOccupancy = isOccupied && (
-                        currentUser?.role === 'Admin' || 
+                        currentUser?.role === 'Admin' ||
                         (occupancy.residenceId && currentUser?.assignedResidences?.includes(occupancy.residenceId))
                       );
-                      
+
                       return (
-                      <div 
-                        key={worker.id} 
-                        className={`flex flex-col p-2 rounded border cursor-pointer transition-colors text-sm hover:bg-muted ${isOccupied ? 'bg-amber-50/50 border-amber-200' : ''}`}
-                        onClick={() => toggleWorkerSelection(worker)}
-                      >
-                        {isOccupied ? (
-                          // Occupied Worker Card Layout
-                          <div className="flex justify-between items-start w-full">
-                            <div className="flex items-start gap-2 flex-1">
-                              <Checkbox 
-                                checked={false}
-                                onCheckedChange={() => toggleWorkerSelection(worker)}
-                                className="mt-1 h-3 w-3"
-                              />
-                              <div className="flex-1">
-                                {/* Line 1: Name */}
-                                <div className="font-bold text-sm text-amber-950 mb-1">
-                                  {worker.name} <span className="font-normal text-amber-900/70 text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
-                                </div>
-                                
-                                {/* Line 2: Role . Nationality . Company */}
-                                <div className="text-amber-800 mb-1 flex flex-wrap gap-1 items-center text-xs">
-                                  <span className="font-medium">{worker.role || 'Worker'}</span>
-                                  <span className="text-amber-400">•</span>
-                                  <span>{worker.nationaliy || 'Unknown'}</span>
-                                  <span className="text-amber-400">•</span>
-                                  <span>{worker.company || 'No Company'}</span>
-                                </div>
+                        <div
+                          key={worker.id}
+                          className={`flex flex-col p-2 rounded border cursor-pointer transition-colors text-sm hover:bg-muted ${isOccupied ? 'bg-amber-50/50 border-amber-200' : ''}`}
+                          onClick={() => toggleWorkerSelection(worker)}
+                        >
+                          {isOccupied ? (
+                            // Occupied Worker Card Layout
+                            <div className="flex justify-between items-start w-full">
+                              <div className="flex items-start gap-2 flex-1">
+                                <Checkbox
+                                  checked={false}
+                                  onCheckedChange={() => toggleWorkerSelection(worker)}
+                                  className="mt-1 h-3 w-3"
+                                />
+                                <div className="flex-1">
+                                  {/* Line 1: Name */}
+                                  <div className="font-bold text-sm text-amber-950 mb-1">
+                                    {worker.name} <span className="font-normal text-amber-900/70 text-xs">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                  </div>
 
-                                {/* Line 3: Residence . Building-Floor-Room . Date . Type */}
-                                <div className="text-amber-700/80 flex flex-wrap gap-1 items-center text-[10px]">
-                                  <span className="font-medium">{residenceName}</span>
-                                  <span className="text-amber-300">•</span>
-                                  <span>
-                                    {buildingName}-{floorName}-{roomName}
-                                  </span>
-                                  <span className="text-amber-300">•</span>
-                                  <span>{occupancy.since ? new Date(occupancy.since).toLocaleDateString() : '-'}</span>
-                                  <span className="text-amber-300">•</span>
-                                  <span className="font-medium text-amber-900">{occupancy.notes || (occupancy.isEmergency ? 'Emergency' : 'Standard')}</span>
+                                  {/* Line 2: Role . Nationality . Company */}
+                                  <div className="text-amber-800 mb-1 flex flex-wrap gap-1 items-center text-xs">
+                                    <span className="font-medium">{worker.role || 'Worker'}</span>
+                                    <span className="text-amber-400">•</span>
+                                    <span>{worker.nationality || 'Unknown'}</span>
+                                    <span className="text-amber-400">•</span>
+                                    <span>{worker.company || 'No Company'}</span>
+                                  </div>
+
+                                  {/* Line 3: Residence . Building-Floor-Room . Date . Type */}
+                                  <div className="text-amber-700/80 flex flex-wrap gap-1 items-center text-[10px]">
+                                    <span className="font-medium">{residenceName}</span>
+                                    <span className="text-amber-300">•</span>
+                                    <span>
+                                      {buildingName}-{floorName}-{roomName}
+                                    </span>
+                                    <span className="text-amber-300">•</span>
+                                    <span>{occupancy.since ? new Date(occupancy.since).toLocaleDateString() : '-'}</span>
+                                    <span className="text-amber-300">•</span>
+                                    <span className="font-medium text-amber-900">{occupancy.notes || (occupancy.isEmergency ? 'Emergency' : 'Standard')}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Right Side: Actions */}
-                            <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-                              <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
-                              
-                              {canManageOccupancy && (
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-6 w-6 text-amber-700 hover:text-red-600 hover:bg-red-50"
-                                  title="Check Out"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCheckoutWorker(worker);
-                                    setCheckoutReason("End of Contract");
-                                    setCheckoutCity("");
-                                  }}
-                                >
-                                  <LogOut className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          // Standard Unassigned Worker Card Layout
-                          <div className="flex items-start gap-2 justify-between">
-                            <div className="flex items-start gap-2 flex-1">
-                              <Checkbox 
-                                checked={false}
-                                onCheckedChange={() => toggleWorkerSelection(worker)}
-                                className="mt-0.5 h-3 w-3"
-                              />
-                              <div className="overflow-hidden flex-1">
-                                <div className="font-medium truncate">
-                                  {worker.name} <span className="text-muted-foreground text-xs font-normal">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
-                                </div>
-                                <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                                  <span className="truncate">{worker.company || 'No Company'}</span>
-                                  <span>•</span>
-                                  <span className="truncate">{worker.nationaliy || 'Unknown'}</span>
-                                  <span>•</span>
-                                  <span className="truncate">{worker.role || 'Worker'}</span>
-                                </div>
+                              {/* Right Side: Actions */}
+                              <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+
+                                {canManageOccupancy && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 text-amber-700 hover:text-red-600 hover:bg-red-50"
+                                    title="Check Out"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCheckoutWorker(worker);
+                                      setCheckoutReason("End of Contract");
+                                      setCheckoutCity("");
+                                    }}
+                                  >
+                                    <LogOut className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                               </div>
                             </div>
-                            <div onClick={e => e.stopPropagation()}>
-                              <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                          ) : (
+                            // Standard Unassigned Worker Card Layout
+                            <div className="flex items-start gap-2 justify-between">
+                              <div className="flex items-start gap-2 flex-1">
+                                <Checkbox
+                                  checked={false}
+                                  onCheckedChange={() => toggleWorkerSelection(worker)}
+                                  className="mt-0.5 h-3 w-3"
+                                />
+                                <div className="overflow-hidden flex-1">
+                                  <div className="font-medium truncate">
+                                    {worker.name} <span className="text-muted-foreground text-xs font-normal">{worker.employeeId ? `(${worker.employeeId})` : ''}</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                                    <span className="truncate">{worker.company || 'No Company'}</span>
+                                    <span>•</span>
+                                    <span className="truncate">{worker.nationality || 'Unknown'}</span>
+                                    <span>•</span>
+                                    <span className="truncate">{worker.role || 'Worker'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div onClick={e => e.stopPropagation()}>
+                                <WorkerHistoryDialog workerId={worker.id} workerName={worker.name} />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    )})}
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </ScrollArea>
             </CardContent>
             <div className="p-4 border-t mt-auto">
-               <Button 
-                  variant="secondary" 
-                  className="w-full"
-                  onClick={handleAutoAssign}
-                  disabled={selectedWorkerIds.length === 0 || isAutoAssigning}
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {isAutoAssigning ? 'Assigning...' : `Auto Assign (${selectedWorkerIds.length})`}
-                </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={handleAutoAssign}
+                disabled={selectedWorkerIds.length === 0 || isAutoAssigning}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {isAutoAssigning ? 'Assigning...' : `Auto Assign (${selectedWorkerIds.length})`}
+              </Button>
             </div>
           </Card>
 
@@ -1221,8 +1223,8 @@ export function AccommodationManager() {
                 {rooms.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                     <Building className="h-8 w-8 mb-2 opacity-20" />
-                    {buildings.length > 0 && !selectedFloorId 
-                      ? "Select a floor to view rooms" 
+                    {buildings.length > 0 && !selectedFloorId
+                      ? "Select a floor to view rooms"
                       : "No rooms found in this location"}
                   </div>
                 ) : (
@@ -1230,7 +1232,7 @@ export function AccommodationManager() {
                     {rooms.map(room => {
                       const roomOccupants = occupants.filter(o => o.roomId === room.id);
                       const isSelected = selectedRoomId === room.id;
-                      
+
                       // Calculate Capacity & Slots
                       const capacity = room.capacity || 4;
                       const slots = Array(capacity).fill(null).map(() => ({ status: 'empty', occupant: null as any, isGhost: false }));
@@ -1240,40 +1242,40 @@ export function AccommodationManager() {
                       if (roomOccupants.length > 0) {
                         const nationalities = new Set<string>();
                         const roles = new Set<string>();
-                        
+
                         roomOccupants.forEach(occ => {
-                          const w = workers.find(worker => worker.id === occ.workerId) || 
-                                    roomOccupantDetails.find(worker => worker.id === occ.workerId);
+                          const w = workers.find(worker => worker.id === occ.workerId) ||
+                            roomOccupantDetails.find(worker => worker.id === occ.workerId);
                           if (w) {
-                            if (w.nationaliy) nationalities.add(w.nationaliy);
+                            if (w.nationality) nationalities.add(w.nationality);
                             if (w.role) roles.add(w.role);
                           }
                         });
 
                         const natStr = nationalities.size === 1 ? Array.from(nationalities)[0] : (nationalities.size > 1 ? 'Mixed' : '');
                         const roleStr = roles.size === 1 ? Array.from(roles)[0] : (roles.size > 1 ? 'Mixed' : '');
-                        
+
                         if (natStr || roleStr) {
                           roomInfo = `${natStr}${natStr && roleStr ? ' - ' : ''}${roleStr}`;
                         }
                       }
-                      
+
                       let currentSlot = 0;
                       roomOccupants.forEach(occ => {
                         if (currentSlot >= capacity) return;
-                        
+
                         const worker = workers.find(w => w.id === occ.workerId);
                         const role = worker?.role || 'Worker';
-                        
+
                         // Determine weight
                         let weight = 1;
                         if (role === 'Supervisor') weight = 2;
                         if (role === 'Engineer') weight = capacity; // Takes whole room
-                        
+
                         // Fill primary slot
                         slots[currentSlot] = { status: 'occupied', occupant: worker, isGhost: false };
                         currentSlot++;
-                        
+
                         // Fill ghost slots
                         for (let i = 1; i < weight; i++) {
                           if (currentSlot < capacity) {
@@ -1284,7 +1286,7 @@ export function AccommodationManager() {
                       });
 
                       const isFull = currentSlot >= capacity;
-                      
+
                       return (
                         <div
                           key={room.id}
@@ -1296,7 +1298,7 @@ export function AccommodationManager() {
                             if (!dataStr) return;
                             try {
                               const data = JSON.parse(dataStr);
-                              
+
                               // CASE 1: Move Existing Worker
                               if (data.type === 'MOVE_WORKER') {
                                 const { workerId, currentRoomId } = data;
@@ -1320,7 +1322,7 @@ export function AccommodationManager() {
                               // CASE 2: New Assignment
                               const { workerIds } = data;
                               if (!workerIds || workerIds.length === 0) return;
-                              
+
                               const result = await bulkCheckIn({
                                 workerIds,
                                 residenceId: selectedResidenceId,
@@ -1336,21 +1338,21 @@ export function AccommodationManager() {
                                 // Remove successfully assigned workers from selection
                                 const successfulIds = result.results ? Object.keys(result.results).filter(id => result.results[id].success) : [];
                                 const failures = result.results ? Object.values(result.results).filter((r: any) => !r.success) : [];
-                                
+
                                 const newSelectedIds = selectedWorkerIds.filter(id => !successfulIds.includes(id));
                                 setSelectedWorkerIds(newSelectedIds);
                                 setSelectedWorkers(prev => prev.filter(w => newSelectedIds.includes(w.id)));
-                                
+
                                 if (successfulIds.length > 0) {
                                   toast({ title: "Assigned", description: `Moved ${successfulIds.length} workers to ${room.name}` });
                                 }
 
                                 if (failures.length > 0) {
                                   const uniqueErrors = Array.from(new Set(failures.map((f: any) => f.error).filter(Boolean)));
-                                  toast({ 
-                                    title: "Assignment Issues", 
-                                    description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`, 
-                                    variant: "destructive" 
+                                  toast({
+                                    title: "Assignment Issues",
+                                    description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`,
+                                    variant: "destructive"
                                   });
                                 }
                               } else {
@@ -1358,10 +1360,10 @@ export function AccommodationManager() {
                                 const failures = result.results ? Object.values(result.results).filter((r: any) => !r.success) : [];
                                 if (failures.length > 0) {
                                   const uniqueErrors = Array.from(new Set(failures.map((f: any) => f.error).filter(Boolean)));
-                                  toast({ 
-                                    title: "Assignment Failed", 
-                                    description: `Reasons: ${uniqueErrors.join(", ")}`, 
-                                    variant: "destructive" 
+                                  toast({
+                                    title: "Assignment Failed",
+                                    description: `Reasons: ${uniqueErrors.join(", ")}`,
+                                    variant: "destructive"
                                   });
                                 }
                               }
@@ -1393,17 +1395,16 @@ export function AccommodationManager() {
                               </Badge>
                             </div>
                           </div>
-                          
+
                           {/* Occupants Visualization */}
                           <div className="flex flex-wrap gap-1">
                             {slots.map((slot, i) => (
-                              <div 
-                                key={i} 
-                                className={`h-2 w-2 rounded-full border ${
-                                  slot.status === 'occupied' 
-                                    ? (slot.isGhost ? 'bg-primary/30 border-primary/30' : 'bg-primary border-primary') 
+                              <div
+                                key={i}
+                                className={`h-2 w-2 rounded-full border ${slot.status === 'occupied'
+                                    ? (slot.isGhost ? 'bg-primary/30 border-primary/30' : 'bg-primary border-primary')
                                     : 'bg-muted border-muted-foreground/20'
-                                }`}
+                                  }`}
                                 title={slot.status === 'occupied' ? (slot.isGhost ? `Space for ${slot.occupant?.name}` : slot.occupant?.name) : 'Empty'}
                               />
                             ))}
@@ -1445,12 +1446,12 @@ export function AccommodationManager() {
                         <div className="space-y-2">
                           {occupants.filter(o => o.roomId === selectedRoomId).map(occ => {
                             // Try to find worker name from loaded details, then search results, then fallback
-                            const worker = roomOccupantDetails.find(w => w.id === occ.workerId) || 
-                                           workers.find(w => w.id === occ.workerId);
-                            
+                            const worker = roomOccupantDetails.find(w => w.id === occ.workerId) ||
+                              workers.find(w => w.id === occ.workerId);
+
                             return (
-                              <div 
-                                key={occ.id || occ.workerId} 
+                              <div
+                                key={occ.id || occ.workerId}
                                 draggable
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("application/json", JSON.stringify({
@@ -1461,7 +1462,7 @@ export function AccommodationManager() {
                                 }}
                                 className={`flex items-start gap-2 p-2 rounded border text-sm group cursor-grab active:cursor-grabbing transition-colors ${selectedWorkerIds.includes(occ.workerId) ? 'bg-primary/10 border-primary' : 'bg-card hover:border-primary/50'}`}
                               >
-                                <Checkbox 
+                                <Checkbox
                                   checked={selectedWorkerIds.includes(occ.workerId)}
                                   onCheckedChange={() => worker && toggleWorkerSelection(worker)}
                                   className="mt-1 h-3 w-3"
@@ -1474,7 +1475,7 @@ export function AccommodationManager() {
                                     <div className="flex gap-2 text-[10px] text-muted-foreground">
                                       <span className="truncate">{worker?.role || 'Worker'}</span>
                                       <span>•</span>
-                                      <span className="truncate">{worker?.nationaliy || 'Unknown'}</span>
+                                      <span className="truncate">{worker?.nationality || 'Unknown'}</span>
                                       {worker?.company && (
                                         <>
                                           <span>•</span>
@@ -1485,10 +1486,10 @@ export function AccommodationManager() {
                                     <div className="flex gap-2 text-[10px] text-muted-foreground mt-1">
                                       <span>{new Date(occ.since).toLocaleDateString()}</span>
                                       {occ.notes && (
-                                          <>
-                                              <span>•</span>
-                                              <span className="truncate max-w-[100px]" title={occ.notes}>{occ.notes}</span>
-                                          </>
+                                        <>
+                                          <span>•</span>
+                                          <span className="truncate max-w-[100px]" title={occ.notes}>{occ.notes}</span>
+                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -1503,7 +1504,7 @@ export function AccommodationManager() {
                                       title="Check Out"
                                       onClick={async (e) => {
                                         e.stopPropagation();
-                                        if(confirm('Check out this worker?')) {
+                                        if (confirm('Check out this worker?')) {
                                           await bulkCheckOut({
                                             workerIds: [occ.workerId],
                                             performedBy: currentUser?.id || 'Admin',
@@ -1531,7 +1532,7 @@ export function AccommodationManager() {
                   </div>
                 )}
               </div>
-                  
+
               <div className="p-4 border-t bg-background mt-auto space-y-3">
                 {(() => {
                   // Fix: Check both global occupants list AND local search results for occupancy status
@@ -1541,7 +1542,7 @@ export function AccommodationManager() {
                     const inLocal = !!searchOccupancies[id];
                     return inGlobal || inLocal;
                   });
-                  
+
                   const selectedAreUnassigned = selectedWorkerIds.length > 0 && selectedWorkerIds.every(id => {
                     const inGlobal = occupants.some(o => o.workerId === id);
                     const inLocal = !!searchOccupancies[id];
@@ -1552,108 +1553,108 @@ export function AccommodationManager() {
 
                   return (
                     <>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-medium text-muted-foreground">
-                                {selectedAreAssigned ? 'Check-out Date' : 'Check-in Date'}
-                            </label>
-                            <Input 
-                              type="date" 
-                              className="h-7 text-xs" 
-                              value={checkInDate}
-                              onChange={(e) => setCheckInDate(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-medium text-muted-foreground">
-                                {selectedAreAssigned ? 'Reason' : 'Type'}
-                            </label>
-                            <Select value={checkInType} onValueChange={setCheckInType}>
-                              <SelectTrigger className="h-7 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {selectedAreAssigned ? (
-                                    <>
-                                        <SelectItem value="End of Contract">End of Contract</SelectItem>
-                                        <SelectItem value="Transfer">Transfer</SelectItem>
-                                        <SelectItem value="Vacation">Vacation</SelectItem>
-                                        <SelectItem value="Termination">Termination</SelectItem>
-                                        <SelectItem value="Other">Other</SelectItem>
-                                    </>
-                                ) : (
-                                    <>
-                                        <SelectItem value="New Recruitment">New Recruitment</SelectItem>
-                                        <SelectItem value="Return from Leave">Return from Leave</SelectItem>
-                                        <SelectItem value="Another Accommodation">Another Accommodation</SelectItem>
-                                        <SelectItem value="Outside Accommodation">Outside Accommodation</SelectItem>
-                                    </>
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            {selectedAreAssigned ? 'Check-out Date' : 'Check-in Date'}
+                          </label>
+                          <Input
+                            type="date"
+                            className="h-7 text-xs"
+                            value={checkInDate}
+                            onChange={(e) => setCheckInDate(e.target.value)}
+                          />
                         </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            {selectedAreAssigned ? 'Reason' : 'Type'}
+                          </label>
+                          <Select value={checkInType} onValueChange={setCheckInType}>
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedAreAssigned ? (
+                                <>
+                                  <SelectItem value="End of Contract">End of Contract</SelectItem>
+                                  <SelectItem value="Transfer">Transfer</SelectItem>
+                                  <SelectItem value="Vacation">Vacation</SelectItem>
+                                  <SelectItem value="Termination">Termination</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </>
+                              ) : (
+                                <>
+                                  <SelectItem value="New Recruitment">New Recruitment</SelectItem>
+                                  <SelectItem value="Return from Leave">Return from Leave</SelectItem>
+                                  <SelectItem value="Another Accommodation">Another Accommodation</SelectItem>
+                                  <SelectItem value="Outside Accommodation">Outside Accommodation</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
-                        {selectedAreAssigned && checkInType === 'Transfer' && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-medium text-muted-foreground">
-                                Transfer to City
-                            </label>
-                            <Select value={bulkTransferCity} onValueChange={setBulkTransferCity}>
-                              <SelectTrigger className="h-7 text-xs">
-                                <SelectValue placeholder="Select City" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {uniqueCities.map(city => (
-                                  <SelectItem key={city} value={city}>{city}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                      {selectedAreAssigned && checkInType === 'Transfer' && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            Transfer to City
+                          </label>
+                          <Select value={bulkTransferCity} onValueChange={setBulkTransferCity}>
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="Select City" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {uniqueCities.map(city => (
+                                <SelectItem key={city} value={city}>{city}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-                        <Button 
-                          className={`w-full ${selectedAreAssigned ? 'bg-destructive hover:bg-destructive/90' : ''}`}
-                          onClick={async () => {
-                            if (selectedAreAssigned) {
-                               if (checkInType === 'Transfer' && !bulkTransferCity) {
-                                 toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
-                                 return;
-                               }
-                               if (!confirm(`Check out ${selectedWorkerIds.length} workers?`)) return;
-                               const result = await bulkCheckOut({
-                                    workerIds: selectedWorkerIds,
-                                    performedBy: currentUser?.id || 'Admin',
-                                    checkOutDate: new Date(checkInDate).toISOString(),
-                                    reason: checkInType,
-                                    transferCity: checkInType === 'Transfer' ? bulkTransferCity : undefined
-                               });
-                               if (result.ok) {
-                                    toast({ title: "Checked Out", description: `Successfully checked out ${selectedWorkerIds.length} workers` });
-                                    setSelectedWorkerIds([]);
-                                    setSelectedWorkers([]);
-                                    setBulkTransferCity("");
-                               } else {
-                                    toast({ title: "Error", description: "Failed to check out workers", variant: "destructive" });
-                               }
-                            } else {
-                               handleAssign();
+                      <Button
+                        className={`w-full ${selectedAreAssigned ? 'bg-destructive hover:bg-destructive/90' : ''}`}
+                        onClick={async () => {
+                          if (selectedAreAssigned) {
+                            if (checkInType === 'Transfer' && !bulkTransferCity) {
+                              toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
+                              return;
                             }
-                          }} 
-                          disabled={(!selectedRoom && !selectedAreAssigned) || selectedWorkerIds.length === 0 || isMixed}
-                        >
-                          {selectedAreAssigned ? (
-                              <>
-                                Check Out {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
-                                <LogOut className="ml-2 h-4 w-4" />
-                              </>
-                          ) : (
-                              <>
-                                Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                              </>
-                          )}
-                        </Button>
+                            if (!confirm(`Check out ${selectedWorkerIds.length} workers?`)) return;
+                            const result = await bulkCheckOut({
+                              workerIds: selectedWorkerIds,
+                              performedBy: currentUser?.id || 'Admin',
+                              checkOutDate: new Date(checkInDate).toISOString(),
+                              reason: checkInType,
+                              transferCity: checkInType === 'Transfer' ? bulkTransferCity : undefined
+                            });
+                            if (result.ok) {
+                              toast({ title: "Checked Out", description: `Successfully checked out ${selectedWorkerIds.length} workers` });
+                              setSelectedWorkerIds([]);
+                              setSelectedWorkers([]);
+                              setBulkTransferCity("");
+                            } else {
+                              toast({ title: "Error", description: "Failed to check out workers", variant: "destructive" });
+                            }
+                          } else {
+                            handleAssign();
+                          }
+                        }}
+                        disabled={(!selectedRoom && !selectedAreAssigned) || selectedWorkerIds.length === 0 || isMixed}
+                      >
+                        {selectedAreAssigned ? (
+                          <>
+                            Check Out {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
+                            <LogOut className="ml-2 h-4 w-4" />
+                          </>
+                        ) : (
+                          <>
+                            Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ''}
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
                     </>
                   );
                 })()}
@@ -1727,7 +1728,7 @@ export function AccommodationManager() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {checkoutReason === 'Transfer' && (
               <div className="grid grid-cols-4 items-center gap-4">
                 <label htmlFor="city" className="text-right text-sm font-medium">
@@ -1767,7 +1768,7 @@ export function AccommodationManager() {
               }
 
               const date = (document.getElementById('checkout-date') as HTMLInputElement)?.value;
-              
+
               await checkOutWorkerEnhanced({
                 workerId: checkoutWorker.id,
                 performedBy: currentUser?.id || 'Admin',

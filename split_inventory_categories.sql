@@ -1,0 +1,1 @@
+INSERT OR REPLACE INTO inventory_categories (id, names) VALUES ('all-categories', '["Electrical","Cleaning","Plumbing","Car Maintenance","A/C","Office","Maintenance","Sleep Kit","Assets","Building","CARS"]');

@@ -6,12 +6,12 @@ import { useAccommodation } from '@/context/accommodation-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
-  LogIn, 
-  LogOut, 
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  LogIn,
+  LogOut,
   ArrowRightLeft,
   Repeat2,
   Clock,
@@ -23,26 +23,26 @@ export default function WorkerTimelinePage() {
   const params = useParams();
   const router = useRouter();
   const workerId = params?.id as string;
-  
-  const { 
-    workers, 
-    accommodationHistory, 
+
+  const {
+    workers,
+    accommodationHistory,
     getWorkerHistory,
     occupants,
-    residences 
+    residences
   } = useAccommodation();
 
-  const worker = useMemo(() => 
-    workers.find(w => w.id === workerId), 
+  const worker = useMemo(() =>
+    workers.find(w => w.id === workerId),
     [workers, workerId]
   );
 
-  const history = useMemo(() => 
-    getWorkerHistory(workerId), 
+  const history = useMemo(() =>
+    getWorkerHistory(workerId),
     [workerId, accommodationHistory]
   );
 
-  const currentOccupancy = useMemo(() => 
+  const currentOccupancy = useMemo(() =>
     occupants.find(o => o.workerId === workerId && !o.until),
     [occupants, workerId]
   );
@@ -51,18 +51,18 @@ export default function WorkerTimelinePage() {
     const checkIns = history.filter(h => h.actionType === 'CHECK_IN').length;
     const checkOuts = history.filter(h => h.actionType === 'CHECK_OUT').length;
     const transfers = history.filter(h => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
-    
+
     // Calculate total days stayed dynamically from dates
     let totalDays = 0;
-    
+
     // Sort history by date (oldest first)
-    const sortedHistory = [...history].sort((a, b) => 
+    const sortedHistory = [...history].sort((a, b) =>
       new Date(a.actionDate).getTime() - new Date(b.actionDate).getTime()
     );
-    
+
     // Calculate days between each CHECK_IN and corresponding CHECK_OUT
     let lastCheckInDate: Date | null = null;
-    
+
     for (const record of sortedHistory) {
       if (record.actionType === 'CHECK_IN') {
         lastCheckInDate = new Date(record.actionDate);
@@ -154,7 +154,7 @@ export default function WorkerTimelinePage() {
             <h1 className="text-3xl font-bold">{worker.name}</h1>
             <p className="text-muted-foreground">
               {worker.employeeId && `رقم وظيفي: ${worker.employeeId}`}
-              {worker.nationaliy && ` • ${worker.nationaliy}`}
+              {worker.nationality && ` • ${worker.nationality}`}
               {worker.role && ` • ${worker.role}`}
             </p>
           </div>
@@ -252,14 +252,14 @@ export default function WorkerTimelinePage() {
             <div className="relative">
               {/* Timeline line */}
               <div className="absolute right-6 top-0 bottom-0 w-0.5 bg-border" />
-              
+
               {/* Timeline items */}
               <div className="space-y-6">
                 {history.map((item, index) => (
                   <div key={item.id} className="relative flex gap-4 pr-14">
                     {/* Timeline dot */}
                     <div className="absolute right-[18px] top-2 w-4 h-4 rounded-full bg-background border-4 border-primary z-10" />
-                    
+
                     {/* Content */}
                     <div className="flex-1">
                       <Card>
@@ -296,7 +296,7 @@ export default function WorkerTimelinePage() {
                               {item.roomName && ` - ${item.roomName}`}
                             </div>
                           )}
-                          
+
                           {item.actionType === 'CHECK_OUT' && (
                             <>
                               <div className="flex items-center gap-2">
@@ -312,7 +312,7 @@ export default function WorkerTimelinePage() {
                               )}
                             </>
                           )}
-                          
+
                           {item.actionType === 'TRANSFER' && (
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 text-red-600">
@@ -327,7 +327,7 @@ export default function WorkerTimelinePage() {
                               </div>
                             </div>
                           )}
-                          
+
                           {item.actionType === 'SWAP' && (
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
@@ -346,7 +346,7 @@ export default function WorkerTimelinePage() {
                               </div>
                             </div>
                           )}
-                          
+
                           {/* Reason */}
                           {item.reason && (
                             <div className="pt-2 border-t">
@@ -354,7 +354,7 @@ export default function WorkerTimelinePage() {
                               <span>{item.reason}</span>
                             </div>
                           )}
-                          
+
                           {/* Notes */}
                           {item.notes && (
                             <div className={item.reason ? '' : 'pt-2 border-t'}>
@@ -362,7 +362,7 @@ export default function WorkerTimelinePage() {
                               <span>{item.notes}</span>
                             </div>
                           )}
-                          
+
                           {/* Performed by */}
                           {item.actionByName && (
                             <div className="text-xs text-muted-foreground pt-2">

@@ -1,0 +1,431 @@
+{
+  "assignments": {
+    "workerId": "40097",
+    "roomId": "room-1753863001310-0.4579118573357096",
+    "residenceId": "4znleAk6l3E1eb1kAEXK",
+    "buildingId": "building-1753861318698",
+    "floorId": "floor-1753861329401",
+    "companyId": "ساكوديكو",
+    "nationality": "اليمن",
+    "role": "worker",
+    "startAt": 1755551063889,
+    "createdAt": 1755551063889,
+    "createdAtTS": {
+      "_seconds": 1755551064,
+      "_nanoseconds": 892000000
+    },
+    "endAt": 1755551608080,
+    "updatedAtTS": {
+      "_seconds": 1755551609,
+      "_nanoseconds": 119000000
+    },
+    "status": "checked_out",
+    "updatedAt": 1755551608080
+  },
+  "auditLogs": {
+    "userId": "BT1f4WWPBFbNJrh4Hgaau9fLl4s1",
+    "userName": "Mohammed Alabdali",
+    "action": "UPDATE_ITEM",
+    "entityType": "inventoryItem",
+    "entityId": "x3xY7mBXFh82ydJ0yVBV",
+    "summary": "Updated item Nail",
+    "before": null,
+    "after": {
+      "nameEn": "Nail",
+      "nameAr": "مسمار",
+      "category": "Office",
+      "unit": "Can"
+    },
+    "meta": null,
+    "timestamp": {
+      "_seconds": 1755209474,
+      "_nanoseconds": 275000000
+    }
+  },
+  "counters": {
+    "last": 2,
+    "updatedAt": {
+      "_seconds": 1760959871,
+      "_nanoseconds": 529000000
+    }
+  },
+  "feedback": {
+    "userId": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "title": "تغيير من عدد الاصناف الى عدد المواد",
+    "description": "بدل من عد عدد المواد 700 اجعلها بعدد الصفوف 11",
+    "category": "Feature Request",
+    "deviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+      "language": "ar",
+      "platform": "Win32",
+      "viewport": {
+        "w": 2133,
+        "h": 1012,
+        "dpr": 0.8999999761581421
+      },
+      "timezone": "Asia/Riyadh"
+    },
+    "appInfo": {
+      "url": "http://localhost:9002/inventory/orders",
+      "path": "/inventory/orders",
+      "referrer": "http://localhost:9002/admin/translations"
+    },
+    "settings": {
+      "theme": {
+        "color": "blue",
+        "mode": "dark"
+      }
+    },
+    "categoryAuto": "Other",
+    "ticketId": "FB-25810",
+    "priority": "medium",
+    "screenshotUrl": "https://rkzutiocnz7fduqu.public.blob.vercel-storage.com/feedback/1756133004630-vcr76y.png",
+    "createdAt": {
+      "_seconds": 1756133009,
+      "_nanoseconds": 688000000
+    },
+    "resolvedAt": {
+      "_seconds": 1756289744,
+      "_nanoseconds": 295000000
+    },
+    "status": "resolved",
+    "updatedAt": {
+      "_seconds": 1756289744,
+      "_nanoseconds": 295000000
+    }
+  },
+  "inventory": {
+    "name": "Fogging Machine",
+    "nameAr": "مكينة دخان",
+    "nameEn": "Fogging Machine",
+    "category": "Assets",
+    "unit": "Piece",
+    "lifespanDays": 1095,
+    "keywordsEn": [
+      "Sprayer",
+      "Mosquito"
+    ],
+    "id": "09xC6LK0PBEQosLlP7U6",
+    "variants": [
+      "كهربائية",
+      "حرارية",
+      "2 Liter",
+      "3 Liter",
+      "5 Liter",
+      "800 Watt",
+      "1000 Watt",
+      "Small",
+      "Medium",
+      "Heavy Duty"
+    ],
+    "keywordsAr": [
+      "بعوض",
+      "حشرات",
+      "باعوض",
+      "رش",
+      "جهاز"
+    ],
+    "stockByResidence": {
+      "DkivDvDBirmX4HIHU3cW": 3
+    },
+    "stock": 3
+  },
+  "inventory-categories": {
+    "names": [
+      "Electrical",
+      "Cleaning",
+      "Plumbing",
+      "Car Maintenance",
+      "A/C",
+      "Office",
+      "Maintenance",
+      "Sleep Kit",
+      "Assets",
+      "Building",
+      "CARS"
+    ]
+  },
+  "inventoryTransactions": {
+    "itemId": "cWqMMufl5hNvdbVmu7yX",
+    "itemNameEn": "Valve",
+    "itemNameAr": "محبس",
+    "residenceId": "L3wLRKW34H2dM2tQaBfI",
+    "date": {
+      "_seconds": 1763969865,
+      "_nanoseconds": 784000000
+    },
+    "type": "OUT",
+    "quantity": 1,
+    "referenceDocId": "MIV-25111",
+    "locationId": "facility-1758518841715-0.1626526208200776",
+    "locationName": "AlZaher -> 1 -> 1 -> جمام 9",
+    "overrideReason": null
+  },
+  "mivs": {
+    "id": "MIV-25101",
+    "date": {
+      "_seconds": 1760959421,
+      "_nanoseconds": 820000000
+    },
+    "residenceId": "KA43UwlETuLC7bWffony",
+    "itemCount": 2,
+    "locationName": "Gypsum -> A -> Kitchens"
+  },
+  "mrvRequests": {
+    "id": "oRhhvzFfNjKFp3VjRix5",
+    "residenceId": "DkivDvDBirmX4HIHU3cW",
+    "items": [
+      {
+        "id": "S4sKbinZ0Q1yYKTTMa86",
+        "nameEn": "Test 2",
+        "nameAr": "تجريبي 2",
+        "quantity": 10
+      },
+      {
+        "id": "TrlvjngNxTJjDzz214Hz",
+        "nameEn": "test",
+        "nameAr": "تجربة",
+        "quantity": 10
+      }
+    ],
+    "supplierName": "test",
+    "invoiceNo": "test",
+    "attachmentUrl": "https://rkzutiocnz7fduqu.public.blob.vercel-storage.com/mrvs/invoices/1756370470871_eye_chart_E_A4.pdf",
+    "attachmentPath": "mrvs/invoices/1756370470871_eye_chart_E_A4.pdf",
+    "notes": "test",
+    "requestedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "requestedAt": {
+      "_seconds": 1756370474,
+      "_nanoseconds": 960000000
+    },
+    "mrvShort": "MRV-2581",
+    "processingById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "processingAt": {
+      "_seconds": 1756370481,
+      "_nanoseconds": 22000000
+    },
+    "mrvId": "MRV-2581",
+    "approvedAt": {
+      "_seconds": 1756370483,
+      "_nanoseconds": 918000000
+    },
+    "approvedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "status": "Approved"
+  },
+  "mrvs": {
+    "id": "MRV-25101",
+    "date": {
+      "_seconds": 1759916750,
+      "_nanoseconds": 479000000
+    },
+    "residenceId": "KA43UwlETuLC7bWffony",
+    "itemCount": 25,
+    "supplierName": null,
+    "invoiceNo": null,
+    "notes": "From MR MR-2583",
+    "attachmentUrl": null,
+    "attachmentPath": null,
+    "attachmentRef": null,
+    "codeShort": "MRV-25101",
+    "orderId": "MR-2583"
+  },
+  "orders": {
+    "residence": "Gypsum",
+    "residenceId": "KA43UwlETuLC7bWffony",
+    "items": [
+      {
+        "id": "IITTjzw6cWrKUjaGbwoh::2.5%20Kg",
+        "variants": [
+          "1.5 Kg",
+          "2 Kg",
+          "2.5 Kg",
+          "3 Kg",
+          "4 Kg",
+          "1 Play",
+          "2 Play"
+        ],
+        "nameAr": "بطانية - 2.5 Kg",
+        "nameEn": "Blanket - 2.5 Kg",
+        "unit": "Piece",
+        "category": "Sleep Kit",
+        "stock": 0,
+        "name": "بطانية",
+        "lifespanDays": 730,
+        "stockByResidence": {},
+        "quantity": 300,
+        "notes": ""
+      },
+      {
+        "id": "Z99kUbpsSnNo02XUCXru",
+        "keywordsAr": [
+          "سوسته",
+          "غطاء",
+          "كيس",
+          "كفر",
+          "شرشف"
+        ],
+        "unit": "Piece",
+        "lifespanDays": 365,
+        "nameEn": "Mattress and Pillow Cover",
+        "stock": 0,
+        "nameAr": "غطاء مرتبة ومخدة",
+        "name": "Mattress and Pillow Cover",
+        "stockByResidence": {},
+        "variants": [],
+        "category": "Sleep Kit",
+        "quantity": 300,
+        "notes": ""
+      },
+      {
+        "id": "MV8GoHc4NbDvJz6HiDnT::1000%20g",
+        "stockByResidence": {},
+        "name": "مخدة",
+        "nameAr": "مخدة - 1000 g",
+        "variants": [
+          "1000 g",
+          "1200 g"
+        ],
+        "category": "Sleep Kit",
+        "lifespanDays": 365,
+        "nameEn": "Pillow - 1000 g",
+        "unit": "Piece",
+        "stock": 0,
+        "quantity": 300,
+        "notes": ""
+      }
+    ],
+    "requestedById": "teeJesoz2pYTZvHNmC7a7tLiwPO2",
+    "notes": "",
+    "requestedByName": "Sadru Aldin",
+    "requestedByEmail": "hamdaniya-housing@sacodeco.net",
+    "date": {
+      "_seconds": 1759841350,
+      "_nanoseconds": 162000000
+    },
+    "id": "MR-25101",
+    "approvedByName": "Mohammed Alabdali",
+    "approvedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "itemsReceived": [
+      {
+        "id": "IITTjzw6cWrKUjaGbwoh::2.5%20Kg",
+        "quantityReceived": 300
+      },
+      {
+        "id": "Z99kUbpsSnNo02XUCXru",
+        "quantityReceived": 300
+      },
+      {
+        "id": "MV8GoHc4NbDvJz6HiDnT::1000%20g",
+        "quantityReceived": 400
+      }
+    ],
+    "status": "Delivered"
+  },
+  "reconciliationRequests": {
+    "id": "OjStP28JbEeauGMj2ACL",
+    "residenceId": "KA43UwlETuLC7bWffony",
+    "adjustments": [
+      {
+        "itemId": "IITTjzw6cWrKUjaGbwoh",
+        "newStock": 310
+      },
+      {
+        "itemId": "h4EuMdOSjD8rLEch0K85",
+        "newStock": 35
+      },
+      {
+        "itemId": "rtiZRRlJG4xVaAFYwpwf",
+        "newStock": 2
+      },
+      {
+        "itemId": "bvYkVIBbexbcyfMLkSHO",
+        "newStock": 13
+      },
+      {
+        "itemId": "hXzV1PqGBZRDwSB7RpVq",
+        "newStock": 2
+      },
+      {
+        "itemId": "muDtkMVxKuRpkCfCxsqT",
+        "newStock": 213
+      }
+    ],
+    "requestedById": "teeJesoz2pYTZvHNmC7a7tLiwPO2",
+    "requestedAt": {
+      "_seconds": 1760959696,
+      "_nanoseconds": 691000000
+    },
+    "reservedId": "CON-25101",
+    "approvedAt": {
+      "_seconds": 1760959738,
+      "_nanoseconds": 487000000
+    },
+    "approvedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "referenceId": "CON-25101",
+    "status": "Approved"
+  },
+  "serviceOrders": {
+    "id": "QhkSkVjeIbIYY8jsyDCA",
+    "codeShort": "SVC-25111",
+    "dateCreated": {
+      "_seconds": 1763971076,
+      "_nanoseconds": 339000000
+    },
+    "residenceId": "3C1ZgRS2sr2VFMYGdzIN",
+    "residenceName": "ReaSea",
+    "destination": {
+      "type": "Vendor",
+      "name": "مصنع تجديد مراتب"
+    },
+    "status": "DISPATCHED",
+    "dispatchedAt": {
+      "_seconds": 1763971076,
+      "_nanoseconds": 339000000
+    },
+    "createdById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "dispatchedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2",
+    "items": [
+      {
+        "itemId": "QJwhbWGkbvglwBq6Sh0K",
+        "itemNameEn": "Mattress",
+        "itemNameAr": "مرتبة",
+        "qtySent": 100,
+        "qtyReturned": 0,
+        "qtyScrapped": 0
+      }
+    ]
+  },
+  "stockReconciliations": {
+    "id": "CON-25101",
+    "residenceId": "KA43UwlETuLC7bWffony",
+    "date": {
+      "_seconds": 1760959734,
+      "_nanoseconds": 800000000
+    },
+    "itemCount": 6,
+    "totalIncrease": 425,
+    "totalDecrease": 0,
+    "performedById": "bRpKwXMuelYjNgGOqpEm55PvPTP2"
+  },
+  "unique_users_emails": {
+    "userId": "BT1f4WWPBFbNJrh4Hgaau9fLl4s1",
+    "email": "m.alabdali@sacodeco.net"
+  },
+  "users": {
+    "createdAt": {
+      "_seconds": 1755953727,
+      "_nanoseconds": 398000000
+    },
+    "name": "Khaled Harharah",
+    "themeSettings": {
+      "mode": "system",
+      "colorTheme": "blue"
+    },
+    "email": "bahra-housing@sacodeco.net",
+    "role": "Supervisor",
+    "assignedResidences": [
+      "4znleAk6l3E1eb1kAEXK",
+      "SMTiuEOKEPoBpAzxEikd"
+    ]
+  }
+}

@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import type { QueryDocumentSnapshot, DocumentData, Query } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from '@/lib/firestore-shim';
+import type { QueryDocumentSnapshot, DocumentData, Query } from '@/lib/firestore-shim';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { useUsers } from './users-context';
 import { useToast } from '@/hooks/use-toast';

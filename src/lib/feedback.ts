@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, runTransaction } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, runTransaction } from "@/lib/firestore-shim";
 
 export type FeedbackCategory = 'Bug' | 'Feature Request' | 'UI Issue' | 'Performance' | 'Other';
 export type FeedbackStatus = 'new' | 'in_progress' | 'resolved' | 'rejected';

@@ -12,14 +12,14 @@ import { TrendingUp, AlertTriangle, AlertCircle, Users, Building2, FileText, Dow
 import Link from 'next/link';
 
 export default function ReportsPage() {
-  const { 
-    residences, 
-    workers, 
-    occupants, 
-    contracts, 
-    invoices, 
-    transferRequests, 
-    companies 
+  const {
+    residences,
+    workers,
+    occupants,
+    contracts,
+    invoices,
+    transferRequests,
+    companies
   } = useAccommodation();
 
   // Occupancy Report
@@ -70,7 +70,7 @@ export default function ReportsPage() {
       const byNationality: Record<string, number> = {};
       for (const occ of residenceOccupants) {
         const worker = workers.find(w => w.id === occ.workerId);
-        const nat = worker?.nationaliy || 'Unknown';
+        const nat = worker?.nationality || 'Unknown';
         byNationality[nat] = (byNationality[nat] || 0) + 1;
       }
 
@@ -97,13 +97,13 @@ export default function ReportsPage() {
   const nationalityViolations = useMemo(() => {
     const violations: Array<{ residenceId: string; residenceName: string; roomId: string; nationalities: string[] }> = [];
     const roomNationalities: Record<string, Set<string>> = {};
-    
+
     for (const occ of occupants) {
       const worker = workers.find(w => w.id === occ.workerId);
-      if (worker?.nationaliy) {
+      if (worker?.nationality) {
         const key = `${occ.residenceId}_${occ.roomId}`;
         if (!roomNationalities[key]) roomNationalities[key] = new Set();
-        roomNationalities[key].add(worker.nationaliy);
+        roomNationalities[key].add(worker.nationality);
       }
     }
 
@@ -166,7 +166,7 @@ export default function ReportsPage() {
   const transferHistory = useMemo(() => {
     return transferRequests
       .map(tr => {
-  const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from?.residenceId) : null;
+        const fromResidence = tr.from?.residenceId ? residences.find(r => r.id === tr.from?.residenceId) : null;
         const toResidence = residences.find(r => r.id === tr.to.residenceId);
         return {
           transfer: tr,
@@ -546,12 +546,12 @@ export default function ReportsPage() {
                         <TableCell className="text-center">{item.workerCount}</TableCell>
                         <TableCell>{new Date(item.transfer.requestedAt).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          <Badge 
+                          <Badge
                             variant={
                               item.transfer.status === 'Approved' ? 'secondary' :
-                              item.transfer.status === 'Rejected' ? 'destructive' :
-                              item.transfer.status === 'Cancelled' ? 'outline' :
-                              'default'
+                                item.transfer.status === 'Rejected' ? 'destructive' :
+                                  item.transfer.status === 'Cancelled' ? 'outline' :
+                                    'default'
                             }
                           >
                             {item.transfer.status}

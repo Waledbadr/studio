@@ -13,7 +13,15 @@
 
 import fs from 'fs';
 import path from 'path';
-import admin from 'firebase-admin';
+
+function requireAdminOrExit() {
+  try {
+    return require('firebase-admin');
+  } catch (e) {
+    console.error('firebase-admin is not installed. To run this script please install firebase-admin or re-enable Firebase admin support.');
+    process.exit(1);
+  }
+}
 
 const argv = process.argv.slice(2);
 const jsonArg = argv.find(a => !a.startsWith('--')) || 'data/ac_workers.json';
@@ -35,6 +43,7 @@ if (!fs.existsSync(jsonPath)) {
   process.exit();
 }
 
+const admin = requireAdminOrExit();
 try {
   admin.initializeApp({ credential: admin.credential.applicationDefault() });
 } catch (e) {

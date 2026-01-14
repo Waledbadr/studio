@@ -25,7 +25,7 @@ import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
 import { useLanguage } from '@/context/language-context';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from '@/lib/firestore-shim';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Clock } from 'lucide-react';

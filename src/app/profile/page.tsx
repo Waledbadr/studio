@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { auth } from '@/lib/firebase';
-import { updatePassword, updateEmail, reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, linkWithCredential, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { updatePassword, updateEmail, reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, linkWithCredential, sendPasswordResetEmail, signOut } from '@/lib/auth-shim';
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { colorThemes } from '@/lib/themes';

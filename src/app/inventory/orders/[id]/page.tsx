@@ -18,7 +18,7 @@ import { useResidences } from '@/context/residences-context';
 import { ApprovalAttachmentDialog } from '@/components/inventory/approval-attachment-dialog';
 // Subscribe to Firestore document for real-time updates
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from '@/lib/firestore-shim';
 
 export default function OrderDetailPage() {
     const { id } = useParams();

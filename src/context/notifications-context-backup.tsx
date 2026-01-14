@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp } from '@/lib/firestore-shim';
 import { useUsers } from './users-context';
 import { useToast } from '@/hooks/use-toast';
 

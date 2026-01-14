@@ -14,25 +14,25 @@ export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
   const { workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, refreshDashboardStats, autoArchiveOccupants } = ctx;
   const { currentUser } = useUsers();
-  
+
   useEffect(() => {
     const init = async () => {
-        // Refresh if no stats, or stale (older than 30s), OR if we have stats but residence occupancy is empty while we have residences
-        const isStale = !dashboardStats || (Date.now() - dashboardStats.lastUpdated > 30000);
-        const missingResidenceData = dashboardStats && residences.length > 0 && Object.keys(dashboardStats.residenceOccupancy).length === 0;
-        
-        if (isStale || missingResidenceData) {
-            await refreshDashboardStats();
-        }
-        
-        // Run auto-archive cleanup in background (Admins only)
-        if (currentUser?.role === 'Admin') {
-          autoArchiveOccupants().catch(e => console.error("Auto-archive failed:", e));
-        }
+      // Refresh if no stats, or stale (older than 30s), OR if we have stats but residence occupancy is empty while we have residences
+      const isStale = !dashboardStats || (Date.now() - dashboardStats.lastUpdated > 30000);
+      const missingResidenceData = dashboardStats && residences.length > 0 && Object.keys(dashboardStats.residenceOccupancy).length === 0;
+
+      if (isStale || missingResidenceData) {
+        await refreshDashboardStats();
+      }
+
+      // Run auto-archive cleanup in background (Admins only)
+      if (currentUser?.role === 'Admin') {
+        autoArchiveOccupants().catch(e => console.error("Auto-archive failed:", e));
+      }
     };
     init();
   }, [refreshDashboardStats, dashboardStats, residences.length, autoArchiveOccupants, currentUser]);
-  
+
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
     if (!currentUser) return residences;
@@ -46,7 +46,7 @@ export default function AccommodationOverviewPage() {
     // If we have full data (workers loaded), use it for most accurate real-time client-side analysis
     // If not, use dashboardStats which are fetched efficiently
     const hasFullData = workers.length > 0 && occupants.length > 0;
-    
+
     let totalWorkers = 0;
     let assignedWorkers = 0;
     let unassignedWorkers = 0;
@@ -58,23 +58,23 @@ export default function AccommodationOverviewPage() {
     let occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
 
     if (hasFullData) {
-        totalWorkers = workers.length;
-        assignedWorkers = occupants.length;
-        unassignedWorkers = totalWorkers - assignedWorkers;
-        activeContractsCount = contracts.filter(c => c.status === 'Active').length;
-        totalCompaniesCount = companies.length;
-        pendingTransfersCount = transferRequests.filter(t => t.status === 'Pending').length;
-        unpaidInvoicesCount = invoices.filter(i => i.status === 'Pending' || i.status === 'Overdue').length;
-        overdueInvoicesCount = invoices.filter(i => i.status === 'Overdue').length;
+      totalWorkers = workers.length;
+      assignedWorkers = occupants.length;
+      unassignedWorkers = totalWorkers - assignedWorkers;
+      activeContractsCount = contracts.filter(c => c.status === 'Active').length;
+      totalCompaniesCount = companies.length;
+      pendingTransfersCount = transferRequests.filter(t => t.status === 'Pending').length;
+      unpaidInvoicesCount = invoices.filter(i => i.status === 'Pending' || i.status === 'Overdue').length;
+      overdueInvoicesCount = invoices.filter(i => i.status === 'Overdue').length;
     } else if (dashboardStats) {
-        totalWorkers = dashboardStats.totalWorkers;
-        assignedWorkers = dashboardStats.assignedWorkers;
-        unassignedWorkers = dashboardStats.unassignedWorkers;
-        activeContractsCount = dashboardStats.activeContracts;
-        totalCompaniesCount = dashboardStats.totalCompanies;
-        pendingTransfersCount = dashboardStats.pendingTransfers;
-        unpaidInvoicesCount = dashboardStats.unpaidInvoices;
-        overdueInvoicesCount = dashboardStats.overdueInvoices || 0;
+      totalWorkers = dashboardStats.totalWorkers;
+      assignedWorkers = dashboardStats.assignedWorkers;
+      unassignedWorkers = dashboardStats.unassignedWorkers;
+      activeContractsCount = dashboardStats.activeContracts;
+      totalCompaniesCount = dashboardStats.totalCompanies;
+      pendingTransfersCount = dashboardStats.pendingTransfers;
+      unpaidInvoicesCount = dashboardStats.unpaidInvoices;
+      overdueInvoicesCount = dashboardStats.overdueInvoices || 0;
     }
 
     // Calculate Capacity & Occupancy per Residence
@@ -91,7 +91,7 @@ export default function AccommodationOverviewPage() {
             const per = room.roomType === "Worker" ? 4 : room.roomType === "Supervisor" ? 8 : 16;
             totalCapacity += Math.floor(space / per);
           } else if (room.capacity) {
-             totalCapacity += Number(room.capacity);
+            totalCapacity += Number(room.capacity);
           }
         }
       };
@@ -109,14 +109,14 @@ export default function AccommodationOverviewPage() {
 
       let occupied = 0;
       if (hasFullData) {
-          occupied = occupants.filter(occ => occ.residenceId === res.id).length;
+        occupied = occupants.filter(occ => occ.residenceId === res.id).length;
       } else if (dashboardStats?.residenceOccupancy) {
-          occupied = dashboardStats.residenceOccupancy[res.id] || 0;
+        occupied = dashboardStats.residenceOccupancy[res.id] || 0;
       }
 
       // Debug log for capacity issues
       if (totalCapacity < 10 && totalRooms > 5) {
-         console.warn(`[Capacity Warning] Residence ${res.name}: Found ${totalRooms} rooms but only ${totalCapacity} capacity. Check room data types.`);
+        console.warn(`[Capacity Warning] Residence ${res.name}: Found ${totalRooms} rooms but only ${totalCapacity} capacity. Check room data types.`);
       }
 
       occupancyByResidence[res.id] = { occupied, capacity: totalCapacity, rooms: totalRooms };
@@ -146,83 +146,83 @@ export default function AccommodationOverviewPage() {
     }
 
     // Nationality conflicts - rooms with multiple nationalities
-    const nationalityConflicts: Array<{ 
-      residenceId: string; 
-      roomId: string; 
+    const nationalityConflicts: Array<{
+      residenceId: string;
+      roomId: string;
       roomName?: string;
       buildingName?: string;
       floorName?: string;
-      nationalities: string[] 
+      nationalities: string[]
     }> = [];
-    
+
     if (hasFullData) {
-        const roomNationalities: Record<string, Set<string>> = {};
-        for (const occ of occupants) {
-          const worker = workers.find(w => w.id === occ.workerId);
-          if (worker?.nationaliy) {
-            const key = `${occ.residenceId}_${occ.buildingId || ''}_${occ.floorId || ''}_${occ.roomId}`;
-            if (!roomNationalities[key]) roomNationalities[key] = new Set();
-            roomNationalities[key].add(worker.nationaliy);
-          }
+      const roomNationalities: Record<string, Set<string>> = {};
+      for (const occ of occupants) {
+        const worker = workers.find(w => w.id === occ.workerId);
+        if (worker?.nationality) {
+          const key = `${occ.residenceId}_${occ.buildingId || ''}_${occ.floorId || ''}_${occ.roomId}`;
+          if (!roomNationalities[key]) roomNationalities[key] = new Set();
+          roomNationalities[key].add(worker.nationality);
         }
-        for (const [key, nats] of Object.entries(roomNationalities)) {
-          if (nats.size > 1) {
-             const [resId, buildingId, floorId, roomId] = key.split('_');
-             
-             // Find room name
-             let roomName = roomId;
-             let buildingName = buildingId;
-             let floorName = floorId;
-             
-             const residence = residences.find(r => r.id === resId);
-             if (residence) {
-               if (buildingId) {
-                 const building = residence.buildings?.find(b => b.id === buildingId);
-                 if (building) {
-                   buildingName = building.name || buildingId;
-                   if (floorId) {
-                     const floor = building.floors?.find(f => f.id === floorId);
-                     if (floor) {
-                       floorName = floor.name || floorId;
-                       const room = floor.rooms?.find(r => r.id === roomId);
-                       if (room) roomName = room.name || roomId;
-                     }
-                   }
-                 }
-               } else {
-                 const room = residence.rooms?.find(r => r.id === roomId);
-                 if (room) roomName = room.name || roomId;
-               }
-             }
-             
-             nationalityConflicts.push({
-                residenceId: resId,
-                roomId,
-                roomName,
-                buildingName,
-                floorName,
-                nationalities: Array.from(nats)
-             });
+      }
+      for (const [key, nats] of Object.entries(roomNationalities)) {
+        if (nats.size > 1) {
+          const [resId, buildingId, floorId, roomId] = key.split('_');
+
+          // Find room name
+          let roomName = roomId;
+          let buildingName = buildingId;
+          let floorName = floorId;
+
+          const residence = residences.find(r => r.id === resId);
+          if (residence) {
+            if (buildingId) {
+              const building = residence.buildings?.find(b => b.id === buildingId);
+              if (building) {
+                buildingName = building.name || buildingId;
+                if (floorId) {
+                  const floor = building.floors?.find(f => f.id === floorId);
+                  if (floor) {
+                    floorName = floor.name || floorId;
+                    const room = floor.rooms?.find(r => r.id === roomId);
+                    if (room) roomName = room.name || roomId;
+                  }
+                }
+              }
+            } else {
+              const room = residence.rooms?.find(r => r.id === roomId);
+              if (room) roomName = room.name || roomId;
+            }
           }
+
+          nationalityConflicts.push({
+            residenceId: resId,
+            roomId,
+            roomName,
+            buildingName,
+            floorName,
+            nationalities: Array.from(nats)
+          });
         }
+      }
     }
 
     return {
-        totalWorkers,
-        assignedWorkers,
-        unassignedWorkers,
-        occupancyRate,
-        totalOccupied,
-        totalCapacity,
-        activeContracts: activeContractsCount,
-        companies: totalCompaniesCount,
-        pendingTransfers: pendingTransfersCount,
-        unpaidInvoices: unpaidInvoicesCount,
-        overdueInvoices: overdueInvoicesCount,
-        occupancyByResidence,
-        capacityWarnings,
-        nationalityConflicts,
-        hasFullData
+      totalWorkers,
+      assignedWorkers,
+      unassignedWorkers,
+      occupancyRate,
+      totalOccupied,
+      totalCapacity,
+      activeContracts: activeContractsCount,
+      companies: totalCompaniesCount,
+      pendingTransfers: pendingTransfersCount,
+      unpaidInvoices: unpaidInvoicesCount,
+      overdueInvoices: overdueInvoicesCount,
+      occupancyByResidence,
+      capacityWarnings,
+      nationalityConflicts,
+      hasFullData
     };
   }, [workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, filteredResidences]);
 
@@ -235,10 +235,10 @@ export default function AccommodationOverviewPage() {
         </div>
         <div className="flex items-center gap-3">
           {!metrics.hasFullData && (
-             <Button variant="outline" size="sm" onClick={() => refreshDashboardStats()} className="gap-2">
-               <RefreshCw className="h-4 w-4" />
-               تحديث القراءات
-             </Button>
+            <Button variant="outline" size="sm" onClick={() => refreshDashboardStats()} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              تحديث القراءات
+            </Button>
           )}
           {/* 🚨 EMERGENCY MODE: Manual sync button (replaces real-time listeners) */}
           <Alert className="py-2 px-3">
@@ -357,10 +357,10 @@ export default function AccommodationOverviewPage() {
             ) : (
               <div className="space-y-2">
                 {metrics.nationalityConflicts.map((conflict, idx) => {
-                  const roomLabel = conflict.buildingName && conflict.floorName 
+                  const roomLabel = conflict.buildingName && conflict.floorName
                     ? `${conflict.buildingName} - ${conflict.floorName} - ${conflict.roomName || conflict.roomId}`
                     : conflict.roomName || conflict.roomId;
-                    
+
                   return (
                     <Alert key={idx} variant="destructive" className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20">
                       <AlertCircle className="h-4 w-4" />
@@ -433,7 +433,7 @@ export default function AccommodationOverviewPage() {
               const data = metrics.occupancyByResidence[res.id] || { occupied: 0, capacity: 0, rooms: 0 };
               const rate = data.capacity > 0 ? Math.round((data.occupied / data.capacity) * 100) : 0;
               const statusColor = rate >= 90 ? 'bg-red-500' : rate >= 70 ? 'bg-orange-500' : 'bg-green-500';
-              
+
               return (
                 <div key={res.id} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
@@ -443,7 +443,7 @@ export default function AccommodationOverviewPage() {
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className={`h-2 rounded-full ${statusColor}`}
                       style={{ width: `${Math.min(rate, 100)}%` }}
                     />

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from '@/lib/firestore-shim';
 
 interface ImportResult {
   success: boolean;
@@ -42,7 +42,7 @@ interface ValidationResult {
 // دالة التحويل من ملف نصي إلى JSON
 function parseTextToJSON(text: string): any[] {
   const lines = text.trim().split('\n').filter(line => line.trim());
-  
+
   if (lines.length === 0) {
     throw new Error('الملف فارغ');
   }
@@ -50,20 +50,20 @@ function parseTextToJSON(text: string): any[] {
   // محاولة اكتشاف الفاصل
   const firstLine = lines[0];
   let delimiter: string | RegExp = '\t'; // افتراضيًا TSV
-  
+
   if (firstLine.includes(',')) delimiter = ',';
   else if (firstLine.includes(';')) delimiter = ';';
   else if (firstLine.split(/\s+/).length > 1) delimiter = /\s+/;
 
   // تحليل السطر الأول كرؤوس
-  const headers = (typeof delimiter === 'string' 
-    ? firstLine.split(delimiter) 
+  const headers = (typeof delimiter === 'string'
+    ? firstLine.split(delimiter)
     : firstLine.split(delimiter as RegExp)
   ).map(h => h.trim());
 
   // تحليل باقي الأسطر
   const workers: any[] = [];
-  
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -87,7 +87,7 @@ function parseTextToJSON(text: string): any[] {
       if (!value) return;
 
       const header = headers[idx]?.toLowerCase() || '';
-      
+
       // اكتشاف نوع الحقل
       if (header.includes('name') || header.includes('اسم')) {
         worker.name = value;
@@ -167,13 +167,13 @@ function validateWorkersData(workers: any[]): ValidationResult {
     // التحقق من الأنماط
     if (worker.employeeId) {
       result.stats.withEmployeeId++;
-      
+
       // تسجيل للتحقق من التكرار
       if (!employeeIdMap.has(worker.employeeId)) {
         employeeIdMap.set(worker.employeeId, new Set());
       }
       employeeIdMap.get(worker.employeeId)!.add(worker.idNumber || 'unknown');
-      
+
       if (!/^\d+$/.test(worker.employeeId)) {
         result.warnings.push(`السطر ${lineNum}: الرقم الوظيفي يجب أن يكون أرقامًا فقط`);
       }
@@ -223,7 +223,7 @@ export default function ImportWorkersPage() {
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [parsedData, setParsedData] = useState<any[] | null>(null);
   const [isTextFile, setIsTextFile] = useState(false);
-  const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
+  const [companies, setCompanies] = useState<{ id: string, name: string }[]>([]);
   const [defaultCompany, setDefaultCompany] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -249,7 +249,7 @@ export default function ImportWorkersPage() {
     // Validate file type
     const isTxt = selectedFile.name.endsWith('.txt') || selectedFile.name.endsWith('.csv') || selectedFile.name.endsWith('.tsv');
     const isJson = selectedFile.name.endsWith('.json');
-    
+
     if (!isTxt && !isJson) {
       toast({
         title: 'نوع ملف غير صحيح',
@@ -287,11 +287,11 @@ export default function ImportWorkersPage() {
 
       // معاينة أول 10 سجلات
       setPreviewData(workers.slice(0, 10));
-      
+
       // التحقق التلقائي
       const validation = validateWorkersData(workers);
       setValidationResult(validation);
-      
+
     } catch (error) {
       toast({
         title: 'خطأ في قراءة الملف',
@@ -413,9 +413,8 @@ export default function ImportWorkersPage() {
             />
             <label
               htmlFor="file-upload"
-              className={`cursor-pointer flex flex-col items-center gap-2 ${
-                (validating || loading) ? 'opacity-50 pointer-events-none' : ''
-              }`}
+              className={`cursor-pointer flex flex-col items-center gap-2 ${(validating || loading) ? 'opacity-50 pointer-events-none' : ''
+                }`}
             >
               {validating ? (
                 <Loader2 className="w-12 h-12 text-muted-foreground animate-spin" />
@@ -620,7 +619,7 @@ export default function ImportWorkersPage() {
                         )}
                       </td>
                       <td className="p-2">{worker.company || defaultCompany || '-'}</td>
-                      <td className="p-2">{worker.nationality || worker.nationaliy || '-'}</td>
+                      <td className="p-2">{worker.nationality || worker.nationality || '-'}</td>
                       <td className="p-2">{worker.role || 'Worker'}</td>
                     </tr>
                   ))}
@@ -730,7 +729,7 @@ export default function ImportWorkersPage() {
           <div className="text-sm">
             <p className="mb-2 font-semibold">1. ملف JSON:</p>
             <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs" dir="ltr">
-{`[
+              {`[
   {
     "name": "أحمد محمد",
     "employeeId": "40097",
@@ -746,7 +745,7 @@ export default function ImportWorkersPage() {
           <div className="text-sm">
             <p className="mb-2 font-semibold">2. ملف نصي (CSV/TSV):</p>
             <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs" dir="ltr">
-{`name,employeeId,idNumber,company,nationality,role
+              {`name,employeeId,idNumber,company,nationality,role
 أحمد محمد,40097,2059537999,الشركة الأولى,سعودي,Worker
 محمد علي,40098,2059538000,الشركة الثانية,مصري,Supervisor`}
             </pre>

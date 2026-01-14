@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
+import * as D1Actions from '@/lib/d1-actions';
+import { collection, doc, getDocs, runTransaction, Timestamp } from '@/lib/firestore-shim';
 import { db } from '@/lib/firebase';
-import {
-  collection,
-  doc,
-  getDocs,
-  runTransaction,
-  Timestamp,
-} from 'firebase/firestore';
 
 type ScanResult = {
   itemId: string;
@@ -14,13 +9,40 @@ type ScanResult = {
 };
 
 async function scanForNegatives(): Promise<{ countItems: number; totalNegatives: number; details: ScanResult[] }> {
-  if (!db) throw new Error('Firestore not configured');
-  const snap = await getDocs(collection(db, 'inventory'));
+  // Support both Firestore and D1-based inventory
+  if (db) {
+    const snap = await getDocs(collection(db, 'inventory'));
+    const details: ScanResult[] = [];
+    let totalNegatives = 0;
+    for (const d of snap.docs) {
+      const data = d.data() as any;
+      const sbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+      const negs: { residenceId: string; value: number }[] = [];
+      for (const [rid, val] of Object.entries(sbr)) {
+        const n = Number(val ?? 0);
+        if (!isNaN(n) && n < 0) {
+          negs.push({ residenceId: rid, value: n });
+          totalNegatives += 1;
+        }
+      }
+      if (negs.length > 0) details.push({ itemId: d.id, negatives: negs });
+    }
+    return { countItems: details.length, totalNegatives, details };
+  }
+
+  // D1 path (read-only scan)
+  const inv = await D1Actions.getInventory();
   const details: ScanResult[] = [];
   let totalNegatives = 0;
-  for (const d of snap.docs) {
-    const data = d.data() as any;
-    const sbr = { ...(data.stockByResidence || {}) } as Record<string, number>;
+  for (const row of inv) {
+    // stockByResidence might be stored as JSON or as an object
+    const sbrRaw = (row as any).stockByResidence;
+    let sbr: Record<string, number> = {};
+    if (!sbrRaw) sbr = {};
+    else if (typeof sbrRaw === 'string') {
+      try { sbr = JSON.parse(sbrRaw); } catch { sbr = {}; }
+    } else if (typeof sbrRaw === 'object') sbr = sbrRaw;
+
     const negs: { residenceId: string; value: number }[] = [];
     for (const [rid, val] of Object.entries(sbr)) {
       const n = Number(val ?? 0);
@@ -29,7 +51,7 @@ async function scanForNegatives(): Promise<{ countItems: number; totalNegatives:
         totalNegatives += 1;
       }
     }
-    if (negs.length > 0) details.push({ itemId: d.id, negatives: negs });
+    if (negs.length > 0) details.push({ itemId: (row as any).id || (row as any).itemId || '', negatives: negs });
   }
   return { countItems: details.length, totalNegatives, details };
 }
@@ -48,15 +70,24 @@ function verifySecret(req: Request): boolean {
 
 export async function GET(req: Request) {
   try {
-    if (!db) return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
     const url = new URL(req.url);
     const apply = url.searchParams.get('apply');
+
     if (apply === '1' || apply === 'true') {
+      // Applying fixes requires write access; not supported in D1-only read-only mode here
       if (!verifySecret(req)) {
         return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
       }
-      // Fall through to same logic as POST to perform fixes
-      // Read all inventory docs
+      if (!db) {
+        // If D1 is present, still don't auto-apply fixes from this endpoint (avoid doing writes here)
+        const inv = await D1Actions.getInventory();
+        if (Array.isArray(inv)) {
+          return NextResponse.json({ ok: false, error: 'Apply not supported in D1-only mode via this endpoint' }, { status: 501 });
+        }
+        return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
+      }
+
+      // Fall through to same logic as POST to perform fixes (Firestore path)
       const snap = await getDocs(collection(db, 'inventory'));
       if (snap.empty) return NextResponse.json({ ok: true, fixedCount: 0, affectedItems: [] });
       let fixedCount = 0;
@@ -110,8 +141,9 @@ export async function GET(req: Request) {
         fixedCount++;
         affected.push(d.id);
       }
-  return NextResponse.json({ ok: true, fixedCount, affectedItems: affected });
+      return NextResponse.json({ ok: true, fixedCount, affectedItems: affected });
     }
+
     const res = await scanForNegatives();
     return NextResponse.json({ ok: true, ...res });
   } catch (e: any) {
@@ -121,10 +153,19 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    if (!db) return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
     if (!verifySecret(req)) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
+
+    if (!db) {
+      // D1 mode: applying fixes via this endpoint is not supported here
+      const inv = await D1Actions.getInventory();
+      if (Array.isArray(inv)) {
+        return NextResponse.json({ ok: false, error: 'Apply not supported in D1-only mode via this endpoint' }, { status: 501 });
+      }
+      return NextResponse.json({ ok: false, error: 'Firestore not configured' }, { status: 500 });
+    }
+
     // Read all inventory docs
     const snap = await getDocs(collection(db, 'inventory'));
     if (snap.empty) return NextResponse.json({ ok: true, fixedCount: 0, affectedItems: [] });

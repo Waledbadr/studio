@@ -13,7 +13,7 @@ export default function NationalityReportPage() {
     let total = 0;
 
     workers.forEach(w => {
-      const nat = w.nationaliy || 'Unknown';
+      const nat = w.nationality || 'Unknown';
       counts[nat] = (counts[nat] || 0) + 1;
       total++;
     });
@@ -28,8 +28,8 @@ export default function NationalityReportPage() {
   }, [workers]);
 
   return (
-    <PrintLayout 
-      title="Nationality Distribution Report" 
+    <PrintLayout
+      title="Nationality Distribution Report"
       description="Breakdown of workers by nationality."
     >
       <div className="border rounded-md">
@@ -56,11 +56,11 @@ export default function NationalityReportPage() {
               ))
             )}
             {stats.length > 0 && (
-                <TableRow className="bg-muted/50 font-bold">
-                    <TableCell>Total</TableCell>
-                    <TableCell className="text-right">{workers.length}</TableCell>
-                    <TableCell className="text-right">100%</TableCell>
-                </TableRow>
+              <TableRow className="bg-muted/50 font-bold">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">{workers.length}</TableCell>
+                <TableCell className="text-right">100%</TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

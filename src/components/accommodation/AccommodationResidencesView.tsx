@@ -519,7 +519,7 @@ export default function AccommodationResidencesView() {
       // Update Firestore directly
       const { db } = await import('@/lib/firebase');
       if (db) {
-        const { doc, setDoc } = await import('firebase/firestore');
+        const { doc, setDoc } = await import('@/lib/firestore-shim');
         await setDoc(doc(db, 'residences', complexId), updatedComplex);
       } else {
         // Update localStorage

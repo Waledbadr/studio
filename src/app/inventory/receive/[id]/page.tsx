@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from '@/lib/firestore-shim';
 import { db } from '@/lib/firebase';
 
 interface ReceivedItem extends OrderItem {

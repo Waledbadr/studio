@@ -1,0 +1,984 @@
+≡اأ Executing content of split_companies.sql...
+   Internal Progress: 0/5 lines
+   ظإî Failed batch at line 0 in split_companies.sql
+≡اأ Executing content of split_contracts.sql...
+   Internal Progress: 0/4 lines
+   ظإî Failed batch at line 0 in split_contracts.sql
+≡اأ Executing content of split_invoices.sql...
+   Internal Progress: 0/15 lines
+   ظإî Failed batch at line 0 in split_invoices.sql
+   Internal Progress: 10/15 lines
+   ظإî Failed batch at line 10 in split_invoices.sql
+≡اأ Executing content of split_notifications.sql...
+   Internal Progress: 0/120 lines
+   ظإî Failed batch at line 0 in split_notifications.sql
+   Internal Progress: 10/120 lines
+   ظإî Failed batch at line 10 in split_notifications.sql
+   Internal Progress: 20/120 lines
+   ظإî Failed batch at line 20 in split_notifications.sql
+   Internal Progress: 30/120 lines
+   ظإî Failed batch at line 30 in split_notifications.sql
+   Internal Progress: 40/120 lines
+   ظإî Failed batch at line 40 in split_notifications.sql
+   Internal Progress: 50/120 lines
+   ظإî Failed batch at line 50 in split_notifications.sql
+   Internal Progress: 60/120 lines
+   Internal Progress: 70/120 lines
+   ظإî Failed batch at line 60 in split_notifications.sql
+   ظإî Failed batch at line 70 in split_notifications.sql
+   Internal Progress: 80/120 lines
+   ظإî Failed batch at line 80 in split_notifications.sql
+   Internal Progress: 90/120 lines
+   ظإî Failed batch at line 90 in split_notifications.sql
+   Internal Progress: 100/120 lines
+   Internal Progress: 110/120 lines
+   ظإî Failed batch at line 100 in split_notifications.sql
+   ظإî Failed batch at line 110 in split_notifications.sql
+≡اأ Executing content of split_occupants.sql...
+   Internal Progress: 0/158 lines
+   ظإî Failed batch at line 0 in split_occupants.sql
+   Internal Progress: 10/158 lines
+   ظإî Failed batch at line 10 in split_occupants.sql
+   Internal Progress: 20/158 lines
+   ظإî Failed batch at line 20 in split_occupants.sql
+   Internal Progress: 30/158 lines
+   ظإî Failed batch at line 30 in split_occupants.sql
+   Internal Progress: 40/158 lines
+   ظإî Failed batch at line 40 in split_occupants.sql
+   Internal Progress: 50/158 lines
+   ظإî Failed batch at line 50 in split_occupants.sql
+   Internal Progress: 60/158 lines
+   ظإî Failed batch at line 60 in split_occupants.sql
+   Internal Progress: 70/158 lines
+   ظإî Failed batch at line 70 in split_occupants.sql
+   Internal Progress: 80/158 lines
+   ظإî Failed batch at line 80 in split_occupants.sql
+   Internal Progress: 90/158 lines
+   ظإî Failed batch at line 90 in split_occupants.sql
+   Internal Progress: 100/158 lines
+   ظإî Failed batch at line 100 in split_occupants.sql
+   Internal Progress: 110/158 lines
+   ظإî Failed batch at line 110 in split_occupants.sql
+   Internal Progress: 120/158 lines
+   ظإî Failed batch at line 120 in split_occupants.sql
+   Internal Progress: 130/158 lines
+   ظإî Failed batch at line 130 in split_occupants.sql
+   Internal Progress: 140/158 lines
+   ظإî Failed batch at line 140 in split_occupants.sql
+   Internal Progress: 150/158 lines
+   ظإî Failed batch at line 150 in split_occupants.sql
+≡اأ Executing content of split_residences.sql...
+   Internal Progress: 0/13 lines
+   ظإî Failed batch at line 0 in split_residences.sql
+   Internal Progress: 10/13 lines
+   ظإî Failed batch at line 10 in split_residences.sql
+≡اأ Executing content of split_workers_1.sql...
+   Internal Progress: 0/2046 lines
+   ظإî Failed batch at line 0 in split_workers_1.sql
+   Internal Progress: 10/2046 lines
+   ظإî Failed batch at line 10 in split_workers_1.sql
+   Internal Progress: 20/2046 lines
+   ظإî Failed batch at line 20 in split_workers_1.sql
+   Internal Progress: 30/2046 lines
+   ظإî Failed batch at line 30 in split_workers_1.sql
+   Internal Progress: 40/2046 lines
+   ظإî Failed batch at line 40 in split_workers_1.sql
+   Internal Progress: 50/2046 lines
+   ظإî Failed batch at line 50 in split_workers_1.sql
+   Internal Progress: 60/2046 lines
+   ظإî Failed batch at line 60 in split_workers_1.sql
+   Internal Progress: 70/2046 lines
+   ظإî Failed batch at line 70 in split_workers_1.sql
+   Internal Progress: 80/2046 lines
+   ظإî Failed batch at line 80 in split_workers_1.sql
+   Internal Progress: 90/2046 lines
+   ظإî Failed batch at line 90 in split_workers_1.sql
+   Internal Progress: 100/2046 lines
+   ظإî Failed batch at line 100 in split_workers_1.sql
+   Internal Progress: 110/2046 lines
+   ظإî Failed batch at line 110 in split_workers_1.sql
+   Internal Progress: 120/2046 lines
+   ظإî Failed batch at line 120 in split_workers_1.sql
+   Internal Progress: 130/2046 lines
+   ظإî Failed batch at line 130 in split_workers_1.sql
+   Internal Progress: 140/2046 lines
+   ظإî Failed batch at line 140 in split_workers_1.sql
+   Internal Progress: 150/2046 lines
+   ظإî Failed batch at line 150 in split_workers_1.sql
+   Internal Progress: 160/2046 lines
+   ظإî Failed batch at line 160 in split_workers_1.sql
+   Internal Progress: 170/2046 lines
+   ظإî Failed batch at line 170 in split_workers_1.sql
+   Internal Progress: 180/2046 lines
+   ظإî Failed batch at line 180 in split_workers_1.sql
+   Internal Progress: 190/2046 lines
+   ظإî Failed batch at line 190 in split_workers_1.sql
+   Internal Progress: 200/2046 lines
+   ظإî Failed batch at line 200 in split_workers_1.sql
+   Internal Progress: 210/2046 lines
+   ظإî Failed batch at line 210 in split_workers_1.sql
+   Internal Progress: 220/2046 lines
+   ظإî Failed batch at line 220 in split_workers_1.sql
+   Internal Progress: 230/2046 lines
+   ظإî Failed batch at line 230 in split_workers_1.sql
+   Internal Progress: 240/2046 lines
+   ظإî Failed batch at line 240 in split_workers_1.sql
+   Internal Progress: 250/2046 lines
+   ظإî Failed batch at line 250 in split_workers_1.sql
+   Internal Progress: 260/2046 lines
+   ظإî Failed batch at line 260 in split_workers_1.sql
+   Internal Progress: 270/2046 lines
+   ظإî Failed batch at line 270 in split_workers_1.sql
+   Internal Progress: 280/2046 lines
+   ظإî Failed batch at line 280 in split_workers_1.sql
+   Internal Progress: 290/2046 lines
+   ظإî Failed batch at line 290 in split_workers_1.sql
+   Internal Progress: 300/2046 lines
+   ظإî Failed batch at line 300 in split_workers_1.sql
+   Internal Progress: 310/2046 lines
+   ظإî Failed batch at line 310 in split_workers_1.sql
+   Internal Progress: 320/2046 lines
+   ظإî Failed batch at line 320 in split_workers_1.sql
+   Internal Progress: 330/2046 lines
+   ظإî Failed batch at line 330 in split_workers_1.sql
+   Internal Progress: 340/2046 lines
+   ظإî Failed batch at line 340 in split_workers_1.sql
+   Internal Progress: 350/2046 lines
+   ظإî Failed batch at line 350 in split_workers_1.sql
+   Internal Progress: 360/2046 lines
+   ظإî Failed batch at line 360 in split_workers_1.sql
+   Internal Progress: 370/2046 lines
+   ظإî Failed batch at line 370 in split_workers_1.sql
+   Internal Progress: 380/2046 lines
+   ظإî Failed batch at line 380 in split_workers_1.sql
+   Internal Progress: 390/2046 lines
+   ظإî Failed batch at line 390 in split_workers_1.sql
+   Internal Progress: 400/2046 lines
+   ظإî Failed batch at line 400 in split_workers_1.sql
+   Internal Progress: 410/2046 lines
+   ظإî Failed batch at line 410 in split_workers_1.sql
+   Internal Progress: 420/2046 lines
+   ظإî Failed batch at line 420 in split_workers_1.sql
+   Internal Progress: 430/2046 lines
+   ظإî Failed batch at line 430 in split_workers_1.sql
+   Internal Progress: 440/2046 lines
+   ظإî Failed batch at line 440 in split_workers_1.sql
+   Internal Progress: 450/2046 lines
+   ظإî Failed batch at line 450 in split_workers_1.sql
+   Internal Progress: 460/2046 lines
+   ظإî Failed batch at line 460 in split_workers_1.sql
+   Internal Progress: 470/2046 lines
+   ظإî Failed batch at line 470 in split_workers_1.sql
+   Internal Progress: 480/2046 lines
+   ظإî Failed batch at line 480 in split_workers_1.sql
+   Internal Progress: 490/2046 lines
+   ظإî Failed batch at line 490 in split_workers_1.sql
+   Internal Progress: 500/2046 lines
+   ظإî Failed batch at line 500 in split_workers_1.sql
+   Internal Progress: 510/2046 lines
+   ظإî Failed batch at line 510 in split_workers_1.sql
+   Internal Progress: 520/2046 lines
+   ظإî Failed batch at line 520 in split_workers_1.sql
+   Internal Progress: 530/2046 lines
+   ظإî Failed batch at line 530 in split_workers_1.sql
+   Internal Progress: 540/2046 lines
+   ظإî Failed batch at line 540 in split_workers_1.sql
+   Internal Progress: 550/2046 lines
+   Internal Progress: 560/2046 lines
+   ظإî Failed batch at line 550 in split_workers_1.sql
+   ظإî Failed batch at line 560 in split_workers_1.sql
+   Internal Progress: 570/2046 lines
+   ظإî Failed batch at line 570 in split_workers_1.sql
+   Internal Progress: 580/2046 lines
+   ظإî Failed batch at line 580 in split_workers_1.sql
+   Internal Progress: 590/2046 lines
+   ظإî Failed batch at line 590 in split_workers_1.sql
+   Internal Progress: 600/2046 lines
+   ظإî Failed batch at line 600 in split_workers_1.sql
+   Internal Progress: 610/2046 lines
+   ظإî Failed batch at line 610 in split_workers_1.sql
+   Internal Progress: 620/2046 lines
+   ظإî Failed batch at line 620 in split_workers_1.sql
+   Internal Progress: 630/2046 lines
+   ظإî Failed batch at line 630 in split_workers_1.sql
+   Internal Progress: 640/2046 lines
+   ظإî Failed batch at line 640 in split_workers_1.sql
+   Internal Progress: 650/2046 lines
+   ظإî Failed batch at line 650 in split_workers_1.sql
+   Internal Progress: 660/2046 lines
+   ظإî Failed batch at line 660 in split_workers_1.sql
+   Internal Progress: 670/2046 lines
+   ظإî Failed batch at line 670 in split_workers_1.sql
+   Internal Progress: 680/2046 lines
+   ظإî Failed batch at line 680 in split_workers_1.sql
+   Internal Progress: 690/2046 lines
+   ظإî Failed batch at line 690 in split_workers_1.sql
+   Internal Progress: 700/2046 lines
+   ظإî Failed batch at line 700 in split_workers_1.sql
+   Internal Progress: 710/2046 lines
+   ظإî Failed batch at line 710 in split_workers_1.sql
+   Internal Progress: 720/2046 lines
+   ظإî Failed batch at line 720 in split_workers_1.sql
+   Internal Progress: 730/2046 lines
+   Internal Progress: 740/2046 lines
+   ظإî Failed batch at line 730 in split_workers_1.sql
+   ظإî Failed batch at line 740 in split_workers_1.sql
+   Internal Progress: 750/2046 lines
+   ظإî Failed batch at line 750 in split_workers_1.sql
+   Internal Progress: 760/2046 lines
+   ظإî Failed batch at line 760 in split_workers_1.sql
+   Internal Progress: 770/2046 lines
+   ظإî Failed batch at line 770 in split_workers_1.sql
+   Internal Progress: 780/2046 lines
+   ظإî Failed batch at line 780 in split_workers_1.sql
+   Internal Progress: 790/2046 lines
+   ظإî Failed batch at line 790 in split_workers_1.sql
+   Internal Progress: 800/2046 lines
+   ظإî Failed batch at line 800 in split_workers_1.sql
+   Internal Progress: 810/2046 lines
+   ظإî Failed batch at line 810 in split_workers_1.sql
+   Internal Progress: 820/2046 lines
+   ظإî Failed batch at line 820 in split_workers_1.sql
+   Internal Progress: 830/2046 lines
+   ظإî Failed batch at line 830 in split_workers_1.sql
+   Internal Progress: 840/2046 lines
+   ظإî Failed batch at line 840 in split_workers_1.sql
+   Internal Progress: 850/2046 lines
+   ظإî Failed batch at line 850 in split_workers_1.sql
+   Internal Progress: 860/2046 lines
+   ظإî Failed batch at line 860 in split_workers_1.sql
+   Internal Progress: 870/2046 lines
+   ظإî Failed batch at line 870 in split_workers_1.sql
+   Internal Progress: 880/2046 lines
+   ظإî Failed batch at line 880 in split_workers_1.sql
+   Internal Progress: 890/2046 lines
+   ظإî Failed batch at line 890 in split_workers_1.sql
+   Internal Progress: 900/2046 lines
+   ظإî Failed batch at line 900 in split_workers_1.sql
+   Internal Progress: 910/2046 lines
+   ظإî Failed batch at line 910 in split_workers_1.sql
+   Internal Progress: 920/2046 lines
+   ظإî Failed batch at line 920 in split_workers_1.sql
+   Internal Progress: 930/2046 lines
+   ظإî Failed batch at line 930 in split_workers_1.sql
+   Internal Progress: 940/2046 lines
+   ظإî Failed batch at line 940 in split_workers_1.sql
+   Internal Progress: 950/2046 lines
+   ظإî Failed batch at line 950 in split_workers_1.sql
+   Internal Progress: 960/2046 lines
+   ظإî Failed batch at line 960 in split_workers_1.sql
+   Internal Progress: 970/2046 lines
+   ظإî Failed batch at line 970 in split_workers_1.sql
+   Internal Progress: 980/2046 lines
+   ظإî Failed batch at line 980 in split_workers_1.sql
+   Internal Progress: 990/2046 lines
+   ظإî Failed batch at line 990 in split_workers_1.sql
+   Internal Progress: 1000/2046 lines
+   ظإî Failed batch at line 1000 in split_workers_1.sql
+   Internal Progress: 1010/2046 lines
+   ظإî Failed batch at line 1010 in split_workers_1.sql
+   Internal Progress: 1020/2046 lines
+   ظإî Failed batch at line 1020 in split_workers_1.sql
+   Internal Progress: 1030/2046 lines
+   ظإî Failed batch at line 1030 in split_workers_1.sql
+   Internal Progress: 1040/2046 lines
+   ظإî Failed batch at line 1040 in split_workers_1.sql
+   Internal Progress: 1050/2046 lines
+   ظإî Failed batch at line 1050 in split_workers_1.sql
+   Internal Progress: 1060/2046 lines
+   ظإî Failed batch at line 1060 in split_workers_1.sql
+   Internal Progress: 1070/2046 lines
+   ظإî Failed batch at line 1070 in split_workers_1.sql
+   Internal Progress: 1080/2046 lines
+   ظإî Failed batch at line 1080 in split_workers_1.sql
+   Internal Progress: 1090/2046 lines
+   ظإî Failed batch at line 1090 in split_workers_1.sql
+   Internal Progress: 1100/2046 lines
+   ظإî Failed batch at line 1100 in split_workers_1.sql
+   Internal Progress: 1110/2046 lines
+   ظإî Failed batch at line 1110 in split_workers_1.sql
+   Internal Progress: 1120/2046 lines
+   ظإî Failed batch at line 1120 in split_workers_1.sql
+   Internal Progress: 1130/2046 lines
+   ظإî Failed batch at line 1130 in split_workers_1.sql
+   Internal Progress: 1140/2046 lines
+   ظإî Failed batch at line 1140 in split_workers_1.sql
+   Internal Progress: 1150/2046 lines
+   ظإî Failed batch at line 1150 in split_workers_1.sql
+   Internal Progress: 1160/2046 lines
+   ظإî Failed batch at line 1160 in split_workers_1.sql
+   Internal Progress: 1170/2046 lines
+   ظإî Failed batch at line 1170 in split_workers_1.sql
+   Internal Progress: 1180/2046 lines
+   ظإî Failed batch at line 1180 in split_workers_1.sql
+   Internal Progress: 1190/2046 lines
+   ظإî Failed batch at line 1190 in split_workers_1.sql
+   Internal Progress: 1200/2046 lines
+   ظإî Failed batch at line 1200 in split_workers_1.sql
+   Internal Progress: 1210/2046 lines
+   ظإî Failed batch at line 1210 in split_workers_1.sql
+   Internal Progress: 1220/2046 lines
+   ظإî Failed batch at line 1220 in split_workers_1.sql
+   Internal Progress: 1230/2046 lines
+   ظإî Failed batch at line 1230 in split_workers_1.sql
+   Internal Progress: 1240/2046 lines
+   ظإî Failed batch at line 1240 in split_workers_1.sql
+   Internal Progress: 1250/2046 lines
+   ظإî Failed batch at line 1250 in split_workers_1.sql
+   Internal Progress: 1260/2046 lines
+   ظإî Failed batch at line 1260 in split_workers_1.sql
+   Internal Progress: 1270/2046 lines
+   ظإî Failed batch at line 1270 in split_workers_1.sql
+   Internal Progress: 1280/2046 lines
+   ظإî Failed batch at line 1280 in split_workers_1.sql
+   Internal Progress: 1290/2046 lines
+   ظإî Failed batch at line 1290 in split_workers_1.sql
+   Internal Progress: 1300/2046 lines
+   ظإî Failed batch at line 1300 in split_workers_1.sql
+   Internal Progress: 1310/2046 lines
+   ظإî Failed batch at line 1310 in split_workers_1.sql
+   Internal Progress: 1320/2046 lines
+   ظإî Failed batch at line 1320 in split_workers_1.sql
+   Internal Progress: 1330/2046 lines
+   ظإî Failed batch at line 1330 in split_workers_1.sql
+   Internal Progress: 1340/2046 lines
+   ظإî Failed batch at line 1340 in split_workers_1.sql
+   Internal Progress: 1350/2046 lines
+   ظإî Failed batch at line 1350 in split_workers_1.sql
+   Internal Progress: 1360/2046 lines
+   ظإî Failed batch at line 1360 in split_workers_1.sql
+   Internal Progress: 1370/2046 lines
+   ظإî Failed batch at line 1370 in split_workers_1.sql
+   Internal Progress: 1380/2046 lines
+   ظإî Failed batch at line 1380 in split_workers_1.sql
+   Internal Progress: 1390/2046 lines
+   ظإî Failed batch at line 1390 in split_workers_1.sql
+   Internal Progress: 1400/2046 lines
+   ظإî Failed batch at line 1400 in split_workers_1.sql
+   Internal Progress: 1410/2046 lines
+   Internal Progress: 1420/2046 lines
+   ظإî Failed batch at line 1410 in split_workers_1.sql
+   ظإî Failed batch at line 1420 in split_workers_1.sql
+   Internal Progress: 1430/2046 lines
+   ظإî Failed batch at line 1430 in split_workers_1.sql
+   Internal Progress: 1440/2046 lines
+   ظإî Failed batch at line 1440 in split_workers_1.sql
+   Internal Progress: 1450/2046 lines
+   ظإî Failed batch at line 1450 in split_workers_1.sql
+   Internal Progress: 1460/2046 lines
+   ظإî Failed batch at line 1460 in split_workers_1.sql
+   Internal Progress: 1470/2046 lines
+   ظإî Failed batch at line 1470 in split_workers_1.sql
+   Internal Progress: 1480/2046 lines
+   ظإî Failed batch at line 1480 in split_workers_1.sql
+   Internal Progress: 1490/2046 lines
+   ظإî Failed batch at line 1490 in split_workers_1.sql
+   Internal Progress: 1500/2046 lines
+   ظإî Failed batch at line 1500 in split_workers_1.sql
+   Internal Progress: 1510/2046 lines
+   Internal Progress: 1520/2046 lines
+   ظإî Failed batch at line 1510 in split_workers_1.sql
+   ظإî Failed batch at line 1520 in split_workers_1.sql
+   Internal Progress: 1530/2046 lines
+   ظإî Failed batch at line 1530 in split_workers_1.sql
+   Internal Progress: 1540/2046 lines
+   ظإî Failed batch at line 1540 in split_workers_1.sql
+   Internal Progress: 1550/2046 lines
+   ظإî Failed batch at line 1550 in split_workers_1.sql
+   Internal Progress: 1560/2046 lines
+   ظإî Failed batch at line 1560 in split_workers_1.sql
+   Internal Progress: 1570/2046 lines
+   ظإî Failed batch at line 1570 in split_workers_1.sql
+   Internal Progress: 1580/2046 lines
+   ظإî Failed batch at line 1580 in split_workers_1.sql
+   Internal Progress: 1590/2046 lines
+   ظإî Failed batch at line 1590 in split_workers_1.sql
+   Internal Progress: 1600/2046 lines
+   ظإî Failed batch at line 1600 in split_workers_1.sql
+   Internal Progress: 1610/2046 lines
+   ظإî Failed batch at line 1610 in split_workers_1.sql
+   Internal Progress: 1620/2046 lines
+   ظإî Failed batch at line 1620 in split_workers_1.sql
+   Internal Progress: 1630/2046 lines
+   ظإî Failed batch at line 1630 in split_workers_1.sql
+   Internal Progress: 1640/2046 lines
+   ظإî Failed batch at line 1640 in split_workers_1.sql
+   Internal Progress: 1650/2046 lines
+   ظإî Failed batch at line 1650 in split_workers_1.sql
+   Internal Progress: 1660/2046 lines
+   ظإî Failed batch at line 1660 in split_workers_1.sql
+   Internal Progress: 1670/2046 lines
+   ظإî Failed batch at line 1670 in split_workers_1.sql
+   Internal Progress: 1680/2046 lines
+   ظإî Failed batch at line 1680 in split_workers_1.sql
+   Internal Progress: 1690/2046 lines
+   ظإî Failed batch at line 1690 in split_workers_1.sql
+   Internal Progress: 1700/2046 lines
+   ظإî Failed batch at line 1700 in split_workers_1.sql
+   Internal Progress: 1710/2046 lines
+   ظإî Failed batch at line 1710 in split_workers_1.sql
+   Internal Progress: 1720/2046 lines
+   ظإî Failed batch at line 1720 in split_workers_1.sql
+   Internal Progress: 1730/2046 lines
+   ظإî Failed batch at line 1730 in split_workers_1.sql
+   Internal Progress: 1740/2046 lines
+   ظإî Failed batch at line 1740 in split_workers_1.sql
+   Internal Progress: 1750/2046 lines
+   ظإî Failed batch at line 1750 in split_workers_1.sql
+   Internal Progress: 1760/2046 lines
+   ظإî Failed batch at line 1760 in split_workers_1.sql
+   Internal Progress: 1770/2046 lines
+   ظإî Failed batch at line 1770 in split_workers_1.sql
+   Internal Progress: 1780/2046 lines
+   ظإî Failed batch at line 1780 in split_workers_1.sql
+   Internal Progress: 1790/2046 lines
+   ظإî Failed batch at line 1790 in split_workers_1.sql
+   Internal Progress: 1800/2046 lines
+   ظإî Failed batch at line 1800 in split_workers_1.sql
+   Internal Progress: 1810/2046 lines
+   ظإî Failed batch at line 1810 in split_workers_1.sql
+   Internal Progress: 1820/2046 lines
+   ظإî Failed batch at line 1820 in split_workers_1.sql
+   Internal Progress: 1830/2046 lines
+   ظإî Failed batch at line 1830 in split_workers_1.sql
+   Internal Progress: 1840/2046 lines
+   ظإî Failed batch at line 1840 in split_workers_1.sql
+   Internal Progress: 1850/2046 lines
+   ظإî Failed batch at line 1850 in split_workers_1.sql
+   Internal Progress: 1860/2046 lines
+   ظإî Failed batch at line 1860 in split_workers_1.sql
+   Internal Progress: 1870/2046 lines
+   ظإî Failed batch at line 1870 in split_workers_1.sql
+   Internal Progress: 1880/2046 lines
+   ظإî Failed batch at line 1880 in split_workers_1.sql
+   Internal Progress: 1890/2046 lines
+   ظإî Failed batch at line 1890 in split_workers_1.sql
+   Internal Progress: 1900/2046 lines
+   ظإî Failed batch at line 1900 in split_workers_1.sql
+   Internal Progress: 1910/2046 lines
+   ظإî Failed batch at line 1910 in split_workers_1.sql
+   Internal Progress: 1920/2046 lines
+   ظإî Failed batch at line 1920 in split_workers_1.sql
+   Internal Progress: 1930/2046 lines
+   ظإî Failed batch at line 1930 in split_workers_1.sql
+   Internal Progress: 1940/2046 lines
+   ظإî Failed batch at line 1940 in split_workers_1.sql
+   Internal Progress: 1950/2046 lines
+   ظإî Failed batch at line 1950 in split_workers_1.sql
+   Internal Progress: 1960/2046 lines
+   ظإî Failed batch at line 1960 in split_workers_1.sql
+   Internal Progress: 1970/2046 lines
+   ظإî Failed batch at line 1970 in split_workers_1.sql
+   Internal Progress: 1980/2046 lines
+   ظإî Failed batch at line 1980 in split_workers_1.sql
+   Internal Progress: 1990/2046 lines
+   ظإî Failed batch at line 1990 in split_workers_1.sql
+   Internal Progress: 2000/2046 lines
+   ظإî Failed batch at line 2000 in split_workers_1.sql
+   Internal Progress: 2010/2046 lines
+   ظإî Failed batch at line 2010 in split_workers_1.sql
+   Internal Progress: 2020/2046 lines
+   ظإî Failed batch at line 2020 in split_workers_1.sql
+   Internal Progress: 2030/2046 lines
+   ظإî Failed batch at line 2030 in split_workers_1.sql
+   Internal Progress: 2040/2046 lines
+   ظإî Failed batch at line 2040 in split_workers_1.sql
+≡اأ Executing content of split_workers_2.sql...
+   Internal Progress: 0/2045 lines
+   ظإî Failed batch at line 0 in split_workers_2.sql
+   Internal Progress: 10/2045 lines
+   Internal Progress: 20/2045 lines
+   ظإî Failed batch at line 10 in split_workers_2.sql
+   ظإî Failed batch at line 20 in split_workers_2.sql
+   Internal Progress: 30/2045 lines
+   ظإî Failed batch at line 30 in split_workers_2.sql
+   Internal Progress: 40/2045 lines
+   ظإî Failed batch at line 40 in split_workers_2.sql
+   Internal Progress: 50/2045 lines
+   ظإî Failed batch at line 50 in split_workers_2.sql
+   Internal Progress: 60/2045 lines
+   ظإî Failed batch at line 60 in split_workers_2.sql
+   Internal Progress: 70/2045 lines
+   ظإî Failed batch at line 70 in split_workers_2.sql
+   Internal Progress: 80/2045 lines
+   ظإî Failed batch at line 80 in split_workers_2.sql
+   Internal Progress: 90/2045 lines
+   ظإî Failed batch at line 90 in split_workers_2.sql
+   Internal Progress: 100/2045 lines
+   ظإî Failed batch at line 100 in split_workers_2.sql
+   Internal Progress: 110/2045 lines
+   ظإî Failed batch at line 110 in split_workers_2.sql
+   Internal Progress: 120/2045 lines
+   ظإî Failed batch at line 120 in split_workers_2.sql
+   Internal Progress: 130/2045 lines
+   ظإî Failed batch at line 130 in split_workers_2.sql
+   Internal Progress: 140/2045 lines
+   ظإî Failed batch at line 140 in split_workers_2.sql
+   Internal Progress: 150/2045 lines
+   ظإî Failed batch at line 150 in split_workers_2.sql
+   Internal Progress: 160/2045 lines
+   ظإî Failed batch at line 160 in split_workers_2.sql
+   Internal Progress: 170/2045 lines
+   ظإî Failed batch at line 170 in split_workers_2.sql
+   Internal Progress: 180/2045 lines
+   ظإî Failed batch at line 180 in split_workers_2.sql
+   Internal Progress: 190/2045 lines
+   ظإî Failed batch at line 190 in split_workers_2.sql
+   Internal Progress: 200/2045 lines
+   ظإî Failed batch at line 200 in split_workers_2.sql
+   Internal Progress: 210/2045 lines
+   ظإî Failed batch at line 210 in split_workers_2.sql
+   Internal Progress: 220/2045 lines
+   ظإî Failed batch at line 220 in split_workers_2.sql
+   Internal Progress: 230/2045 lines
+   ظإî Failed batch at line 230 in split_workers_2.sql
+   Internal Progress: 240/2045 lines
+   ظإî Failed batch at line 240 in split_workers_2.sql
+   Internal Progress: 250/2045 lines
+   ظإî Failed batch at line 250 in split_workers_2.sql
+   Internal Progress: 260/2045 lines
+   ظإî Failed batch at line 260 in split_workers_2.sql
+   Internal Progress: 270/2045 lines
+   ظإî Failed batch at line 270 in split_workers_2.sql
+   Internal Progress: 280/2045 lines
+   ظإî Failed batch at line 280 in split_workers_2.sql
+   Internal Progress: 290/2045 lines
+   ظإî Failed batch at line 290 in split_workers_2.sql
+   Internal Progress: 300/2045 lines
+   ظإî Failed batch at line 300 in split_workers_2.sql
+   Internal Progress: 310/2045 lines
+   ظإî Failed batch at line 310 in split_workers_2.sql
+   Internal Progress: 320/2045 lines
+   ظإî Failed batch at line 320 in split_workers_2.sql
+   Internal Progress: 330/2045 lines
+   ظإî Failed batch at line 330 in split_workers_2.sql
+   Internal Progress: 340/2045 lines
+   ظإî Failed batch at line 340 in split_workers_2.sql
+   Internal Progress: 350/2045 lines
+   ظإî Failed batch at line 350 in split_workers_2.sql
+   Internal Progress: 360/2045 lines
+   ظإî Failed batch at line 360 in split_workers_2.sql
+   Internal Progress: 370/2045 lines
+   ظإî Failed batch at line 370 in split_workers_2.sql
+   Internal Progress: 380/2045 lines
+   ظإî Failed batch at line 380 in split_workers_2.sql
+   Internal Progress: 390/2045 lines
+   ظإî Failed batch at line 390 in split_workers_2.sql
+   Internal Progress: 400/2045 lines
+   ظإî Failed batch at line 400 in split_workers_2.sql
+   Internal Progress: 410/2045 lines
+   ظإî Failed batch at line 410 in split_workers_2.sql
+   Internal Progress: 420/2045 lines
+   ظإî Failed batch at line 420 in split_workers_2.sql
+   Internal Progress: 430/2045 lines
+   ظإî Failed batch at line 430 in split_workers_2.sql
+   Internal Progress: 440/2045 lines
+   ظإî Failed batch at line 440 in split_workers_2.sql
+   Internal Progress: 450/2045 lines
+   ظإî Failed batch at line 450 in split_workers_2.sql
+   Internal Progress: 460/2045 lines
+   ظإî Failed batch at line 460 in split_workers_2.sql
+   Internal Progress: 470/2045 lines
+   ظإî Failed batch at line 470 in split_workers_2.sql
+   Internal Progress: 480/2045 lines
+   ظإî Failed batch at line 480 in split_workers_2.sql
+   Internal Progress: 490/2045 lines
+   ظإî Failed batch at line 490 in split_workers_2.sql
+   Internal Progress: 500/2045 lines
+   ظإî Failed batch at line 500 in split_workers_2.sql
+   Internal Progress: 510/2045 lines
+   ظإî Failed batch at line 510 in split_workers_2.sql
+   Internal Progress: 520/2045 lines
+   ظإî Failed batch at line 520 in split_workers_2.sql
+   Internal Progress: 530/2045 lines
+   ظإî Failed batch at line 530 in split_workers_2.sql
+   Internal Progress: 540/2045 lines
+   ظإî Failed batch at line 540 in split_workers_2.sql
+   Internal Progress: 550/2045 lines
+   ظإî Failed batch at line 550 in split_workers_2.sql
+   Internal Progress: 560/2045 lines
+   ظإî Failed batch at line 560 in split_workers_2.sql
+   Internal Progress: 570/2045 lines
+   ظإî Failed batch at line 570 in split_workers_2.sql
+   Internal Progress: 580/2045 lines
+   ظإî Failed batch at line 580 in split_workers_2.sql
+   Internal Progress: 590/2045 lines
+   ظإî Failed batch at line 590 in split_workers_2.sql
+   Internal Progress: 600/2045 lines
+   ظإî Failed batch at line 600 in split_workers_2.sql
+   Internal Progress: 610/2045 lines
+   ظإî Failed batch at line 610 in split_workers_2.sql
+   Internal Progress: 620/2045 lines
+   ظإî Failed batch at line 620 in split_workers_2.sql
+   Internal Progress: 630/2045 lines
+   ظإî Failed batch at line 630 in split_workers_2.sql
+   Internal Progress: 640/2045 lines
+   ظإî Failed batch at line 640 in split_workers_2.sql
+   Internal Progress: 650/2045 lines
+   ظإî Failed batch at line 650 in split_workers_2.sql
+   Internal Progress: 660/2045 lines
+   ظإî Failed batch at line 660 in split_workers_2.sql
+   Internal Progress: 670/2045 lines
+   ظإî Failed batch at line 670 in split_workers_2.sql
+   Internal Progress: 680/2045 lines
+   ظإî Failed batch at line 680 in split_workers_2.sql
+   Internal Progress: 690/2045 lines
+   ظإî Failed batch at line 690 in split_workers_2.sql
+   Internal Progress: 700/2045 lines
+   ظإî Failed batch at line 700 in split_workers_2.sql
+   Internal Progress: 710/2045 lines
+   ظإî Failed batch at line 710 in split_workers_2.sql
+   Internal Progress: 720/2045 lines
+   ظإî Failed batch at line 720 in split_workers_2.sql
+   Internal Progress: 730/2045 lines
+   ظإî Failed batch at line 730 in split_workers_2.sql
+   Internal Progress: 740/2045 lines
+   ظإî Failed batch at line 740 in split_workers_2.sql
+   Internal Progress: 750/2045 lines
+   ظإî Failed batch at line 750 in split_workers_2.sql
+   Internal Progress: 760/2045 lines
+   ظإî Failed batch at line 760 in split_workers_2.sql
+   Internal Progress: 770/2045 lines
+   ظإî Failed batch at line 770 in split_workers_2.sql
+   Internal Progress: 780/2045 lines
+   ظإî Failed batch at line 780 in split_workers_2.sql
+   Internal Progress: 790/2045 lines
+   ظإî Failed batch at line 790 in split_workers_2.sql
+   Internal Progress: 800/2045 lines
+   ظإî Failed batch at line 800 in split_workers_2.sql
+   Internal Progress: 810/2045 lines
+   ظإî Failed batch at line 810 in split_workers_2.sql
+   Internal Progress: 820/2045 lines
+   ظإî Failed batch at line 820 in split_workers_2.sql
+   Internal Progress: 830/2045 lines
+   ظإî Failed batch at line 830 in split_workers_2.sql
+   Internal Progress: 840/2045 lines
+   ظإî Failed batch at line 840 in split_workers_2.sql
+   Internal Progress: 850/2045 lines
+   ظإî Failed batch at line 850 in split_workers_2.sql
+   Internal Progress: 860/2045 lines
+   ظإî Failed batch at line 860 in split_workers_2.sql
+   Internal Progress: 870/2045 lines
+   Internal Progress: 880/2045 lines
+   ظإî Failed batch at line 870 in split_workers_2.sql
+   ظإî Failed batch at line 880 in split_workers_2.sql
+   Internal Progress: 890/2045 lines
+   ظإî Failed batch at line 890 in split_workers_2.sql
+   Internal Progress: 900/2045 lines
+   ظإî Failed batch at line 900 in split_workers_2.sql
+   Internal Progress: 910/2045 lines
+   ظإî Failed batch at line 910 in split_workers_2.sql
+   Internal Progress: 920/2045 lines
+   ظإî Failed batch at line 920 in split_workers_2.sql
+   Internal Progress: 930/2045 lines
+   Internal Progress: 940/2045 lines
+   ظإî Failed batch at line 930 in split_workers_2.sql
+   ظإî Failed batch at line 940 in split_workers_2.sql
+   Internal Progress: 950/2045 lines
+   ظإî Failed batch at line 950 in split_workers_2.sql
+   Internal Progress: 960/2045 lines
+   Internal Progress: 970/2045 lines
+   ظإî Failed batch at line 960 in split_workers_2.sql
+   ظإî Failed batch at line 970 in split_workers_2.sql
+   Internal Progress: 980/2045 lines
+   ظإî Failed batch at line 980 in split_workers_2.sql
+   Internal Progress: 990/2045 lines
+   ظإî Failed batch at line 990 in split_workers_2.sql
+   Internal Progress: 1000/2045 lines
+   ظإî Failed batch at line 1000 in split_workers_2.sql
+   Internal Progress: 1010/2045 lines
+   ظإî Failed batch at line 1010 in split_workers_2.sql
+   Internal Progress: 1020/2045 lines
+   ظإî Failed batch at line 1020 in split_workers_2.sql
+   Internal Progress: 1030/2045 lines
+   ظإî Failed batch at line 1030 in split_workers_2.sql
+   Internal Progress: 1040/2045 lines
+   ظإî Failed batch at line 1040 in split_workers_2.sql
+   Internal Progress: 1050/2045 lines
+   ظإî Failed batch at line 1050 in split_workers_2.sql
+   Internal Progress: 1060/2045 lines
+   ظإî Failed batch at line 1060 in split_workers_2.sql
+   Internal Progress: 1070/2045 lines
+   ظإî Failed batch at line 1070 in split_workers_2.sql
+   Internal Progress: 1080/2045 lines
+   ظإî Failed batch at line 1080 in split_workers_2.sql
+   Internal Progress: 1090/2045 lines
+   ظإî Failed batch at line 1090 in split_workers_2.sql
+   Internal Progress: 1100/2045 lines
+   ظإî Failed batch at line 1100 in split_workers_2.sql
+   Internal Progress: 1110/2045 lines
+   ظإî Failed batch at line 1110 in split_workers_2.sql
+   Internal Progress: 1120/2045 lines
+   ظإî Failed batch at line 1120 in split_workers_2.sql
+   Internal Progress: 1130/2045 lines
+   ظإî Failed batch at line 1130 in split_workers_2.sql
+   Internal Progress: 1140/2045 lines
+   ظإî Failed batch at line 1140 in split_workers_2.sql
+   Internal Progress: 1150/2045 lines
+   ظإî Failed batch at line 1150 in split_workers_2.sql
+   Internal Progress: 1160/2045 lines
+   ظإî Failed batch at line 1160 in split_workers_2.sql
+   Internal Progress: 1170/2045 lines
+   ظإî Failed batch at line 1170 in split_workers_2.sql
+   Internal Progress: 1180/2045 lines
+   ظإî Failed batch at line 1180 in split_workers_2.sql
+   Internal Progress: 1190/2045 lines
+   ظإî Failed batch at line 1190 in split_workers_2.sql
+   Internal Progress: 1200/2045 lines
+   ظإî Failed batch at line 1200 in split_workers_2.sql
+   Internal Progress: 1210/2045 lines
+   ظإî Failed batch at line 1210 in split_workers_2.sql
+   Internal Progress: 1220/2045 lines
+   ظإî Failed batch at line 1220 in split_workers_2.sql
+   Internal Progress: 1230/2045 lines
+   ظإî Failed batch at line 1230 in split_workers_2.sql
+   Internal Progress: 1240/2045 lines
+   ظإî Failed batch at line 1240 in split_workers_2.sql
+   Internal Progress: 1250/2045 lines
+   ظإî Failed batch at line 1250 in split_workers_2.sql
+   Internal Progress: 1260/2045 lines
+   ظإî Failed batch at line 1260 in split_workers_2.sql
+   Internal Progress: 1270/2045 lines
+   ظإî Failed batch at line 1270 in split_workers_2.sql
+   Internal Progress: 1280/2045 lines
+   ظإî Failed batch at line 1280 in split_workers_2.sql
+   Internal Progress: 1290/2045 lines
+   ظإî Failed batch at line 1290 in split_workers_2.sql
+   Internal Progress: 1300/2045 lines
+   ظإî Failed batch at line 1300 in split_workers_2.sql
+   Internal Progress: 1310/2045 lines
+   ظإî Failed batch at line 1310 in split_workers_2.sql
+   Internal Progress: 1320/2045 lines
+   ظإî Failed batch at line 1320 in split_workers_2.sql
+   Internal Progress: 1330/2045 lines
+   ظإî Failed batch at line 1330 in split_workers_2.sql
+   Internal Progress: 1340/2045 lines
+   ظإî Failed batch at line 1340 in split_workers_2.sql
+   Internal Progress: 1350/2045 lines
+   ظإî Failed batch at line 1350 in split_workers_2.sql
+   Internal Progress: 1360/2045 lines
+   ظإî Failed batch at line 1360 in split_workers_2.sql
+   Internal Progress: 1370/2045 lines
+   ظإî Failed batch at line 1370 in split_workers_2.sql
+   Internal Progress: 1380/2045 lines
+   ظإî Failed batch at line 1380 in split_workers_2.sql
+   Internal Progress: 1390/2045 lines
+   Internal Progress: 1400/2045 lines
+   ظإî Failed batch at line 1390 in split_workers_2.sql
+   ظإî Failed batch at line 1400 in split_workers_2.sql
+   Internal Progress: 1410/2045 lines
+   ظإî Failed batch at line 1410 in split_workers_2.sql
+   Internal Progress: 1420/2045 lines
+   ظإî Failed batch at line 1420 in split_workers_2.sql
+   Internal Progress: 1430/2045 lines
+   ظإî Failed batch at line 1430 in split_workers_2.sql
+   Internal Progress: 1440/2045 lines
+   ظإî Failed batch at line 1440 in split_workers_2.sql
+   Internal Progress: 1450/2045 lines
+   ظإî Failed batch at line 1450 in split_workers_2.sql
+   Internal Progress: 1460/2045 lines
+   ظإî Failed batch at line 1460 in split_workers_2.sql
+   Internal Progress: 1470/2045 lines
+   ظإî Failed batch at line 1470 in split_workers_2.sql
+   Internal Progress: 1480/2045 lines
+   ظإî Failed batch at line 1480 in split_workers_2.sql
+   Internal Progress: 1490/2045 lines
+   ظإî Failed batch at line 1490 in split_workers_2.sql
+   Internal Progress: 1500/2045 lines
+   ظإî Failed batch at line 1500 in split_workers_2.sql
+   Internal Progress: 1510/2045 lines
+   ظإî Failed batch at line 1510 in split_workers_2.sql
+   Internal Progress: 1520/2045 lines
+   ظإî Failed batch at line 1520 in split_workers_2.sql
+   Internal Progress: 1530/2045 lines
+   ظإî Failed batch at line 1530 in split_workers_2.sql
+   Internal Progress: 1540/2045 lines
+   ظإî Failed batch at line 1540 in split_workers_2.sql
+   Internal Progress: 1550/2045 lines
+   ظإî Failed batch at line 1550 in split_workers_2.sql
+   Internal Progress: 1560/2045 lines
+   ظإî Failed batch at line 1560 in split_workers_2.sql
+   Internal Progress: 1570/2045 lines
+   ظإî Failed batch at line 1570 in split_workers_2.sql
+   Internal Progress: 1580/2045 lines
+   ظإî Failed batch at line 1580 in split_workers_2.sql
+   Internal Progress: 1590/2045 lines
+   ظإî Failed batch at line 1590 in split_workers_2.sql
+   Internal Progress: 1600/2045 lines
+   ظإî Failed batch at line 1600 in split_workers_2.sql
+   Internal Progress: 1610/2045 lines
+   ظإî Failed batch at line 1610 in split_workers_2.sql
+   Internal Progress: 1620/2045 lines
+   ظإî Failed batch at line 1620 in split_workers_2.sql
+   Internal Progress: 1630/2045 lines
+   ظإî Failed batch at line 1630 in split_workers_2.sql
+   Internal Progress: 1640/2045 lines
+   ظإî Failed batch at line 1640 in split_workers_2.sql
+   Internal Progress: 1650/2045 lines
+   ظإî Failed batch at line 1650 in split_workers_2.sql
+   Internal Progress: 1660/2045 lines
+   ظإî Failed batch at line 1660 in split_workers_2.sql
+   Internal Progress: 1670/2045 lines
+   ظإî Failed batch at line 1670 in split_workers_2.sql
+   Internal Progress: 1680/2045 lines
+   ظإî Failed batch at line 1680 in split_workers_2.sql
+   Internal Progress: 1690/2045 lines
+   ظإî Failed batch at line 1690 in split_workers_2.sql
+   Internal Progress: 1700/2045 lines
+   ظإî Failed batch at line 1700 in split_workers_2.sql
+   Internal Progress: 1710/2045 lines
+   ظإî Failed batch at line 1710 in split_workers_2.sql
+   Internal Progress: 1720/2045 lines
+   ظإî Failed batch at line 1720 in split_workers_2.sql
+   Internal Progress: 1730/2045 lines
+   ظإî Failed batch at line 1730 in split_workers_2.sql
+   Internal Progress: 1740/2045 lines
+   ظإî Failed batch at line 1740 in split_workers_2.sql
+   Internal Progress: 1750/2045 lines
+   ظإî Failed batch at line 1750 in split_workers_2.sql
+   Internal Progress: 1760/2045 lines
+   ظإî Failed batch at line 1760 in split_workers_2.sql
+   Internal Progress: 1770/2045 lines
+   ظإî Failed batch at line 1770 in split_workers_2.sql
+   Internal Progress: 1780/2045 lines
+   ظإî Failed batch at line 1780 in split_workers_2.sql
+   Internal Progress: 1790/2045 lines
+   ظإî Failed batch at line 1790 in split_workers_2.sql
+   Internal Progress: 1800/2045 lines
+   ظإî Failed batch at line 1800 in split_workers_2.sql
+   Internal Progress: 1810/2045 lines
+   ظإî Failed batch at line 1810 in split_workers_2.sql
+   Internal Progress: 1820/2045 lines
+   ظإî Failed batch at line 1820 in split_workers_2.sql
+   Internal Progress: 1830/2045 lines
+   ظإî Failed batch at line 1830 in split_workers_2.sql
+   Internal Progress: 1840/2045 lines
+   ظإî Failed batch at line 1840 in split_workers_2.sql
+   Internal Progress: 1850/2045 lines
+   ظإî Failed batch at line 1850 in split_workers_2.sql
+   Internal Progress: 1860/2045 lines
+   ظإî Failed batch at line 1860 in split_workers_2.sql
+   Internal Progress: 1870/2045 lines
+   ظإî Failed batch at line 1870 in split_workers_2.sql
+   Internal Progress: 1880/2045 lines
+   ظإî Failed batch at line 1880 in split_workers_2.sql
+   Internal Progress: 1890/2045 lines
+   ظإî Failed batch at line 1890 in split_workers_2.sql
+   Internal Progress: 1900/2045 lines
+   ظإî Failed batch at line 1900 in split_workers_2.sql
+   Internal Progress: 1910/2045 lines
+   ظإî Failed batch at line 1910 in split_workers_2.sql
+   Internal Progress: 1920/2045 lines
+   ظإî Failed batch at line 1920 in split_workers_2.sql
+   Internal Progress: 1930/2045 lines
+   ظإî Failed batch at line 1930 in split_workers_2.sql
+   Internal Progress: 1940/2045 lines
+   ظإî Failed batch at line 1940 in split_workers_2.sql
+   Internal Progress: 1950/2045 lines
+   ظإî Failed batch at line 1950 in split_workers_2.sql
+   Internal Progress: 1960/2045 lines
+   ظإî Failed batch at line 1960 in split_workers_2.sql
+   Internal Progress: 1970/2045 lines
+   ظإî Failed batch at line 1970 in split_workers_2.sql
+   Internal Progress: 1980/2045 lines
+   ظإî Failed batch at line 1980 in split_workers_2.sql
+   Internal Progress: 1990/2045 lines
+   ظإî Failed batch at line 1990 in split_workers_2.sql
+   Internal Progress: 2000/2045 lines
+   ظإî Failed batch at line 2000 in split_workers_2.sql
+   Internal Progress: 2010/2045 lines
+   ظإî Failed batch at line 2010 in split_workers_2.sql
+   Internal Progress: 2020/2045 lines
+   ظإî Failed batch at line 2020 in split_workers_2.sql
+   Internal Progress: 2030/2045 lines
+   ظإî Failed batch at line 2030 in split_workers_2.sql
+   Internal Progress: 2040/2045 lines
+   ظإî Failed batch at line 2040 in split_workers_2.sql
+≡اأ Executing content of split_history.sql...
+   Internal Progress: 0/427 lines
+   ظإî Failed batch at line 0 in split_history.sql
+   Internal Progress: 10/427 lines
+   Internal Progress: 20/427 lines
+   ظإî Failed batch at line 10 in split_history.sql
+   ظإî Failed batch at line 20 in split_history.sql
+   Internal Progress: 30/427 lines
+   ظإî Failed batch at line 30 in split_history.sql
+   Internal Progress: 40/427 lines
+   ظإî Failed batch at line 40 in split_history.sql
+   Internal Progress: 50/427 lines
+   ظإî Failed batch at line 50 in split_history.sql
+   Internal Progress: 60/427 lines
+   ظإî Failed batch at line 60 in split_history.sql
+   Internal Progress: 70/427 lines
+   ظإî Failed batch at line 70 in split_history.sql
+   Internal Progress: 80/427 lines
+   ظإî Failed batch at line 80 in split_history.sql
+   Internal Progress: 90/427 lines
+   ظإî Failed batch at line 90 in split_history.sql
+   Internal Progress: 100/427 lines
+   ظإî Failed batch at line 100 in split_history.sql
+   Internal Progress: 110/427 lines
+   ظإî Failed batch at line 110 in split_history.sql
+   Internal Progress: 120/427 lines
+   ظإî Failed batch at line 120 in split_history.sql
+   Internal Progress: 130/427 lines
+   ظإî Failed batch at line 130 in split_history.sql
+   Internal Progress: 140/427 lines
+   ظإî Failed batch at line 140 in split_history.sql
+   Internal Progress: 150/427 lines
+   ظإî Failed batch at line 150 in split_history.sql
+   Internal Progress: 160/427 lines
+   ظإî Failed batch at line 160 in split_history.sql
+   Internal Progress: 170/427 lines
+   ظإî Failed batch at line 170 in split_history.sql
+   Internal Progress: 180/427 lines
+   ظإî Failed batch at line 180 in split_history.sql
+   Internal Progress: 190/427 lines
+   ظإî Failed batch at line 190 in split_history.sql
+   Internal Progress: 200/427 lines
+   Internal Progress: 210/427 lines
+   ظإî Failed batch at line 200 in split_history.sql
+   ظإî Failed batch at line 210 in split_history.sql
+   Internal Progress: 220/427 lines
+   ظإî Failed batch at line 220 in split_history.sql
+   Internal Progress: 230/427 lines
+   ظإî Failed batch at line 230 in split_history.sql
+   Internal Progress: 240/427 lines
+   ظإî Failed batch at line 240 in split_history.sql
+   Internal Progress: 250/427 lines
+   ظإî Failed batch at line 250 in split_history.sql
+   Internal Progress: 260/427 lines
+   ظإî Failed batch at line 260 in split_history.sql
+   Internal Progress: 270/427 lines
+   ظإî Failed batch at line 270 in split_history.sql
+   Internal Progress: 280/427 lines
+   ظإî Failed batch at line 280 in split_history.sql
+   Internal Progress: 290/427 lines
+   ظإî Failed batch at line 290 in split_history.sql
+   Internal Progress: 300/427 lines
+   ظإî Failed batch at line 300 in split_history.sql
+   Internal Progress: 310/427 lines
+   ظإî Failed batch at line 310 in split_history.sql
+   Internal Progress: 320/427 lines
+   ظإî Failed batch at line 320 in split_history.sql
+   Internal Progress: 330/427 lines
+   ظإî Failed batch at line 330 in split_history.sql
+   Internal Progress: 340/427 lines
+   ظإî Failed batch at line 340 in split_history.sql
+   Internal Progress: 350/427 lines
+   ظإî Failed batch at line 350 in split_history.sql
+   Internal Progress: 360/427 lines
+   ظإî Failed batch at line 360 in split_history.sql
+   Internal Progress: 370/427 lines
+   ظإî Failed batch at line 370 in split_history.sql
+   Internal Progress: 380/427 lines
+   ظإî Failed batch at line 380 in split_history.sql
+   Internal Progress: 390/427 lines
+   ظإî Failed batch at line 390 in split_history.sql
+   Internal Progress: 400/427 lines
+   ظإî Failed batch at line 400 in split_history.sql
+   Internal Progress: 410/427 lines
+   ظإî Failed batch at line 410 in split_history.sql
+   Internal Progress: 420/427 lines
+   ظإî Failed batch at line 420 in split_history.sql
+ظ£à Migration Finished!

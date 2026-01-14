@@ -1,0 +1,21 @@
+
+ ظؤàي╕ wrangler 4.58.0
+ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤ظ¤
+Resource location: remote 
+
+ظû▓ [WARNING] ظأبي╕ This process may take some time, during which your D1 database will be unavailable to serve queries.
+
+
+≡اî Executing on remote database estatecare (df5d6fab-efb5-4b09-b3a0-be536d7edaaf):
+≡اî To execute on your local development database, remove the --remote flag from your wrangler command.
+Note: if the execution fails to complete, your DB will return to its original state and you can safely retry.
+ظ¤£ Checking if file needs uploading
+ظ¤é
+ظ¤£ ≡اî Uploading df5d6fab-efb5-4b09-b3a0-be536d7edaaf.053765151b00cc5c.sql
+ظ¤é ≡اî Uploading complete.
+ظ¤é
+
+X [ERROR] Network connection lost.
+
+
+≡از╡  Logs were written to "C:\Users\abdal\.wrangler\logs\wrangler-2026-01-10_21-59-21_294.log"

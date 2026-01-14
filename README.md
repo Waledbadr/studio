@@ -143,58 +143,16 @@ EstateCare/
    npm install
    ```
 
-3. **إعداد Firebase**
-   - إنشاء مشروع جديد في [Firebase Console](https://console.firebase.google.com)
-   - تفعيل Firestore Database
-   - تفعيل Authentication (Email/Password + أي موفرات تريدها مثل Google/Microsoft)
-   - تفعيل Hosting (اختياري للتجربة المحلية)
-
-4. **تكوين متغيرات البيئة**
-   - انسخ الملف `.env.local.example` إلى `.env.local` ثم عبئ القيم من إعدادات تطبيق الويب في Firebase (Project settings > General > Your apps):
-   ```bash
-   NEXT_PUBLIC_FIREBASE_API_KEY=...
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-   NEXT_PUBLIC_FIREBASE_APP_ID=...
-   ```
-   - في وضع التطوير يمكنك أيضًا الاعتماد على `.env.development` المرفق كتجربة، لكن يُفضّل إنشاء مشروع Firebase منفصل لك.
-   - لتفعيل WebAuthn (اختياري)، اترك `NEXT_PUBLIC_WEBAUTHN_RPID=localhost` أثناء التطوير.
-
-   ملاحظات مهمة لتجنب خطأ `auth/invalid-credential`:
-   - تأكد من صحة البريد/كلمة المرور وأن المستخدم موجود في Authentication > Users.
-   - تحقق من أن `Authorized domains` في Firebase Authentication تحتوي `localhost` واسم نطاقك.
-   - في حال استخدام Google/Microsoft، فعّل الموفر واضبط Client ID/Secret، وأضف `http://localhost:9002` ضمن النطاقات المسموح بها للعودة إن لزم.
-   - إن نقرت "Continue with Google" ورأيت الخطأ، فالسبب غالبًا نطاق غير مصرح به أو موفر غير مفعّل.
-
-5. **تشغيل التطبيق في وضع التطوير**
+3. **تشغيل التطبيق في وضع التطوير**
    ```powershell
    npm run dev
    ```
    
    سيتم تشغيل التطبيق على: `http://localhost:9002`
 
-### (اختياري) تهيئة Firebase Admin لمسارات الخادم
-
-بعض المسارات الخلفية مثل `POST /api/accommodation/assign` تعتمد على Firebase Admin للوصول الآمن إلى Firestore. إذا لم تُجهّز بيانات اعتماد Admin، سيعمل النظام في "الوضع المحلي" ويستخدم التخزين المحلي وسياق المتصفح كحل بديل.
-
-لتمكين Firebase Admin محلياً أو على الخادم، وفّر أحد الخيارات التالية في البيئة:
-
-- باستخدام متغير واحد Base64:
-   - `FIREBASE_SERVICE_ACCOUNT_B64` = قيمة JSON لمفاتيح الخدمة مشفّرة Base64
-- أو باستخدام JSON خام:
-   - `FIREBASE_SERVICE_ACCOUNT` = كائن JSON لنفس بيانات الخدمة
-- أو باستخدام مفاتيح منفصلة:
-   - `FIREBASE_ADMIN_PROJECT_ID`
-   - `FIREBASE_ADMIN_CLIENT_EMAIL`
-   - `FIREBASE_ADMIN_PRIVATE_KEY` (استبدل \n بأسطر جديدة تلقائياً)
-- بديل: استخدم مسار ملف اعتماد Google:
-   - `GOOGLE_APPLICATION_CREDENTIALS` يشير إلى ملف .json على القرص
-
-ملاحظات:
-- عند عدم توفّر Admin، ستبقى صفحات الإسكان (مثل صفحة `assign`) قابلة للعمل بوضع محلي، وستظهر التغييرات فقط في المتصفح حتى يتم إعداد Firebase.
-- إذا رأيت أخطاء في المتصفح مثل "listener indicated an asynchronous response" فغالباً مصدرها إضافة للمتصفح؛ جرّب إيقاف الإضافات مؤقتاً للتأكد.
+Notes on legacy Firebase usage
+- This project has migrated to a D1-first approach. If you still require Firebase (Firestore or Admin SDK) for specific tasks, re-enable it by installing `firebase-admin` and adding credentials as described in older docs or prior commits.
+- For blob/file storage prefer `STORAGE_PATH` for local paths or an external blob store (R2) if your platform does not support writable local storage.
 
 ### تشغيل dev على منفذ مختلف
 
@@ -350,9 +308,15 @@ firebase deploy
 
 ### متطلبات الإنتاج
 - خادم Node.js (للوظائف الخلفية)
-- قاعدة بيانات Firebase
+- قاعدة بيانات Firebase or Cloudflare D1
 - شهادة SSL
 - نطاق مخصص (اختياري)
+
+**D1 & Storage**
+- To enable D1 mode set `NEXT_PUBLIC_USE_D1=true` and configure `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_D1_TOKEN` in your deploy environment.
+- Add `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` (or `JWT_SECRET`) for production auth.
+- If using local file uploads, set `STORAGE_PATH=/var/estatecare/storage` and ensure the runtime provides writable persistent storage. If not, use R2 or another blob store.
+- Verify deploy with: GET `/api/health` → expects `{ "ok": true, "d1": "connected" }` when D1 is available.
 
 ## 🤝 المساهمة
 

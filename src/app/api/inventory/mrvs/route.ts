@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from '@/lib/firestore-shim';
 
 // Direct MRV API now uses monthly counters for deterministic IDs and short codes.
 async function reserveNewMrvId(): Promise<{ id: string; short: string }> {

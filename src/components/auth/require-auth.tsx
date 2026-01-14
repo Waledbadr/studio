@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
+import { onAuthStateChanged, signOut, User } from '@/lib/auth-shim';
 import { useRouter, usePathname } from "next/navigation";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,7 +34,7 @@ export default function PendingTransfersPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  
+
   // NEW: Store transferring workers fetched from Firestore
   const [transferringWorkers, setTransferringWorkers] = useState<any[]>([]);
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(true);
@@ -42,7 +42,7 @@ export default function PendingTransfersPage() {
   const [workerLastOccupancies, setWorkerLastOccupancies] = useState<Record<string, any>>({});
   // NEW: Store room occupants details (workers data)
   const [roomWorkersCache, setRoomWorkersCache] = useState<Record<string, any>>({});
-  
+
   // Auto-Assign State
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [autoAssignResults, setAutoAssignResults] = useState<{
@@ -52,7 +52,7 @@ export default function PendingTransfersPage() {
     details: Array<{ workerId: string; workerName: string; roomName: string; residenceName: string; status: 'success' | 'error'; message?: string }>;
   } | null>(null);
   const [selectedForAutoAssign, setSelectedForAutoAssign] = useState<Set<string>>(new Set());
-  
+
   // Effect 1: Fetch transferring workers on mount
   useEffect(() => {
     async function loadTransferringWorkers() {
@@ -81,9 +81,9 @@ export default function PendingTransfersPage() {
       });
       return;
     }
-    
+
     console.log(`[PendingTransfers] Calculating last occupancies for ${transferringWorkers.length} workers from ${occupants.length} occupants...`);
-    
+
     const lastOccMap: Record<string, any> = {};
     transferringWorkers.forEach((w: any) => {
       const workerOccs = occupants.filter(o => o.workerId === w.id);
@@ -105,11 +105,11 @@ export default function PendingTransfersPage() {
         console.warn(`[PendingTransfers] No occupancy found for worker ${w.name} (${w.id})`);
       }
     });
-    
+
     console.log(`[PendingTransfers] Found last occupancies for ${Object.keys(lastOccMap).length} workers`);
     setWorkerLastOccupancies(lastOccMap);
   }, [transferringWorkers, occupants]);
-  
+
   // Assignment Dialog State
   const [assignDialog, setAssignDialog] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<any>(null);
@@ -119,7 +119,7 @@ export default function PendingTransfersPage() {
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkInType, setCheckInType] = useState('Transfer');
-  
+
   // Auto-Assign Target Residence
   const [autoAssignResidenceId, setAutoAssignResidenceId] = useState('');
 
@@ -185,13 +185,13 @@ export default function PendingTransfersPage() {
       // Get workers to assign
       const workersToAssign = filtered.filter(w => selectedForAutoAssign.has(w.id));
       const targetResidence = accessibleResidences.find(r => r.id === autoAssignResidenceId);
-      
+
       if (!targetResidence) {
         toast({ title: "Error", description: "Selected residence not found", variant: "destructive" });
         setIsAutoAssigning(false);
         return;
       }
-      
+
       console.log(`[AutoAssign] Starting auto-assign for ${workersToAssign.length} workers to ${targetResidence.name}`);
 
       // Sort workers: Engineers -> Supervisors -> Workers
@@ -220,13 +220,13 @@ export default function PendingTransfersPage() {
           for (const floor of building.floors) {
             if (!floor.rooms) continue;
             for (const room of floor.rooms) {
-              const roomOccs = occupants.filter(o => 
-                o.residenceId === targetResidence.id && 
-                o.roomId === room.id && 
+              const roomOccs = occupants.filter(o =>
+                o.residenceId === targetResidence.id &&
+                o.roomId === room.id &&
                 !o.until
               );
               const occWorkers = roomOccs.map(o => roomWorkersCache[o.workerId]).filter(Boolean);
-              
+
               allRooms.push({
                 residenceId: targetResidence.id,
                 residenceName: targetResidence.name,
@@ -236,7 +236,7 @@ export default function PendingTransfersPage() {
                 roomName: room.name || room.id,
                 capacity: room.capacity || 6,
                 currentOccupants: occWorkers,
-                roomNationality: occWorkers[0]?.nationaliy?.toLowerCase?.()?.trim?.(),
+                roomNationality: occWorkers[0]?.nationality?.toLowerCase?.()?.trim?.(),
                 roomRole: occWorkers[0]?.role || undefined
               });
             }
@@ -249,33 +249,33 @@ export default function PendingTransfersPage() {
 
       // For each worker, find best room
       for (const worker of sortedWorkers) {
-        const workerNat = worker.nationaliy?.toLowerCase?.()?.trim?.();
+        const workerNat = worker.nationality?.toLowerCase?.()?.trim?.();
         const workerRole = worker.role || 'Worker';
-        
+
         // Find all suitable rooms (sorted by score)
         const suitableRooms = allRooms
           .map(room => {
             const virtualOccs = virtualAssignments[room.roomId] || [];
             const totalOccupied = room.currentOccupants.length + virtualOccs.length;
             const available = room.capacity - totalOccupied;
-            
+
             if (available <= 0) return null;
-            
+
             // Determine room's nationality and role (from current or virtual occupants)
             const allOccs = [...room.currentOccupants, ...virtualOccs];
-            const roomNat = allOccs[0]?.nationaliy?.toLowerCase?.()?.trim?.() || room.roomNationality;
+            const roomNat = allOccs[0]?.nationality?.toLowerCase?.()?.trim?.() || room.roomNationality;
             const roomRole = allOccs[0]?.role || room.roomRole;
-            
+
             // Check nationality match (empty room = any nationality)
             if (roomNat && workerNat && roomNat !== workerNat) return null;
-            
+
             // Check role match (empty room = any role)
             if (roomRole && roomRole !== workerRole) return null;
-            
+
             // Calculate score (prefer fuller rooms with same nationality)
             const occupancyPercent = room.capacity > 0 ? (totalOccupied / room.capacity) * 100 : 0;
             const score = allOccs.length > 0 ? 1000 + occupancyPercent : 100;
-            
+
             return { ...room, score, available };
           })
           .filter(Boolean)
@@ -317,7 +317,7 @@ export default function PendingTransfersPage() {
                 virtualAssignments[room.roomId] = [];
               }
               virtualAssignments[room.roomId].push(worker);
-              
+
               resultsDetails.push({
                 workerId: worker.id,
                 workerName: worker.name,
@@ -394,21 +394,21 @@ export default function PendingTransfersPage() {
   useEffect(() => {
     async function fetchRoomOccupantsDetails() {
       if (!selectedResidenceId || !getWorkersByIds) return;
-      
+
       // Get all active occupants for this residence
       const residenceOccupants = occupants.filter(
         o => o.residenceId === selectedResidenceId && !o.until
       );
-      
+
       // Get unique worker IDs
       const workerIds = [...new Set(residenceOccupants.map(o => o.workerId))];
-      
+
       if (workerIds.length === 0) return;
-      
+
       try {
         console.log(`[PendingTransfers] Fetching ${workerIds.length} workers for room details...`);
         const fetchedWorkers = await getWorkersByIds(workerIds);
-        
+
         // Build cache from fetched workers
         const newCache: Record<string, any> = {};
         fetchedWorkers.forEach(w => {
@@ -420,7 +420,7 @@ export default function PendingTransfersPage() {
         console.error('[PendingTransfers] Failed to fetch room occupants:', error);
       }
     }
-    
+
     fetchRoomOccupantsDetails();
   }, [selectedResidenceId, occupants, getWorkersByIds]); // Removed roomWorkersCache to prevent infinite loop
 
@@ -433,23 +433,23 @@ export default function PendingTransfersPage() {
       role?: string;
       roomType?: string;
     }> = {};
-    
+
     if (!selectedResidenceId) return detailsMap;
-    
+
     // Get all active occupants for this residence
     const residenceOccupants = occupants.filter(
       o => o.residenceId === selectedResidenceId && !o.until
     );
-    
+
     // Get worker details for each occupant
     residenceOccupants.forEach(o => {
       if (!o.roomId) return;
-      
+
       // Find worker from cache, transferringWorkers, or context workers
-      const worker = roomWorkersCache[o.workerId] || 
-        transferringWorkers.find(w => w.id === o.workerId) || 
+      const worker = roomWorkersCache[o.workerId] ||
+        transferringWorkers.find(w => w.id === o.workerId) ||
         workers.find((w: any) => w.id === o.workerId);
-      
+
       if (!detailsMap[o.roomId]) {
         detailsMap[o.roomId] = {
           count: 0,
@@ -459,18 +459,18 @@ export default function PendingTransfersPage() {
           roomType: undefined
         };
       }
-      
+
       detailsMap[o.roomId].count++;
-      
+
       // Set nationality and role from first occupant
-      if (!detailsMap[o.roomId].nationality && worker?.nationaliy) {
-        detailsMap[o.roomId].nationality = worker.nationaliy;
+      if (!detailsMap[o.roomId].nationality && worker?.nationality) {
+        detailsMap[o.roomId].nationality = worker.nationality;
       }
       if (!detailsMap[o.roomId].role && worker?.role) {
         detailsMap[o.roomId].role = worker.role;
       }
     });
-    
+
     // Add room type and capacity from room definition
     rooms.forEach(room => {
       if (!detailsMap[room.id]) {
@@ -486,7 +486,7 @@ export default function PendingTransfersPage() {
         detailsMap[room.id].roomType = room.roomType;
       }
     });
-    
+
     return detailsMap;
   }, [occupants, selectedResidenceId, rooms, transferringWorkers, workers, roomWorkersCache]);
 
@@ -521,7 +521,7 @@ export default function PendingTransfersPage() {
     console.log('[PendingTransfers] Assigning worker:', {
       workerId: selectedWorker.id,
       workerName: selectedWorker.name,
-      workerNationality: selectedWorker.nationaliy,
+      workerNationality: selectedWorker.nationality,
       workerRole: selectedWorker.role,
       residenceId: selectedResidenceId,
       buildingId: selectedBuildingId,
@@ -551,13 +551,13 @@ export default function PendingTransfersPage() {
       // Check if this specific worker was assigned successfully
       const workerResult = result.results[selectedWorker.id];
       const workerSuccess = workerResult?.success === true;
-      
+
       console.log('[PendingTransfers] Worker result:', workerResult, 'Success:', workerSuccess);
 
       // Check if any worker was successful (in case ID format differs)
       const allResults = Object.entries(result.results);
       const anySuccess = allResults.some(([_, r]: [string, any]) => r.success === true);
-      
+
       console.log('[PendingTransfers] All results entries:', allResults);
       console.log('[PendingTransfers] Any success:', anySuccess);
 
@@ -572,7 +572,7 @@ export default function PendingTransfersPage() {
         // Find the actual error from results
         const firstError = allResults.find(([_, r]: [string, any]) => r.error)?.[1] as any;
         console.error('[PendingTransfers] Assignment failed:', workerResult, 'First error:', firstError);
-        
+
         // Map error codes to English messages
         const errorMessages: Record<string, string> = {
           'nationality-mismatch': 'Nationality does not match room occupants',
@@ -581,18 +581,18 @@ export default function PendingTransfersPage() {
           'room-not-found': 'Room not found',
           'worker-not-found': 'Worker not found'
         };
-        
+
         const errorCode = workerResult?.error || firstError?.error || 'unknown';
         const errorMsg = errorMessages[errorCode] || errorCode || "Assignment failed - unknown reason";
-        
+
         // If no results at all, might be a different issue
-        const finalMessage = allResults.length === 0 
+        const finalMessage = allResults.length === 0
           ? "Worker was not processed - check the data"
           : errorMsg;
-        
-        toast({ 
-          title: "Assignment Failed ❌", 
-          description: `${finalMessage}\n\nWorker: ${selectedWorker.name}\nRole: ${selectedWorker.role || 'Worker'}`, 
+
+        toast({
+          title: "Assignment Failed ❌",
+          description: `${finalMessage}\n\nWorker: ${selectedWorker.name}\nRole: ${selectedWorker.role || 'Worker'}`,
           variant: "destructive",
           duration: 10000 // Show for 10 seconds
         });
@@ -609,36 +609,36 @@ export default function PendingTransfersPage() {
       console.log('[PendingTransfers] No current user');
       return [];
     }
-    
+
     console.log('[PendingTransfers] Current user:', {
       id: currentUser.id,
       name: currentUser.name,
       role: currentUser.role,
       assignedResidences: currentUser.assignedResidences
     });
-    
+
     if (currentUser.role === 'Admin') {
       // Admin sees all cities
       const cities = residences.map(r => r.city).filter(Boolean);
       console.log('[PendingTransfers] Admin - all cities:', cities);
       return cities;
     }
-    
+
     // Filter residences by user's assignedResidences IDs
-    const userResidences = residences.filter(r => 
+    const userResidences = residences.filter(r =>
       currentUser.assignedResidences?.includes(r.id)
     );
-    
+
     console.log('[PendingTransfers] User assigned residences:', userResidences.map(r => ({
       id: r.id,
       name: r.name,
       city: r.city
     })));
-    
+
     // Extract unique cities from assigned residences
     const cities = [...new Set(userResidences.map(r => r.city).filter(Boolean))];
     console.log('[PendingTransfers] User accessible cities:', cities);
-    
+
     return cities;
   }, [currentUser, residences]);
 
@@ -646,7 +646,7 @@ export default function PendingTransfersPage() {
   const normalizeCityName = (city: string | undefined): string => {
     if (!city) return '';
     const normalized = city.toLowerCase().trim();
-    
+
     // Map common variations to standard names
     const cityMappings: Record<string, string> = {
       'jeddah': 'jeddah',
@@ -664,7 +664,7 @@ export default function PendingTransfersPage() {
       'المدينة': 'medina',
       'المدينة المنورة': 'medina',
     };
-    
+
     return cityMappings[normalized] || normalized;
   };
 
@@ -675,47 +675,47 @@ export default function PendingTransfersPage() {
     console.log('[PendingTransfers] Total transferring workers from Firestore:', transferringWorkers.length);
     console.log('[PendingTransfers] Accessible cities:', accessibleCities);
     console.log('[PendingTransfers] Is Admin:', currentUser?.role === 'Admin');
-    
+
     // Admin sees all transferring workers
     if (currentUser?.role === 'Admin') {
       console.log('[PendingTransfers] Admin user - showing all transferring workers');
       return transferringWorkers;
     }
-    
+
     const transferring = transferringWorkers.filter(w => {
-      console.log('[PendingTransfers] Checking worker:', { 
-        id: w.id, 
-        name: w.name, 
+      console.log('[PendingTransfers] Checking worker:', {
+        id: w.id,
+        name: w.name,
         employeeId: w.employeeId,
-        status: w.status, 
+        status: w.status,
         transferDestination: w.transferDestination
       });
-      
+
       // If no destination, show to admin only (already handled above)
       if (!w.transferDestination) {
         console.warn(`⚠️ [PendingTransfers] Worker ${w.name} (${w.id}) has NO transferDestination.`);
         return false;
       }
-      
+
       // Get last occupancy from pre-fetched data or from context
       const lastOccupancy = workerLastOccupancies[w.id] || occupants
         .filter(o => o.workerId === w.id)
         .sort((a, b) => new Date(b.since || 0).getTime() - new Date(a.since || 0).getTime())[0];
-      
+
       const sourceResidence = lastOccupancy ? residences.find(r => r.id === lastOccupancy.residenceId) : null;
       const sourceCity = sourceResidence?.city;
-      
+
       // Normalize city names for comparison
       const normalizedSourceCity = normalizeCityName(sourceCity);
       const normalizedDestination = normalizeCityName(w.transferDestination);
       const normalizedAccessibleCities = accessibleCities.map(c => normalizeCityName(c));
-      
+
       // Show worker if user has access to EITHER source city OR destination city
       const hasAccessToSource = normalizedSourceCity && normalizedAccessibleCities.includes(normalizedSourceCity);
       const hasAccessToDestination = normalizedAccessibleCities.includes(normalizedDestination);
-      
+
       const isAccessible = hasAccessToSource || hasAccessToDestination;
-      
+
       console.log('[PendingTransfers] Is accessible?', {
         workerId: w.id,
         workerName: w.name,
@@ -729,22 +729,22 @@ export default function PendingTransfersPage() {
         hasAccessToDestination,
         isAccessible
       });
-      
+
       if (!isAccessible) {
         console.warn(`⚠️ [PendingTransfers] Worker ${w.name} (${w.id}) is Transferring from ${sourceCity || 'Unknown'} to ${w.transferDestination}, but user has no access to either city. User cities:`, accessibleCities);
       }
-      
+
       return isAccessible;
     });
-    
+
     console.log('[PendingTransfers] === FILTERING COMPLETE ===');
     console.log('[PendingTransfers] Total transferring workers found:', transferring.length);
-    
+
     return transferring;
   }, [transferringWorkers, occupants, residences, accessibleCities, currentUser, workerLastOccupancies]);
 
   // Filter by search
-  const filtered = pendingTransfers.filter(w => 
+  const filtered = pendingTransfers.filter(w =>
     w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (w.employeeId && w.employeeId.includes(searchQuery)) ||
     (w.transferDestination && w.transferDestination.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -754,40 +754,40 @@ export default function PendingTransfersPage() {
   const { outgoingWorkers, incomingWorkers } = useMemo(() => {
     const outgoing: any[] = [];
     const incoming: any[] = [];
-    
+
     // Get user's residence IDs and cities
     const userResidenceIds = accessibleResidences.map(r => r.id);
     const userCities = accessibleResidences.map(r => normalizeCityName(r.city));
-    
+
     console.log('[PendingTransfers] Splitting workers. User residences:', userResidenceIds.length, 'User cities:', userCities);
     console.log('[PendingTransfers] Total filtered workers:', filtered.length);
     console.log('[PendingTransfers] workerLastOccupancies keys:', Object.keys(workerLastOccupancies).length);
-    
+
     filtered.forEach(w => {
       // Find source residence - first check cached occupancies, then live occupants
       const cachedOccupancy = workerLastOccupancies[w.id];
       const liveOccupancy = occupants
         .filter(o => o.workerId === w.id)
         .sort((a, b) => new Date(b.since || 0).getTime() - new Date(a.since || 0).getTime())[0];
-      
+
       const lastOccupancy = cachedOccupancy || liveOccupancy;
-      
+
       const sourceResidence = lastOccupancy ? residences.find(r => r.id === lastOccupancy.residenceId) : null;
       const sourceResidenceId = sourceResidence?.id;
       const normalizedSourceCity = normalizeCityName(sourceResidence?.city);
       const normalizedDestination = normalizeCityName(w.transferDestination);
-      
+
       // Check if worker is coming FROM user's residence (outgoing)
       const isOutgoingByResidence = sourceResidenceId && userResidenceIds.includes(sourceResidenceId);
       // OR if source city matches user's cities
       const isOutgoingByCity = normalizedSourceCity && userCities.includes(normalizedSourceCity);
-      
+
       // Check if worker is going TO user's city (incoming)
       const isIncoming = normalizedDestination && userCities.includes(normalizedDestination);
-      
+
       // Also show as outgoing if no occupancy but destination is NOT user's city (they're leaving somewhere)
       const noOccupancyOutgoing = !lastOccupancy && normalizedDestination && !userCities.includes(normalizedDestination);
-      
+
       // Add source info to worker
       const workerWithSource = {
         ...w,
@@ -795,16 +795,16 @@ export default function PendingTransfersPage() {
         sourceResidenceName: sourceResidence?.name,
         sourceCity: sourceResidence?.city || 'Unknown'
       };
-      
+
       console.log(`[PendingTransfers] Worker ${w.name}: source=${sourceResidence?.name || 'none'}, dest=${w.transferDestination}, isOutgoing=${isOutgoingByResidence || isOutgoingByCity}, isIncoming=${isIncoming}`);
-      
+
       if (isOutgoingByResidence || isOutgoingByCity) {
         outgoing.push(workerWithSource);
       }
       if (isIncoming) {
         incoming.push(workerWithSource);
       }
-      
+
       // If worker doesn't fit either category but has a transfer destination,
       // show in incoming if destination matches, otherwise show in a general list
       if (!isOutgoingByResidence && !isOutgoingByCity && !isIncoming) {
@@ -812,9 +812,9 @@ export default function PendingTransfersPage() {
         incoming.push(workerWithSource);
       }
     });
-    
+
     console.log(`[PendingTransfers] Split result: ${outgoing.length} outgoing, ${incoming.length} incoming`);
-    
+
     return { outgoingWorkers: outgoing, incomingWorkers: incoming };
   }, [filtered, accessibleResidences, workerLastOccupancies, occupants, residences]);
 
@@ -849,9 +849,9 @@ export default function PendingTransfersPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button 
-                variant="default" 
-                size="sm" 
+              <Button
+                variant="default"
+                size="sm"
                 onClick={handleAutoAssign}
                 disabled={isAutoAssigning || !autoAssignResidenceId}
                 className="bg-green-600 hover:bg-green-700"
@@ -865,9 +865,9 @@ export default function PendingTransfersPage() {
               </Button>
             </>
           )}
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleSync}
             disabled={isSyncing}
           >
@@ -930,7 +930,7 @@ export default function PendingTransfersPage() {
                             <div className="text-xs text-muted-foreground">{worker.employeeId}</div>
                           </TableCell>
                           <TableCell className="text-sm">{worker.role || 'Worker'}</TableCell>
-                          <TableCell className="text-sm">{worker.nationaliy || '-'}</TableCell>
+                          <TableCell className="text-sm">{worker.nationality || '-'}</TableCell>
                           <TableCell>
                             <Badge variant="secondary" className="flex w-fit items-center gap-1">
                               <MapPin className="h-3 w-3" />
@@ -973,9 +973,9 @@ export default function PendingTransfersPage() {
               </div>
               {incomingWorkers.length > 0 && (
                 <div className="flex items-center gap-2 mt-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       const ids = new Set(incomingWorkers.map(w => w.id));
                       setSelectedForAutoAssign(ids);
@@ -985,9 +985,9 @@ export default function PendingTransfersPage() {
                     Select All
                   </Button>
                   {selectedForAutoAssign.size > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={deselectAllWorkers}
                       className="text-xs"
                     >
@@ -1047,7 +1047,7 @@ export default function PendingTransfersPage() {
                               <div className="text-xs text-muted-foreground">{worker.employeeId}</div>
                             </TableCell>
                             <TableCell className="text-sm">{worker.role || 'Worker'}</TableCell>
-                            <TableCell className="text-sm">{worker.nationaliy || '-'}</TableCell>
+                            <TableCell className="text-sm">{worker.nationality || '-'}</TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="flex w-fit items-center gap-1">
                                 <MapPin className="h-3 w-3" />
@@ -1055,8 +1055,8 @@ export default function PendingTransfersPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="default"
                                 className="bg-green-600 hover:bg-green-700"
                                 onClick={() => handleAssignClick(worker)}
@@ -1102,7 +1102,7 @@ export default function PendingTransfersPage() {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Nationality</div>
-                    <div className="font-medium">{selectedWorker?.nationaliy || '-'}</div>
+                    <div className="font-medium">{selectedWorker?.nationality || '-'}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Role</div>
@@ -1169,11 +1169,10 @@ export default function PendingTransfersPage() {
                             setSelectedFloorId('');
                             setSelectedRoomId('');
                           }}
-                          className={`cursor-pointer rounded-lg border-2 p-3 transition-all hover:border-primary/50 ${
-                            selectedResidenceId === r.id 
-                              ? 'border-primary bg-primary/5' 
+                          className={`cursor-pointer rounded-lg border-2 p-3 transition-all hover:border-primary/50 ${selectedResidenceId === r.id
+                              ? 'border-primary bg-primary/5'
                               : 'border-border bg-background'
-                          }`}
+                            }`}
                         >
                           <div className="font-semibold text-sm">{r.name}</div>
                           <div className="text-xs text-muted-foreground mt-1">{r.city}</div>
@@ -1195,11 +1194,10 @@ export default function PendingTransfersPage() {
                               setSelectedFloorId('');
                               setSelectedRoomId('');
                             }}
-                            className={`cursor-pointer rounded-md border p-2 text-center transition-all hover:border-primary/50 ${
-                              selectedBuildingId === b.id 
-                                ? 'border-primary bg-primary/10 font-semibold' 
+                            className={`cursor-pointer rounded-md border p-2 text-center transition-all hover:border-primary/50 ${selectedBuildingId === b.id
+                                ? 'border-primary bg-primary/10 font-semibold'
                                 : 'border-border'
-                            }`}
+                              }`}
                           >
                             <div className="text-sm">{b.name || b.id}</div>
                           </div>
@@ -1220,11 +1218,10 @@ export default function PendingTransfersPage() {
                               setSelectedFloorId(f.id);
                               setSelectedRoomId('');
                             }}
-                            className={`cursor-pointer rounded-md border p-2 text-center transition-all hover:border-primary/50 ${
-                              selectedFloorId === f.id 
-                                ? 'border-primary bg-primary/10 font-semibold' 
+                            className={`cursor-pointer rounded-md border p-2 text-center transition-all hover:border-primary/50 ${selectedFloorId === f.id
+                                ? 'border-primary bg-primary/10 font-semibold'
                                 : 'border-border'
-                            }`}
+                              }`}
                           >
                             <div className="text-sm">{f.name || f.id}</div>
                           </div>
@@ -1247,21 +1244,20 @@ export default function PendingTransfersPage() {
                           const isFull = available <= 0;
                           const roomNationality = details.nationality;
                           const roomRole = details.role || details.roomType || room.roomType;
-                          
+
                           // Build info text (e.g., "Indian - Worker")
                           const infoText = [roomNationality, roomRole].filter(Boolean).join(' • ');
-                          
+
                           return (
                             <div
                               key={room.id}
                               onClick={() => !isFull && setSelectedRoomId(room.id)}
-                              className={`cursor-pointer rounded-lg border p-3 transition-all ${
-                                isFull 
-                                  ? 'border-border bg-muted/50 cursor-not-allowed opacity-50' 
+                              className={`cursor-pointer rounded-lg border p-3 transition-all ${isFull
+                                  ? 'border-border bg-muted/50 cursor-not-allowed opacity-50'
                                   : isSelected
                                     ? 'border-primary bg-primary/10 shadow-md ring-2 ring-primary/20'
                                     : 'border-border hover:border-primary/50 hover:shadow'
-                              }`}
+                                }`}
                             >
                               {/* Room Header with number and occupancy */}
                               <div className="flex items-center justify-between mb-2">
@@ -1273,14 +1269,14 @@ export default function PendingTransfersPage() {
                                   <span>{occupied}/{capacity}</span>
                                 </div>
                               </div>
-                              
+
                               {/* Nationality and Role info */}
                               {infoText && (
                                 <div className="text-xs text-muted-foreground truncate mb-1" title={infoText}>
                                   {infoText}
                                 </div>
                               )}
-                              
+
                               {/* Availability status */}
                               <div className="text-xs">
                                 {available > 0 ? (
@@ -1306,7 +1302,7 @@ export default function PendingTransfersPage() {
             <Button variant="outline" onClick={() => setAssignDialog(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleAssignConfirm}
               disabled={!selectedResidenceId || !selectedRoomId}
               className="min-w-[180px]"
@@ -1326,12 +1322,12 @@ export default function PendingTransfersPage() {
               Auto-Assignment Results
             </DialogTitle>
             <DialogDescription>
-              Processed {autoAssignResults?.total} workers. 
-              Success: <span className="text-green-600 font-semibold">{autoAssignResults?.success}</span>, 
+              Processed {autoAssignResults?.total} workers.
+              Success: <span className="text-green-600 font-semibold">{autoAssignResults?.success}</span>,
               Failed: <span className="text-red-600 font-semibold">{autoAssignResults?.failures}</span>
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="mt-4">
             <Table>
               <TableHeader>
@@ -1364,7 +1360,7 @@ export default function PendingTransfersPage() {
               </TableBody>
             </Table>
           </div>
-          
+
           <DialogFooter>
             <Button onClick={() => setAutoAssignResults(null)}>Close</Button>
           </DialogFooter>

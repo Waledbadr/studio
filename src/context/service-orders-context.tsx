@@ -14,9 +14,9 @@ import {
   orderBy,
   runTransaction,
   Timestamp,
-} from "firebase/firestore";
-import type { Timestamp as TsType, Firestore } from "firebase/firestore";
-import { onAuthStateChanged } from 'firebase/auth';
+} from "@/lib/firestore-shim";
+import { onAuthStateChanged } from '@/lib/auth-shim';
+import * as D1Client from '@/lib/d1-client';
 
 export type DestinationType = "InternalMaintenance" | "ExternalWorkshop" | "Vendor";
 
@@ -46,13 +46,13 @@ export type ServiceOrderStatus =
 export interface ServiceOrder {
   id: string; // Firestore doc id
   codeShort: string; // SVC-YYM#
-  dateCreated: TsType;
+  dateCreated: Date | any;
   residenceId: string;
   residenceName: string;
   destination: ServiceOrderDestination;
   status: ServiceOrderStatus;
-  dispatchedAt?: TsType;
-  receivedAt?: TsType;
+  dispatchedAt?: Date | any;
+  receivedAt?: Date | any;
   createdById: string;
   dispatchedById?: string;
   receivedById?: string;
@@ -111,7 +111,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     }
     isLoaded.current = true;
     setLoading(true);
-  const fdb = db as Firestore;
+  const fdb = db as any;
   const qRef = query(collection(fdb, "serviceOrders"), orderBy("dateCreated", "desc"));
     subRef.current = onSnapshot(
       qRef,
@@ -149,7 +149,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const reserveNewSvcId = async (): Promise<string> => {
     if (!db) throw new Error("Firebase not initialized");
-  const fdb = db as Firestore;
+  const fdb = db as any;
     // Use counters/svc-YY-MM similar to other counters
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
@@ -169,12 +169,23 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   };
 
   const createAndDispatchServiceOrder = async (payload: CreateAndDispatchPayload): Promise<string> => {
-    if (!db) throw new Error("Firebase not configured");
-  const fdb = db as Firestore;
     const validItems = (payload.items || []).filter((i) => i.quantity && i.quantity > 0);
     if (!payload.residenceId || validItems.length === 0) {
-  throw new Error("يرجى اختيار السكن وإضافة صنف واحد على الأقل بكمية أكبر من 0.");
+      throw new Error("يرجى اختيار السكن وإضافة صنف واحد على الأقل بكمية أكبر من 0.");
     }
+
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    if (USE_D1) {
+      const res = await D1Client.createServiceOrder({ ...payload, items: validItems });
+      if (res && res.id) {
+        toast({ title: "Dispatched", description: "Service order created and dispatched." });
+        return res.id;
+      }
+      throw new Error(res?.error || 'Failed to create service order');
+    }
+
+    if (!db) throw new Error("Firebase not configured");
+    const fdb = db as Firestore;
 
     const codeShort = await reserveNewSvcId();
 
@@ -274,8 +285,15 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     updates: ReceiveLineUpdate[],
     receivedById: string
   ) => {
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    if (USE_D1) {
+      await D1Client.receiveServiceOrder(orderId, updates, receivedById);
+      toast({ title: "Received", description: "Service order receipt posted." });
+      return;
+    }
+
     if (!db) throw new Error("Firebase not configured");
-    const fdb = db as Firestore;
+    const fdb = db as any;
 
     await runTransaction(fdb, async (trx) => {
       const orderRef = doc(fdb, "serviceOrders", orderId);
@@ -390,7 +408,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const getServiceOrderById = async (orderId: string): Promise<ServiceOrder | null> => {
     if (!db) return null;
-  const fdb = db as Firestore;
+  const fdb = db as any;
   const ref = doc(fdb, "serviceOrders", orderId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
