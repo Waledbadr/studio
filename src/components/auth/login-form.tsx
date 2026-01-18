@@ -43,8 +43,6 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   
@@ -91,17 +89,25 @@ export default function LoginForm() {
   useEffect(() => {
     if (typeof onAuthStateChanged !== 'function') return;
     const unsub = onAuthStateChanged(null as any, (u) => {
-      if (u) redirectAfterLogin();
+      console.debug('[LOGIN] onAuthStateChanged fired, user=', u);
+      if (u) {
+        try {
+          redirectAfterLogin();
+        } catch (e) {
+          console.error('[LOGIN] redirectAfterLogin error', e);
+        }
+      }
     });
-    return () => unsub();
-  }, [router]);
+    return () => { try { unsub(); } catch {} };
+  }, [router, appChoice, search]);
 
   // Handle OAuth redirect result if popup fallback was used
   useEffect(() => {
     if (typeof getRedirectResult !== 'function') return;
     getRedirectResult(null as any)
-      .then(async (res) => {
-        if (res && res.user) {
+      .then(async (res: any) => {
+        // Type guard: check res and res.user
+        if (res && res.user && typeof res.user === 'object' && 'uid' in res.user) {
           await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
           // Use persisted choice because UI state may be reset after redirect
           let persisted: "accommodation" | "materials" | null = null;
@@ -132,7 +138,10 @@ export default function LoginForm() {
             } catch {}
             redirectAfterLogin(persisted || undefined);
           })
-          .catch((e) => setError(e?.message || 'Magic link failed'));
+          .catch((e) => {
+        const msg = e?.message || 'Magic link failed';
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
+      });
       }
     }
   }, [router]);
@@ -143,25 +152,36 @@ export default function LoginForm() {
 
     if (USE_D1) {
       try {
+        const timeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('D1 timeout')), 5000)
+        );
+        
         // Look for pre-provisioned user by email
         if (email) {
-          const users = await (await import('@/lib/d1-client')).getUsers();
-          const pre = (users || []).find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase());
-          if (pre && pre.id !== uid) {
-            // Merge into target UID
-            const merged = {
-              name: data?.name || pre.name || 'User',
-              email,
-              role: pre.role || 'Technician',
-              assignedResidences: pre.assignedResidences || [],
-              themeSettings: pre.themeSettings || { colorTheme: 'blue', mode: 'system' },
-              createdAt: pre.createdAt || new Date().toISOString()
-            };
-            await (await import('@/lib/d1-client')).updateUser(uid, merged).catch(() => {});
-            // Optionally mark old pre-provisioned user as removed (skip delete for safety)
-            return;
+          try {
+            const users = await Promise.race([
+              (await import('@/lib/d1-client')).getUsers(),
+              timeout
+            ]);
+            const pre = (users || []).find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase());
+            if (pre && pre.id !== uid) {
+              // Merge into target UID
+              const merged = {
+                name: data?.name || pre.name || 'User',
+                email,
+                role: pre.role || 'Technician',
+                assignedResidences: pre.assignedResidences || [],
+                themeSettings: pre.themeSettings || { colorTheme: 'blue', mode: 'system' },
+                createdAt: pre.createdAt || new Date().toISOString()
+              };
+              await (await import('@/lib/d1-client')).updateUser(uid, merged).catch(() => {});
+              return;
+            }
+          } catch (e) {
+            console.warn('D1 getUsers failed:', e?.message);
           }
         }
+        
         // Ensure ID exists by attempting to create or update
         const payload = {
           name: data?.name || 'User',
@@ -172,11 +192,14 @@ export default function LoginForm() {
           createdAt: new Date().toISOString()
         };
         // Try update first, then create if update didn't create a row (createUser always inserts)
-        await (await import('@/lib/d1-client')).updateUser(uid, payload).catch(() => {});
-        await (await import('@/lib/d1-client')).createUser(uid, payload).catch(() => {});
+        // Use fire-and-forget for D1 in local dev - don't block on failure
+        (await import('@/lib/d1-client')).updateUser(uid, payload).catch(() => {});
+        (await import('@/lib/d1-client')).createUser(uid, payload).catch(() => {});
         return;
       } catch (e) {
         console.warn('D1 ensureUserProfile failed:', e);
+        // Don't block on D1 errors in local dev
+        return;
       }
     }
 
@@ -222,7 +245,8 @@ export default function LoginForm() {
   const handleEmailPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (typeof signInWithEmailAndPassword !== 'function') {
-      setError("Authentication is not configured.");
+      const msg = "Authentication is not configured.";
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
       return;
     }
     // Guard: ensure English-only (ASCII) for email & password
@@ -230,26 +254,27 @@ export default function LoginForm() {
     const sanitizedPassword = toASCII(password);
     if (sanitizedEmail !== email.trim() || sanitizedPassword !== password) {
       const msg = "Please use English (ASCII) characters for email and password only.";
-      setError(msg);
       toast({ title: "Error", description: msg, variant: "destructive" });
       setEmail(sanitizedEmail);
       setPassword(sanitizedPassword);
       return;
     }
     setLoading(true);
-    setError(null);
-    setInfo(null);
-  try {
+    try {
       if (mode === "signin") {
         await signInWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
+        // For signin, let onAuthStateChanged listener handle redirect
       } else {
         const cred = await createUserWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
         if (name.trim()) {
           try { await updateProfile(cred.user, { displayName: name.trim() }); } catch {}
         }
+        // Ensure profile exists before redirecting
         await ensureUserProfile(cred.user.uid, { name: name || cred.user.displayName || "User", email: cred.user.email || sanitizedEmail });
+        // Small delay to allow user state propagation
+        await new Promise(r => setTimeout(r, 500));
+        redirectAfterLogin();
       }
-      redirectAfterLogin();
     } catch (err: any) {
       const code = err?.code || '';
       const map: Record<string, string> = {
@@ -261,7 +286,6 @@ export default function LoginForm() {
         'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
       };
   const msg = map[code] || err?.message || "Failed. Try again.";
-  setError(msg);
   toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -270,18 +294,20 @@ export default function LoginForm() {
 
   const oauthHandler = async (provider: "google" | "microsoft") => {
     if (typeof signInWithPopup !== 'function') {
-      setError("Authentication is not configured.");
+      const msg = "Authentication is not configured.";
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
       return;
     }
     setLoading(true);
-    setError(null);
-    setInfo(null);
     try {
       const prov = provider === "google" ? new GoogleAuthProvider() : new OAuthProvider("microsoft.com");
       try {
         const res = await signInWithPopup(auth, prov);
-        await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
-        redirectAfterLogin();
+        // Type guard: check res and res.user
+        if (res && res.user && typeof res.user === 'object' && 'uid' in res.user) {
+          await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
+          redirectAfterLogin();
+        }
       } catch (popupErr: any) {
         const c = popupErr?.code || '';
         const msg = popupErr?.message || '';
@@ -293,25 +319,29 @@ export default function LoginForm() {
         throw popupErr;
       }
     } catch (err: any) {
-      setError(err?.message || "OAuth failed.");
+      const msg = err?.message || "OAuth failed.";
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleReset = async () => {
-    if (typeof sendPasswordResetEmail !== 'function') return setError("Authentication is not configured.");
-    if (!email) return setError("Please enter your email first.");
+    if (typeof sendPasswordResetEmail !== 'function') {
+      toast({ title: 'Error', description: 'Authentication is not configured.', variant: 'destructive' });
+      return;
+    }
+    if (!email) {
+      toast({ title: 'Error', description: 'Please enter your email first.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
-    setError(null);
-    setInfo(null);
     try {
       const actionCodeSettings = {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: false,
       } as const;
   await sendPasswordResetEmail(null as any, toASCII(email).trim(), actionCodeSettings);
-  setInfo('Password reset email sent.');
   toast({ title: 'Email sent', description: 'Password reset email sent.' });
     } catch (err: any) {
   const code = err?.code || '';
@@ -321,7 +351,6 @@ export default function LoginForm() {
         'auth/too-many-requests': 'Too many requests. Please wait and try again.',
       };
   const msg = map[code] || err?.message || "Failed to send reset email.";
-  setError(msg);
   toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -329,11 +358,15 @@ export default function LoginForm() {
   };
 
   const handleMagicLink = async () => {
-    if (typeof sendSignInLinkToEmail !== 'function') return setError("Authentication is not configured.");
-    if (!email) return setError("Please enter your email first.");
+    if (typeof sendSignInLinkToEmail !== 'function') {
+      toast({ title: 'Error', description: 'Authentication is not configured.', variant: 'destructive' });
+      return;
+    }
+    if (!email) {
+      toast({ title: 'Error', description: 'Please enter your email first.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
-    setError(null);
-    setInfo(null);
     try {
       const actionCodeSettings = {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
@@ -342,11 +375,9 @@ export default function LoginForm() {
   const asciiEmail = toASCII(email).trim();
   await sendSignInLinkToEmail(null as any, asciiEmail, actionCodeSettings);
   window.localStorage.setItem('pendingEmailForLink', asciiEmail);
-  setInfo('Magic link sent to your email.');
   toast({ title: 'Email sent', description: 'Magic link sent to your email.' });
     } catch (e: any) {
   const msg = e?.message || 'Failed to send magic link.';
-  setError(msg);
   toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -358,14 +389,17 @@ export default function LoginForm() {
       const meRes = await fetch('/api/auth/me');
       const meJson = await meRes.json();
       const user = meJson?.user;
-      if (!user) return setError('Sign in once, then register a passkey.');
+      if (!user) {
+        toast({ title: 'Error', description: 'Sign in once, then register a passkey.', variant: 'destructive' });
+        return;
+      }
 
       const challengeRes = await fetch('/api/auth/webauthn-challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.id, name: user.name || 'User', email: user.email || '' } })
       });
-      const options = await challengeRes.json();
+      const options: any = await challengeRes.json();
       const attResp = await startRegistration(options);
 
       await fetch('/api/auth/webauthn-verify', {
@@ -373,11 +407,9 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.id, name: user.name || 'User', email: user.email || '' }, response: attResp })
       });
-  setInfo('Passkey registered successfully.');
   toast({ title: 'Passkey', description: 'Passkey registered successfully.' });
     } catch (e: any) {
   const msg = e?.message || 'Passkey registration failed.';
-  setError(msg);
   toast({ title: 'Error', description: msg, variant: 'destructive' });
     }
   };
@@ -390,7 +422,7 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'authenticate', user: { id: provisionalUserId, name: '', email } })
       });
-      const options = await challengeRes.json();
+      const options: any = await challengeRes.json();
       const assertion = await startAuthentication(options);
 
       const verifyRes = await fetch('/api/auth/webauthn-verify', {
@@ -398,9 +430,8 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'authenticate', user: { id: provisionalUserId, name: '', email }, response: assertion })
       });
-      const verified = await verifyRes.json();
+      const verified: any = await verifyRes.json();
       if (verified.verified) {
-        setInfo('Passkey verified.');
         toast({ title: 'Passkey', description: 'Passkey verified.' });
         let persisted: "accommodation" | "materials" | null = null;
         try {
@@ -410,12 +441,10 @@ export default function LoginForm() {
         redirectAfterLogin(persisted || undefined);
       } else {
         const msg = 'Passkey authentication failed.';
-        setError(msg);
         toast({ title: 'Error', description: msg, variant: 'destructive' });
       }
     } catch (e: any) {
       const msg = e?.message || 'Passkey login failed.';
-      setError(msg);
       toast({ title: 'Error', description: msg, variant: 'destructive' });
     }
   };

@@ -5,21 +5,31 @@ import { getUser } from '@/lib/d1-actions';
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('access_token')?.value || '';
+    console.log('[AUTH ME] token present:', Boolean(token), token ? token.slice(0, 12) + '...' : '');
     if (!token) return NextResponse.json({ ok: true, user: null });
-    const payload: any = verifyAccessToken(token);
+    let payload: any;
+    try {
+      payload = verifyAccessToken(token);
+      console.log('[AUTH ME] token verified, sub:', payload?.sub);
+    } catch (verErr) {
+      console.warn('[AUTH ME] token verify failed:', verErr?.message || verErr);
+      return NextResponse.json({ ok: true, user: null });
+    }
     const user = await getUser(payload.sub);
     if (!user) return NextResponse.json({ ok: true, user: null });
+    console.log('[AUTH ME] found user:', user?.id, user?.email);
     return NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (e: any) {
+    console.error('[AUTH ME] unexpected error', e);
     return NextResponse.json({ ok: true, user: null });
   }
 }
 
 export async function PATCH(req: Request) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('access_token')?.value || '';
     if (!token) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     const payload: any = verifyAccessToken(token);

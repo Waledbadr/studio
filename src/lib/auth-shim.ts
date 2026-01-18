@@ -5,10 +5,19 @@ type User = { uid: string; email?: string | null; displayName?: string | null } 
 let currentUser: User = null;
 let listeners: Array<(u: User) => void> = [];
 let pollingHandle: any = null;
+let fetchMeInFlight = false;
 
 async function fetchMe() {
+  // Prevent concurrent fetches
+  if (fetchMeInFlight) return currentUser;
+  fetchMeInFlight = true;
   try {
     const res = await fetch('/api/auth/me');
+    if (!res.ok) {
+      currentUser = null;
+      listeners.forEach(l => { try { l(null); } catch {} });
+      return null;
+    }
     const json = await res.json();
     const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null } : null;
     const changed = JSON.stringify(user) !== JSON.stringify(currentUser);
@@ -18,7 +27,10 @@ async function fetchMe() {
     }
     return user;
   } catch (e) {
+    console.warn('fetchMe error:', e);
     return null;
+  } finally {
+    fetchMeInFlight = false;
   }
 }
 
@@ -28,8 +40,11 @@ export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
   listeners.push(cb);
   // start polling if not started
   if (!pollingHandle) {
-    void fetchMe();
-    pollingHandle = setInterval(() => { void fetchMe(); }, 30_000);
+    // First fetch immediately
+    void fetchMe().then(() => {
+      // Then poll every 5 seconds for faster updates on registration
+      pollingHandle = setInterval(() => { void fetchMe(); }, 5_000);
+    });
   }
   return () => { listeners = listeners.filter(l => l !== cb); if (listeners.length === 0) { clearInterval(pollingHandle); pollingHandle = null; } };
 }

@@ -34,8 +34,10 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   checkInWorker: D1Actions.checkInWorker,
   checkOutWorker: D1Actions.checkOutWorker,
   getUser: D1Actions.getUser,
+  getUserByEmail: D1Actions.getUserByEmail,
   updateUser: D1Actions.updateUser,
   createUser: D1Actions.createUser,
+  setUserPasswordHash: D1Actions.setUserPasswordHash,
   createServiceOrder: D1Actions.createServiceOrder,
   receiveServiceOrder: D1Actions.receiveServiceOrder,
 

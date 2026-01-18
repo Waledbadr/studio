@@ -5,7 +5,7 @@ import { jwtVerify, createRemoteJWKSet } from 'jose';
 const TEAM = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
 const AUD = process.env.CLOUDFLARE_ACCESS_AUD;
 
-const PUBLIC_PATHS = [ '/login', '/api/d1' , '/_next', '/static', '/favicon.ico', '/robots.txt' ];
+const PUBLIC_PATHS = [ '/login', '/api/auth', '/api/d1', '/_next', '/static', '/favicon.ico', '/robots.txt' ];
 
 async function verifyToken(token: string) {
   // Try Cloudflare Access first when configured

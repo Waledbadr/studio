@@ -43,9 +43,9 @@ async function getD1() {
         const { env } = getRequestContext();
         return env.DB;
     } catch (e) {
-        // Fallback for local development or if getRequestContext fails
-        // In development without D1 binding, return null quietly
-        // (no log to keep dev console clean)
+        // Fallback: check if wrangler dev is running by checking if .wrangler exists
+        // In true local dev without wrangler, D1 actions will fail gracefully
+        // User should run `npm run dev:d1` for full D1 support
         return null as any;
     }
 }

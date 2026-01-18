@@ -29,6 +29,11 @@ export function getTransferRequests() { return rpc('getTransferRequests'); }
 export function getNotifications() { return rpc('getNotifications'); }
 export function getInventory() { return rpc('getInventory'); }
 export function getUsers() { return rpc('getUsers'); }
+export function getUser(id: string) { return rpc('getUser', [id]); }
+export function getUserByEmail(email: string) { return rpc('getUserByEmail', [email]); }
+export function createUser(id: string, data: any) { return rpc('createUser', [id, data]); }
+export function updateUser(id: string, data: any) { return rpc('updateUser', [id, data]); }
+export function setUserPasswordHash(id: string, hash: string) { return rpc('setUserPasswordHash', [id, hash]); }
 export function getServiceOrders() { return rpc('getServiceOrders'); }
 export function createMRV(payload: any) { return rpc('createMRV', [payload]); }
 export function approveMRVRequest(requestId: string, approverId: string) { return rpc('approveMRVRequest', [requestId, approverId]); }
@@ -41,8 +46,5 @@ export function createTransferRequest(tr: any) { return rpc('createTransferReque
 export function updateTransferRequest(id: string, data: any) { return rpc('updateTransferRequest', [id, data]); }
 export function checkInWorker(params: any) { return rpc('checkInWorker', [params]); }
 export function checkOutWorker(params: any) { return rpc('checkOutWorker', [params]); }
-export function getUser(id: string) { return rpc('getUser', [id]); }
-export function updateUser(id: string, data: any) { return rpc('updateUser', [id, data]); }
-export function createUser(id: string, data: any) { return rpc('createUser', [id, data]); }
 export function createServiceOrder(payload: any) { return rpc('createServiceOrder', [payload]); }
 export function receiveServiceOrder(orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) { return rpc('receiveServiceOrder', [orderId, updates, receivedById, forceComplete]); }

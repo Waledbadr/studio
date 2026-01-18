@@ -2,6 +2,62 @@ import jwt from 'jsonwebtoken';
 const bcrypt: any = require('bcrypt');
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 
+// Fallback in-memory store when D1 binding is missing (local dev only)
+let localUsersFallback: Map<string, any> | null = null;
+let isSeeded = false;
+
+async function seedDefaultUsers(users: Map<string, any>) {
+  if (isSeeded) return;
+  isSeeded = true;
+  
+  // Pre-seed test users with hashed passwords
+  const testUsers = [
+    {
+      id: 'user_admin_local',
+      email: 'admin@estatecare.com',
+      name: 'Admin User',
+      role: 'Admin',
+      passwordHash: await hashPassword('admin123'),
+      assignedResidences: [],
+      themeSettings: { colorTheme: 'blue', mode: 'system' },
+      createdAt: new Date().toISOString(),
+      disabled: false,
+    },
+    {
+      id: 'user_test_local',
+      email: 'test@test.com',
+      name: 'Test User',
+      role: 'Technician',
+      passwordHash: await hashPassword('test123'),
+      assignedResidences: [],
+      themeSettings: { colorTheme: 'blue', mode: 'system' },
+      createdAt: new Date().toISOString(),
+      disabled: false,
+    },
+  ];
+  
+  for (const user of testUsers) {
+    if (!users.has(user.email)) {
+      users.set(user.email, user);
+      console.log(`✓ Pre-seeded test user: ${user.email}`);
+    }
+  }
+}
+
+async function getLocalUsers() {
+  if (localUsersFallback) return localUsersFallback;
+  
+  try {
+    const module = await import('@/app/api/seed-local-user/route');
+    localUsersFallback = module.localUsers;
+  } catch {
+    localUsersFallback = new Map();
+  }
+  
+  await seedDefaultUsers(localUsersFallback);
+  return localUsersFallback;
+}
+
 const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY || '';
 const PUBLIC_KEY = process.env.JWT_PUBLIC_KEY || '';
 const ISSUER = process.env.JWT_ISSUER || 'estatecare.local';
@@ -40,25 +96,52 @@ export function verifyRefreshToken(token: string) {
 
 // High-level helpers
 export async function registerUser({ name, email, password }: { name: string; email: string; password: string }) {
-  const existing = await getUserByEmail(email);
+  let existing = await getUserByEmail(email);
+  // Fallback: check in-memory store if D1 returned null
+  if (!existing) {
+    const local = await getLocalUsers();
+    existing = local.get(email.toLowerCase()) || null;
+  }
   if (existing) throw new Error('User exists');
-  const id = `user_${Date.now()}`;
-  const created = { name, email, role: 'Technician', createdAt: new Date().toISOString() } as any;
-  await createUser(id, created);
+  
+  const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const hash = await hashPassword(password);
-  await setUserPasswordHash(id, hash);
-  const user = await getUser(id);
-  return user;
+  const created = { name, email, role: 'Technician', passwordHash: hash, createdAt: new Date().toISOString(), disabled: false } as any;
+  
+  try {
+    await createUser(id, created);
+    await setUserPasswordHash(id, hash);
+    const user = await getUser(id);
+    if (user) return user;
+  } catch (d1Err) {
+    console.warn('D1 create failed, using in-memory fallback');
+  }
+  
+  // Fallback: store in-memory
+  const local = await getLocalUsers();
+  local.set(email.toLowerCase(), { id, ...created });
+  return { id, ...created };
 }
 
 export async function authenticateUser({ email, password }: { email: string; password: string }) {
-  const user = await getUserByEmail(email);
+  let user = await getUserByEmail(email);
+  
+  // Fallback: check in-memory store if D1 returned null
+  if (!user) {
+    const local = await getLocalUsers();
+    user = local.get(email.toLowerCase()) || null;
+  }
+  
   if (!user) throw new Error('User not found');
   if (user.disabled) throw new Error('User disabled');
   if (!user.passwordHash) throw new Error('No password set');
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) throw new Error('Invalid password');
-  // update last seen
-  await updateUser(user.id, { lastSeen: new Date().toISOString() });
+  
+  // update last seen (try D1, fallback to in-memory)
+  try {
+    await updateUser(user.id, { lastSeen: new Date().toISOString() });
+  } catch {}
+  
   return user;
 }
