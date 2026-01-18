@@ -123,7 +123,7 @@ migrations_dir = "drizzle/migrations"       # ← Migrations folder
 #### 3. Run Database Migrations
 ```bash
 # Generate migration files (if schema changed)
-npx drizzle-kit generate:sqlite
+ل
 
 # Apply migrations to D1
 wrangler d1 migrations apply estatecare-d1 --remote

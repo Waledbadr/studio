@@ -9,7 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "estatecare-d1"
-database_id = "df5d6fab-efb5-4b09-b3a0-be536d7edaaf"
+database_id = "079529e2-33da-4127-ac5f-c1c0b641155c"
 migrations_dir = "drizzle/migrations"
 
 # Optional: environment vars for pages / preview envs
