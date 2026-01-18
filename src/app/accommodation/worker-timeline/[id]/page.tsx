@@ -382,3 +382,6 @@ export default function WorkerTimelinePage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

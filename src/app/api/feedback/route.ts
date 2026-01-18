@@ -59,3 +59,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
+
+
+export const runtime = 'edge';

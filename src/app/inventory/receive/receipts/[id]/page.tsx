@@ -398,3 +398,6 @@ export default function MRVDetailsPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

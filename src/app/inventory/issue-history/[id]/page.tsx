@@ -259,3 +259,6 @@ export default function MIVDetailPage() {
         </div>
     )
 }
+
+
+export const runtime = 'edge';

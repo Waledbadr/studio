@@ -61,3 +61,6 @@ export default function WorkerPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

@@ -749,3 +749,6 @@ function JustificationCell({ orderId, itemIndex, item }: { orderId: string; item
         </div>
     );
 }
+
+
+export const runtime = 'edge';

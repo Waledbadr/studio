@@ -294,3 +294,6 @@ export default function EditMRVPage() {
         </div>
     );
 }
+
+
+export const runtime = 'edge';

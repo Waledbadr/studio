@@ -329,3 +329,6 @@ export default function MRVApprovalDetailPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

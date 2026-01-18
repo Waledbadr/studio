@@ -5,7 +5,7 @@ import fs from 'fs';
 import { verifyAccessToken } from '@/lib/auth';
 const mimeLookup: any = require('mime-types').lookup;
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {

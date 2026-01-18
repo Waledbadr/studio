@@ -399,3 +399,6 @@ export default function ReceiveOrderPage() {
         </>
     );
 }
+
+
+export const runtime = 'edge';

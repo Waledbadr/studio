@@ -20,3 +20,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }
+
+export const runtime = 'edge';

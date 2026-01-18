@@ -226,3 +226,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to fix negatives' }, { status: 500 });
   }
 }
+
+
+export const runtime = 'edge';

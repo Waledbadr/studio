@@ -102,3 +102,6 @@ export default function ReconciliationDetailsPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

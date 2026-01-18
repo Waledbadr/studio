@@ -646,3 +646,6 @@ export default function EditPlanPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

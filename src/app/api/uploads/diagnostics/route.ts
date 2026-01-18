@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 /**
  * Diagnostics endpoint to check upload configuration

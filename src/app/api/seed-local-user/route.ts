@@ -62,3 +62,6 @@ export async function POST(req: Request) {
 
 // Export the in-memory store for auth handlers to use as fallback
 export { localUsers };
+
+
+export const runtime = 'edge';

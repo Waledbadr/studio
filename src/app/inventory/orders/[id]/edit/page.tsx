@@ -1010,3 +1010,6 @@ export default function EditOrderPage() {
 }
 
 
+
+
+export const runtime = 'edge';

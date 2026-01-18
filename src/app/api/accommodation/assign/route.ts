@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from '@/lib/firebase-admin';
 import serverCache from '@/lib/server-cache';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {

@@ -290,3 +290,6 @@ export default function AuditCompletePage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

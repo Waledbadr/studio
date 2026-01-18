@@ -264,3 +264,6 @@ export default function ServiceOrderDetailsPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

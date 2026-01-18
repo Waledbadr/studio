@@ -426,3 +426,6 @@ export default function EditMIVPage() {
         </div>
     );
 }
+
+
+export const runtime = 'edge';

@@ -244,3 +244,6 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     </div>
   );
 }
+
+
+export const runtime = 'edge';

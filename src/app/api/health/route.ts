@@ -20,3 +20,6 @@ export async function GET() {
     return Response.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
   }
 }
+
+
+export const runtime = 'edge';

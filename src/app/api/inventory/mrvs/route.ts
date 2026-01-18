@@ -103,3 +103,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e?.message || 'Failed to create MRV' }, { status: 500 });
   }
 }
+
+
+export const runtime = 'edge';

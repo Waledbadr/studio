@@ -578,3 +578,6 @@ export default function StockReconciliationPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

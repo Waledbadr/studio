@@ -8,3 +8,5 @@ export async function POST() {
   res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 0 });
   return res;
 }
+
+export const runtime = 'edge';

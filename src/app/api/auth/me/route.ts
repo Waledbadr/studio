@@ -43,3 +43,5 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || 'Update failed' }, { status: 400 });
   }
 }
+
+export const runtime = 'edge';

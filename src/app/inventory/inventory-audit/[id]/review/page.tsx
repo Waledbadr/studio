@@ -479,3 +479,6 @@ export default function ReconciliationReviewPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

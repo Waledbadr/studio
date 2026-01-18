@@ -971,3 +971,6 @@ export default function InvoicePrintPage() {
     </div>
   );
 }
+
+
+export const runtime = 'edge';

@@ -19,3 +19,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || 'Refresh failed' }, { status: 401 });
   }
 }
+
+export const runtime = 'edge';

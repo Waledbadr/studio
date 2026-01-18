@@ -73,3 +73,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
+
+
+export const runtime = 'edge';
