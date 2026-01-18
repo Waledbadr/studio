@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     console.error('[Upload Error]', {
       message: err?.message,
       stack: err?.stack,
-      hasToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      hasToken: Boolean(typeof process !== 'undefined' && (process as any)?.env?.BLOB_READ_WRITE_TOKEN),
     });
     return NextResponse.json({
       error: err?.message || 'فشل رفع الملف - Upload failed',

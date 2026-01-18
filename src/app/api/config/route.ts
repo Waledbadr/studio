@@ -13,15 +13,16 @@ export async function GET() {
     'NEXT_PUBLIC_FIRESTORE_CACHE',
   ] as const;
 
+  const safeEnv = typeof process !== 'undefined' && (process as any)?.env ? (process as any).env : {};
   const env: Record<string, string | undefined> = {};
   for (const k of keys) {
-    const v = process.env[k];
+    const v = safeEnv[k];
     if (!v) env[k] = undefined;
     else if (k === 'NEXT_PUBLIC_FIREBASE_API_KEY') env[k] = v.slice(0, 6) + '...' + v.slice(-4);
     else env[k] = v;
   }
 
-  const isConfigured = keys.slice(0, 6).every((k) => (process.env[k]?.trim()?.length || 0) > 0);
+  const isConfigured = keys.slice(0, 6).every((k) => (safeEnv[k]?.trim()?.length || 0) > 0);
   return NextResponse.json({ ok: true, isConfigured, env });
 }
 

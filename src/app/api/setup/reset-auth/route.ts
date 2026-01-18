@@ -7,11 +7,13 @@ export const dynamic = 'force-dynamic';
 
 function getProjectIdFallback(): string | undefined {
   try {
-    if (process.env.GOOGLE_CLOUD_PROJECT) return process.env.GOOGLE_CLOUD_PROJECT;
-    if (process.env.GCLOUD_PROJECT) return process.env.GCLOUD_PROJECT;
-    if (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    if (process.env.FIREBASE_CONFIG) {
-      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
+    if (typeof process === 'undefined' || !(process as any)?.env) return undefined;
+    const env = (process as any).env;
+    if (env.GOOGLE_CLOUD_PROJECT) return env.GOOGLE_CLOUD_PROJECT;
+    if (env.GCLOUD_PROJECT) return env.GCLOUD_PROJECT;
+    if (env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    if (env.FIREBASE_CONFIG) {
+      const cfg = JSON.parse(env.FIREBASE_CONFIG);
       if (cfg.projectId) return cfg.projectId;
     }
   } catch { }
@@ -28,8 +30,9 @@ function initAdmin() {
 
   if (admin.apps.length) return admin;
   try {
-    const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
-    const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const env = typeof process !== 'undefined' && (process as any)?.env ? (process as any).env : {};
+    const b64 = env.FIREBASE_SERVICE_ACCOUNT_B64;
+    const svc = env.FIREBASE_SERVICE_ACCOUNT;
     if (b64 || svc) {
       const jsonStr = b64
         ? Buffer.from(b64, 'base64').toString('utf8')

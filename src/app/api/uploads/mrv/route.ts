@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
   const db = getAdminDb();
-    const blobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    const blobConfigured = Boolean(typeof process !== 'undefined' && (process as any)?.env?.BLOB_READ_WRITE_TOKEN);
     return NextResponse.json({
       ok: true,
       adminConfigured: Boolean(db),
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     console.error('[MRV Upload Error]', {
       message: e?.message,
       stack: e?.stack,
-      hasToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      hasToken: Boolean(typeof process !== 'undefined' && (process as any)?.env?.BLOB_READ_WRITE_TOKEN),
     });
     return NextResponse.json({
       error: e?.message || 'فشل رفع المرفق - Upload failed',
