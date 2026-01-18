@@ -64,7 +64,9 @@ export const useLanguage = () => {
     // If a consumer accidentally calls useLanguage outside the provider,
     // return a safe fallback to avoid crashing the entire app (helps during
     // hydration/order-of-mount issues). Log a warning in dev so it can be fixed.
-    if (process.env.NODE_ENV !== 'production') {
+    const nodeEnv =
+      (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NODE_ENV : undefined) || 'production';
+    if (nodeEnv !== 'production') {
       // eslint-disable-next-line no-console
       console.warn('useLanguage was called outside of LanguageProvider — returning fallback dictionary. Wrap your tree with <LanguageProvider> to provide translations.');
     }

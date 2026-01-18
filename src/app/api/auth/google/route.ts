@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { getRuntimeEnv, isHttpsRequest } from '@/lib/runtime-env';
 
 export const runtime = 'edge';
 
 export async function GET(req: Request) {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientId = await getRuntimeEnv('GOOGLE_CLIENT_ID');
     if (!clientId) {
         return NextResponse.json({ error: 'Google Client ID not configured' }, { status: 500 });
     }
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
     // Store state in httpOnly cookie to verify in callback
     response.cookies.set('google_oauth_state', state, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isHttpsRequest(req),
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 10, // 10 minutes

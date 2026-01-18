@@ -2,7 +2,10 @@
 // Exports nulls and a resolved authReady promise so the codebase can
 // safely import from '@/lib/firebase' without initializing the SDK.
 
-const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true' || false;
+const USE_D1 =
+  String(
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+  ).toLowerCase() === 'true' || false;
 
 if (USE_D1) {
   console.log('D1-only mode: Firebase features are disabled.');

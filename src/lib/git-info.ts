@@ -10,10 +10,13 @@ export interface GitInfo {
 }
 
 // This will be populated at build time or can be set manually
+const safeProcessEnv: Record<string, string | undefined> =
+  typeof process !== 'undefined' && (process as any)?.env ? ((process as any).env as any) : {};
+
 export const gitInfo: GitInfo = {
-  branch: process.env.NEXT_PUBLIC_GIT_BRANCH || 'development',
-  lastCommitDate: process.env.NEXT_PUBLIC_LAST_COMMIT_DATE || '2025-08-03T11:22:33.000Z',
-  lastCommitHash: process.env.NEXT_PUBLIC_LAST_COMMIT_HASH || '1f287492'
+  branch: safeProcessEnv.NEXT_PUBLIC_GIT_BRANCH || 'development',
+  lastCommitDate: safeProcessEnv.NEXT_PUBLIC_LAST_COMMIT_DATE || '2025-08-03T11:22:33.000Z',
+  lastCommitHash: safeProcessEnv.NEXT_PUBLIC_LAST_COMMIT_HASH || '1f287492'
 };
 
 /**

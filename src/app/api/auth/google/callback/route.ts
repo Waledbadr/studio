@@ -3,6 +3,7 @@ import { signAccessToken, signRefreshToken } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getRuntimeEnv, isHttpsRequest } from '@/lib/runtime-env';
 
 export const runtime = 'edge';
 
@@ -28,8 +29,8 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Invalid state or code' }, { status: 400 });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const clientId = await getRuntimeEnv('GOOGLE_CLIENT_ID');
+    const clientSecret = await getRuntimeEnv('GOOGLE_CLIENT_SECRET');
 
     if (!clientId || !clientSecret) {
         return NextResponse.json({ error: 'Server configuration missing' }, { status: 500 });
@@ -133,7 +134,7 @@ export async function GET(req: Request) {
 
         // 5. Redirect and Set Cookies
         const response = NextResponse.redirect(`${url.origin}/`);
-        const secure = process.env.NODE_ENV === 'production';
+        const secure = isHttpsRequest(req);
 
         // Clear state cookie
         response.cookies.set('google_oauth_state', '', { maxAge: 0 });

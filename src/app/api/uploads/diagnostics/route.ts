@@ -7,24 +7,27 @@ export const runtime = 'edge';
  * Access at: /api/uploads/diagnostics
  */
 export async function GET() {
+  const safeEnv: Record<string, string | undefined> =
+    typeof process !== 'undefined' && (process as any)?.env ? ((process as any).env as any) : {};
+
   const diagnostics = {
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'unknown',
+    environment: safeEnv.NODE_ENV || 'unknown',
     runtime: 'nodejs',
     checks: {
       storageRoot: {
-        configured: Boolean(process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR),
-        root: process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR || 'default ./storage',
-        status: (process.env.STORAGE_ROOT || process.env.STORAGE_PATH || process.env.STORAGE_DIR) ? '✅' : '⚠️ (using ./storage)',
+        configured: Boolean(safeEnv.STORAGE_ROOT || safeEnv.STORAGE_PATH || safeEnv.STORAGE_DIR),
+        root: safeEnv.STORAGE_ROOT || safeEnv.STORAGE_PATH || safeEnv.STORAGE_DIR || 'default ./storage',
+        status: (safeEnv.STORAGE_ROOT || safeEnv.STORAGE_PATH || safeEnv.STORAGE_DIR) ? '✅' : '⚠️ (using ./storage)',
       },
       firebaseConfig: {
-        apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'NOT SET',
-        status: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅' : '❌',
+        apiKey: Boolean(safeEnv.NEXT_PUBLIC_FIREBASE_API_KEY),
+        projectId: safeEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'NOT SET',
+        status: safeEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅' : '❌',
       },
       geminiApi: {
-        configured: Boolean(process.env.GEMINI_API_KEY),
-        status: process.env.GEMINI_API_KEY ? '✅' : '❌',
+        configured: Boolean(safeEnv.GEMINI_API_KEY),
+        status: safeEnv.GEMINI_API_KEY ? '✅' : '❌',
       },
     },
     uploadEndpoints: {

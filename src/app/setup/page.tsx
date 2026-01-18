@@ -19,7 +19,10 @@ export default function SetupPage() {
     const { toast } = useToast();
     const { currentUser } = useUsers();
     const isAdmin = currentUser?.role === 'Admin';
-    const dangerousEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DANGEROUS_TOOLS === 'true';
+    const safeEnv: Record<string, string | undefined> =
+        typeof process !== 'undefined' && (process as any)?.env ? ((process as any).env as any) : {};
+    const dangerousEnabled =
+        (safeEnv.NODE_ENV || 'production') !== 'production' || safeEnv.NEXT_PUBLIC_ENABLE_DANGEROUS_TOOLS === 'true';
     const [isLoading, setIsLoading] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
     const [isAddingRooms, setIsAddingRooms] = useState(false);

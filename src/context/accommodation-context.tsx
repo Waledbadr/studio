@@ -11,7 +11,10 @@ import { db, auth } from '@/lib/firebase';
 import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer } from '@/lib/firestore-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 
-const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true' || false;
+const USE_D1 =
+  String(
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+  ).toLowerCase() === 'true' || false;
 const POLL_INTERVAL_MS = 7000; // 5-10s polling window (7s chosen)
 
 export type Location = { lat: number; lng: number } | null;

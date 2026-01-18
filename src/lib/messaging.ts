@@ -1,7 +1,10 @@
 import { addDoc, collection, serverTimestamp, doc, setDoc } from '@/lib/firestore-shim';
 import * as D1Client from '@/lib/d1-client';
 
-const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true' || false;
+const USE_D1 =
+  String(
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+  ).toLowerCase() === 'true' || false;
 
 // When in D1-only mode, messaging is disabled. Keep functions no-op.
 let _isSupported: any;
@@ -33,7 +36,10 @@ export async function enablePushIfGranted(userId?: string) {
     } catch {}
 
     const messaging = _getMessaging();
-    const vapidKey = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
+    const vapidKey =
+      (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_FCM_VAPID_KEY : undefined) as
+        | string
+        | undefined;
     const token = await _getToken(messaging, { vapidKey, serviceWorkerRegistration: reg }).catch(() => undefined);
     if (!token) return;
 

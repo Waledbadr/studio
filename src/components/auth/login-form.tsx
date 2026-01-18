@@ -147,7 +147,10 @@ export default function LoginForm() {
   }, [router]);
 
   const ensureUserProfile = async (uid: string, data?: { name?: string; email?: string }) => {
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     const email = data?.email;
 
     if (USE_D1) {

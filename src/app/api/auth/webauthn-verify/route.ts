@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyRegistrationResponse, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
 function getSafeRpID(hostname: string) {
-  const envRp = process.env.NEXT_PUBLIC_WEBAUTHN_RPID || process.env.WEBAUTHN_RPID;
+  const envRp =
+    (typeof process !== 'undefined' && (process as any).env
+      ? (process as any).env.NEXT_PUBLIC_WEBAUTHN_RPID || (process as any).env.WEBAUTHN_RPID
+      : undefined) || undefined;
   if (envRp) return envRp;
   // Avoid IP addresses and 0.0.0.0 which are not valid RPID in most browsers; prefer localhost in dev
   if (/^(\d+\.){3}\d+$/.test(hostname) || hostname === '0.0.0.0') return 'localhost';

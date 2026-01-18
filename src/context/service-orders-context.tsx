@@ -99,7 +99,10 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const load = useCallback(() => {
     if (isLoaded.current) return;
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     if (USE_D1) {
       // D1 fetch implementation or empty return for now to prevent error
       setLoading(false);
@@ -181,7 +184,10 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       throw new Error("يرجى اختيار السكن وإضافة صنف واحد على الأقل بكمية أكبر من 0.");
     }
 
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     if (USE_D1) {
       const res = await D1Client.createServiceOrder({ ...payload, items: validItems });
       if (res && res.id) {
@@ -292,7 +298,10 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     updates: ReceiveLineUpdate[],
     receivedById: string
   ) => {
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     if (USE_D1) {
       await D1Client.receiveServiceOrder(orderId, updates, receivedById);
       toast({ title: "Received", description: "Service order receipt posted." });

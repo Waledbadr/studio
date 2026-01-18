@@ -17,7 +17,10 @@ import { createPoller } from '@/lib/polling';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
 
-const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true' || false;
+const USE_D1 =
+  String(
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+  ).toLowerCase() === 'true' || false;
 
 // Define types for our data structure
 export interface Room {

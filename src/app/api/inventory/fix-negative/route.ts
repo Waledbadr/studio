@@ -57,13 +57,16 @@ async function scanForNegatives(): Promise<{ countItems: number; totalNegatives:
 }
 
 function isDev() {
-  return process.env.NODE_ENV !== 'production';
+  const nodeEnv =
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NODE_ENV : undefined) || 'production';
+  return nodeEnv !== 'production';
 }
 
 function verifySecret(req: Request): boolean {
   const headerKey = req.headers.get('x-maint-key') || '';
   const qs = new URL(req.url).searchParams.get('key') || '';
-  const secret = process.env.MAINT_KEY || '';
+  const secret =
+    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.MAINT_KEY : undefined) || '';
   if (!secret) return isDev();
   return headerKey === secret || qs === secret;
 }

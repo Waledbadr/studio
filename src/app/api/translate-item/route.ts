@@ -14,7 +14,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload: name is required' }, { status: 400 });
     }
 
-    if (process.env.NODE_ENV === 'production') {
+    const nodeEnv =
+      (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NODE_ENV : undefined) || 'production';
+    if (nodeEnv === 'production') {
       // Hard-disable translation in production to keep deployment stable.
       return NextResponse.json(
         {

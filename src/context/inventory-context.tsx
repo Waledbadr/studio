@@ -380,7 +380,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
   const { users, currentUser } = useUsers();
-  const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+  const USE_D1 =
+    String(
+      (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+    ).toLowerCase() === 'true';
   const POLL_INTERVAL_MS = 7000; // polling interval (5-10s window)
   const d1PollWarnedRef = useRef(false);
 
@@ -890,7 +893,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('Residence and at least one item with quantity > 0 are required.');
     }
 
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     if (USE_D1) {
       // Client-side guard: only Admin or Supervisor can post MRVs
       if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
@@ -1539,7 +1545,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
-    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
     if (USE_D1) {
       const res: any = await (await import('@/lib/d1-client')).approveMRVRequest(requestId, approverId);
       if (!res || !res.ok) throw new Error(res?.error || 'D1 approve failed');
