@@ -2,16 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
 
-const TEAM = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
-const AUD = process.env.CLOUDFLARE_ACCESS_AUD;
-// Use the same secret key logic as src/lib/auth.ts
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_PRIVATE_KEY || 'development_secret_key_must_be_long');
-const ISSUER = process.env.JWT_ISSUER || 'estatecare.local';
-const APP_AUD = process.env.JWT_AUD || 'estatecare-client';
+import { getRuntimeEnv } from '@/lib/runtime-env';
+
+// NOTE: Cloudflare Pages (Edge) can run without Node's `process`.
+// Always access env vars via a safe helper.
+const DEFAULT_SECRET = 'development_secret_key_must_be_long';
 
 const PUBLIC_PATHS = ['/login', '/api/auth', '/api/d1', '/_next', '/static', '/favicon.ico', '/robots.txt'];
 
 async function verifyToken(token: string) {
+  const TEAM = await getRuntimeEnv('CLOUDFLARE_ACCESS_TEAM_DOMAIN', '');
+  const AUD = await getRuntimeEnv('CLOUDFLARE_ACCESS_AUD', '');
   // Try Cloudflare Access first when configured
   if (TEAM && AUD) {
     try {
@@ -23,6 +24,11 @@ async function verifyToken(token: string) {
       // fallthrough to app JWT
     }
   }
+
+  const secret = await getRuntimeEnv('JWT_PRIVATE_KEY', DEFAULT_SECRET);
+  const SECRET_KEY = new TextEncoder().encode(secret);
+  const ISSUER = await getRuntimeEnv('JWT_ISSUER', 'estatecare.local');
+  const APP_AUD = await getRuntimeEnv('JWT_AUD', 'estatecare-client');
 
   // Fall back to app JWT verification using HS256 and Secret Key
   const { jwtVerify: joseVerify } = await import('jose');

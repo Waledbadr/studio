@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyRefreshToken, signAccessToken, signRefreshToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
+import { isHttpsRequest } from '@/lib/runtime-env';
 
 export async function POST(req: Request) {
   try {
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
     const access = signAccessToken({ sub: payload.sub, email: payload.email, role: payload.role });
     const refresh = signRefreshToken({ sub: payload.sub, email: payload.email, role: payload.role });
     const res = NextResponse.json({ ok: true });
-    const secure = process.env.NODE_ENV === 'production';
+    const secure = isHttpsRequest(req);
     res.cookies.set('access_token', access, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 15 * 60 });
     res.cookies.set('refresh_token', refresh, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 60 * 60 * 24 * 30 });
     return res;

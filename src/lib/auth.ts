@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import * as bcrypt from 'bcryptjs';
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
+import { getRuntimeEnv } from './runtime-env';
 
 // Fallback in-memory store when D1 binding is missing (local dev only)
 let localUsersFallback: Map<string, any> | null = null;
@@ -58,16 +59,40 @@ async function getLocalUsers() {
   return localUsersFallback;
 }
 
-const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY || ''; // For Node/Local, usually simpler secret
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_PRIVATE_KEY || 'development_secret_key_must_be_long');
-const ISSUER = process.env.JWT_ISSUER || 'estatecare.local';
-const AUD = process.env.JWT_AUD || 'estatecare-client';
-const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
-const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '30d';
-const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10); // 10 is enough for bcryptjs
+const DEFAULT_SECRET = 'development_secret_key_must_be_long';
+const DEFAULT_ISSUER = 'estatecare.local';
+const DEFAULT_AUD = 'estatecare-client';
+
+async function getSecretKeyBytes() {
+  const secret = await getRuntimeEnv('JWT_PRIVATE_KEY', DEFAULT_SECRET);
+  return new TextEncoder().encode(secret);
+}
+
+async function getJwtIssuer() {
+  return getRuntimeEnv('JWT_ISSUER', DEFAULT_ISSUER);
+}
+
+async function getJwtAudience() {
+  return getRuntimeEnv('JWT_AUD', DEFAULT_AUD);
+}
+
+async function getAccessExpires() {
+  return getRuntimeEnv('JWT_ACCESS_EXPIRES', '15m');
+}
+
+async function getRefreshExpires() {
+  return getRuntimeEnv('JWT_REFRESH_EXPIRES', '30d');
+}
+
+async function getBcryptRounds() {
+  const roundsStr = await getRuntimeEnv('BCRYPT_ROUNDS', '10');
+  const rounds = Number(roundsStr);
+  return Number.isFinite(rounds) && rounds > 0 ? rounds : 10;
+}
 
 export async function hashPassword(password: string) {
-  return bcrypt.hash(password, BCRYPT_ROUNDS);
+  const rounds = await getBcryptRounds();
+  return bcrypt.hash(password, rounds);
 }
 
 export async function verifyPassword(password: string, hash: string) {
@@ -75,6 +100,10 @@ export async function verifyPassword(password: string, hash: string) {
 }
 
 export async function signAccessToken(payload: any) {
+  const SECRET_KEY = await getSecretKeyBytes();
+  const ISSUER = await getJwtIssuer();
+  const AUD = await getJwtAudience();
+  const ACCESS_EXPIRES = await getAccessExpires();
   return new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -85,6 +114,10 @@ export async function signAccessToken(payload: any) {
 }
 
 export async function signRefreshToken(payload: any) {
+  const SECRET_KEY = await getSecretKeyBytes();
+  const ISSUER = await getJwtIssuer();
+  const AUD = await getJwtAudience();
+  const REFRESH_EXPIRES = await getRefreshExpires();
   return new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -95,6 +128,9 @@ export async function signRefreshToken(payload: any) {
 }
 
 export async function verifyAccessToken(token: string) {
+  const SECRET_KEY = await getSecretKeyBytes();
+  const ISSUER = await getJwtIssuer();
+  const AUD = await getJwtAudience();
   const { payload } = await jwtVerify(token, SECRET_KEY, {
     issuer: ISSUER,
     audience: AUD,
@@ -103,6 +139,9 @@ export async function verifyAccessToken(token: string) {
 }
 
 export async function verifyRefreshToken(token: string) {
+  const SECRET_KEY = await getSecretKeyBytes();
+  const ISSUER = await getJwtIssuer();
+  const AUD = await getJwtAudience();
   const { payload } = await jwtVerify(token, SECRET_KEY, {
     issuer: ISSUER,
     audience: AUD,
