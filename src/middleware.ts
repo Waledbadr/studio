@@ -4,8 +4,12 @@ import { jwtVerify, createRemoteJWKSet } from 'jose';
 
 const TEAM = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
 const AUD = process.env.CLOUDFLARE_ACCESS_AUD;
+// Use the same secret key logic as src/lib/auth.ts
+const SECRET_KEY = new TextEncoder().encode(process.env.JWT_PRIVATE_KEY || 'development_secret_key_must_be_long');
+const ISSUER = process.env.JWT_ISSUER || 'estatecare.local';
+const APP_AUD = process.env.JWT_AUD || 'estatecare-client';
 
-const PUBLIC_PATHS = [ '/login', '/api/auth', '/api/d1', '/_next', '/static', '/favicon.ico', '/robots.txt' ];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/d1', '/_next', '/static', '/favicon.ico', '/robots.txt'];
 
 async function verifyToken(token: string) {
   // Try Cloudflare Access first when configured
@@ -20,13 +24,13 @@ async function verifyToken(token: string) {
     }
   }
 
-  // Fall back to app JWT verification using configured public key
-  const PUBLIC = process.env.JWT_PUBLIC_KEY;
-  if (!PUBLIC) throw new Error('Access config missing and JWT_PUBLIC_KEY not set');
-  // importSPKI gives a KeyLike usable by jose
-  const { importSPKI, jwtVerify: joseVerify } = await import('jose');
-  const key = await importSPKI(PUBLIC, 'RS256');
-  const { payload } = await joseVerify(token, key, { issuer: process.env.JWT_ISSUER || 'estatecare.local', audience: process.env.JWT_AUD || 'estatecare-client' });
+  // Fall back to app JWT verification using HS256 and Secret Key
+  const { jwtVerify: joseVerify } = await import('jose');
+  // jwtVerify handles Uint8Array secret for symmetric algorithms (HS256)
+  const { payload } = await joseVerify(token, SECRET_KEY, {
+    issuer: ISSUER,
+    audience: APP_AUD
+  });
   return payload;
 }
 

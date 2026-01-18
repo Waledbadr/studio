@@ -72,7 +72,11 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const text = await req.text();
+    if (!text) {
+      return NextResponse.json({ ok: false, error: 'Empty body' }, { status: 400 });
+    }
+    const body = JSON.parse(text);
     const { action, args } = body;
     if (!action || typeof action !== 'string' || !(action in allowed)) {
       return NextResponse.json({ ok: false, error: 'Invalid action' }, { status: 400 });

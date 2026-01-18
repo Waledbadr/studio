@@ -11,9 +11,9 @@ export async function GET() {
     if (!token) return NextResponse.json({ ok: true, user: null });
     let payload: any;
     try {
-      payload = verifyAccessToken(token);
+      payload = await verifyAccessToken(token);
       console.log('[AUTH ME] token verified, sub:', payload?.sub);
-    } catch (verErr) {
+    } catch (verErr: any) {
       console.warn('[AUTH ME] token verify failed:', verErr?.message || verErr);
       return NextResponse.json({ ok: true, user: null });
     }
@@ -32,8 +32,8 @@ export async function PATCH(req: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('access_token')?.value || '';
     if (!token) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-    const payload: any = verifyAccessToken(token);
-    const body = await req.json();
+    const payload: any = await verifyAccessToken(token);
+    const body = await req.json() as any;
     const updates: any = {};
     if (body.name) updates.name = body.name;
     if (body.email) updates.email = body.email;

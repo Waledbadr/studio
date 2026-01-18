@@ -99,6 +99,13 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const load = useCallback(() => {
     if (isLoaded.current) return;
+    const USE_D1 = String(process.env.NEXT_PUBLIC_USE_D1 || '').toLowerCase() === 'true';
+    if (USE_D1) {
+      // D1 fetch implementation or empty return for now to prevent error
+      setLoading(false);
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       toast({ title: "Config error", description: "Firebase not configured.", variant: "destructive" });
@@ -111,8 +118,8 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     }
     isLoaded.current = true;
     setLoading(true);
-  const fdb = db as any;
-  const qRef = query(collection(fdb, "serviceOrders"), orderBy("dateCreated", "desc"));
+    const fdb = db as any;
+    const qRef = query(collection(fdb, "serviceOrders"), orderBy("dateCreated", "desc"));
     subRef.current = onSnapshot(
       qRef,
       (snap) => {
@@ -149,17 +156,17 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const reserveNewSvcId = async (): Promise<string> => {
     if (!db) throw new Error("Firebase not initialized");
-  const fdb = db as any;
+    const fdb = db as any;
     // Use counters/svc-YY-MM similar to other counters
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
     const mm = (now.getMonth() + 1).toString().padStart(2, "0");
     const mmNoPad = (now.getMonth() + 1).toString();
     const counterId = `svc-${yy}-${mm}`;
-  const counterRef = doc(fdb, "counters", counterId);
+    const counterRef = doc(fdb, "counters", counterId);
 
     let nextSeq = 0;
-  await runTransaction(fdb, async (trx) => {
+    await runTransaction(fdb, async (trx) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
@@ -189,11 +196,11 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
     const codeShort = await reserveNewSvcId();
 
-  await runTransaction(fdb, async (trx) => {
+    await runTransaction(fdb, async (trx) => {
       const now = Timestamp.now();
       // 1) Read all inventory items first and validate stock
-  const uniqueItemIds = [...new Set(validItems.map((i) => i.id))];
-  const itemRefs = uniqueItemIds.map((id) => doc(fdb, "inventory", id));
+      const uniqueItemIds = [...new Set(validItems.map((i) => i.id))];
+      const itemRefs = uniqueItemIds.map((id) => doc(fdb, "inventory", id));
       const itemSnaps = await Promise.all(itemRefs.map((r) => trx.get(r)));
 
       for (let i = 0; i < uniqueItemIds.length; i++) {
@@ -235,7 +242,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
       // Log OUT transactions per line
       for (const line of validItems) {
-  const txRef = doc(collection(fdb, "inventoryTransactions"));
+        const txRef = doc(collection(fdb, "inventoryTransactions"));
         trx.set(txRef, {
           itemId: line.id,
           itemNameEn: line.nameEn,
@@ -250,7 +257,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       }
 
       // Create service order master document
-  const orderRef = doc(collection(fdb, "serviceOrders"));
+      const orderRef = doc(collection(fdb, "serviceOrders"));
       const order: ServiceOrder = {
         id: orderRef.id,
         codeShort,
@@ -408,8 +415,8 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const getServiceOrderById = async (orderId: string): Promise<ServiceOrder | null> => {
     if (!db) return null;
-  const fdb = db as any;
-  const ref = doc(fdb, "serviceOrders", orderId);
+    const fdb = db as any;
+    const ref = doc(fdb, "serviceOrders", orderId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
     const data = snap.data() as any;
@@ -428,7 +435,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   return (
     <ServiceOrdersContext.Provider
-  value={{ serviceOrders, loading, createAndDispatchServiceOrder, receiveServiceOrder, getServiceOrderById, getServiceOrderByCode }}
+      value={{ serviceOrders, loading, createAndDispatchServiceOrder, receiveServiceOrder, getServiceOrderById, getServiceOrderByCode }}
     >
       {children}
     </ServiceOrdersContext.Provider>

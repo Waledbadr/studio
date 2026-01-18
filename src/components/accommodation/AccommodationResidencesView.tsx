@@ -42,28 +42,28 @@ export default function AccommodationResidencesView() {
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [openComplexIds, setOpenComplexIds] = useState<Record<string, boolean>>({});
   const [openBuildingKeys, setOpenBuildingKeys] = useState<Record<string, boolean>>({});
-  const [editingRoom, setEditingRoom] = useState<{ 
-    complexId: string; 
-    buildingId?: string; 
-    floorId?: string; 
+  const [editingRoom, setEditingRoom] = useState<{
+    complexId: string;
+    buildingId?: string;
+    floorId?: string;
     roomId: string;
     room: Room;
   } | null>(null);
-  
+
   // Editing states for buildings, floors, and rooms
   const [editingBuilding, setEditingBuilding] = useState<{
     complexId: string;
     buildingId: string;
     name: string;
   } | null>(null);
-  
+
   const [editingFloor, setEditingFloor] = useState<{
     complexId: string;
     buildingId: string;
     floorId: string;
     name: string;
   } | null>(null);
-  
+
   const [editingRoomName, setEditingRoomName] = useState<{
     complexId: string;
     buildingId?: string;
@@ -115,33 +115,33 @@ export default function AccommodationResidencesView() {
   // Filter residences based on search and city
   const filteredResidences = useMemo(() => {
     let filtered = activeResidences;
-    
+
     // Apply city filter
     if (cityFilter !== 'all') {
       filtered = filtered.filter(c => c.city === cityFilter);
     }
-    
+
     // Apply search filter
     if (!deferredSearch.trim()) return filtered;
-    
+
     const searchLower = deferredSearch.toLowerCase();
     return filtered.filter(complex => {
       // Search in complex name or city
       if (complex.name.toLowerCase().includes(searchLower)) return true;
       if (complex.city?.toLowerCase().includes(searchLower)) return true;
-      
+
       // Search in flat rooms
       if (complex.rooms?.some(room => room.name.toLowerCase().includes(searchLower))) return true;
-      
+
       // Search in nested rooms
-      if (complex.buildings?.some(building => 
+      if (complex.buildings?.some(building =>
         building.name.toLowerCase().includes(searchLower) ||
-        building.floors?.some(floor => 
+        building.floors?.some(floor =>
           floor.name.toLowerCase().includes(searchLower) ||
           floor.rooms?.some(room => room.name.toLowerCase().includes(searchLower))
         )
       )) return true;
-      
+
       return false;
     });
   }, [activeResidences, deferredSearch, cityFilter]);
@@ -158,7 +158,7 @@ export default function AccommodationResidencesView() {
 
     filteredResidences.forEach(complex => {
       complexes++;
-      
+
       // Count flat rooms
       if (complex.rooms) {
         complex.rooms.forEach(room => {
@@ -168,7 +168,7 @@ export default function AccommodationResidencesView() {
           if (roomOccupants > 0) occupiedRooms++;
         });
       }
-      
+
       // Count nested structure
       if (complex.buildings) {
         buildings += complex.buildings.length;
@@ -463,22 +463,17 @@ export default function AccommodationResidencesView() {
 
   // Helper function to update Firestore
   const updateFirestore = async (complexId: string, updatedComplex: Complex) => {
-    const { db } = await import('@/lib/firebase');
-    if (db) {
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(db, 'residences', complexId), updatedComplex);
-    } else {
-      // Update localStorage
-      const storedResidences = localStorage.getItem('estatecare_residences');
-      const allResidences = storedResidences ? JSON.parse(storedResidences) : [];
-      const residenceIndex = allResidences.findIndex((r: Complex) => r.id === complexId);
-      if (residenceIndex !== -1) {
-        allResidences[residenceIndex] = updatedComplex;
-        localStorage.setItem('estatecare_residences', JSON.stringify(allResidences));
-      }
-    }
-    // Force reload
-    window.location.reload();
+    // In D1 migration, we need to create an API endpoint to update residence structure.
+    // For now, we stub this to fix the build.
+    console.warn('updateFirestore not fully implemented for D1');
+    toast({
+      title: "Warning",
+      description: "Updating residence structure is not yet supported in D1 mode directly from client. Please use the API.",
+      variant: "destructive"
+    });
+
+    // Update local state if needed (optional, effectively optimistic UI without persistence)
+    // For a real fix, implement PATCH /api/residences/[id] and call it here.
   };
 
   const handleSaveRoom = async () => {
@@ -517,11 +512,14 @@ export default function AccommodationResidencesView() {
       }
 
       // Update Firestore directly
-      const { db } = await import('@/lib/firebase');
-      if (db) {
-        const { doc, setDoc } = await import('@/lib/firestore-shim');
-        await setDoc(doc(db, 'residences', complexId), updatedComplex);
-      } else {
+      // const { db } = await import('@/lib/firebase');
+      // if (db) {
+      //   const { doc, setDoc } = await import('@/lib/firestore-shim');
+      //   await setDoc(doc(db, 'residences', complexId), updatedComplex);
+      // } else {
+      updateFirestore(complexId, updatedComplex);
+      return; // updateFirestore will handle it (stubbed)
+      /* 
         // Update localStorage
         const storedResidences = localStorage.getItem('estatecare_residences');
         const allResidences = storedResidences ? JSON.parse(storedResidences) : [];
@@ -530,8 +528,10 @@ export default function AccommodationResidencesView() {
           allResidences[residenceIndex] = updatedComplex;
           localStorage.setItem('estatecare_residences', JSON.stringify(allResidences));
         }
-      }
-      
+      */
+      // }
+
+
       // Force reload of residences
       window.location.reload();
 
@@ -556,8 +556,8 @@ export default function AccommodationResidencesView() {
       await updateComplex(complex.id, { isEmergencyMode: !complex.isEmergencyMode });
       toast({
         title: !complex.isEmergencyMode ? "Emergency Mode Activated" : "Emergency Mode Deactivated",
-        description: !complex.isEmergencyMode 
-          ? "Validation rules will be bypassed for this residence." 
+        description: !complex.isEmergencyMode
+          ? "Validation rules will be bypassed for this residence."
           : "Validation rules are now active.",
         variant: !complex.isEmergencyMode ? "destructive" : "default"
       });
@@ -589,7 +589,7 @@ export default function AccommodationResidencesView() {
           rows.push({ residence, room });
         });
       }
-      
+
       // Nested rooms
       if (residence.buildings) {
         residence.buildings.forEach(building => {
@@ -633,7 +633,7 @@ export default function AccommodationResidencesView() {
                 const occupancy = getOccupantCount(room.id);
                 const isFull = room.capacity ? occupancy >= room.capacity : false;
                 const isOvercrowded = room.capacity ? occupancy > room.capacity : false;
-                
+
                 return (
                   <TableRow key={room.id}>
                     <TableCell className="font-medium">
@@ -764,36 +764,36 @@ export default function AccommodationResidencesView() {
               </SelectContent>
             </Select>
             <div className="flex gap-1 flex-wrap">
-              <Button 
-                variant={viewMode === 'cards' ? 'default' : 'outline'} 
-                size="sm" 
+              <Button
+                variant={viewMode === 'cards' ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => setViewMode('cards')}
                 title="Cards view"
               >
                 <Grid3x3 className="h-4 w-4 mr-2" />
                 Cards
               </Button>
-              <Button 
-                variant={viewMode === 'tree' ? 'default' : 'outline'} 
-                size="sm" 
+              <Button
+                variant={viewMode === 'tree' ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => setViewMode('tree')}
                 title="Tree view"
               >
                 <List className="h-4 w-4 mr-2" />
                 Tree
               </Button>
-              <Button 
-                variant={viewMode === 'board' ? 'default' : 'outline'} 
-                size="sm" 
+              <Button
+                variant={viewMode === 'board' ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => setViewMode('board')}
                 title={dict.boardView}
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
                 {dict.board}
               </Button>
-              <Button 
-                variant={viewMode === 'table' ? 'default' : 'outline'} 
-                size="sm" 
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => setViewMode('table')}
                 title="Table View"
               >
@@ -802,12 +802,12 @@ export default function AccommodationResidencesView() {
               </Button>
             </div>
           </div>
-          
+
           {/* Maintenance Actions */}
           <div className="mt-4 flex gap-2 flex-wrap">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleUpdateAllRoomsDefaultArea}
               className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
               title="Update all rooms without area to 24m² (6 capacity)"
@@ -829,326 +829,324 @@ export default function AccommodationResidencesView() {
       {/* Cards View */}
       {viewMode === 'cards' && filteredResidences.map((complex) => {
         const canManageEmergency = currentUser?.role === 'Admin' || currentUser?.id === complex.managerId;
-        
-        return (
-        <Card key={complex.id} className={complex.isEmergencyMode ? "border-red-500 border-2" : ""}>
-          <CardHeader className="cursor-pointer" onClick={() => toggleComplexOpen(complex.id)}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ChevronDown 
-                  className={`h-5 w-5 transition-transform ${(openComplexIds[complex.id] ?? true) ? '' : '-rotate-90'}`}
-                />
-                <Building className={`h-5 w-5 ${complex.isEmergencyMode ? "text-red-600" : "text-primary"}`} />
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    {complex.name}
-                    {complex.isEmergencyMode && (
-                      <Badge variant="destructive" className="text-xs animate-pulse">
-                        <Siren className="h-3 w-3 mr-1" /> Emergency Mode
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  {complex.city && (
-                    <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <MapPin className="h-3 w-3" />
-                      {complex.city}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {canManageEmergency && (
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Label htmlFor={`emergency-${complex.id}`} className={`text-xs font-medium ${complex.isEmergencyMode ? "text-red-600" : "text-muted-foreground"}`}>
-                    {complex.isEmergencyMode ? "Emergency ON" : "Emergency OFF"}
-                  </Label>
-                  <Switch
-                    id={`emergency-${complex.id}`}
-                    checked={complex.isEmergencyMode || false}
-                    onCheckedChange={() => handleToggleEmergencyMode(complex)}
-                  />
-                </div>
-              )}
-            </div>
-          </CardHeader>
 
-          {(openComplexIds[complex.id] ?? true) && (
-            <CardContent className="space-y-4">
-              {/* Flat room structure */}
-              {complex.rooms && complex.rooms.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {complex.rooms.map((room) => {
-                    const occupantCount = getOccupantCount(room.id);
-                    return (
-                      <Card key={room.id} className="relative">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <DoorOpen className="h-5 w-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">{room.name}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {room.area ? `${room.area} m²` : '-'} • 
-                                  Capacity: {room.capacity || '-'}
+        return (
+          <Card key={complex.id} className={complex.isEmergencyMode ? "border-red-500 border-2" : ""}>
+            <CardHeader className="cursor-pointer" onClick={() => toggleComplexOpen(complex.id)}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ChevronDown
+                    className={`h-5 w-5 transition-transform ${(openComplexIds[complex.id] ?? true) ? '' : '-rotate-90'}`}
+                  />
+                  <Building className={`h-5 w-5 ${complex.isEmergencyMode ? "text-red-600" : "text-primary"}`} />
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      {complex.name}
+                      {complex.isEmergencyMode && (
+                        <Badge variant="destructive" className="text-xs animate-pulse">
+                          <Siren className="h-3 w-3 mr-1" /> Emergency Mode
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    {complex.city && (
+                      <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                        <MapPin className="h-3 w-3" />
+                        {complex.city}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {canManageEmergency && (
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Label htmlFor={`emergency-${complex.id}`} className={`text-xs font-medium ${complex.isEmergencyMode ? "text-red-600" : "text-muted-foreground"}`}>
+                      {complex.isEmergencyMode ? "Emergency ON" : "Emergency OFF"}
+                    </Label>
+                    <Switch
+                      id={`emergency-${complex.id}`}
+                      checked={complex.isEmergencyMode || false}
+                      onCheckedChange={() => handleToggleEmergencyMode(complex)}
+                    />
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+
+            {(openComplexIds[complex.id] ?? true) && (
+              <CardContent className="space-y-4">
+                {/* Flat room structure */}
+                {complex.rooms && complex.rooms.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {complex.rooms.map((room) => {
+                      const occupantCount = getOccupantCount(room.id);
+                      return (
+                        <Card key={room.id} className="relative">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <DoorOpen className="h-5 w-5 text-muted-foreground" />
+                                <div>
+                                  <div className="font-medium">{room.name}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {room.area ? `${room.area} m²` : '-'} •
+                                    Capacity: {room.capacity || '-'}
+                                  </div>
                                 </div>
                               </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEditRoom(complex.id, room)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEditRoom(complex.id, room)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          
-                            <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md">
-                            <Users className="h-4 w-4 text-primary" />
-                            <span className="text-sm font-medium">
-                              Occupants: {occupantCount}
-                              {room.capacity ? ` / ${room.capacity}` : ''}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
 
-              {/* Nested building/floor/room structure */}
-              {complex.buildings && complex.buildings.length > 0 && (
-                <div className="space-y-4">
-                  {complex.buildings.map((building) => {
-                    const buildingKey = `${complex.id}-${building.id}`;
-                    const isBuildingOpen = openBuildingKeys[buildingKey] ?? true;
-                    
-                    return (
-                      <div key={building.id} className="border rounded-lg overflow-hidden">
-                        <div 
-                          className="flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => toggleBuildingOpen(complex.id, building.id)}>
-                            <ChevronDown 
-                              className={`h-4 w-4 transition-transform ${isBuildingOpen ? '' : '-rotate-90'}`}
-                            />
-                            <Building className="h-4 w-4" />
-                            {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
-                              <Input
-                                value={editingBuilding.name}
-                                onChange={(e) => setEditingBuilding({ ...editingBuilding, name: e.target.value })}
-                                onBlur={() => {
-                                  if (editingBuilding.name.trim()) {
-                                    handleUpdateBuildingName(complex.id, building.id, editingBuilding.name.trim());
-                                  } else {
-                                    setEditingBuilding(null);
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && editingBuilding.name.trim()) {
-                                    handleUpdateBuildingName(complex.id, building.id, editingBuilding.name.trim());
-                                  } else if (e.key === 'Escape') {
-                                    setEditingBuilding(null);
-                                  }
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                className="h-7 text-sm font-semibold"
-                                autoFocus
+                            <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md">
+                              <Users className="h-4 w-4 text-primary" />
+                              <span className="text-sm font-medium">
+                                Occupants: {occupantCount}
+                                {room.capacity ? ` / ${room.capacity}` : ''}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Nested building/floor/room structure */}
+                {complex.buildings && complex.buildings.length > 0 && (
+                  <div className="space-y-4">
+                    {complex.buildings.map((building) => {
+                      const buildingKey = `${complex.id}-${building.id}`;
+                      const isBuildingOpen = openBuildingKeys[buildingKey] ?? true;
+
+                      return (
+                        <div key={building.id} className="border rounded-lg overflow-hidden">
+                          <div
+                            className="flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => toggleBuildingOpen(complex.id, building.id)}>
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform ${isBuildingOpen ? '' : '-rotate-90'}`}
                               />
-                            ) : (
-                              <h3 className="font-semibold">{building.name}</h3>
-                            )}
+                              <Building className="h-4 w-4" />
+                              {editingBuilding?.complexId === complex.id && editingBuilding?.buildingId === building.id ? (
+                                <Input
+                                  value={editingBuilding.name}
+                                  onChange={(e) => setEditingBuilding({ ...editingBuilding, name: e.target.value })}
+                                  onBlur={() => {
+                                    if (editingBuilding.name.trim()) {
+                                      handleUpdateBuildingName(complex.id, building.id, editingBuilding.name.trim());
+                                    } else {
+                                      setEditingBuilding(null);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && editingBuilding.name.trim()) {
+                                      handleUpdateBuildingName(complex.id, building.id, editingBuilding.name.trim());
+                                    } else if (e.key === 'Escape') {
+                                      setEditingBuilding(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-7 text-sm font-semibold"
+                                  autoFocus
+                                />
+                              ) : (
+                                <h3 className="font-semibold">{building.name}</h3>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                {building.floors?.reduce((acc, floor) => acc + (floor.rooms?.length || 0), 0) || 0} rooms
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingBuilding({ complexId: complex.id, buildingId: building.id, name: building.name });
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete building "${building.name}"? This will delete all floors and rooms inside.`)) {
+                                    handleDeleteBuilding(complex.id, building.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              {building.floors?.reduce((acc, floor) => acc + (floor.rooms?.length || 0), 0) || 0} rooms
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingBuilding({ complexId: complex.id, buildingId: building.id, name: building.name });
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Delete building "${building.name}"? This will delete all floors and rooms inside.`)) {
-                                  handleDeleteBuilding(complex.id, building.id);
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {isBuildingOpen && building.floors && (
-                          <div className="p-4 space-y-4">
-                            {building.floors.map((floor) => (
-                              <div key={floor.id}>
-                                <div className="flex items-center justify-between mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <Layers className="h-3 w-3 text-muted-foreground" />
-                                    {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
-                                      <Input
-                                        value={editingFloor.name}
-                                        onChange={(e) => setEditingFloor({ ...editingFloor, name: e.target.value })}
-                                        onBlur={() => {
-                                          if (editingFloor.name.trim()) {
-                                            handleUpdateFloorName(complex.id, building.id, floor.id, editingFloor.name.trim());
-                                          } else {
-                                            setEditingFloor(null);
-                                          }
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && editingFloor.name.trim()) {
-                                            handleUpdateFloorName(complex.id, building.id, floor.id, editingFloor.name.trim());
-                                          } else if (e.key === 'Escape') {
-                                            setEditingFloor(null);
-                                          }
-                                        }}
-                                        className="h-6 text-sm font-medium"
-                                        autoFocus
-                                      />
-                                    ) : (
-                                      <h4 className="text-sm font-medium text-muted-foreground">{floor.name}</h4>
-                                    )}
-                                    <span className="text-xs text-muted-foreground">({floor.rooms?.length || 0} rooms)</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => setEditingFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id, name: floor.name })}
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-destructive"
-                                      onClick={() => {
-                                        if (confirm(`Delete floor "${floor.name}"? This will delete all rooms inside.`)) {
-                                          handleDeleteFloor(complex.id, building.id, floor.id);
-                                        }
-                                      }}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                  {floor.rooms && floor.rooms.map((room) => {
-                                    const occupantCount = getOccupantCount(room.id);
-                                    const isOccupied = occupantCount > 0;
-                                    const isFull = room.capacity ? occupantCount >= room.capacity : false;
-                                    
-                                    return (
-                                      <Card 
-                                        key={room.id} 
-                                        className={`relative transition-all ${
-                                          isFull ? 'border-red-200 bg-red-50/50 dark:bg-red-950/20' : 
-                                          isOccupied ? 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20' : 
-                                          ''
-                                        }`}
+
+                          {isBuildingOpen && building.floors && (
+                            <div className="p-4 space-y-4">
+                              {building.floors.map((floor) => (
+                                <div key={floor.id}>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <Layers className="h-3 w-3 text-muted-foreground" />
+                                      {editingFloor?.complexId === complex.id && editingFloor?.buildingId === building.id && editingFloor?.floorId === floor.id ? (
+                                        <Input
+                                          value={editingFloor.name}
+                                          onChange={(e) => setEditingFloor({ ...editingFloor, name: e.target.value })}
+                                          onBlur={() => {
+                                            if (editingFloor.name.trim()) {
+                                              handleUpdateFloorName(complex.id, building.id, floor.id, editingFloor.name.trim());
+                                            } else {
+                                              setEditingFloor(null);
+                                            }
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && editingFloor.name.trim()) {
+                                              handleUpdateFloorName(complex.id, building.id, floor.id, editingFloor.name.trim());
+                                            } else if (e.key === 'Escape') {
+                                              setEditingFloor(null);
+                                            }
+                                          }}
+                                          className="h-6 text-sm font-medium"
+                                          autoFocus
+                                        />
+                                      ) : (
+                                        <h4 className="text-sm font-medium text-muted-foreground">{floor.name}</h4>
+                                      )}
+                                      <span className="text-xs text-muted-foreground">({floor.rooms?.length || 0} rooms)</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => setEditingFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id, name: floor.name })}
                                       >
-                                        <CardContent className="p-3">
-                                          <div className="flex items-start justify-between mb-2">
-                                            <div className="flex items-center gap-2 flex-1">
-                                              <DoorOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div className="flex-1 min-w-0">
-                                                {editingRoomName?.complexId === complex.id && editingRoomName?.buildingId === building.id && editingRoomName?.floorId === floor.id && editingRoomName?.roomId === room.id ? (
-                                                  <Input
-                                                    value={editingRoomName.name}
-                                                    onChange={(e) => setEditingRoomName({ ...editingRoomName, name: e.target.value })}
-                                                    onBlur={() => {
-                                                      if (editingRoomName.name.trim()) {
-                                                        handleUpdateRoomName(complex.id, building.id, floor.id, room.id, editingRoomName.name.trim());
-                                                      } else {
-                                                        setEditingRoomName(null);
-                                                      }
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === 'Enter' && editingRoomName.name.trim()) {
-                                                        handleUpdateRoomName(complex.id, building.id, floor.id, room.id, editingRoomName.name.trim());
-                                                      } else if (e.key === 'Escape') {
-                                                        setEditingRoomName(null);
-                                                      }
-                                                    }}
-                                                    className="h-6 text-sm font-medium"
-                                                    autoFocus
-                                                  />
-                                                ) : (
-                                                  <div 
-                                                    className="font-medium text-sm truncate cursor-pointer hover:text-primary"
-                                                    onClick={() => setEditingRoomName({ complexId: complex.id, buildingId: building.id, floorId: floor.id, roomId: room.id, name: room.name })}
-                                                    title="Click to edit name"
-                                                  >
-                                                    {room.name}
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-destructive"
+                                        onClick={() => {
+                                          if (confirm(`Delete floor "${floor.name}"? This will delete all rooms inside.`)) {
+                                            handleDeleteFloor(complex.id, building.id, floor.id);
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {floor.rooms && floor.rooms.map((room) => {
+                                      const occupantCount = getOccupantCount(room.id);
+                                      const isOccupied = occupantCount > 0;
+                                      const isFull = room.capacity ? occupantCount >= room.capacity : false;
+
+                                      return (
+                                        <Card
+                                          key={room.id}
+                                          className={`relative transition-all ${isFull ? 'border-red-200 bg-red-50/50 dark:bg-red-950/20' :
+                                            isOccupied ? 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20' :
+                                              ''
+                                            }`}
+                                        >
+                                          <CardContent className="p-3">
+                                            <div className="flex items-start justify-between mb-2">
+                                              <div className="flex items-center gap-2 flex-1">
+                                                <DoorOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                  {editingRoomName?.complexId === complex.id && editingRoomName?.buildingId === building.id && editingRoomName?.floorId === floor.id && editingRoomName?.roomId === room.id ? (
+                                                    <Input
+                                                      value={editingRoomName.name}
+                                                      onChange={(e) => setEditingRoomName({ ...editingRoomName, name: e.target.value })}
+                                                      onBlur={() => {
+                                                        if (editingRoomName.name.trim()) {
+                                                          handleUpdateRoomName(complex.id, building.id, floor.id, room.id, editingRoomName.name.trim());
+                                                        } else {
+                                                          setEditingRoomName(null);
+                                                        }
+                                                      }}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && editingRoomName.name.trim()) {
+                                                          handleUpdateRoomName(complex.id, building.id, floor.id, room.id, editingRoomName.name.trim());
+                                                        } else if (e.key === 'Escape') {
+                                                          setEditingRoomName(null);
+                                                        }
+                                                      }}
+                                                      className="h-6 text-sm font-medium"
+                                                      autoFocus
+                                                    />
+                                                  ) : (
+                                                    <div
+                                                      className="font-medium text-sm truncate cursor-pointer hover:text-primary"
+                                                      onClick={() => setEditingRoomName({ complexId: complex.id, buildingId: building.id, floorId: floor.id, roomId: room.id, name: room.name })}
+                                                      title="Click to edit name"
+                                                    >
+                                                      {room.name}
+                                                    </div>
+                                                  )}
+                                                  <div className="text-xs text-muted-foreground">
+                                                    {room.area ? `${room.area} m²` : '-'} •
+                                                    Capacity: {room.capacity || '-'}
                                                   </div>
-                                                )}
-                                                <div className="text-xs text-muted-foreground">
-                                                  {room.area ? `${room.area} m²` : '-'} • 
-                                                  Capacity: {room.capacity || '-'}
                                                 </div>
                                               </div>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 flex-shrink-0"
+                                                onClick={() => handleEditRoom(complex.id, room, building.id, floor.id)}
+                                                title="Edit area"
+                                              >
+                                                <Pencil className="h-3 w-3" />
+                                              </Button>
                                             </div>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-6 w-6 flex-shrink-0"
-                                              onClick={() => handleEditRoom(complex.id, room, building.id, floor.id)}
-                                              title="Edit area"
-                                            >
-                                              <Pencil className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                          
-                                          <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${
-                                            isFull ? 'bg-red-100 dark:bg-red-900/30' :
-                                            isOccupied ? 'bg-orange-100 dark:bg-orange-900/30' :
-                                            'bg-muted/50'
-                                          }`}>
-                                            <Users className={`h-3 w-3 ${
-                                              isFull ? 'text-red-600 dark:text-red-400' :
-                                              isOccupied ? 'text-orange-600 dark:text-orange-400' :
-                                              'text-primary'
-                                            }`} />
-                                            <span className="font-medium">
-                                              Occupants: {occupantCount}
-                                              {room.capacity ? ` / ${room.capacity}` : ''}
-                                            </span>
-                                            {isFull && <span className="ml-auto text-red-600 dark:text-red-400 font-medium">Full</span>}
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    );
-                                  })}
+
+                                            <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${isFull ? 'bg-red-100 dark:bg-red-900/30' :
+                                              isOccupied ? 'bg-orange-100 dark:bg-orange-900/30' :
+                                                'bg-muted/50'
+                                              }`}>
+                                              <Users className={`h-3 w-3 ${isFull ? 'text-red-600 dark:text-red-400' :
+                                                isOccupied ? 'text-orange-600 dark:text-orange-400' :
+                                                  'text-primary'
+                                                }`} />
+                                              <span className="font-medium">
+                                                Occupants: {occupantCount}
+                                                {room.capacity ? ` / ${room.capacity}` : ''}
+                                              </span>
+                                              {isFull && <span className="ml-auto text-red-600 dark:text-red-400 font-medium">Full</span>}
+                                            </div>
+                                          </CardContent>
+                                        </Card>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      ); })}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        );
+      })}
 
       {/* Tree View */}
       {viewMode === 'tree' && (
@@ -1171,16 +1169,16 @@ export default function AccommodationResidencesView() {
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span>
-                      {(complex.rooms?.length || 0) + 
-                       (complex.buildings?.reduce((acc, b) => 
-                         acc + (b.floors?.reduce((acc2, f) => acc2 + (f.rooms?.length || 0), 0) || 0), 0) || 0)
+                      {(complex.rooms?.length || 0) +
+                        (complex.buildings?.reduce((acc, b) =>
+                          acc + (b.floors?.reduce((acc2, f) => acc2 + (f.rooms?.length || 0), 0) || 0), 0) || 0)
                       } rooms
                     </span>
                     <span>
                       {occupants.filter(occ => {
                         const roomIds = [
                           ...(complex.rooms?.map(r => r.id) || []),
-                          ...(complex.buildings?.flatMap(b => 
+                          ...(complex.buildings?.flatMap(b =>
                             b.floors?.flatMap(f => f.rooms?.map(r => r.id) || []) || []
                           ) || [])
                         ];
@@ -1197,15 +1195,14 @@ export default function AccommodationResidencesView() {
                     {complex.rooms.map((room) => {
                       const occupantCount = getOccupantCount(room.id);
                       const isFull = room.capacity ? occupantCount >= room.capacity : false;
-                      
+
                       return (
-                        <div 
-                          key={room.id} 
-                          className={`flex items-center justify-between p-3 border rounded-lg ${
-                            isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' : 
-                            occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' : 
-                            'bg-card'
-                          }`}
+                        <div
+                          key={room.id}
+                          className={`flex items-center justify-between p-3 border rounded-lg ${isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' :
+                            occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' :
+                              'bg-card'
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             <DoorOpen className="h-4 w-4 text-muted-foreground" />
@@ -1217,11 +1214,10 @@ export default function AccommodationResidencesView() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <div className={`flex items-center gap-2 px-3 py-1 rounded text-xs ${
-                              isFull ? 'bg-red-100 dark:bg-red-900/30' :
+                            <div className={`flex items-center gap-2 px-3 py-1 rounded text-xs ${isFull ? 'bg-red-100 dark:bg-red-900/30' :
                               occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
-                              'bg-muted'
-                            }`}>
+                                'bg-muted'
+                              }`}>
                               <Users className="h-3 w-3" />
                               <span className="font-medium">
                                 {occupantCount} / {room.capacity || '-'}
@@ -1260,15 +1256,14 @@ export default function AccommodationResidencesView() {
                             {floor.rooms && floor.rooms.map((room) => {
                               const occupantCount = getOccupantCount(room.id);
                               const isFull = room.capacity ? occupantCount >= room.capacity : false;
-                              
+
                               return (
-                                <div 
+                                <div
                                   key={room.id}
-                                  className={`flex items-center justify-between p-2 border rounded ${
-                                    isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' : 
-                                    occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' : 
-                                    'bg-card'
-                                  }`}
+                                  className={`flex items-center justify-between p-2 border rounded ${isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' :
+                                    occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' :
+                                      'bg-card'
+                                    }`}
                                 >
                                   <div className="flex items-center gap-2">
                                     <DoorOpen className="h-3 w-3 text-muted-foreground" />
@@ -1280,11 +1275,10 @@ export default function AccommodationResidencesView() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${
-                                      isFull ? 'bg-red-100 dark:bg-red-900/30' :
+                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${isFull ? 'bg-red-100 dark:bg-red-900/30' :
                                       occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
-                                      'bg-muted'
-                                    }`}>
+                                        'bg-muted'
+                                      }`}>
                                       <Users className="h-3 w-3" />
                                       <span>{occupantCount}/{room.capacity || '-'}</span>
                                     </div>
@@ -1327,123 +1321,121 @@ export default function AccommodationResidencesView() {
               </h2>
               {complexes.map((complex) => {
                 const canManageEmergency = currentUser?.role === 'Admin' || currentUser?.id === complex.managerId;
-                
+
                 return (
-                <div key={complex.id} className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => toggleComplexOpen(complex.id)}
-                      >
-                        <ChevronDown 
-                          className={`h-4 w-4 transition-transform ${
-                            (openComplexIds[complex.id] ?? true) ? '' : '-rotate-90'
-                          }`} 
-                        />
-                      </Button>
-                      <div className="font-semibold text-lg flex items-center gap-2">
-                        {complex.name}
-                        {complex.isEmergencyMode && (
-                          <Badge variant="destructive" className="text-xs h-5">
-                            <Siren className="h-3 w-3 mr-1" /> Emergency
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {canManageEmergency && (
+                  <div key={complex.id} className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <Switch
-                          checked={complex.isEmergencyMode || false}
-                          onCheckedChange={() => handleToggleEmergencyMode(complex)}
-                          className="data-[state=checked]:bg-red-600"
-                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => toggleComplexOpen(complex.id)}
+                        >
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${(openComplexIds[complex.id] ?? true) ? '' : '-rotate-90'
+                              }`}
+                          />
+                        </Button>
+                        <div className="font-semibold text-lg flex items-center gap-2">
+                          {complex.name}
+                          {complex.isEmergencyMode && (
+                            <Badge variant="destructive" className="text-xs h-5">
+                              <Siren className="h-3 w-3 mr-1" /> Emergency
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {canManageEmergency && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={complex.isEmergencyMode || false}
+                            onCheckedChange={() => handleToggleEmergencyMode(complex)}
+                            className="data-[state=checked]:bg-red-600"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {(openComplexIds[complex.id] ?? true) && (
+                      <div className="overflow-x-auto pb-2">
+                        <div className="flex gap-4 min-w-max">
+                          {complex.buildings && complex.buildings.map((building: BuildingType) => {
+                            const floorsCount = building.floors?.length || 0;
+                            const roomsCount = building.floors?.reduce((acc: number, f: Floor) =>
+                              acc + (f.rooms?.length || 0), 0) || 0;
+
+                            return (
+                              <div key={building.id} className="w-80 shrink-0 rounded-lg border bg-background">
+                                <div className="p-3 border-b flex items-center justify-between bg-muted/30">
+                                  <div className="flex items-center gap-2">
+                                    <Building className="h-4 w-4 text-muted-foreground" />
+                                    <div className="font-medium">{building.name}</div>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {floorsCount}P • {roomsCount}G
+                                  </div>
+                                </div>
+
+                                <div className="p-3 space-y-4 max-h-[600px] overflow-y-auto">
+                                  {building.floors && building.floors.map((floor: Floor) => (
+                                    <div key={floor.id} className="rounded-md bg-muted/20 border">
+                                      <div className="px-3 py-2 flex items-center justify-between border-b bg-muted/30">
+                                        <div className="flex items-center gap-2 font-semibold text-sm">
+                                          <Layers className="h-4 w-4" />
+                                          <span>{floor.name}</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {floor.rooms?.length || 0} rooms
+                                        </div>
+                                      </div>
+
+                                      <div className="p-3 space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          {floor.rooms && floor.rooms.map((room: Room) => {
+                                            const occupantCount = getOccupantCount(room.id);
+                                            const isFull = room.capacity ? occupantCount >= room.capacity : false;
+
+                                            return (
+                                              <div
+                                                key={room.id}
+                                                className={`p-2 border rounded text-xs ${isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' :
+                                                  occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' :
+                                                    'bg-card'
+                                                  }`}
+                                              >
+                                                <div className="flex items-center gap-1 mb-1">
+                                                  <DoorOpen className="h-3 w-3 text-muted-foreground" />
+                                                  <span className="font-medium truncate">{room.name}</span>
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground mb-1">
+                                                  {room.area ? `${room.area} م²` : '-'} • {room.capacity || '-'}
+                                                </div>
+                                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${isFull ? 'bg-red-100 dark:bg-red-900/30' :
+                                                  occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
+                                                    'bg-muted'
+                                                  }`}>
+                                                  <Users className="h-3 w-3" />
+                                                  <span>{occupantCount}/{room.capacity || '-'}</span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
-                  
-                  {(openComplexIds[complex.id] ?? true) && (
-                    <div className="overflow-x-auto pb-2">
-                      <div className="flex gap-4 min-w-max">
-                        {complex.buildings && complex.buildings.map((building: BuildingType) => {
-                          const floorsCount = building.floors?.length || 0;
-                          const roomsCount = building.floors?.reduce((acc: number, f: Floor) => 
-                            acc + (f.rooms?.length || 0), 0) || 0;
-                          
-                          return (
-                            <div key={building.id} className="w-80 shrink-0 rounded-lg border bg-background">
-                              <div className="p-3 border-b flex items-center justify-between bg-muted/30">
-                                <div className="flex items-center gap-2">
-                                  <Building className="h-4 w-4 text-muted-foreground" />
-                                  <div className="font-medium">{building.name}</div>
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {floorsCount}P • {roomsCount}G
-                                </div>
-                              </div>
-                              
-                              <div className="p-3 space-y-4 max-h-[600px] overflow-y-auto">
-                                {building.floors && building.floors.map((floor: Floor) => (
-                                  <div key={floor.id} className="rounded-md bg-muted/20 border">
-                                    <div className="px-3 py-2 flex items-center justify-between border-b bg-muted/30">
-                                      <div className="flex items-center gap-2 font-semibold text-sm">
-                                        <Layers className="h-4 w-4" />
-                                        <span>{floor.name}</span>
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {floor.rooms?.length || 0} rooms
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="p-3 space-y-2">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {floor.rooms && floor.rooms.map((room: Room) => {
-                                          const occupantCount = getOccupantCount(room.id);
-                                          const isFull = room.capacity ? occupantCount >= room.capacity : false;
-                                          
-                                          return (
-                                            <div
-                                              key={room.id}
-                                              className={`p-2 border rounded text-xs ${
-                                                isFull ? 'bg-red-50/50 border-red-200 dark:bg-red-950/20' : 
-                                                occupantCount > 0 ? 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20' : 
-                                                'bg-card'
-                                              }`}
-                                            >
-                                              <div className="flex items-center gap-1 mb-1">
-                                                <DoorOpen className="h-3 w-3 text-muted-foreground" />
-                                                <span className="font-medium truncate">{room.name}</span>
-                                              </div>
-                                              <div className="text-[10px] text-muted-foreground mb-1">
-                                                {room.area ? `${room.area} م²` : '-'} • {room.capacity || '-'}
-                                              </div>
-                                              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${
-                                                isFull ? 'bg-red-100 dark:bg-red-900/30' :
-                                                occupantCount > 0 ? 'bg-orange-100 dark:bg-orange-900/30' :
-                                                'bg-muted'
-                                              }`}>
-                                                <Users className="h-3 w-3" />
-                                                <span>{occupantCount}/{room.capacity || '-'}</span>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ); })}
+                );
+              })}
             </div>
           ))}
         </div>
@@ -1488,8 +1480,8 @@ export default function AccommodationResidencesView() {
                     const area = parseFloat(e.target.value) || 0;
                     setEditingRoom({
                       ...editingRoom,
-                      room: { 
-                        ...editingRoom.room, 
+                      room: {
+                        ...editingRoom.room,
                         area: area,
                         capacity: calculateCapacity(area)
                       }
@@ -1540,7 +1532,7 @@ export default function AccommodationResidencesView() {
           <CardContent>
             <div className="grid gap-3">
               {disabledResidences.map((residence) => (
-                <div 
+                <div
                   key={residence.id}
                   className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
                 >

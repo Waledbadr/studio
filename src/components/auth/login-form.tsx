@@ -45,7 +45,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
-  
+
   // Restrict inputs to ASCII (English) characters only for email & password
   const toASCII = (s: string) => s.replace(/[^\x00-\x7F]/g, "");
   const [emailNonAscii, setEmailNonAscii] = useState(false);
@@ -72,7 +72,7 @@ export default function LoginForm() {
   // Persist preferred app choice for OAuth/MagicLink redirect flows
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try { window.localStorage.setItem('preferred-app', appChoice); } catch {}
+    try { window.localStorage.setItem('preferred-app', appChoice); } catch { }
   }, [appChoice]);
 
   const redirectAfterLogin = (fallbackChoice?: "accommodation" | "materials") => {
@@ -98,7 +98,7 @@ export default function LoginForm() {
         }
       }
     });
-    return () => { try { unsub(); } catch {} };
+    return () => { try { unsub(); } catch { } };
   }, [router, appChoice, search]);
 
   // Handle OAuth redirect result if popup fallback was used
@@ -114,11 +114,11 @@ export default function LoginForm() {
           try {
             const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
             if (saved === 'materials' || saved === 'accommodation') persisted = saved;
-          } catch {}
+          } catch { }
           redirectAfterLogin(persisted || undefined);
         }
       })
-      .catch(() => {/* ignore */});
+      .catch(() => {/* ignore */ });
   }, [router]);
 
   // Complete magic link sign-in if applicable
@@ -135,13 +135,13 @@ export default function LoginForm() {
             try {
               const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
               if (saved === 'materials' || saved === 'accommodation') persisted = saved;
-            } catch {}
+            } catch { }
             redirectAfterLogin(persisted || undefined);
           })
           .catch((e) => {
-        const msg = e?.message || 'Magic link failed';
-        toast({ title: 'Error', description: msg, variant: 'destructive' });
-      });
+            const msg = e?.message || 'Magic link failed';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
+          });
       }
     }
   }, [router]);
@@ -152,10 +152,10 @@ export default function LoginForm() {
 
     if (USE_D1) {
       try {
-        const timeout = new Promise((_, reject) => 
+        const timeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('D1 timeout')), 5000)
         );
-        
+
         // Look for pre-provisioned user by email
         if (email) {
           try {
@@ -174,14 +174,14 @@ export default function LoginForm() {
                 themeSettings: pre.themeSettings || { colorTheme: 'blue', mode: 'system' },
                 createdAt: pre.createdAt || new Date().toISOString()
               };
-              await (await import('@/lib/d1-client')).updateUser(uid, merged).catch(() => {});
+              await (await import('@/lib/d1-client')).updateUser(uid, merged).catch(() => { });
               return;
             }
           } catch (e) {
             console.warn('D1 getUsers failed:', e?.message);
           }
         }
-        
+
         // Ensure ID exists by attempting to create or update
         const payload = {
           name: data?.name || 'User',
@@ -193,8 +193,8 @@ export default function LoginForm() {
         };
         // Try update first, then create if update didn't create a row (createUser always inserts)
         // Use fire-and-forget for D1 in local dev - don't block on failure
-        (await import('@/lib/d1-client')).updateUser(uid, payload).catch(() => {});
-        (await import('@/lib/d1-client')).createUser(uid, payload).catch(() => {});
+        (await import('@/lib/d1-client')).updateUser(uid, payload).catch(() => { });
+        (await import('@/lib/d1-client')).createUser(uid, payload).catch(() => { });
         return;
       } catch (e) {
         console.warn('D1 ensureUserProfile failed:', e);
@@ -223,7 +223,7 @@ export default function LoginForm() {
             themeSettings: preData.themeSettings || { colorTheme: "blue", mode: "system" },
             createdAt: preData.createdAt || serverTimestamp(),
           }, { merge: true });
-          try { await deleteDoc(pre.ref); } catch {}
+          try { await deleteDoc(pre.ref); } catch { }
           merged = true;
           break;
         }
@@ -267,7 +267,7 @@ export default function LoginForm() {
       } else {
         const cred = await createUserWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
         if (name.trim()) {
-          try { await updateProfile(cred.user, { displayName: name.trim() }); } catch {}
+          try { await updateProfile(cred.user, { displayName: name.trim() }); } catch { }
         }
         // Ensure profile exists before redirecting
         await ensureUserProfile(cred.user.uid, { name: name || cred.user.displayName || "User", email: cred.user.email || sanitizedEmail });
@@ -285,14 +285,20 @@ export default function LoginForm() {
         'auth/wrong-password': 'Invalid email or password.',
         'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
       };
-  const msg = map[code] || err?.message || "Failed. Try again.";
-  toast({ title: "Error", description: msg, variant: "destructive" });
+      const msg = map[code] || err?.message || "Failed. Try again.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const oauthHandler = async (provider: "google" | "microsoft") => {
+    if (provider === "google") {
+      setLoading(true);
+      window.location.href = "/api/auth/google";
+      return;
+    }
+
     if (typeof signInWithPopup !== 'function') {
       const msg = "Authentication is not configured.";
       toast({ title: 'Error', description: msg, variant: 'destructive' });
@@ -300,7 +306,7 @@ export default function LoginForm() {
     }
     setLoading(true);
     try {
-      const prov = provider === "google" ? new GoogleAuthProvider() : new OAuthProvider("microsoft.com");
+      const prov = new OAuthProvider("microsoft.com");
       try {
         const res = await signInWithPopup(auth, prov);
         // Type guard: check res and res.user
@@ -341,17 +347,17 @@ export default function LoginForm() {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: false,
       } as const;
-  await sendPasswordResetEmail(null as any, toASCII(email).trim(), actionCodeSettings);
-  toast({ title: 'Email sent', description: 'Password reset email sent.' });
+      await sendPasswordResetEmail(null as any, toASCII(email).trim(), actionCodeSettings);
+      toast({ title: 'Email sent', description: 'Password reset email sent.' });
     } catch (err: any) {
-  const code = err?.code || '';
-  const map: Record<string, string> = {
+      const code = err?.code || '';
+      const map: Record<string, string> = {
         'auth/invalid-email': 'The email address is badly formatted.',
         'auth/user-not-found': 'If an account exists for this email, a reset link will be sent.',
         'auth/too-many-requests': 'Too many requests. Please wait and try again.',
       };
-  const msg = map[code] || err?.message || "Failed to send reset email.";
-  toast({ title: 'Error', description: msg, variant: 'destructive' });
+      const msg = map[code] || err?.message || "Failed to send reset email.";
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -372,13 +378,13 @@ export default function LoginForm() {
         url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
         handleCodeInApp: true,
       } as const;
-  const asciiEmail = toASCII(email).trim();
-  await sendSignInLinkToEmail(null as any, asciiEmail, actionCodeSettings);
-  window.localStorage.setItem('pendingEmailForLink', asciiEmail);
-  toast({ title: 'Email sent', description: 'Magic link sent to your email.' });
+      const asciiEmail = toASCII(email).trim();
+      await sendSignInLinkToEmail(null as any, asciiEmail, actionCodeSettings);
+      window.localStorage.setItem('pendingEmailForLink', asciiEmail);
+      toast({ title: 'Email sent', description: 'Magic link sent to your email.' });
     } catch (e: any) {
-  const msg = e?.message || 'Failed to send magic link.';
-  toast({ title: 'Error', description: msg, variant: 'destructive' });
+      const msg = e?.message || 'Failed to send magic link.';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -407,10 +413,10 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.id, name: user.name || 'User', email: user.email || '' }, response: attResp })
       });
-  toast({ title: 'Passkey', description: 'Passkey registered successfully.' });
+      toast({ title: 'Passkey', description: 'Passkey registered successfully.' });
     } catch (e: any) {
-  const msg = e?.message || 'Passkey registration failed.';
-  toast({ title: 'Error', description: msg, variant: 'destructive' });
+      const msg = e?.message || 'Passkey registration failed.';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     }
   };
 
@@ -437,7 +443,7 @@ export default function LoginForm() {
         try {
           const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
           if (saved === 'materials' || saved === 'accommodation') persisted = saved;
-        } catch {}
+        } catch { }
         redirectAfterLogin(persisted || undefined);
       } else {
         const msg = 'Passkey authentication failed.';
@@ -490,123 +496,123 @@ export default function LoginForm() {
         </CardHeader>
         <CardContent className="p-0 pt-4">
           <div className="grid gap-5">
-          {/* Segmented control */}
-          <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
-            <Button
-              size="sm"
-              variant={mode === "signin" ? "default" : "ghost"}
-              className="rounded-md"
-              onClick={() => setMode("signin")}
-            >
-              Sign in
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "signup" ? "default" : "ghost"}
-              className="rounded-md"
-              onClick={() => setMode("signup")}
-            >
-              Create account
-            </Button>
-          </div>
-
-          {/* Choose system after login */}
-          <div className="grid gap-2">
-            <Label className="text-xs text-muted-foreground">Open after login</Label>
+            {/* Segmented control */}
             <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
               <Button
-                type="button"
                 size="sm"
-                variant={appChoice === 'accommodation' ? 'default' : 'ghost'}
+                variant={mode === "signin" ? "default" : "ghost"}
                 className="rounded-md"
-                onClick={() => setAppChoice('accommodation')}
+                onClick={() => setMode("signin")}
               >
-                Accommodation
+                Sign in
               </Button>
               <Button
-                type="button"
                 size="sm"
-                variant={appChoice === 'materials' ? 'default' : 'ghost'}
+                variant={mode === "signup" ? "default" : "ghost"}
                 className="rounded-md"
-                onClick={() => setAppChoice('materials')}
+                onClick={() => setMode("signup")}
               >
-                Materials
+                Create account
               </Button>
             </div>
-          </div>
 
-          <form onSubmit={handleEmailPassword} className="grid gap-4">
-            {mode === "signup" && (
-              <div className="grid gap-1.5">
-                <Label htmlFor="name">Full name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" className="pl-9" />
-                </div>
-              </div>
-            )}
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="email" type="email" dir="ltr" inputMode="email" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
-              </div>
-                {/* Inline non-ASCII tip removed in favor of red toast popup */}
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="password" type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => onPasswordChange(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
-                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {/* Inline non-ASCII tip removed in favor of red toast popup */}
-            </div>
-
-            {/* Errors and infos are surfaced via toast popups for a compact, consistent UX */}
-
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
-            </Button>
-
-            <div className="flex items-center gap-2">
-              <Separator className="flex-1" />
-              <span className="text-xs text-muted-foreground">Or continue with</span>
-              <Separator className="flex-1" />
-            </div>
-
+            {/* Choose system after login */}
             <div className="grid gap-2">
-              <Button variant="outline" onClick={() => oauthHandler("google")} disabled={loading}>
-                <img alt="" src="https://www.google.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Google
-              </Button>
-              <Button variant="outline" onClick={() => oauthHandler("microsoft")} disabled={loading}>
-                <img alt="" src="https://learn.microsoft.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Microsoft
-              </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button type="button" variant="secondary" onClick={handleMagicLink} disabled={loading}>
-                  <Link2 className="h-4 w-4 mr-2" /> Magic Link
+              <Label className="text-xs text-muted-foreground">Open after login</Label>
+              <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={appChoice === 'accommodation' ? 'default' : 'ghost'}
+                  className="rounded-md"
+                  onClick={() => setAppChoice('accommodation')}
+                >
+                  Accommodation
                 </Button>
-                <Button type="button" variant="outline" onClick={handlePasskeyLogin}>
-                  <KeyRound className="h-4 w-4 mr-2" /> Passkey
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={appChoice === 'materials' ? 'default' : 'ghost'}
+                  className="rounded-md"
+                  onClick={() => setAppChoice('materials')}
+                >
+                  Materials
                 </Button>
               </div>
-              <Button type="button" variant="ghost" onClick={handlePasskeyRegister} className="justify-start text-xs text-muted-foreground hover:text-foreground">
-                <Shield className="h-3.5 w-3.5 mr-2" /> Register a Passkey (after your first sign-in)
-              </Button>
             </div>
 
-            {mode === "signin" && (
-              <button type="button" className={cn("text-sm text-muted-foreground hover:underline text-left")}
-                onClick={handleReset}>
-                Forgot your password?
-              </button>
-            )}
-          </form>
-        </div>
+            <form onSubmit={handleEmailPassword} className="grid gap-4">
+              {mode === "signup" && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="name">Full name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" className="pl-9" />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="email" type="email" dir="ltr" inputMode="email" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
+                </div>
+                {/* Inline non-ASCII tip removed in favor of red toast popup */}
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="password" type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => onPasswordChange(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
+                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {/* Inline non-ASCII tip removed in favor of red toast popup */}
+              </div>
+
+              {/* Errors and infos are surfaced via toast popups for a compact, consistent UX */}
+
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">Or continue with</span>
+                <Separator className="flex-1" />
+              </div>
+
+              <div className="grid gap-2">
+                <Button variant="outline" onClick={() => oauthHandler("google")} disabled={loading}>
+                  <img alt="" src="https://www.google.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Google
+                </Button>
+                <Button variant="outline" onClick={() => oauthHandler("microsoft")} disabled={loading}>
+                  <img alt="" src="https://learn.microsoft.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Microsoft
+                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant="secondary" onClick={handleMagicLink} disabled={loading}>
+                    <Link2 className="h-4 w-4 mr-2" /> Magic Link
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handlePasskeyLogin}>
+                    <KeyRound className="h-4 w-4 mr-2" /> Passkey
+                  </Button>
+                </div>
+                <Button type="button" variant="ghost" onClick={handlePasskeyRegister} className="justify-start text-xs text-muted-foreground hover:text-foreground">
+                  <Shield className="h-3.5 w-3.5 mr-2" /> Register a Passkey (after your first sign-in)
+                </Button>
+              </div>
+
+              {mode === "signin" && (
+                <button type="button" className={cn("text-sm text-muted-foreground hover:underline text-left")}
+                  onClick={handleReset}>
+                  Forgot your password?
+                </button>
+              )}
+            </form>
+          </div>
         </CardContent>
       </div>
     </Card>

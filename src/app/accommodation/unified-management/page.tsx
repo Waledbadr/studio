@@ -4,9 +4,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
 import { useToast } from "@/hooks/use-toast";
-import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from '@/lib/auth-shim';
-import { doc, getDoc } from "firebase/firestore";
+
 import {
   Building2,
   Users,
@@ -122,60 +121,36 @@ export default function UnifiedManagementPage() {
   // Selection state for batch operations
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
 
-  // Debug: Log data status
-  useEffect(() => {
-    console.log('🔍 [UnifiedManagement] Data Status:', {
-      workers: workers.length,
-      occupants: occupants.length,
-      residences: residences.length,
-      currentUserId,
-      userRole,
-    });
-
-    // Log detailed residence structure for debugging room issues
-    if (residences.length > 0) {
-      console.log('🏘️ [UnifiedManagement] Residences Structure:',
-        residences.map(r => ({
-          id: r.id,
-          name: r.name,
-          buildings: r.buildings?.length || 0,
-          totalRooms: r.buildings?.reduce((sum, b) =>
-            sum + (b.floors?.reduce((fsum, f) => fsum + (f.rooms?.length || 0), 0) || 0), 0
-          ) || r.rooms?.length || 0
-        }))
-      );
-    }
-
-    // Log a sample worker and occupant for debugging
-    if (workers.length > 0) {
-      console.log('👷 [UnifiedManagement] Sample Worker:', workers[0]);
-    }
-    if (occupants.length > 0) {
-      console.log('🛏️ [UnifiedManagement] Sample Occupant:', occupants[0]);
-    }
-  }, [workers, occupants, residences, currentUserId, userRole]);
-
   // Get current user
   useEffect(() => {
-    if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUserId(user.uid);
-        try {
-          if (!db) return;
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setUserRole(userData.role || null);
-            setUserName(userData.name || userData.displayName || 'User');
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setCurrentUserId(data.user.id);
+            setUserRole(data.user.role || null);
+            setUserName(data.user.name || 'User');
+            return;
           }
-        } catch (error) {
-          console.error('Error fetching user:', error);
         }
-      } else {
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+      setCurrentUserId(null);
+      setUserRole(null);
+    };
+
+    fetchUser();
+    // Also listen to auth changes if using the shim
+    const unsubscribe = onAuthStateChanged(null, (user) => {
+      if (!user) {
         setCurrentUserId(null);
         setUserRole(null);
+      } else {
+        // Re-fetch full details including role
+        fetchUser();
       }
     });
     return () => unsubscribe();

@@ -14,7 +14,7 @@ function getProjectIdFallback(): string | undefined {
       const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
       if (cfg.projectId) return cfg.projectId;
     }
-  } catch {}
+  } catch { }
   return undefined;
 }
 
@@ -54,17 +54,10 @@ function initAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = initAdmin();
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'RESET_AUTH_DISABLED_IN_PRODUCTION',
-        },
-        { status: 200 }
-      );
-    }
+    // D1-only: this route is disabled or needs to be rewritten for D1
+    return NextResponse.json({ error: 'Not implemented for D1' }, { status: 501 });
 
+    /* Firebase code removed
     const { keepEmails, password } = await req.json();
     // naive guard so no one hits this by mistake in production
     if (password !== 'RESET123') {
@@ -72,11 +65,13 @@ export async function POST(req: NextRequest) {
     }
     initAdmin();
     const auth = admin.auth();
+    */
 
+    /*
     const keep = new Set<string>((keepEmails || []).map((e: string) => String(e || '').trim().toLowerCase()));
 
-  let deleted = 0, kept = 0;
-  const keptUsers: { email: string; uid: string }[] = [];
+    let deleted = 0, kept = 0;
+    const keptUsers: { email: string; uid: string }[] = [];
     const MAX_PER_PAGE = 1000;
     let nextPageToken: string | undefined = undefined;
 
@@ -91,7 +86,9 @@ export async function POST(req: NextRequest) {
       nextPageToken = pageToken || undefined;
     } while (nextPageToken);
 
-  return NextResponse.json({ deleted, kept, keptUsers });
+    return NextResponse.json({ deleted, kept, keptUsers });
+    */
+    return NextResponse.json({ error: 'Not implemented for D1' }, { status: 501 });
   } catch (e: any) {
     console.error('reset-auth error', e);
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });

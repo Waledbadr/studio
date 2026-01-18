@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken';
-const bcrypt: any = require('bcrypt');
+import { SignJWT, jwtVerify } from 'jose';
+import * as bcrypt from 'bcryptjs';
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 
 // Fallback in-memory store when D1 binding is missing (local dev only)
@@ -9,7 +9,7 @@ let isSeeded = false;
 async function seedDefaultUsers(users: Map<string, any>) {
   if (isSeeded) return;
   isSeeded = true;
-  
+
   // Pre-seed test users with hashed passwords
   const testUsers = [
     {
@@ -35,7 +35,7 @@ async function seedDefaultUsers(users: Map<string, any>) {
       disabled: false,
     },
   ];
-  
+
   for (const user of testUsers) {
     if (!users.has(user.email)) {
       users.set(user.email, user);
@@ -46,25 +46,25 @@ async function seedDefaultUsers(users: Map<string, any>) {
 
 async function getLocalUsers() {
   if (localUsersFallback) return localUsersFallback;
-  
+
   try {
     const module = await import('@/app/api/seed-local-user/route');
     localUsersFallback = module.localUsers;
   } catch {
     localUsersFallback = new Map();
   }
-  
+
   await seedDefaultUsers(localUsersFallback);
   return localUsersFallback;
 }
 
-const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY || '';
-const PUBLIC_KEY = process.env.JWT_PUBLIC_KEY || '';
+const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY || ''; // For Node/Local, usually simpler secret
+const SECRET_KEY = new TextEncoder().encode(process.env.JWT_PRIVATE_KEY || 'development_secret_key_must_be_long');
 const ISSUER = process.env.JWT_ISSUER || 'estatecare.local';
 const AUD = process.env.JWT_AUD || 'estatecare-client';
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '30d';
-const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10); // 10 is enough for bcryptjs
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -74,24 +74,40 @@ export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
-export function signAccessToken(payload: any) {
-  if (!PRIVATE_KEY) throw new Error('JWT private key missing');
-  return (jwt as any).sign(payload, PRIVATE_KEY, { algorithm: 'RS256', expiresIn: ACCESS_EXPIRES, issuer: ISSUER, audience: AUD });
+export async function signAccessToken(payload: any) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setIssuer(ISSUER)
+    .setAudience(AUD)
+    .setExpirationTime(ACCESS_EXPIRES)
+    .sign(SECRET_KEY);
 }
 
-export function signRefreshToken(payload: any) {
-  if (!PRIVATE_KEY) throw new Error('JWT private key missing');
-  return (jwt as any).sign(payload, PRIVATE_KEY, { algorithm: 'RS256', expiresIn: REFRESH_EXPIRES, issuer: ISSUER, audience: AUD });
+export async function signRefreshToken(payload: any) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setIssuer(ISSUER)
+    .setAudience(AUD)
+    .setExpirationTime(REFRESH_EXPIRES)
+    .sign(SECRET_KEY);
 }
 
-export function verifyAccessToken(token: string) {
-  if (!PUBLIC_KEY) throw new Error('JWT public key missing');
-  return (jwt as any).verify(token, PUBLIC_KEY, { algorithms: ['RS256'], issuer: ISSUER, audience: AUD }) as any;
+export async function verifyAccessToken(token: string) {
+  const { payload } = await jwtVerify(token, SECRET_KEY, {
+    issuer: ISSUER,
+    audience: AUD,
+  });
+  return payload;
 }
 
-export function verifyRefreshToken(token: string) {
-  if (!PUBLIC_KEY) throw new Error('JWT public key missing');
-  return (jwt as any).verify(token, PUBLIC_KEY, { algorithms: ['RS256'], issuer: ISSUER, audience: AUD }) as any;
+export async function verifyRefreshToken(token: string) {
+  const { payload } = await jwtVerify(token, SECRET_KEY, {
+    issuer: ISSUER,
+    audience: AUD,
+  });
+  return payload;
 }
 
 // High-level helpers
@@ -103,20 +119,21 @@ export async function registerUser({ name, email, password }: { name: string; em
     existing = local.get(email.toLowerCase()) || null;
   }
   if (existing) throw new Error('User exists');
-  
+
   const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const hash = await hashPassword(password);
   const created = { name, email, role: 'Technician', passwordHash: hash, createdAt: new Date().toISOString(), disabled: false } as any;
-  
+
   try {
+    // Only call createUser, which includes the passwordHash in `created` object
     await createUser(id, created);
-    await setUserPasswordHash(id, hash);
+    // await setUserPasswordHash(id, hash); // Redundant
     const user = await getUser(id);
     if (user) return user;
   } catch (d1Err) {
-    console.warn('D1 create failed, using in-memory fallback');
+    console.warn('D1 create failed, using in-memory fallback', d1Err);
   }
-  
+
   // Fallback: store in-memory
   const local = await getLocalUsers();
   local.set(email.toLowerCase(), { id, ...created });
@@ -125,23 +142,23 @@ export async function registerUser({ name, email, password }: { name: string; em
 
 export async function authenticateUser({ email, password }: { email: string; password: string }) {
   let user = await getUserByEmail(email);
-  
+
   // Fallback: check in-memory store if D1 returned null
   if (!user) {
     const local = await getLocalUsers();
     user = local.get(email.toLowerCase()) || null;
   }
-  
+
   if (!user) throw new Error('User not found');
   if (user.disabled) throw new Error('User disabled');
   if (!user.passwordHash) throw new Error('No password set');
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) throw new Error('Invalid password');
-  
+
   // update last seen (try D1, fallback to in-memory)
   try {
     await updateUser(user.id, { lastSeen: new Date().toISOString() });
-  } catch {}
-  
+  } catch { }
+
   return user;
 }

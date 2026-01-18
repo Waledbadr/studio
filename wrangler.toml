@@ -1,9 +1,9 @@
 name = "estatecare-studio"
 compatibility_date = "2024-04-03"
-pages_build_output_dir = ".next"
+pages_build_output_dir = ".vercel/output/static"
 
 # Replace with your Cloudflare Account ID
-account_id = "your-cloudflare-account-id"
+
 
 [[d1_databases]]
 binding = "DB"
