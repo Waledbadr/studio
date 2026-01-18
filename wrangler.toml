@@ -15,3 +15,9 @@ migrations_dir = "drizzle/migrations"
 [vars]
 # STORAGE_PATH can be set here or via your deploy platform secrets
 STORAGE_PATH = "/var/estatecare/storage"
+
+[[r2_buckets]]
+binding = "STORAGE_BUCKET"
+bucket_name = "estatecare-storage"
+
+compatibility_flags = ["nodejs_compat"]
