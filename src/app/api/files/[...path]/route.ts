@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getAbsolutePath } from '@/lib/storage';
-import fs from 'fs';
 import { verifyAccessToken } from '@/lib/auth';
-const mimeLookup: any = require('mime-types').lookup;
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -23,21 +21,32 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
     try {
       const t = token || req.cookies.get?.('access_token')?.value || '';
       if (!t) throw new Error('No token');
-      verifyAccessToken(t);
+      await verifyAccessToken(t);
     } catch (e) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const parts = params.path || [];
-    const relPath = parts.map(p => decodeURIComponent(p)).join('/');
-    if (!relPath) return new NextResponse('Not found', { status: 404 });
+    const parts = await params;
+    const pathParts = parts.path || [];
+    const r2Key = pathParts.map(p => decodeURIComponent(p)).join('/');
 
-    const abs = await getAbsolutePath(relPath);
-    if (!fs.existsSync(abs)) return new NextResponse('Not found', { status: 404 });
+    if (!r2Key) return new NextResponse('Not found', { status: 404 });
 
-    const stream = fs.createReadStream(abs);
-    const mtype = mimeLookup(abs) || 'application/octet-stream';
-    return new NextResponse(stream, { status: 200, headers: { 'content-type': String(mtype), 'cache-control': 'private, max-age=0, no-cache' } });
+    const bucket = getRequestContext().env.STORAGE_BUCKET;
+    if (!bucket) {
+      console.error('No R2 bucket binding found');
+      return new NextResponse('Storage configuration error', { status: 500 });
+    }
+
+    const object = await bucket.get(r2Key);
+    if (!object) return new NextResponse('File not found', { status: 404 });
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('etag', object.httpEtag);
+    headers.set('cache-control', 'private, max-age=3600'); // Cache for 1 hour
+
+    return new NextResponse(object.body, { headers });
   } catch (e: any) {
     console.error('[File Serve Error]', e?.message);
     return new NextResponse('Server error', { status: 500 });
