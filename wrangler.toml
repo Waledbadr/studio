@@ -1,6 +1,7 @@
 name = "estatecare-studio"
 compatibility_date = "2024-04-03"
 pages_build_output_dir = ".vercel/output/static"
+compatibility_flags = ["nodejs_compat"]
 
 # Replace with your Cloudflare Account ID
 
@@ -19,5 +20,3 @@ STORAGE_PATH = "/var/estatecare/storage"
 [[r2_buckets]]
 binding = "STORAGE_BUCKET"
 bucket_name = "estatecare-storage"
-
-compatibility_flags = ["nodejs_compat"]
