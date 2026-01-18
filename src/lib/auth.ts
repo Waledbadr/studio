@@ -3,6 +3,17 @@ import * as bcrypt from 'bcryptjs';
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 import { getRuntimeEnv } from './runtime-env';
 
+// Helper to get env for D1 actions
+async function getEnvForD1() {
+  try {
+    const { getRequestContext } = await import('@cloudflare/next-on-pages');
+    const { env } = getRequestContext();
+    return env;
+  } catch {
+    return null;
+  }
+}
+
 // Fallback in-memory store when D1 binding is missing (local dev only)
 let localUsersFallback: Map<string, any> | null = null;
 let isSeeded = false;
@@ -151,7 +162,8 @@ export async function verifyRefreshToken(token: string) {
 
 // High-level helpers
 export async function registerUser({ name, email, password }: { name: string; email: string; password: string }) {
-  let existing = await getUserByEmail(email);
+  const env = await getEnvForD1();
+  let existing = await getUserByEmail(env, email);
   // Fallback: check in-memory store if D1 returned null
   if (!existing) {
     const local = await getLocalUsers();
@@ -165,9 +177,9 @@ export async function registerUser({ name, email, password }: { name: string; em
 
   try {
     // Only call createUser, which includes the passwordHash in `created` object
-    await createUser(id, created);
-    // await setUserPasswordHash(id, hash); // Redundant
-    const user = await getUser(id);
+    await createUser(env, id, created);
+    // await setUserPasswordHash(env, id, hash); // Redundant
+    const user = await getUser(env, id);
     if (user) return user;
   } catch (d1Err) {
     console.warn('D1 create failed, using in-memory fallback', d1Err);
@@ -180,7 +192,8 @@ export async function registerUser({ name, email, password }: { name: string; em
 }
 
 export async function authenticateUser({ email, password }: { email: string; password: string }) {
-  let user = await getUserByEmail(email);
+  const env = await getEnvForD1();
+  let user = await getUserByEmail(env, email);
 
   // Fallback: check in-memory store if D1 returned null
   if (!user) {
@@ -196,7 +209,7 @@ export async function authenticateUser({ email, password }: { email: string; pas
 
   // update last seen (try D1, fallback to in-memory)
   try {
-    await updateUser(user.id, { lastSeen: new Date().toISOString() });
+    await updateUser(env, user.id, { lastSeen: new Date().toISOString() });
   } catch { }
 
   return user;

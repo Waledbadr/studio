@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export async function GET() {
-  const base = { ok: true, uptime: process.uptime(), timestamp: new Date().toISOString() } as any;
+  const base = { ok: true, timestamp: new Date().toISOString() } as any;
   try {
     const { env } = getRequestContext();
     const d1 = (env as any)?.DB;

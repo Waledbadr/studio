@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   getWorkers: D1Actions.getWorkers,
@@ -72,6 +73,12 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 
 export async function POST(req: Request) {
   try {
+    // Get env from request context
+    const { env } = getRequestContext();
+    if (!env || !env.DB) {
+      return NextResponse.json({ ok: false, error: 'D1 binding not available' }, { status: 500 });
+    }
+
     const text = await req.text();
     if (!text) {
       return NextResponse.json({ ok: false, error: 'Empty body' }, { status: 400 });
@@ -82,7 +89,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Invalid action' }, { status: 400 });
     }
     const fn = allowed[action];
-    const res = await fn(...(Array.isArray(args) ? args : [args]));
+    
+    // Pass env as first argument to all D1 actions
+    const actionArgs = Array.isArray(args) ? args : [args];
+    const res = await fn(env, ...actionArgs);
+    
     return NextResponse.json({ ok: true, result: res });
   } catch (e: any) {
     console.error('D1 API error', e);

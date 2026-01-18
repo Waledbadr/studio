@@ -9,22 +9,16 @@ export interface Env {
     DB: D1Database;
 }
 
-// Global variable to store the database instance
-let db: ReturnType<typeof drizzle<typeof schema>>;
-
 /**
  * Get the database instance.
- * @param d1 - The D1 database binding.
+ * @param d1 - The D1 database binding (required).
  */
-export function getDb(d1?: D1Database) {
-    if (db) return db;
-
+export function getDb(d1: D1Database) {
     if (!d1) {
-        throw new Error('D1 Database binding is missing. Ensure you are passing the binding from the context.');
+        throw new Error('D1 Database binding is required. Ensure you are passing the binding from getRequestContext().env');
     }
-
-    db = drizzle(d1, { schema });
-    return db;
+    // Always create a fresh instance to avoid caching issues across requests
+    return drizzle(d1, { schema });
 }
 
 export { schema };

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { getUser } from '@/lib/d1-actions';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export async function GET() {
   try {
@@ -17,7 +18,8 @@ export async function GET() {
       console.warn('[AUTH ME] token verify failed:', verErr?.message || verErr);
       return NextResponse.json({ ok: true, user: null });
     }
-    const user = await getUser(payload.sub);
+    const { env } = getRequestContext();
+    const user = await getUser(env, payload.sub);
     if (!user) return NextResponse.json({ ok: true, user: null });
     console.log('[AUTH ME] found user:', user?.id, user?.email);
     return NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
@@ -37,7 +39,8 @@ export async function PATCH(req: Request) {
     const updates: any = {};
     if (body.name) updates.name = body.name;
     if (body.email) updates.email = body.email;
-    await (await import('@/lib/d1-actions')).updateUser(payload.sub, updates);
+    const { env } = getRequestContext();
+    await (await import('@/lib/d1-actions')).updateUser(env, payload.sub, updates);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Update failed' }, { status: 400 });

@@ -1,59 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-declare const require: any;
-
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
-
-function getProjectIdFallback(): string | undefined {
-  try {
-    if (typeof process === 'undefined' || !(process as any)?.env) return undefined;
-    const env = (process as any).env;
-    if (env.GOOGLE_CLOUD_PROJECT) return env.GOOGLE_CLOUD_PROJECT;
-    if (env.GCLOUD_PROJECT) return env.GCLOUD_PROJECT;
-    if (env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    if (env.FIREBASE_CONFIG) {
-      const cfg = JSON.parse(env.FIREBASE_CONFIG);
-      if (cfg.projectId) return cfg.projectId;
-    }
-  } catch { }
-  return undefined;
-}
-
-function initAdmin() {
-  let admin;
-  try {
-    admin = require('firebase-admin');
-  } catch (err) {
-    throw new Error('firebase-admin is not available in this build. Reinstall firebase-admin or enable legacy Firebase admin support if you need this route.');
-  }
-
-  if (admin.apps.length) return admin;
-  try {
-    const env = typeof process !== 'undefined' && (process as any)?.env ? (process as any).env : {};
-    const b64 = env.FIREBASE_SERVICE_ACCOUNT_B64;
-    const svc = env.FIREBASE_SERVICE_ACCOUNT;
-    if (b64 || svc) {
-      const jsonStr = b64
-        ? Buffer.from(b64, 'base64').toString('utf8')
-        : (typeof svc === 'string' ? svc : JSON.stringify(svc));
-      const credentials = JSON.parse(jsonStr);
-      admin.initializeApp({
-        credential: admin.credential.cert(credentials as any),
-        projectId: (credentials as any).project_id || getProjectIdFallback(),
-      });
-      return admin;
-    }
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-      projectId: getProjectIdFallback(),
-    } as any);
-    return admin;
-  } catch (e) {
-    console.error('firebase-admin init failed', e);
-    throw e;
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {

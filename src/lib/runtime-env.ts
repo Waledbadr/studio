@@ -33,14 +33,30 @@ function tryGetProcessEnv(key: string): string | undefined {
   }
 }
 
+/**
+ * Get environment variable from Cloudflare context or process.env
+ * Priority: Cloudflare env (for edge runtime) > process.env (for Node.js runtime)
+ * This ensures proper behavior in both Cloudflare Edge and local development
+ */
 export async function getRuntimeEnv(key: string, fallback?: string): Promise<string> {
-  const fromProcess = tryGetProcessEnv(key);
-  if (fromProcess !== undefined && fromProcess !== '') return fromProcess;
-
+  // Try Cloudflare context first (Edge Runtime)
   const fromCf = await tryGetCloudflareEnv(key);
   if (fromCf !== undefined && fromCf !== '') return fromCf;
 
+  // Fall back to process.env (Node.js or dev)
+  const fromProcess = tryGetProcessEnv(key);
+  if (fromProcess !== undefined && fromProcess !== '') return fromProcess;
+
   return fallback ?? '';
+}
+
+/**
+ * Synchronous version for non-async contexts
+ * Only checks process.env, suitable for build-time or initialization
+ */
+export function getRuntimeEnvSync(key: string, fallback?: string): string {
+  const fromProcess = tryGetProcessEnv(key);
+  return fromProcess !== undefined && fromProcess !== '' ? fromProcess : fallback ?? '';
 }
 
 export function isHttpsRequest(req: Request): boolean {

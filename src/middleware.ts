@@ -47,7 +47,12 @@ export async function middleware(req: NextRequest) {
   // Redirect root to login if not authenticated
   if (pathname === '/') {
     const token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
-    const cookieToken = req.cookies.get?.('access_token')?.value || '';
+    let cookieToken = '';
+    try {
+      cookieToken = req.cookies.get?.('access_token')?.value || '';
+    } catch {
+      // Ignore cookie access errors
+    }
     if (!token && !cookieToken) {
       return NextResponse.redirect(new URL('/login', req.url));
     }
@@ -55,9 +60,13 @@ export async function middleware(req: NextRequest) {
 
   let token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
   if (!token) {
-    // Try cookie
-    const cookieToken = req.cookies.get?.('access_token')?.value || '';
-    token = cookieToken || token;
+    // Try cookie with defensive access
+    try {
+      const cookieToken = req.cookies.get?.('access_token')?.value || '';
+      token = cookieToken || token;
+    } catch (e) {
+      console.warn('[Middleware] Cookie access failed:', e);
+    }
   }
   if (!token) return new NextResponse('Unauthorized', { status: 401 });
 

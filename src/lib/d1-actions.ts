@@ -1,32 +1,32 @@
-export async function createWorker(data: any) {
-    const d1 = await getD1();
+export async function createWorker(env: any, data: any) {
+    const d1 = getD1FromEnv(env);
     const db = getDb(d1);
     await db.insert(workers).values(data);
     return { ok: true };
 }
-export async function deleteWorker(id: string) {
-    const d1 = await getD1();
+export async function deleteWorker(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
     const db = getDb(d1);
     await db.delete(workers).where(eq(workers.id, id));
     return { ok: true };
 }
-export async function updateTransferRequest(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateTransferRequest(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     const db = getDb(d1);
     await db.update(transferRequests).set(data).where(eq(transferRequests.id, id));
     return { ok: true };
 }
 // --- Accommodation Transfer Requests (D1 only) ---
 
-export async function createTransferRequest(tr: any) {
-    const d1 = await getD1();
+export async function createTransferRequest(env: any, tr: any) {
+    const d1 = getD1FromEnv(env);
     const db = getDb(d1);
     await db.insert(transferRequests).values(tr);
     return { ok: true };
 }
 
-export async function updateWorker(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateWorker(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     const db = getDb(d1);
     await db.update(workers).set(data).where(eq(workers.id, id));
     return { ok: true };
@@ -36,36 +36,38 @@ export async function updateWorker(id: string, data: any) {
 import { getDb } from './db';
 import { workers, residences, occupants, accommodationHistory, companies, contracts, invoices, transferRequests, notifications, inventory, inventoryCategories, inventoryTransactions, mrvRequests, mrvs, orders, users, counters, serviceOrders, mivs, stockReconciliations, auditLogs, feedback } from '../db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { getRequestContext } from '@cloudflare/next-on-pages';
 
-async function getD1() {
-    try {
-        const { env } = getRequestContext();
-        return env.DB;
-    } catch (e) {
-        // Fallback: check if wrangler dev is running by checking if .wrangler exists
-        // In true local dev without wrangler, D1 actions will fail gracefully
-        // User should run `npm run dev:d1` for full D1 support
-        return null as any;
-    }
+// Type for environment with D1 binding
+export interface D1Env {
+    DB: D1Database;
 }
 
-export async function getWorkers() {
-    const d1 = await getD1();
+/**
+ * Helper to validate and get D1 binding from env
+ */
+function getD1FromEnv(env: any): D1Database | null {
+    if (!env || !env.DB) {
+        return null;
+    }
+    return env.DB;
+}
+
+export async function getWorkers(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(workers);
 }
 
-export async function getResidences() {
-    const d1 = await getD1();
+export async function getResidences(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(residences);
 }
 
-export async function getOccupants(residenceId?: string) {
-    const d1 = await getD1();
+export async function getOccupants(env: any, residenceId?: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     let query = db.select().from(occupants).where(isNull(occupants.until));
@@ -80,55 +82,55 @@ export async function getOccupants(residenceId?: string) {
     return await query;
 }
 
-export async function getCompanies() {
-    const d1 = await getD1();
+export async function getCompanies(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(companies);
 }
 
-export async function getContracts() {
-    const d1 = await getD1();
+export async function getContracts(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(contracts);
 }
 
-export async function getInvoices() {
-    const d1 = await getD1();
+export async function getInvoices(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(invoices);
 }
 
-export async function getHistory() {
-    const d1 = await getD1();
+export async function getHistory(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(accommodationHistory);
 }
 
-export async function getTransferRequests() {
-    const d1 = await getD1();
+export async function getTransferRequests(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(transferRequests);
 }
 
-export async function getNotifications() {
-    const d1 = await getD1();
+export async function getNotifications(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(notifications);
 }
 
-export async function getServiceOrders() {
-    const d1 = await getD1();
+export async function getServiceOrders(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(serviceOrders);
 }
-export async function checkInWorker(params: {
+export async function checkInWorker(env: any, params: {
     workerId: string;
     residenceId: string;
     roomId: string;
@@ -136,7 +138,7 @@ export async function checkInWorker(params: {
     checkInBy: string;
     isEmergency?: boolean;
 }) {
-    const d1 = await getD1();
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -161,7 +163,7 @@ export async function checkInWorker(params: {
     return { ok: true, id };
 }
 
-export async function checkOutWorker(params: {
+export async function checkOutWorker(env: any, params: {
     workerId: string;
     residenceId: string;
     roomId: string;
@@ -170,7 +172,7 @@ export async function checkOutWorker(params: {
     checkoutType?: string;
     transferCity?: string;
 }) {
-    const d1 = await getD1();
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -207,8 +209,8 @@ export async function checkOutWorker(params: {
 }
 
 // --- Service Orders (D1 implementations) ---
-export async function createServiceOrder(payload: any) {
-    const d1 = await getD1();
+export async function createServiceOrder(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -304,8 +306,8 @@ export async function createServiceOrder(payload: any) {
     return { ok: true, id: codeShort };
 }
 
-export async function receiveServiceOrder(orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) {
-    const d1 = await getD1();
+export async function receiveServiceOrder(env: any, orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -398,48 +400,48 @@ export async function receiveServiceOrder(orderId: string, updates: any[], recei
 
 // --- Mutations ---
 
-export async function createResidence(data: any) {
-    const d1 = await getD1();
+export async function createResidence(env: any, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.insert(residences).values(data);
     return { ok: true };
 }
 
-export async function updateResidence(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateResidence(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(residences).set(data).where(eq(residences.id, id));
     return { ok: true };
 }
 
-export async function deleteResidence(id: string) {
-    const d1 = await getD1();
+export async function deleteResidence(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.delete(residences).where(eq(residences.id, id));
     return { ok: true };
 }
 
-export async function createCompany(data: any) {
-    const d1 = await getD1();
+export async function createCompany(env: any, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.insert(companies).values(data);
     return { ok: true };
 }
 
-export async function updateCompany(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateCompany(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(companies).set(data).where(eq(companies.id, id));
     return { ok: true };
 }
 
-export async function deleteCompany(id: string) {
-    const d1 = await getD1();
+export async function deleteCompany(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.delete(companies).where(eq(companies.id, id));
@@ -448,43 +450,43 @@ export async function deleteCompany(id: string) {
 
 // --- Additional Getters ---
 
-export async function getInventory() {
-    const d1 = await getD1();
+export async function getInventory(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(inventory);
 }
 
-export async function getInventoryCategories() {
-    const d1 = await getD1();
+export async function getInventoryCategories(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(inventoryCategories);
 }
 
-export async function getInventoryTransactions() {
-    const d1 = await getD1();
+export async function getInventoryTransactions(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(inventoryTransactions);
 }
 
-export async function getMrvRequests() {
-    const d1 = await getD1();
+export async function getMrvRequests(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(mrvRequests);
 }
 
-export async function getMrvs() {
-    const d1 = await getD1();
+export async function getMrvs(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(mrvs);
 }
 
-export async function createMRV(payload: any) {
-    const d1 = await getD1();
+export async function createMRV(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -576,8 +578,8 @@ export async function createMRV(payload: any) {
     return { ok: true, id: mrvId };
 }
 
-export async function approveMRVRequest(requestId: string, approverId: string) {
-    const d1 = await getD1();
+export async function approveMRVRequest(env: any, requestId: string, approverId: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -603,7 +605,7 @@ export async function approveMRVRequest(requestId: string, approverId: string) {
         }
     };
 
-    const created = await createMRV(createPayload);
+    const created = await createMRV(env, createPayload);
     if (!created || !created.ok) return { ok: false, error: created?.error || 'Failed to create MRV' };
 
     await db.update(mrvRequests).set({ status: 'Approved', approvedById: approverId, approvedAt: new Date().toISOString(), mrvId: created.id, mrvShort: reserved ? reserved.short : created.id }).where(eq(mrvRequests.id, requestId));
@@ -619,53 +621,53 @@ export async function approveMRVRequest(requestId: string, approverId: string) {
     return { ok: true, id: created.id };
 }
 
-export async function getOrders() {
-    const d1 = await getD1();
+export async function getOrders(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(orders);
 }
 
-export async function getUser(id: string) {
-    const d1 = await getD1();
+export async function getUser(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return null;
     const db = getDb(d1);
     const res = await db.select().from(users).where(eq(users.id, id));
     return res[0];
 }
 
-export async function getUserByEmail(email: string) {
-    const d1 = await getD1();
+export async function getUserByEmail(env: any, email: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return null;
     const db = getDb(d1);
     const res = await db.select().from(users).where(eq(users.email, email));
     return res[0] || null;
 }
 
-export async function getUsers() {
-    const d1 = await getD1();
+export async function getUsers(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(users);
 }
 
-export async function setUserPasswordHash(id: string, hash: string) {
-    const d1 = await getD1();
+export async function setUserPasswordHash(env: any, id: string, hash: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(users).set({ passwordHash: hash }).where(eq(users.id, id));
     return { ok: true };
 }
-export async function updateUser(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateUser(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(users).set(data).where(eq(users.id, id));
     return { ok: true };
 }
 
-export async function createUser(id: string, data: any) {
-    const d1 = await getD1();
+export async function createUser(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     // Insert a new user with provided id. If a row with same id exists, ignore or return error.
@@ -674,8 +676,8 @@ export async function createUser(id: string, data: any) {
 }
 
 // --- Inventory operations ---
-export async function createInventoryItem(data: any) {
-    const d1 = await getD1();
+export async function createInventoryItem(env: any, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const id = data.id || `it_${Date.now()}`;
@@ -683,24 +685,24 @@ export async function createInventoryItem(data: any) {
     return { ok: true, id };
 }
 
-export async function updateInventoryItem(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateInventoryItem(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(inventory).set(data).where(eq(inventory.id, id));
     return { ok: true };
 }
 
-export async function deleteInventoryItem(id: string) {
-    const d1 = await getD1();
+export async function deleteInventoryItem(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.delete(inventory).where(eq(inventory.id, id));
     return { ok: true };
 }
 
-export async function issueStock(payload: any) {
-    const d1 = await getD1();
+export async function issueStock(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -781,8 +783,8 @@ export async function issueStock(payload: any) {
     return { ok: true, id };
 }
 
-export async function transferStock(payload: any) {
-    const d1 = await getD1();
+export async function transferStock(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -853,8 +855,8 @@ export async function transferStock(payload: any) {
     return { ok: true, id: transferId };
 }
 
-export async function reconcileStock(payload: any) {
-    const d1 = await getD1();
+export async function reconcileStock(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
@@ -921,8 +923,8 @@ export async function reconcileStock(payload: any) {
 }
 
 // --- Maintenance Requests ---
-export async function createMaintenanceRequest(payload: any) {
-    const d1 = await getD1();
+export async function createMaintenanceRequest(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const nowIso = new Date().toISOString();
@@ -931,23 +933,23 @@ export async function createMaintenanceRequest(payload: any) {
     return { ok: true, id };
 }
 
-export async function updateMaintenanceRequest(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateMaintenanceRequest(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(serviceOrders).set(data).where(eq(serviceOrders.id, id));
     return { ok: true };
 }
 
-export async function getMaintenanceRequests() {
-    const d1 = await getD1();
+export async function getMaintenanceRequests(env: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(serviceOrders);
 }
 
-export async function assignMaintenance(requestId: string, assigneeId: string) {
-    const d1 = await getD1();
+export async function assignMaintenance(env: any, requestId: string, assigneeId: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const nowIso = new Date().toISOString();
@@ -956,8 +958,8 @@ export async function assignMaintenance(requestId: string, assigneeId: string) {
 }
 
 // --- Orders workflow ---
-export async function createOrder(payload: any) {
-    const d1 = await getD1();
+export async function createOrder(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const nowIso = new Date().toISOString();
@@ -966,24 +968,24 @@ export async function createOrder(payload: any) {
     return { ok: true, id };
 }
 
-export async function approveOrder(orderId: string, approverId: string, approverName?: string) {
-    const d1 = await getD1();
+export async function approveOrder(env: any, orderId: string, approverId: string, approverName?: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(orders).set({ status: 'Approved', approvedById: approverId, approvedByName: approverName || null }).where(eq(orders.id, orderId));
     return { ok: true };
 }
 
-export async function rejectOrder(orderId: string, approverId: string, reason?: string) {
-    const d1 = await getD1();
+export async function rejectOrder(env: any, orderId: string, approverId: string, reason?: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(orders).set({ status: 'Rejected', approvedById: approverId, notes: reason || null }).where(eq(orders.id, orderId));
     return { ok: true };
 }
 
-export async function updateOrderStatus(orderId: string, status: string) {
-    const d1 = await getD1();
+export async function updateOrderStatus(env: any, orderId: string, status: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(orders).set({ status }).where(eq(orders.id, orderId));
@@ -991,8 +993,8 @@ export async function updateOrderStatus(orderId: string, status: string) {
 }
 
 // --- Notifications ---
-export async function createNotification(payload: any) {
-    const d1 = await getD1();
+export async function createNotification(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const id = `N-${Date.now()}`;
@@ -1001,32 +1003,32 @@ export async function createNotification(payload: any) {
     return { ok: true, id };
 }
 
-export async function markAsRead(notificationId: string) {
-    const d1 = await getD1();
+export async function markAsRead(env: any, notificationId: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(notifications).set({ read: 1 }).where(eq(notifications.id, notificationId));
     return { ok: true };
 }
 
-export async function deleteNotification(notificationId: string) {
-    const d1 = await getD1();
+export async function deleteNotification(env: any, notificationId: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.delete(notifications).where(eq(notifications.id, notificationId));
     return { ok: true };
 }
 
-export async function getUserNotifications(userId: string) {
-    const d1 = await getD1();
+export async function getUserNotifications(env: any, userId: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     return await db.select().from(notifications).where(eq(notifications.userId, userId));
 }
 
 // --- Audit Logs ---
-export async function createAuditLog(payload: any) {
-    const d1 = await getD1();
+export async function createAuditLog(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const id = `A-${Date.now()}`;
@@ -1035,8 +1037,8 @@ export async function createAuditLog(payload: any) {
     return { ok: true, id };
 }
 
-export async function getAuditLogs(filters: any = {}) {
-    const d1 = await getD1();
+export async function getAuditLogs(env: any, filters: any = {}) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
 
@@ -1061,8 +1063,8 @@ export async function getAuditLogs(filters: any = {}) {
 }
 
 // --- Feedback ---
-export async function createFeedback(data: any) {
-    const d1 = await getD1();
+export async function createFeedback(env: any, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     const id = `FB-${Date.now()}`;
@@ -1071,16 +1073,16 @@ export async function createFeedback(data: any) {
     return { ok: true, id };
 }
 
-export async function updateFeedback(id: string, data: any) {
-    const d1 = await getD1();
+export async function updateFeedback(env: any, id: string, data: any) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
     await db.update(feedback).set(data).where(eq(feedback.id, id));
     return { ok: true };
 }
 
-export async function getFeedback(id?: string) {
-    const d1 = await getD1();
+export async function getFeedback(env: any, id?: string) {
+    const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
     if (id) {

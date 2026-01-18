@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
 import { collection, doc, getDocs, runTransaction, Timestamp } from '@/lib/firestore-shim';
 import { db } from '@/lib/firebase';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 type ScanResult = {
   itemId: string;
   negatives: { residenceId: string; value: number }[];
 };
 
-async function scanForNegatives(): Promise<{ countItems: number; totalNegatives: number; details: ScanResult[] }> {
+async function scanForNegatives(env?: any): Promise<{ countItems: number; totalNegatives: number; details: ScanResult[] }> {
   // Support both Firestore and D1-based inventory
   if (db) {
     const snap = await getDocs(collection(db, 'inventory'));
@@ -31,7 +32,7 @@ async function scanForNegatives(): Promise<{ countItems: number; totalNegatives:
   }
 
   // D1 path (read-only scan)
-  const inv = await D1Actions.getInventory();
+  const inv = await D1Actions.getInventory(env);
   const details: ScanResult[] = [];
   let totalNegatives = 0;
   for (const row of inv) {
@@ -76,6 +77,12 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const apply = url.searchParams.get('apply');
 
+    // Get env for D1 operations
+    let env: any;
+    try {
+      env = getRequestContext().env;
+    } catch {}
+
     if (apply === '1' || apply === 'true') {
       // Applying fixes requires write access; not supported in D1-only read-only mode here
       if (!verifySecret(req)) {
@@ -83,7 +90,7 @@ export async function GET(req: Request) {
       }
       if (!db) {
         // If D1 is present, still don't auto-apply fixes from this endpoint (avoid doing writes here)
-        const inv = await D1Actions.getInventory();
+        const inv = await D1Actions.getInventory(env);
         if (Array.isArray(inv)) {
           return NextResponse.json({ ok: false, error: 'Apply not supported in D1-only mode via this endpoint' }, { status: 501 });
         }
@@ -147,7 +154,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, fixedCount, affectedItems: affected });
     }
 
-    const res = await scanForNegatives();
+    const res = await scanForNegatives(env);
     return NextResponse.json({ ok: true, ...res });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to scan' }, { status: 500 });
@@ -160,9 +167,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get env for D1 operations
+    let env: any;
+    try {
+      env = getRequestContext().env;
+    } catch {}
+
     if (!db) {
       // D1 mode: applying fixes via this endpoint is not supported here
-      const inv = await D1Actions.getInventory();
+      const inv = await D1Actions.getInventory(env);
       if (Array.isArray(inv)) {
         return NextResponse.json({ ok: false, error: 'Apply not supported in D1-only mode via this endpoint' }, { status: 501 });
       }
