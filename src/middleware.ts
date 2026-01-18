@@ -38,6 +38,15 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next();
 
+  // Redirect root to login if not authenticated
+  if (pathname === '/') {
+    const token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
+    const cookieToken = req.cookies.get?.('access_token')?.value || '';
+    if (!token && !cookieToken) {
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+  }
+
   let token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
   if (!token) {
     // Try cookie
