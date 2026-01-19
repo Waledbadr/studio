@@ -27,6 +27,7 @@ import { Search, MapPin, ArrowRight, Truck, RefreshCw, Users, Zap, CheckCircle, 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
+import { getUserLanguage, getLocalizedMessage, ERROR_MESSAGES, UI_TEXT } from '@/lib/i18n-helpers';
 
 export default function PendingTransfersPage() {
   const { workers, loading, residences, bulkCheckIn, occupants, getTransferringWorkers, getWorkersByIds } = useAccommodation();
@@ -573,26 +574,44 @@ export default function PendingTransfersPage() {
         const firstError = allResults.find(([_, r]: [string, any]) => r.error)?.[1] as any;
         console.error('[PendingTransfers] Assignment failed:', workerResult, 'First error:', firstError);
         
-        // Map error codes to English messages
-        const errorMessages: Record<string, string> = {
-          'nationality-mismatch': 'Nationality does not match room occupants',
-          'role-mismatch': 'Role does not match room occupants (e.g., Supervisor cannot room with Worker)',
-          'room-full': 'Room is full',
-          'room-not-found': 'Room not found',
-          'worker-not-found': 'Worker not found'
+        const lang = getUserLanguage();
+        
+        // Map error codes to user-friendly messages
+        const errorMessagesMap: Record<string, { ar: string; en: string }> = {
+          'CHECKIN_IN_FUTURE': {
+            ar: 'تاريخ التسكين لا يمكن أن يكون في المستقبل. الرجاء اختيار تاريخ اليوم أو تاريخ سابق',
+            en: 'Check-in date cannot be in the future. Please select today or a past date'
+          },
+          'CHECKOUT_IN_FUTURE': ERROR_MESSAGES.CHECKOUT_IN_FUTURE,
+          'DATE_CONFLICT_WITH_HISTORY': ERROR_MESSAGES.DATE_CONFLICT_WITH_HISTORY,
+          'CHECKIN_BEFORE_LAST_CHECKOUT': ERROR_MESSAGES.CHECKIN_BEFORE_LAST_CHECKOUT,
+          'MONTH_ALREADY_INVOICED': ERROR_MESSAGES.MONTH_ALREADY_INVOICED,
+          'nationality-mismatch': ERROR_MESSAGES['nationality-mismatch'],
+          'role-mismatch': ERROR_MESSAGES['role-mismatch'],
+          'room-full': ERROR_MESSAGES['room-full'],
+          'room-not-found': ERROR_MESSAGES['room-not-found'],
+          'worker-not-found': ERROR_MESSAGES['worker-not-found'],
+          'worker-already-assigned': ERROR_MESSAGES['worker-already-assigned']
         };
         
         const errorCode = workerResult?.error || firstError?.error || 'unknown';
-        const errorMsg = errorMessages[errorCode] || errorCode || "Assignment failed - unknown reason";
+        const cleanErrorCode = errorCode.split(':')[0].trim();
+        const errorMsg = errorMessagesMap[cleanErrorCode] 
+          ? getLocalizedMessage(errorMessagesMap[cleanErrorCode])
+          : cleanErrorCode || getLocalizedMessage({ ar: 'فشل التسكين - سبب غير معروف', en: 'Assignment failed - unknown reason' });
         
-        // If no results at all, might be a different issue
         const finalMessage = allResults.length === 0 
-          ? "Worker was not processed - check the data"
+          ? getLocalizedMessage({ ar: 'لم تتم معالجة العامل - تحقق من البيانات', en: 'Worker was not processed - check data' })
           : errorMsg;
         
+        const dateStr = new Date(checkInDate).toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US');
+        
         toast({ 
-          title: "Assignment Failed ❌", 
-          description: `${finalMessage}\n\nWorker: ${selectedWorker.name}\nRole: ${selectedWorker.role || 'Worker'}`, 
+          title: getLocalizedMessage(UI_TEXT.titles.assignmentFailed), 
+          description: getLocalizedMessage({
+            ar: `${finalMessage}\n\nالعامل: ${selectedWorker.name}\nالتاريخ: ${dateStr}`,
+            en: `${finalMessage}\n\nWorker: ${selectedWorker.name}\nDate: ${dateStr}`
+          }), 
           variant: "destructive",
           duration: 10000 // Show for 10 seconds
         });

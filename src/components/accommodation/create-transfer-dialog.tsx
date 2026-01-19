@@ -11,7 +11,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, AlertTriangle, Info } from 'lucide-react';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { 
+  validateDateConflicts, 
+  getValidationErrorMessage,
+  type WorkerHistoryRecord
+} from '@/lib/accommodation-date-validation';
 
 interface CreateTransferDialogProps {
   isOpen: boolean;
@@ -20,7 +32,7 @@ interface CreateTransferDialogProps {
 }
 
 export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers = [] }: CreateTransferDialogProps) {
-  const { workers, occupants, createTransferRequest } = useAccommodation();
+  const { workers, occupants, createTransferRequest, getWorkerHistory, accommodationHistory } = useAccommodation();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { toast } = useToast();
@@ -32,6 +44,8 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
   const [toRoomId, setToRoomId] = useState<string>('');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [transferDate, setTransferDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateConflicts, setDateConflicts] = useState<Record<string, string>>({});
 
   // Get available workers (not pre-selected)
   const availableWorkers = workers?.filter(w => !selectedWorkers.includes(w.id)) || [];
@@ -74,11 +88,61 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
 
   const handleAddWorker = (workerId: string) => {
     setSelectedWorkers(prev => [...prev, workerId]);
+    // Check for date conflicts when adding worker
+    checkDateConflictsForWorker(workerId);
   };
 
   const handleRemoveWorker = (workerId: string) => {
     setSelectedWorkers(prev => prev.filter(id => id !== workerId));
+    setDateConflicts(prev => {
+      const updated = { ...prev };
+      delete updated[workerId];
+      return updated;
+    });
   };
+
+  // Check date conflicts for a worker
+  const checkDateConflictsForWorker = (workerId: string) => {
+    if (!transferDate) return;
+    
+    const workerHistory = getWorkerHistory(workerId);
+    const historyRecords: WorkerHistoryRecord[] = workerHistory
+      .filter(h => h.actionType === 'CHECK_IN' || h.actionType === 'CHECK_OUT' || h.actionType === 'TRANSFER')
+      .map(h => ({
+        id: h.id,
+        workerId: h.workerId,
+        checkInDate: new Date(h.actionDate),
+        checkOutDate: h.actionType === 'CHECK_OUT' ? new Date(h.actionDate) : null,
+        roomId: h.toRoomId || h.roomId || '',
+        residenceId: h.toResidenceId || h.residenceId
+      }));
+
+    const conflictValidation = validateDateConflicts(
+      workerId,
+      new Date(transferDate),
+      historyRecords
+    );
+
+    if (!conflictValidation.isValid) {
+      const lastCheckout = workerHistory.find(h => h.actionType === 'CHECK_OUT');
+      const errorMsg = lastCheckout 
+        ? `لا يمكن النقل بتاريخ ${new Date(transferDate).toLocaleDateString('ar-SA')} لأن العامل خرج بتاريخ ${new Date(lastCheckout.actionDate).toLocaleDateString('ar-SA')}`
+        : getValidationErrorMessage(conflictValidation, 'ar');
+      
+      setDateConflicts(prev => ({ ...prev, [workerId]: errorMsg }));
+    } else {
+      setDateConflicts(prev => {
+        const updated = { ...prev };
+        delete updated[workerId];
+        return updated;
+      });
+    }
+  };
+
+  // Re-check conflicts when date changes
+  React.useEffect(() => {
+    selectedWorkers.forEach(checkDateConflictsForWorker);
+  }, [transferDate]);
 
   const getWorkerName = (id: string) => {
     return workers?.find(w => w.id === id)?.name || id;
@@ -195,6 +259,23 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
                 ))
               )}
             </div>
+            
+            {/* Show date conflicts if any */}
+            {Object.keys(dateConflicts).length > 0 && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-semibold mb-2">تعارض في التواريخ:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {Object.entries(dateConflicts).map(([workerId, error]) => (
+                      <li key={workerId} className="text-sm">
+                        {getWorkerName(workerId)}: {error}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           {/* Add Worker */}
@@ -304,6 +385,40 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Transfer Date */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label>تاريخ النقل *</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-sm">• لا يمكن اختيار تاريخ في المستقبل</p>
+                      <p className="text-sm">• لا يمكن النقل إلى تاريخ محجوز أو مستخدم</p>
+                      <p className="text-sm">• تحقق من عدم وجود تعارض مع سجلات العمال</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <input
+                type="date"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={transferDate}
+                onChange={(e) => setTransferDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+              />
+              {new Date(transferDate) > new Date() && (
+                <Alert className="py-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-xs text-destructive">
+                    ⚠️ لا يمكن اختيار تاريخ في المستقبل للنقل
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
 

@@ -5,6 +5,13 @@ import serverCache from '@/lib/server-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/**
+ * Accommodation Assignment API (Check-in)
+ * 
+ * Handles worker check-in operations and room assignments.
+ * For checkout operations with date validation, see: /api/accommodation/checkout
+ */
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -12,14 +19,21 @@ export async function POST(request: Request) {
     const { workerId, workerIds, residenceId, roomId } = body || {};
     
     if ((!workerId && !Array.isArray(workerIds)) || !residenceId || !roomId) {
-      return NextResponse.json({ ok: false, error: 'missing-params' }, { status: 400 });
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'missing-params',
+        errorAr: 'معاملات مفقودة: يجب تحديد العامل والمسكن والغرفة',
+        errorEn: 'Missing parameters: worker, residence, and room are required'
+      }, { status: 400 });
     }
 
     const adminDb = getAdminDb();
     if (!adminDb) {
       return NextResponse.json({ 
         ok: false, 
-        error: 'Firebase Admin not configured' 
+        error: 'Firebase Admin not configured',
+        errorAr: 'خطأ في إعداد قاعدة البيانات',
+        errorEn: 'Database configuration error'
       }, { status: 500 });
     }
 
@@ -75,7 +89,12 @@ export async function POST(request: Request) {
       const residence = residenceDoc.data();
       
       if (!residence) {
-        return NextResponse.json({ ok: false, error: 'Residence not found' }, { status: 404 });
+        return NextResponse.json({ 
+          ok: false, 
+          error: 'Residence not found',
+          errorAr: 'المسكن غير موجود',
+          errorEn: 'Residence not found'
+        }, { status: 404 });
       }
       
       // Find the room in the residence structure
@@ -96,7 +115,12 @@ export async function POST(request: Request) {
       }
       
       if (!roomData) {
-        return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
+        return NextResponse.json({ 
+          ok: false, 
+          error: 'Room not found',
+          errorAr: 'الغرفة غير موجودة',
+          errorEn: 'Room not found'
+        }, { status: 404 });
       }
       
       // Check room capacity
@@ -106,7 +130,9 @@ export async function POST(request: Request) {
       if (currentOccupants.length + toAssign.length > roomCapacity) {
         return NextResponse.json({ 
           ok: false, 
-          error: `Room capacity exceeded. Current: ${currentOccupants.length}, Capacity: ${roomCapacity}` 
+          error: `Room capacity exceeded. Current: ${currentOccupants.length}, Capacity: ${roomCapacity}`,
+          errorAr: `الغرفة ممتلئة. الحالي: ${currentOccupants.length}، السعة: ${roomCapacity}`,
+          errorEn: `Room capacity exceeded. Current: ${currentOccupants.length}, Capacity: ${roomCapacity}`
         }, { status: 400 });
       }
       
@@ -115,7 +141,9 @@ export async function POST(request: Request) {
         const workerIds = alreadyAssignedWorkers.join(', ');
         return NextResponse.json({ 
           ok: false, 
-          error: `Workers already assigned: ${workerIds}` 
+          error: `Workers already assigned: ${workerIds}`,
+          errorAr: `العمال مسكّنين بالفعل: ${workerIds}`,
+          errorEn: `Workers already assigned: ${workerIds}`
         }, { status: 400 });
       }
       
@@ -129,14 +157,21 @@ export async function POST(request: Request) {
         for (const worker of workers) {
           const w = worker as any;
           if (!w) {
-            return NextResponse.json({ ok: false, error: `Worker ${w?.id} not found` }, { status: 404 });
+            return NextResponse.json({ 
+              ok: false, 
+              error: `Worker ${w?.id} not found`,
+              errorAr: `العامل ${w?.id} غير موجود`,
+              errorEn: `Worker ${w?.id} not found`
+            }, { status: 404 });
           }
           
           // Check nationality match
           if (firstNationality && w.nationaliy !== firstNationality) {
             return NextResponse.json({ 
               ok: false, 
-              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationaliy}` 
+              error: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationaliy}`,
+              errorAr: `تعارض في الجنسية. الغرفة بها عمال من ${firstNationality}، لا يمكن تسكين ${w.nationaliy}`,
+              errorEn: `Nationality mismatch. Room has ${firstNationality} workers, cannot assign ${w.nationaliy}`
             }, { status: 400 });
           }
         }
@@ -149,7 +184,9 @@ export async function POST(request: Request) {
             if (w.nationaliy !== firstNationality) {
               return NextResponse.json({ 
                 ok: false, 
-                error: `Cannot assign workers with different nationalities to the same room` 
+                error: `Cannot assign workers with different nationalities to the same room`,
+                errorAr: 'لا يمكن تسكين عمال من جنسيات مختلفة في نفس الغرفة',
+                errorEn: 'Cannot assign workers with different nationalities to the same room'
               }, { status: 400 });
             }
           }
@@ -175,10 +212,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, assigned, count: assigned.length });
     } catch (e) {
       console.error('assign route error', e);
-      return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+      return NextResponse.json({ 
+        ok: false, 
+        error: String(e),
+        errorAr: 'خطأ في معالجة طلب التسكين',
+        errorEn: 'Error processing assignment request'
+      }, { status: 500 });
     }
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ ok: false, error: (e as any).message || 'error' }, { status: 500 });
+    return NextResponse.json({ 
+      ok: false, 
+      error: (e as any).message || 'error',
+      errorAr: 'خطأ غير متوقع',
+      errorEn: 'Unexpected error'
+    }, { status: 500 });
   }
 }

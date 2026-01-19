@@ -7,7 +7,8 @@ import { useUsers } from "@/context/users-context";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, Users, Building, Home, ArrowRight, CheckCircle2, 
-  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X
+  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X,
+  AlertTriangle, Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -39,6 +47,7 @@ import { RoomHistoryDialog } from "./room-history-dialog";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { getUserLanguage, getLocalizedMessage, ERROR_MESSAGES, UI_TEXT } from '@/lib/i18n-helpers';
 
 export function AccommodationManager() {
   // const { residences } = useResidences(); // Use residences from AccommodationContext for better type support
@@ -67,7 +76,11 @@ export function AccommodationManager() {
     setIsSyncing(true);
     try {
       await manualSyncFromFirestore();
-      toast({ title: "Synced", description: "Data synchronized with database" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage(UI_TEXT.titles.success),
+        description: getLocalizedMessage({ ar: 'تم مزامنة البيانات مع قاعدة البيانات', en: 'Data synchronized with database' })
+      });
     } catch (e) {
       console.error(e);
     } finally {
@@ -97,6 +110,8 @@ export function AccommodationManager() {
   const [checkoutWorker, setCheckoutWorker] = useState<any>(null);
   const [checkoutReason, setCheckoutReason] = useState<string>("End of Contract");
   const [checkoutCity, setCheckoutCity] = useState<string>("");
+  const [checkoutDateValue, setCheckoutDateValue] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [checkoutDateWarning, setCheckoutDateWarning] = useState<string>('');
   
   // Extract Unique Cities from ALL residences (for transfer destinations)
   const uniqueCities = React.useMemo(() => {
@@ -367,7 +382,12 @@ export function AccommodationManager() {
   // Actions
   const handleAssign = async () => {
     if (!selectedResidenceId || !selectedRoomId || selectedWorkerIds.length === 0) {
-      toast({ title: "Error", description: "Please select workers and a room", variant: "destructive" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage(UI_TEXT.titles.error),
+        description: getLocalizedMessage({ ar: 'يرجى اختيار العمال والغرفة', en: 'Please select workers and a room' }),
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -396,17 +416,49 @@ export function AccommodationManager() {
       }
 
       if (failures.length > 0) {
-        // Show detailed error for failures
-        // We take unique error messages
-        const uniqueErrors = Array.from(new Set(failures.map(f => f.error).filter(Boolean)));
+        const lang = getUserLanguage();
+        
+        // Map error codes to bilingual user-friendly messages
+        const errorMessages: Record<string, {ar: string, en: string}> = {
+          'CHECKIN_IN_FUTURE': { ar: 'تاريخ التسكين لا يمكن أن يكون في المستقبل', en: 'Check-in date cannot be in the future' },
+          'CHECKOUT_IN_FUTURE': { ar: 'تاريخ الخروج لا يمكن أن يكون في المستقبل', en: 'Check-out date cannot be in the future' },
+          'DATE_CONFLICT_WITH_HISTORY': { ar: 'تعارض في التواريخ مع السجلات السابقة', en: 'Date conflict with history records' },
+          'CHECKIN_BEFORE_LAST_CHECKOUT': { ar: 'تاريخ التسكين يجب أن يكون بعد آخر خروج', en: 'Check-in must be after last checkout' },
+          'MONTH_ALREADY_INVOICED': { ar: 'تم إصدار فاتورة لهذا الشهر', en: 'Month already invoiced' },
+          'nationality-mismatch': { ar: 'الجنسية لا تطابق الغرفة', en: 'Nationality mismatch' },
+          'role-mismatch': { ar: 'الدور الوظيفي لا يطابق الغرفة', en: 'Role mismatch' },
+          'room-full': { ar: 'الغرفة ممتلئة', en: 'Room is full' },
+          'room-not-found': { ar: 'الغرفة غير موجودة', en: 'Room not found' },
+          'worker-not-found': { ar: 'العامل غير موجود', en: 'Worker not found' },
+          'worker-already-assigned': { ar: 'العامل مسكّن بالفعل', en: 'Worker already assigned' }
+        };
+        
+        // Get unique error messages with translation
+        const translatedErrors = failures
+          .map(f => {
+            const errorCode = (f.error || '').split(':')[0].trim();
+            const msg = errorMessages[errorCode];
+            return msg ? getLocalizedMessage(msg) : errorCode;
+          })
+          .filter(Boolean);
+        const uniqueErrors = Array.from(new Set(translatedErrors));
+        
         toast({ 
-          title: "Assignment Issues", 
-          description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`, 
+          title: getLocalizedMessage({ ar: 'مشاكل في التسكين', en: 'Check-in Issues' }),
+          description: getLocalizedMessage({
+            ar: `فشل تسكين ${failures.length} عامل. الأسباب: ${uniqueErrors.join("، ")}`,
+            en: `Failed to check-in ${failures.length} worker(s). Reasons: ${uniqueErrors.join(", ")}`
+          }),
           variant: "destructive" 
         });
       }
     } catch (error) {
-      toast({ title: "Error", description: "Assignment failed", variant: "destructive" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage(UI_TEXT.titles.error),
+        description: getLocalizedMessage({ ar: 'فشل التسكين', en: 'Assignment failed' }),
+        variant: "destructive" 
+      });
     }
   };
 
@@ -416,7 +468,15 @@ export function AccommodationManager() {
 
   const checkDuplicates = () => {
     if (!workers || workers.length === 0) {
-      toast({ title: "No Data", description: "Workers list is empty (Optimization Mode). Cannot check for duplicates locally.", variant: "destructive" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage({ ar: 'لا توجد بيانات', en: 'No Data' }),
+        description: getLocalizedMessage({ 
+          ar: 'قائمة العمال فارغة (وضع التحسين). لا يمكن التحقق من التكرارات محلياً',
+          en: 'Workers list is empty (Optimization Mode). Cannot check for duplicates locally'
+        }),
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -444,7 +504,11 @@ export function AccommodationManager() {
   const handleDeleteDuplicate = async (id: string) => {
     if (!confirm("Are you sure you want to delete this worker?")) return;
     await deleteWorker(id);
-    toast({ title: "Deleted", description: "Worker deleted successfully" });
+    const lang = getUserLanguage();
+    toast({ 
+      title: getLocalizedMessage({ ar: 'تم الحذف', en: 'Deleted' }),
+      description: getLocalizedMessage({ ar: 'تم حذف العامل بنجاح', en: 'Worker deleted successfully' })
+    });
     
     setDuplicates(prev => {
       const newDuplicates = prev.map(group => ({
@@ -463,7 +527,12 @@ export function AccommodationManager() {
   const handleAutoAssign = async () => {
     if (selectedWorkerIds.length === 0) return;
     if (!selectedFloorId) {
-      toast({ title: "Selection Required", description: "Please select a floor to auto-assign workers to.", variant: "destructive" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage({ ar: 'اختيار مطلوب', en: 'Selection Required' }),
+        description: getLocalizedMessage({ ar: 'يرجى اختيار طابق للتسكين التلقائي', en: 'Please select a floor to auto-assign workers to' }),
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -691,12 +760,26 @@ export function AccommodationManager() {
                 });
                 successCount++;
               } else {
+                // Map error codes to user-friendly messages (Arabic)
+                const errorMessages: Record<string, string> = {
+                  'CHECKIN_IN_FUTURE': 'تاريخ مستقبلي',
+                  'DATE_CONFLICT_WITH_HISTORY': 'تعارض تواريخ',
+                  'CHECKIN_BEFORE_LAST_CHECKOUT': 'قبل آخر خروج',
+                  'nationality-mismatch': 'جنسية مختلفة',
+                  'role-mismatch': 'دور وظيفي مختلف',
+                  'room-full': 'غرفة ممتلئة',
+                  'worker-already-assigned': 'مسكّن بالفعل'
+                };
+                
+                const errorCode = (result?.error || '').split(':')[0].trim();
+                const translatedError = errorMessages[errorCode] || result?.error || 'فشل';
+                
                 resultsDetails.push({
                   workerId: id,
                   workerName: w?.name || id,
                   roomName,
                   status: 'error',
-                  message: result?.error || 'Batch failed'
+                  message: translatedError
                 });
                 failCount++;
               }
@@ -747,7 +830,12 @@ export function AccommodationManager() {
 
     } catch (e) {
       console.error("Auto Assign Failed", e);
-      toast({ title: "Auto Assign Error", description: "An unexpected error occurred.", variant: "destructive" });
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage({ ar: 'خطأ في التسكين التلقائي', en: 'Auto Assign Error' }),
+        description: getLocalizedMessage({ ar: 'حدث خطأ غير متوقع', en: 'An unexpected error occurred' }),
+        variant: "destructive" 
+      });
     } finally {
       setIsAutoAssigning(false);
     }
@@ -1342,14 +1430,44 @@ export function AccommodationManager() {
                                 setSelectedWorkers(prev => prev.filter(w => newSelectedIds.includes(w.id)));
                                 
                                 if (successfulIds.length > 0) {
-                                  toast({ title: "Assigned", description: `Moved ${successfulIds.length} workers to ${room.name}` });
+                                  const lang = getUserLanguage();
+                                  toast({ 
+                                    title: getLocalizedMessage({ ar: 'تم التسكين', en: 'Assigned' }),
+                                    description: getLocalizedMessage({ 
+                                      ar: `تم نقل ${successfulIds.length} عامل إلى ${room.name}`,
+                                      en: `Moved ${successfulIds.length} workers to ${room.name}`
+                                    })
+                                  });
                                 }
 
                                 if (failures.length > 0) {
-                                  const uniqueErrors = Array.from(new Set(failures.map((f: any) => f.error).filter(Boolean)));
+                                  const lang = getUserLanguage();
+                                  
+                                  // Map error codes to bilingual user-friendly messages
+                                  const errorMessages: Record<string, {ar: string, en: string}> = {
+                                    'CHECKIN_IN_FUTURE': { ar: 'تاريخ مستقبلي', en: 'Future date' },
+                                    'DATE_CONFLICT_WITH_HISTORY': { ar: 'تعارض تواريخ', en: 'Date conflict' },
+                                    'nationality-mismatch': { ar: 'جنسية مختلفة', en: 'Nationality mismatch' },
+                                    'role-mismatch': { ar: 'دور مختلف', en: 'Role mismatch' },
+                                    'room-full': { ar: 'غرفة ممتلئة', en: 'Room full' },
+                                    'worker-already-assigned': { ar: 'مسكّن بالفعل', en: 'Already assigned' }
+                                  };
+                                  
+                                  const translatedErrors = failures
+                                    .map((f: any) => {
+                                      const errorCode = (f.error || '').split(':')[0].trim();
+                                      const msg = errorMessages[errorCode];
+                                      return msg ? getLocalizedMessage(msg) : f.error;
+                                    })
+                                    .filter(Boolean);
+                                  const uniqueErrors = Array.from(new Set(translatedErrors));
+                                  
                                   toast({ 
-                                    title: "Assignment Issues", 
-                                    description: `Failed to assign ${failures.length} workers. Reasons: ${uniqueErrors.join(", ")}`, 
+                                    title: getLocalizedMessage({ ar: 'مشاكل في التسكين', en: 'Check-in Issues' }),
+                                    description: getLocalizedMessage({
+                                      ar: `فشل تسكين ${failures.length} عامل. الأسباب: ${uniqueErrors.join("، ")}`,
+                                      en: `Failed ${failures.length} worker(s). Reasons: ${uniqueErrors.join(", ")}`
+                                    }),
                                     variant: "destructive" 
                                   });
                                 }
@@ -1357,10 +1475,32 @@ export function AccommodationManager() {
                                 // Handle complete failure
                                 const failures = result.results ? Object.values(result.results).filter((r: any) => !r.success) : [];
                                 if (failures.length > 0) {
-                                  const uniqueErrors = Array.from(new Set(failures.map((f: any) => f.error).filter(Boolean)));
+                                  const lang = getUserLanguage();
+                                  
+                                  // Map error codes to bilingual user-friendly messages
+                                  const errorMessages: Record<string, {ar: string, en: string}> = {
+                                    'CHECKIN_IN_FUTURE': { ar: 'تاريخ مستقبلي', en: 'Future date' },
+                                    'DATE_CONFLICT_WITH_HISTORY': { ar: 'تعارض تواريخ', en: 'Date conflict' },
+                                    'nationality-mismatch': { ar: 'جنسية مختلفة', en: 'Nationality mismatch' },
+                                    'role-mismatch': { ar: 'دور مختلف', en: 'Role mismatch' },
+                                    'room-full': { ar: 'غرفة ممتلئة', en: 'Room full' }
+                                  };
+                                  
+                                  const translatedErrors = failures
+                                    .map((f: any) => {
+                                      const errorCode = (f.error || '').split(':')[0].trim();
+                                      const msg = errorMessages[errorCode];
+                                      return msg ? getLocalizedMessage(msg) : f.error;
+                                    })
+                                    .filter(Boolean);
+                                  const uniqueErrors = Array.from(new Set(translatedErrors));
+                                  
                                   toast({ 
-                                    title: "Assignment Failed", 
-                                    description: `Reasons: ${uniqueErrors.join(", ")}`, 
+                                    title: getLocalizedMessage({ ar: 'فشل التسكين', en: 'Check-in Failed' }),
+                                    description: getLocalizedMessage({
+                                      ar: `الأسباب: ${uniqueErrors.join("، ")}`,
+                                      en: `Reasons: ${uniqueErrors.join(", ")}`
+                                    }),
                                     variant: "destructive" 
                                   });
                                 }
@@ -1509,7 +1649,11 @@ export function AccommodationManager() {
                                             performedBy: currentUser?.id || 'Admin',
                                             checkOutDate: new Date().toISOString()
                                           });
-                                          toast({ title: "Checked Out", description: "Worker removed" });
+                                          const lang = getUserLanguage();
+                                          toast({ 
+                                            title: getLocalizedMessage({ ar: 'تم الخروج', en: 'Checked Out' }),
+                                            description: getLocalizedMessage({ ar: 'تم حذف العامل', en: 'Worker removed' })
+                                          });
                                         }
                                       }}
                                     >
@@ -1562,6 +1706,7 @@ export function AccommodationManager() {
                               className="h-7 text-xs" 
                               value={checkInDate}
                               onChange={(e) => setCheckInDate(e.target.value)}
+                              max={new Date().toISOString().split('T')[0]}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1617,7 +1762,12 @@ export function AccommodationManager() {
                           onClick={async () => {
                             if (selectedAreAssigned) {
                                if (checkInType === 'Transfer' && !bulkTransferCity) {
-                                 toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
+                                 const lang = getUserLanguage();
+                                 toast({ 
+                                   title: getLocalizedMessage({ ar: 'مدينة مطلوبة', en: 'City Required' }),
+                                   description: getLocalizedMessage({ ar: 'يرجى اختيار المدينة للنقل', en: 'Please select a city for transfer' }),
+                                   variant: "destructive" 
+                                 });
                                  return;
                                }
                                if (!confirm(`Check out ${selectedWorkerIds.length} workers?`)) return;
@@ -1629,12 +1779,24 @@ export function AccommodationManager() {
                                     transferCity: checkInType === 'Transfer' ? bulkTransferCity : undefined
                                });
                                if (result.ok) {
-                                    toast({ title: "Checked Out", description: `Successfully checked out ${selectedWorkerIds.length} workers` });
+                                    const lang = getUserLanguage();
+                                    toast({ 
+                                      title: getLocalizedMessage({ ar: 'تم الخروج', en: 'Checked Out' }),
+                                      description: getLocalizedMessage({
+                                        ar: `تم خروج ${selectedWorkerIds.length} عامل بنجاح`,
+                                        en: `Successfully checked out ${selectedWorkerIds.length} workers`
+                                      })
+                                    });
                                     setSelectedWorkerIds([]);
                                     setSelectedWorkers([]);
                                     setBulkTransferCity("");
                                } else {
-                                    toast({ title: "Error", description: "Failed to check out workers", variant: "destructive" });
+                                    const lang = getUserLanguage();
+                                    toast({ 
+                                      title: getLocalizedMessage(UI_TEXT.titles.error),
+                                      description: getLocalizedMessage({ ar: 'فشل خروج العمال', en: 'Failed to check out workers' }),
+                                      variant: "destructive" 
+                                    });
                                }
                             } else {
                                handleAssign();
@@ -1746,27 +1908,78 @@ export function AccommodationManager() {
               </div>
             )}
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="date" className="text-right text-sm font-medium">
-                Date
-              </label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label htmlFor="checkout-date" className="text-sm font-medium">
+                  تاريخ الخروج
+                </label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs" dir="rtl">
+                      <p className="text-sm">
+                        • لا يمكن اختيار تاريخ في المستقبل<br/>
+                        • لا يمكن تعديل السجلات في الشهور المفوترة<br/>
+                        • يجب أن يكون تاريخ الخروج بعد تاريخ الدخول
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Input
                 id="checkout-date"
                 type="date"
-                defaultValue={new Date().toISOString().split('T')[0]}
-                className="col-span-3"
+                value={checkoutDateValue}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => {
+                  const selectedDate = new Date(e.target.value);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  if (selectedDate > today) {
+                    setCheckoutDateWarning('⚠️ لا يمكن اختيار تاريخ في المستقبل');
+                  } else {
+                    setCheckoutDateWarning('');
+                  }
+                  setCheckoutDateValue(e.target.value);
+                }}
+                className="w-full"
               />
+              {checkoutDateWarning && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{checkoutDateWarning}</AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCheckoutWorker(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={async () => {
+            <Button variant="outline" onClick={() => {
+              setCheckoutWorker(null);
+              setCheckoutDateWarning('');
+              setCheckoutDateValue(new Date().toISOString().split('T')[0]);
+            }}>إلغاء</Button>
+            <Button 
+              variant="destructive" 
+              disabled={!!checkoutDateWarning}
+              onClick={async () => {
               if (checkoutReason === 'Transfer' && !checkoutCity) {
-                toast({ title: "City Required", description: "Please select a city for transfer", variant: "destructive" });
+                const lang = getUserLanguage();
+                toast({ 
+                  title: getLocalizedMessage({ ar: 'مدينة مطلوبة', en: 'City Required' }),
+                  description: getLocalizedMessage({ ar: 'يرجى اختيار المدينة للنقل', en: 'Please select city for transfer' }),
+                  variant: "destructive" 
+                });
+                return;
+              }
+              
+              if (checkoutDateWarning) {
                 return;
               }
 
-              const date = (document.getElementById('checkout-date') as HTMLInputElement)?.value;
+              const date = checkoutDateValue;
               
               await checkOutWorkerEnhanced({
                 workerId: checkoutWorker.id,
@@ -1775,7 +1988,11 @@ export function AccommodationManager() {
                 checkOutDate: date ? new Date(date).toISOString() : undefined,
                 transferCity: checkoutReason === 'Transfer' ? checkoutCity : undefined
               });
-              toast({ title: "Checked Out", description: "Worker removed from room" });
+              const lang = getUserLanguage();
+              toast({ 
+                title: getLocalizedMessage({ ar: 'تم الخروج', en: 'Checked Out' }),
+                description: getLocalizedMessage({ ar: 'تم حذف العامل من الغرفة', en: 'Worker removed from room' })
+              });
               handleSearch(searchQuery);
               setCheckoutWorker(null);
               setCheckoutCity("");

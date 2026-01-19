@@ -23,8 +23,18 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  X
+  X,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getUserLanguage, getLocalizedMessage } from '@/lib/i18n-helpers';
 
 type OperationType = 'CHECK_IN' | 'CHECK_OUT' | 'TRANSFER';
 
@@ -63,6 +73,7 @@ export function BatchOperationsDialog({
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<Record<string, { success: boolean; error?: string }> | null>(null);
+  const [dateWarning, setDateWarning] = useState<string>('');
 
   // Filter Residences based on permissions
   const accessibleResidences = useMemo(() => {
@@ -72,10 +83,11 @@ export function BatchOperationsDialog({
   }, [residences, currentUser]);
 
   const getTitle = () => {
+    const lang = getUserLanguage();
     switch (operationType) {
-      case 'CHECK_IN': return 'تسكين جماعي';
-      case 'CHECK_OUT': return 'إخراج جماعي';
-      case 'TRANSFER': return 'تبديل جماعي';
+      case 'CHECK_IN': return getLocalizedMessage({ ar: 'تسكين جماعي', en: 'Bulk Check-In' });
+      case 'CHECK_OUT': return getLocalizedMessage({ ar: 'إخراج جماعي', en: 'Bulk Check-Out' });
+      case 'TRANSFER': return getLocalizedMessage({ ar: 'تبديل جماعي', en: 'Bulk Transfer' });
     }
   };
 
@@ -88,10 +100,11 @@ export function BatchOperationsDialog({
   };
 
   const getDescription = () => {
+    const lang = getUserLanguage();
     switch (operationType) {
-      case 'CHECK_IN': return 'تسكين عدة عمال في نفس الغرفة';
-      case 'CHECK_OUT': return 'إخراج عدة عمال من سكناتهم الحالية';
-      case 'TRANSFER': return 'نقل عدة عمال إلى غرفة جديدة';
+      case 'CHECK_IN': return getLocalizedMessage({ ar: 'تسكين عدة عمال في نفس الغرفة', en: 'Check in multiple workers to the same room' });
+      case 'CHECK_OUT': return getLocalizedMessage({ ar: 'إخراج عدة عمال من سكناتهم الحالية', en: 'Check out multiple workers from their current accommodations' });
+      case 'TRANSFER': return getLocalizedMessage({ ar: 'نقل عدة عمال إلى غرفة جديدة', en: 'Transfer multiple workers to a new room' });
     }
   };
 
@@ -202,10 +215,10 @@ export function BatchOperationsDialog({
           <div className="space-y-6">
             {/* Selected Workers */}
             <div>
-              <Label>العمال المحددين ({selectedWorkerIds.length})</Label>
+              <Label>{getLocalizedMessage({ ar: `العمال المحددين (${selectedWorkerIds.length})`, en: `Selected Workers (${selectedWorkerIds.length})` })}</Label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedWorkerIds.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">لم يتم تحديد أي عمال</p>
+                  <p className="text-sm text-muted-foreground">{getLocalizedMessage({ ar: 'لم يتم تحديد أي عمال', en: 'No workers selected' })}</p>
                 ) : (
                   selectedWorkerIds.map(workerId => {
                     const worker = workers.find(w => w.id === workerId);
@@ -229,7 +242,7 @@ export function BatchOperationsDialog({
             {(operationType === 'CHECK_IN' || operationType === 'TRANSFER') && (
               <>
                 <div>
-                  <Label htmlFor="residence">المسكن</Label>
+                  <Label htmlFor="residence">{getLocalizedMessage({ ar: 'المسكن', en: 'Residence' })}</Label>
                   <select
                     id="residence"
                     value={selectedResidenceId}
@@ -239,7 +252,7 @@ export function BatchOperationsDialog({
                     }}
                     className="w-full mt-1 border rounded-md px-3 py-2 bg-background"
                   >
-                    <option value="">اختر المسكن</option>
+                    <option value="">{getLocalizedMessage({ ar: 'اختر المسكن', en: 'Select Residence' })}</option>
                     {accessibleResidences.map(r => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
@@ -247,7 +260,7 @@ export function BatchOperationsDialog({
                 </div>
 
                 <div>
-                  <Label htmlFor="room">الغرفة</Label>
+                  <Label htmlFor="room">{getLocalizedMessage({ ar: 'الغرفة', en: 'Room' })}</Label>
                   <select
                     id="room"
                     value={selectedRoomId}
@@ -255,7 +268,7 @@ export function BatchOperationsDialog({
                     disabled={!selectedResidenceId}
                     className="w-full mt-1 border rounded-md px-3 py-2 bg-background disabled:opacity-50"
                   >
-                    <option value="">اختر الغرفة</option>
+                    <option value="">{getLocalizedMessage({ ar: 'اختر الغرفة', en: 'Select Room' })}</option>
                     {availableRooms.map(room => (
                       <option key={room.id} value={room.id}>
                         {room.name || room.id}
@@ -266,31 +279,71 @@ export function BatchOperationsDialog({
               </>
             )}
 
-            {/* Date */}
-            <div>
-              <Label htmlFor="date">
-                {operationType === 'CHECK_IN' && 'تاريخ التسكين'}
-                {operationType === 'CHECK_OUT' && 'تاريخ الإخراج'}
-                {operationType === 'TRANSFER' && 'تاريخ التبديل'}
-              </Label>
+            {/*  className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="date">
+                  {operationType === 'CHECK_IN' && 'تاريخ التسكين'}
+                  {operationType === 'CHECK_OUT' && 'تاريخ الإخراج'}
+                  {operationType === 'TRANSFER' && 'تاريخ التبديل'}
+                </Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs" dir="rtl">
+                      <p className="text-sm">
+                        {operationType === 'CHECK_OUT' && (
+                          <>• لا يمكن اختيار تاريخ في المستقبل<br/>• لا يمكن التعديل في الشهور المفوترة</>
+                        )}
+                        {operationType === 'CHECK_IN' && (
+                          <>• لا يمكن اختيار تاريخ في المستقبل<br/>• يجب أن يكون التاريخ بعد آخر خروج للعامل<br/>• لا يمكن تسكين عامل لديه سجل نشط</>
+                        )}
+                        {operationType === 'TRANSFER' && (
+                          <>• لا يمكن اختيار تاريخ في المستقبل<br/>• يجب أن يكون التاريخ بعد آخر خروج للعامل<br/>• لا يمكن النقل في فترة مفوترة</>
+                        )}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Input
                 id="date"
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => {
+                  const selectedDate = new Date(e.target.value);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  if (selectedDate > today) {
+                    setDateWarning('⚠️ لا يمكن اختيار تاريخ في المستقبل');
+                  } else {
+                    setDateWarning('');
+                  }
+                  setDate(e.target.value);
+                }}
                 className="mt-1"
+              />
+              {dateWarning && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{dateWarning}</AlertDescription>
+                </Alert>
+              )}className="mt-1"
               />
             </div>
 
             {/* Reason (for CHECK_OUT and TRANSFER) */}
             {(operationType === 'CHECK_OUT' || operationType === 'TRANSFER') && (
               <div>
-                <Label htmlFor="reason">السبب (اختياري)</Label>
+                <Label htmlFor="reason">{getLocalizedMessage({ ar: 'السبب (اختياري)', en: 'Reason (Optional)' })}</Label>
                 <Input
                   id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="أدخل سبب العملية"
+                  placeholder={getLocalizedMessage({ ar: 'أدخل سبب العملية', en: 'Enter reason for operation' })}
                   className="mt-1"
                 />
               </div>
@@ -298,22 +351,29 @@ export function BatchOperationsDialog({
 
             {/* Notes */}
             <div>
-              <Label htmlFor="notes">ملاحظات (اختياري)</Label>
+              <Label htmlFor="notes">{getLocalizedMessage({ ar: 'ملاحظات (اختياري)', en: 'Notes (Optional)' })}</Label>
               <Textarea
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="أدخل أي ملاحظات إضافية"
+                placeholder={getLocalizedMessage({ ar: 'أدخل أي ملاحظات إضافية', en: 'Enter any additional notes' })}
                 className="mt-1"
                 rows={3}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Results */
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-lg font-semibold">
-              {Object.values(results).every(r => r.success) ? (
+              /> dir="rtl">
+                        {result.error === 'worker-not-found' && 'العامل غير موجود'}
+                        {result.error === 'worker-already-assigned' && 'العامل مسكّن بالفعل'}
+                        {result.error === 'worker-not-assigned' && 'العامل غير مسكّن'}
+                        {result.error === 'occupant-not-found' && 'سجل الإقامة غير موجود'}
+                        {result.error === 'room-not-found' && 'الغرفة غير موجودة'}
+                        {result.error === 'room-full' && 'الغرفة ممتلئة'}
+                        {result.error === 'nationality-mismatch' && 'تعارض في الجنسية'}
+                        {result.error === 'CHECKOUT_IN_FUTURE' && 'تاريخ الخروج في المستقبل'}
+                        {result.error === 'MONTH_ALREADY_INVOICED' && 'تم إصدار فاتورة لهذا الشهر'}
+                        {result.error === 'CHECKIN_BEFORE_LAST_CHECKOUT' && 'تاريخ الدخول قبل آخر خروج'}
+                        {result.error === 'WORKER_STILL_CHECKED_IN' && 'العامل لديه سجل إقامة نشط'}
+                        {result.error.includes('تعارض') && result.error}
+                        {result.error.includes(':') && result.error.split(':')[1]}
+                        {!['worker-not-found', 'worker-already-assigned', 'worker-not-assigned', 'occupant-not-found', 'room-not-found', 'room-full', 'nationality-mismatch', 'CHECKOUT_IN_FUTURE', 'MONTH_ALREADY_INVOICED', 'CHECKIN_BEFORE_LAST_CHECKOUT', 'WORKER_STILL_CHECKED_IN'].includes(result.error) && !result.error.includes('تعارض') && !result.error.includes(':'
                 <>
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span>تمت العملية بنجاح</span>
@@ -327,7 +387,8 @@ export function BatchOperationsDialog({
             </div>
 
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {Object.entries(results).map(([workerId, result]) => {
+              {Obj!!dateWarning ||
+                  ect.entries(results).map(([workerId, result]) => {
                 const worker = workers.find(w => w.id === workerId);
                 return (
                   <div
@@ -348,13 +409,27 @@ export function BatchOperationsDialog({
                     </div>
                     {result.error && (
                       <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                        {result.error === 'worker-not-found' && 'العامل غير موجود'}
-                        {result.error === 'worker-already-assigned' && 'العامل مسكّن بالفعل'}
-                        {result.error === 'worker-not-assigned' && 'العامل غير مسكّن'}
-                        {result.error === 'room-not-found' && 'الغرفة غير موجودة'}
-                        {result.error === 'room-full' && 'الغرفة ممتلئة'}
-                        {result.error === 'nationality-mismatch' && 'تعارض في الجنسية'}
-                        {!['worker-not-found', 'worker-already-assigned', 'worker-not-assigned', 'room-not-found', 'room-full', 'nationality-mismatch'].includes(result.error) && result.error}
+                        {(() => {
+                          const lang = getUserLanguage();
+                          const errorCode = (result.error || '').split(':')[0].trim();
+                          const errorMessages: Record<string, {ar: string, en: string}> = {
+                            'CHECKIN_IN_FUTURE': { ar: 'تاريخ التسكين لا يمكن أن يكون في المستقبل', en: 'Check-in date cannot be in the future' },
+                            'CHECKOUT_IN_FUTURE': { ar: 'تاريخ الخروج لا يمكن أن يكون في المستقبل', en: 'Check-out date cannot be in the future' },
+                            'DATE_CONFLICT_WITH_HISTORY': { ar: 'يوجد تعارض في التواريخ مع سجلات العامل', en: 'Date conflict with worker history' },
+                            'CHECKIN_BEFORE_LAST_CHECKOUT': { ar: 'تاريخ التسكين يجب أن يكون بعد آخر خروج', en: 'Check-in must be after last check-out' },
+                            'CHECKOUT_BEFORE_CHECKIN': { ar: 'تاريخ الخروج قبل تاريخ الدخول', en: 'Check-out before check-in' },
+                            'MONTH_ALREADY_INVOICED': { ar: 'تم إصدار فاتورة لهذا الشهر', en: 'Month already invoiced' },
+                            'worker-not-found': { ar: 'العامل غير موجود', en: 'Worker not found' },
+                            'worker-already-assigned': { ar: 'العامل مسكّن بالفعل', en: 'Worker already assigned' },
+                            'worker-not-assigned': { ar: 'العامل غير مسكّن', en: 'Worker not assigned' },
+                            'room-not-found': { ar: 'الغرفة غير موجودة', en: 'Room not found' },
+                            'room-full': { ar: 'الغرفة ممتلئة', en: 'Room full' },
+                            'nationality-mismatch': { ar: 'تعارض في الجنسية', en: 'Nationality mismatch' },
+                            'role-mismatch': { ar: 'تعارض في الدور الوظيفي', en: 'Role mismatch' }
+                          };
+                          const msg = errorMessages[errorCode];
+                          return msg ? getLocalizedMessage(msg) : result.error;
+                        })()}
                       </p>
                     )}
                   </div>
@@ -368,7 +443,7 @@ export function BatchOperationsDialog({
           {!results ? (
             <>
               <Button variant="outline" onClick={handleClose} disabled={processing}>
-                إلغاء
+                {getLocalizedMessage({ ar: 'إلغاء', en: 'Cancel' })}
               </Button>
               <Button
                 onClick={handleSubmit}
@@ -380,14 +455,14 @@ export function BatchOperationsDialog({
                 }
               >
                 {processing && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
-                {operationType === 'CHECK_IN' && 'تسكين الجميع'}
-                {operationType === 'CHECK_OUT' && 'إخراج الجميع'}
-                {operationType === 'TRANSFER' && 'نقل الجميع'}
+                {operationType === 'CHECK_IN' && getLocalizedMessage({ ar: 'تسكين الجميع', en: 'Check In All' })}
+                {operationType === 'CHECK_OUT' && getLocalizedMessage({ ar: 'إخراج الجميع', en: 'Check Out All' })}
+                {operationType === 'TRANSFER' && getLocalizedMessage({ ar: 'نقل الجميع', en: 'Transfer All' })}
               </Button>
             </>
           ) : (
             <Button onClick={handleClose}>
-              إغلاق
+              {getLocalizedMessage({ ar: 'إغلاق', en: 'Close' })}
             </Button>
           )}
         </DialogFooter>

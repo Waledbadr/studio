@@ -30,15 +30,18 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        // Glass default
+        // Glass default with blue accent
         default:
-          "text-foreground bg-white/70 border-white/30 dark:bg-white/10 dark:border-white/10",
-        // Keep destructive strong/legible while matching glass aesthetic
+          "text-foreground bg-blue-50/80 border-blue-200/40 dark:bg-blue-950/30 dark:border-blue-800/30 dark:text-blue-100",
+        // Success with green glass aesthetic
+        success:
+          "group text-green-900 bg-green-50/80 border-green-200/40 dark:text-green-100 dark:bg-green-950/30 dark:border-green-800/30",
+        // Destructive with red glass aesthetic
         destructive:
-          "destructive group text-destructive-foreground bg-destructive/85 border-destructive/40",
-        // Warning (yellow) style for gentle alerts
+          "destructive group text-red-900 bg-red-50/80 border-red-200/40 dark:text-red-100 dark:bg-red-950/30 dark:border-red-800/30",
+        // Warning with amber glass aesthetic
         warning:
-          "group text-amber-950 bg-amber-100/90 border-amber-300/80 dark:text-amber-100 dark:bg-amber-500/20 dark:border-amber-400/30",
+          "group text-amber-900 bg-amber-50/80 border-amber-200/40 dark:text-amber-100 dark:bg-amber-950/30 dark:border-amber-800/30",
       },
     },
     defaultVariants: {

@@ -2,13 +2,25 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer, startAfter } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer, startAfter, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
 import { useUsers } from '@/context/users-context';
 import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
 import { differenceInDays, isWithinInterval, max, min, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { 
+  validateCheckInDate,
+  validateCheckOutDate, 
+  isDateRangeInvoiced, 
+  isMonthInvoiced,
+  validateDateConflicts,
+  canModifyHistoryRecord,
+  getValidationErrorMessage,
+  type InvoiceRecord,
+  type WorkerHistoryRecord
+} from '@/lib/accommodation-date-validation';
+import { getUserLanguage, getLocalizedMessage, ERROR_MESSAGES, UI_TEXT } from '@/lib/i18n-helpers';
 
 export type Location = { lat: number; lng: number } | null;
 
@@ -1757,6 +1769,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }) => {
     if (!db) return { ok: false, error: 'DB not available' };
 
+    // Validate checkout date is not in the future
+    const checkoutDateToUse = params.checkOutDate || new Date().toISOString();
+    const dateValidation = validateCheckOutDate(new Date(checkoutDateToUse));
+    if (!dateValidation.isValid) {
+      const lang = getUserLanguage();
+      const errorMsg = getValidationErrorMessage(dateValidation, lang);
+      toast({ 
+        title: getLocalizedMessage(UI_TEXT.titles.validationError), 
+        description: errorMsg, 
+        variant: 'destructive' 
+      });
+      return { ok: false, error: dateValidation.errorCode };
+    }
+
     const q = query(
       collection(db, 'occupants'),
       where('workerId', '==', params.workerId),
@@ -1768,9 +1794,64 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     if (snap.empty) return { ok: false, error: 'occupant-not-found' };
 
+    const occupantData = snap.docs[0].data();
+    const checkInDate = occupantData.since;
+
+    // Validate checkout date is not before check-in date
+    const checkoutDate = new Date(checkoutDateToUse);
+    const checkinDate = new Date(checkInDate);
+    
+    if (checkoutDate < checkinDate) {
+      const lang = getUserLanguage();
+      toast({ 
+        title: getLocalizedMessage(UI_TEXT.titles.error), 
+        description: getLocalizedMessage({
+          ar: `تاريخ الخروج (${checkoutDate.toLocaleDateString('ar-SA')}) لا يمكن أن يكون قبل تاريخ الدخول (${checkinDate.toLocaleDateString('ar-SA')})`,
+          en: `Check-out date (${checkoutDate.toLocaleDateString('en-US')}) cannot be before check-in date (${checkinDate.toLocaleDateString('en-US')})`
+        }), 
+        variant: 'destructive' 
+      });
+      return { ok: false, error: 'CHECKOUT_BEFORE_CHECKIN' };
+    }
+
+    // Convert invoices to the format expected by validation
+    const invoiceRecords: InvoiceRecord[] = invoices.map(inv => ({
+      id: inv.id,
+      month: parseInt(inv.month.split('-')[1]) - 1, // Convert YYYY-MM to 0-indexed month
+      year: parseInt(inv.month.split('-')[0]),
+      residenceId: inv.residenceId,
+      status: inv.status === 'Draft' ? 'draft' : inv.status === 'Paid' ? 'paid' : inv.status === 'Cancelled' ? 'cancelled' : 'issued',
+      createdAt: new Date(inv.generatedAt)
+    }));
+
+    // Check if the checkout month has been invoiced
+    const checkoutMonth = checkoutDate.getMonth();
+    const checkoutYear = checkoutDate.getFullYear();
+    
+    const isInvoiced = isMonthInvoiced(
+      checkoutMonth,
+      checkoutYear,
+      params.residenceId,
+      invoiceRecords
+    );
+
+    if (isInvoiced) {
+      const lang = getUserLanguage();
+      const monthName = new Date(checkoutYear, checkoutMonth).toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', year: 'numeric' });
+      toast({ 
+        title: getLocalizedMessage({ ar: 'لا يمكن تسجيل الخروج', en: 'Cannot Check Out' }), 
+        description: getLocalizedMessage({
+          ar: `تم إصدار فاتورة لشهر ${monthName} ولا يمكن التعديل`,
+          en: `Invoice has been issued for ${monthName} and cannot be modified`
+        }), 
+        variant: 'destructive' 
+      });
+      return { ok: false, error: 'MONTH_ALREADY_INVOICED' };
+    }
+
     const docRef = snap.docs[0].ref;
     const updatePayload: any = {
-      until: params.checkOutDate || new Date().toISOString(),
+      until: checkoutDateToUse,
       checkOutBy: params.performedBy
     };
 
@@ -1819,7 +1900,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     setOccupants(prev => prev.filter(o => o.workerId !== params.workerId));
 
     return { ok: true };
-  }, [db]);
+  }, [db, invoices, toast]);
 
   // ============ COMPANY CRUD ============
   async function saveCompany(company: Company | Omit<Company, 'id' | 'createdAt'>) {
@@ -2486,6 +2567,44 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       if (!db) return { ok: false, error: 'Database not available' };
 
+      // Find the history record
+      const historyRecord = accommodationHistory.find(h => h.id === historyId);
+      if (!historyRecord) {
+        return { ok: false, error: 'History record not found' };
+      }
+
+      // Convert to WorkerHistoryRecord format for validation
+      const recordForValidation: WorkerHistoryRecord = {
+        id: historyRecord.id,
+        workerId: historyRecord.workerId,
+        checkInDate: new Date(historyRecord.actionDate),
+        checkOutDate: historyRecord.actionType === 'CHECK_OUT' ? new Date(historyRecord.actionDate) : null,
+        roomId: historyRecord.roomId || '',
+        residenceId: historyRecord.residenceId
+      };
+
+      // Convert invoices to the format expected by validation
+      const invoiceRecords: InvoiceRecord[] = invoices.map(inv => ({
+        id: inv.id,
+        month: parseInt(inv.month.split('-')[1]) - 1,
+        year: parseInt(inv.month.split('-')[0]),
+        residenceId: inv.residenceId,
+        status: inv.status === 'Draft' ? 'draft' : inv.status === 'Paid' ? 'paid' : inv.status === 'Cancelled' ? 'cancelled' : 'issued',
+        createdAt: new Date(inv.generatedAt)
+      }));
+
+      // Check if this record can be modified
+      const canModify = canModifyHistoryRecord(recordForValidation, invoiceRecords);
+      if (!canModify.isValid) {
+        const errorMsg = getValidationErrorMessage(canModify, 'ar');
+        toast({
+          title: 'لا يمكن حذف السجل',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        return { ok: false, error: canModify.errorCode };
+      }
+
       // Delete from Firestore
       await deleteDoc(doc(db, 'accommodationHistory', historyId));
 
@@ -2524,8 +2643,85 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       if (!db) return { ok: false, error: 'Database not available' };
 
+      // Find the history record
+      const historyRecord = accommodationHistory.find(h => h.id === historyId);
+      if (!historyRecord) {
+        return { ok: false, error: 'History record not found' };
+      }
+
+      // Convert to WorkerHistoryRecord format for validation
+      const recordForValidation: WorkerHistoryRecord = {
+        id: historyRecord.id,
+        workerId: historyRecord.workerId,
+        checkInDate: new Date(historyRecord.actionDate),
+        checkOutDate: historyRecord.actionType === 'CHECK_OUT' ? new Date(historyRecord.actionDate) : null,
+        roomId: historyRecord.roomId || '',
+        residenceId: historyRecord.residenceId
+      };
+
+      // Convert invoices to the format expected by validation
+      const invoiceRecords: InvoiceRecord[] = invoices.map(inv => ({
+        id: inv.id,
+        month: parseInt(inv.month.split('-')[1]) - 1,
+        year: parseInt(inv.month.split('-')[0]),
+        residenceId: inv.residenceId,
+        status: inv.status === 'Draft' ? 'draft' : inv.status === 'Paid' ? 'paid' : inv.status === 'Cancelled' ? 'cancelled' : 'issued',
+        createdAt: new Date(inv.generatedAt)
+      }));
+
+      // Check if this record can be modified
+      const canModify = canModifyHistoryRecord(recordForValidation, invoiceRecords);
+      if (!canModify.isValid) {
+        const errorMsg = getValidationErrorMessage(canModify, 'ar');
+        toast({
+          title: 'لا يمكن تعديل السجل',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        return { ok: false, error: canModify.errorCode };
+      }
+
       // Update in Firestore
       await updateDoc(doc(db, 'accommodationHistory', historyId), updates);
+
+      // If actionDate is being updated for CHECK_IN, update the corresponding occupant record
+      if (updates.actionDate && historyRecord.actionType === 'CHECK_IN') {
+        // Find the occupant record that matches this check-in
+        const occupantQuery = query(
+          collection(db, 'occupants'),
+          where('workerId', '==', historyRecord.workerId),
+          where('residenceId', '==', historyRecord.residenceId),
+          where('roomId', '==', historyRecord.roomId || historyRecord.toRoomId)
+        );
+        
+        const occupantSnap = await getDocs(occupantQuery);
+        
+        if (!occupantSnap.empty) {
+          // Update the occupant's 'since' date to match the new check-in date
+          for (const occupantDoc of occupantSnap.docs) {
+            const occupantData = occupantDoc.data();
+            // Only update if this is the matching check-in (same or close date)
+            const existingSince = new Date(occupantData.since);
+            const oldActionDate = new Date(historyRecord.actionDate);
+            const daysDiff = Math.abs((existingSince.getTime() - oldActionDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            // If dates are within 1 day of each other, consider them matching
+            if (daysDiff <= 1) {
+              await updateDoc(occupantDoc.ref, {
+                since: updates.actionDate
+              });
+              
+              // Update local occupants state
+              setOccupants(prev => prev.map(o =>
+                o.id === occupantDoc.id ? { ...o, since: updates.actionDate as string } : o
+              ));
+              
+              console.log(`✅ Updated occupant record ${occupantDoc.id} with new check-in date: ${updates.actionDate}`);
+              break;
+            }
+          }
+        }
+      }
 
       // Update local state
       setAccommodationHistory(prev => prev.map(h =>
@@ -2546,7 +2742,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       toast({
         title: "تم تحديث السجل ✅",
-        description: "تم تحديث السجل بنجاح",
+        description: "تم تحديث السجل وسجل الإشغال بنجاح",
       });
 
       return { ok: true };
@@ -2576,6 +2772,37 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       }
 
       const lastAction = workerHistory[0];
+      
+      // Check if this record can be modified (invoicing validation)
+      const recordForValidation: WorkerHistoryRecord = {
+        id: lastAction.id,
+        workerId: lastAction.workerId,
+        checkInDate: new Date(lastAction.actionDate),
+        checkOutDate: lastAction.actionType === 'CHECK_OUT' ? new Date(lastAction.actionDate) : null,
+        roomId: lastAction.roomId || '',
+        residenceId: lastAction.residenceId
+      };
+
+      const invoiceRecords: InvoiceRecord[] = invoices.map(inv => ({
+        id: inv.id,
+        month: parseInt(inv.month.split('-')[1]) - 1,
+        year: parseInt(inv.month.split('-')[0]),
+        residenceId: inv.residenceId,
+        status: inv.status === 'Draft' ? 'draft' : inv.status === 'Paid' ? 'paid' : inv.status === 'Cancelled' ? 'cancelled' : 'issued',
+        createdAt: new Date(inv.generatedAt)
+      }));
+
+      const canModify = canModifyHistoryRecord(recordForValidation, invoiceRecords);
+      if (!canModify.isValid) {
+        const errorMsg = getValidationErrorMessage(canModify, 'ar');
+        toast({
+          title: 'لا يمكن التراجع عن العملية',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        return { ok: false, error: canModify.errorCode, message: errorMsg };
+      }
+
       const now = new Date();
       const actionDate = new Date(lastAction.actionDate);
       const diffMinutes = (now.getTime() - actionDate.getTime()) / (1000 * 60);
@@ -2723,6 +2950,68 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     try {
       console.log('🔵 [checkInWorker] Starting optimized check-in:', params);
 
+      // Validate date conflicts unless in emergency mode
+      if (!params.emergencyMode) {
+        const checkInDateToUse = params.checkInDate || new Date().toISOString();
+        
+        // Validate check-in date is not in the future
+        const dateValidation = validateCheckInDate(new Date(checkInDateToUse));
+        if (!dateValidation.isValid) {
+          const lang = getUserLanguage();
+          const errorMsg = getValidationErrorMessage(dateValidation, lang);
+          if (!params.silent) {
+            toast({ 
+              title: getLocalizedMessage(UI_TEXT.titles.validationError), 
+              description: errorMsg, 
+              variant: 'destructive' 
+            });
+          }
+          return { ok: false, error: dateValidation.errorCode };
+        }
+        const workerHistory = getWorkerHistory(params.workerId);
+        
+        // Convert history to the format expected by validation
+        const historyRecords: WorkerHistoryRecord[] = workerHistory
+          .filter(h => h.actionType === 'CHECK_IN' || h.actionType === 'CHECK_OUT')
+          .map(h => ({
+            id: h.id,
+            workerId: h.workerId,
+            checkInDate: new Date(h.actionDate),
+            checkOutDate: h.actionType === 'CHECK_OUT' ? new Date(h.actionDate) : null,
+            roomId: h.roomId || '',
+            residenceId: h.residenceId
+          }));
+
+        const conflictValidation = validateDateConflicts(
+          params.workerId,
+          new Date(checkInDateToUse),
+          historyRecords
+        );
+
+        if (!conflictValidation.isValid) {
+          const lang = getUserLanguage();
+          const errorMsg = getValidationErrorMessage(conflictValidation, lang);
+          
+          // Get last checkout date for detailed error message
+          const lastCheckout = workerHistory.find(h => h.actionType === 'CHECK_OUT');
+          const detailedError = lastCheckout 
+            ? getLocalizedMessage({
+                ar: `لا يمكن تسكين العامل بتاريخ ${new Date(checkInDateToUse).toLocaleDateString('ar-SA')} لأنه خرج من السكن السابق بتاريخ ${new Date(lastCheckout.actionDate).toLocaleDateString('ar-SA')}`,
+                en: `Cannot check in worker on ${new Date(checkInDateToUse).toLocaleDateString('en-US')} because they checked out on ${new Date(lastCheckout.actionDate).toLocaleDateString('en-US')}`
+              })
+            : errorMsg;
+          
+          if (!params.silent) {
+            toast({
+              title: getLocalizedMessage(UI_TEXT.titles.dateConflict),
+              description: detailedError,
+              variant: 'destructive'
+            });
+          }
+          return { ok: false, error: conflictValidation.errorCode };
+        }
+      }
+
       // Use optimized async check-in (no massive reads)
       const result = await checkInWorkerAsync({
         workerId: params.workerId,
@@ -2808,6 +3097,19 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     transferCity?: string; // NEW
   }): Promise<{ ok: boolean; error?: string; historyId?: string }> {
     try {
+      // Validate checkout date is not in the future
+      const checkoutDateToUse = params.checkOutDate || new Date().toISOString();
+      const dateValidation = validateCheckOutDate(new Date(checkoutDateToUse));
+      if (!dateValidation.isValid) {
+        const errorMsg = getValidationErrorMessage(dateValidation, 'ar');
+        toast({ 
+          title: 'خطأ في التحقق من التاريخ', 
+          description: errorMsg, 
+          variant: 'destructive' 
+        });
+        return { ok: false, error: dateValidation.errorCode };
+      }
+
       // Helper function to calculate duration (including check-in day)
       const calculateDuration = (sinceDate: string, untilDate: string): number => {
         const since = new Date(sinceDate);
@@ -2924,6 +3226,43 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const currentOccupant = occupants.find(o => o.workerId === params.workerId && !o.until);
       if (!currentOccupant) return { ok: false, error: "worker-not-assigned" };
 
+      // Validate transfer date doesn't conflict with worker history
+      const transferDate = params.transferDate || new Date().toISOString();
+      const workerHistory = getWorkerHistory(params.workerId);
+      
+      // Convert history to validation format
+      const historyRecords: WorkerHistoryRecord[] = workerHistory
+        .filter(h => h.actionType === 'CHECK_IN' || h.actionType === 'CHECK_OUT' || h.actionType === 'TRANSFER')
+        .map(h => ({
+          id: h.id,
+          workerId: h.workerId,
+          checkInDate: new Date(h.actionDate),
+          checkOutDate: h.actionType === 'CHECK_OUT' ? new Date(h.actionDate) : null,
+          roomId: h.toRoomId || h.roomId || '',
+          residenceId: h.toResidenceId || h.residenceId
+        }));
+
+      const conflictValidation = validateDateConflicts(
+        params.workerId,
+        new Date(transferDate),
+        historyRecords
+      );
+
+      if (!conflictValidation.isValid) {
+        const errorMsg = getValidationErrorMessage(conflictValidation, 'ar');
+        const lastCheckout = workerHistory.find(h => h.actionType === 'CHECK_OUT');
+        const detailedError = lastCheckout 
+          ? `لا يمكن نقل العامل بتاريخ ${new Date(transferDate).toLocaleDateString('ar-SA')} لأنه خرج من السكن السابق بتاريخ ${new Date(lastCheckout.actionDate).toLocaleDateString('ar-SA')}`
+          : errorMsg;
+        
+        toast({
+          title: 'تعارض في تاريخ النقل',
+          description: detailedError,
+          variant: 'destructive'
+        });
+        return { ok: false, error: conflictValidation.errorCode };
+      }
+
       // Check target room
       const toRoom = findRoom(params.toResidenceId, params.toRoomId);
       if (!toRoom) return { ok: false, error: "target-room-not-found" };
@@ -2966,8 +3305,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           return { ok: false, error: `target-room-full (Used: ${usedSqm}, Req: ${requiredSqm}, Space: ${spaceSqm})` };
         }
       }
-
-      const transferDate = params.transferDate || new Date().toISOString();
 
       // Get names for history
       const fromResidence = residences.find(r => r.id === currentOccupant.residenceId);
@@ -3312,6 +3649,85 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     const newHistory: AccommodationHistory[] = [];
 
     try {
+      const checkInDateToUse = params.checkInDate || new Date().toISOString();
+
+      // Validate date conflicts for all workers unless in emergency mode
+      if (!params.emergencyMode) {
+        // First, validate check-in date is not in the future
+        const dateValidation = validateCheckInDate(new Date(checkInDateToUse));
+        if (!dateValidation.isValid) {
+          const lang = getUserLanguage();
+          const errorMsg = getValidationErrorMessage(dateValidation, lang);
+          toast({ 
+            title: getLocalizedMessage(UI_TEXT.titles.validationError), 
+            description: errorMsg, 
+            variant: 'destructive' 
+          });
+          // Mark all workers as failed
+          params.workerIds.forEach(id => {
+            results[id] = { success: false, error: dateValidation.errorCode };
+          });
+          return { ok: false, results };
+        }
+
+        for (const workerId of params.workerIds) {
+          const workerHistory = getWorkerHistory(workerId);
+          
+          const historyRecords: WorkerHistoryRecord[] = workerHistory
+            .filter(h => h.actionType === 'CHECK_IN' || h.actionType === 'CHECK_OUT')
+            .map(h => ({
+              id: h.id,
+              workerId: h.workerId,
+              checkInDate: new Date(h.actionDate),
+              checkOutDate: h.actionType === 'CHECK_OUT' ? new Date(h.actionDate) : null,
+              roomId: h.roomId || '',
+              residenceId: h.residenceId
+            }));
+
+          const conflictValidation = validateDateConflicts(
+            workerId,
+            new Date(checkInDateToUse),
+            historyRecords
+          );
+
+          if (!conflictValidation.isValid) {
+            const lang = getUserLanguage();
+            const lastCheckout = workerHistory.find(h => h.actionType === 'CHECK_OUT');
+            const detailedError = lastCheckout 
+              ? getLocalizedMessage({
+                  ar: `تعارض: خرج بتاريخ ${new Date(lastCheckout.actionDate).toLocaleDateString('ar-SA')}`,
+                  en: `Conflict: checked out on ${new Date(lastCheckout.actionDate).toLocaleDateString('en-US')}`
+                })
+              : getValidationErrorMessage(conflictValidation, lang);
+            
+            results[workerId] = { 
+              success: false, 
+              error: `${conflictValidation.errorCode}: ${detailedError}` 
+            };
+          }
+        }
+
+        // If any worker has date conflicts, show summary and return
+        const conflictCount = Object.values(results).filter(r => !r.success).length;
+        if (conflictCount > 0) {
+          toast({
+            title: getLocalizedMessage(UI_TEXT.titles.dateConflict),
+            description: getLocalizedMessage({
+              ar: `${conflictCount} من ${params.workerIds.length} عامل لديهم تعارض في تواريخ الدخول`,
+              en: `${conflictCount} of ${params.workerIds.length} workers have date conflicts`
+            }),
+            variant: 'destructive'
+          });
+          // Mark remaining workers as not processed
+          params.workerIds.forEach(id => {
+            if (!results[id]) {
+              results[id] = { success: false, error: 'skipped-due-to-conflicts' };
+            }
+          });
+          return { ok: false, results };
+        }
+      }
+
       // 1. Fetch Room & Existing Occupants (Once)
       const room = findRoom(params.residenceId, params.roomId);
       if (!room) {
@@ -3580,6 +3996,25 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     performedBy: string;
     transferCity?: string; // NEW
   }) {
+    // Validate checkout date once before processing all workers
+    const checkoutDateToUse = params.checkOutDate || new Date().toISOString();
+    const dateValidation = validateCheckOutDate(new Date(checkoutDateToUse));
+    if (!dateValidation.isValid) {
+      const errorMsg = getValidationErrorMessage(dateValidation, 'ar');
+      toast({ 
+        title: 'خطأ في التحقق من التاريخ', 
+        description: errorMsg, 
+        variant: 'destructive' 
+      });
+      return { 
+        ok: false, 
+        error: dateValidation.errorCode,
+        results: Object.fromEntries(
+          params.workerIds.map(wid => [wid, { success: false, error: dateValidation.errorCode }])
+        )
+      };
+    }
+
     const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
 
     // Process sequentially to avoid race conditions/overload
@@ -3593,6 +4028,23 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         transferCity: params.transferCity
       });
       results[wid] = { success: res.ok, error: res.error, historyId: res.historyId };
+    }
+
+    // Show summary toast
+    const successCount = Object.values(results).filter(r => r.success).length;
+    const failCount = params.workerIds.length - successCount;
+    
+    if (failCount === 0) {
+      toast({
+        title: 'نجحت العملية',
+        description: `تم تسجيل خروج ${successCount} عامل بنجاح`,
+      });
+    } else {
+      toast({
+        title: 'عملية جزئية',
+        description: `نجح: ${successCount}، فشل: ${failCount}`,
+        variant: 'destructive'
+      });
     }
 
     return { ok: true, results };
