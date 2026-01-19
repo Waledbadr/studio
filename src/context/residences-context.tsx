@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import * as D1Client from '@/lib/d1-client';
+import * as D1Client from '@/lib/d1-client'; // server RPC client for D1
+// Legacy references to D1Server replaced with D1Client to use current RPC helpers.
 import { db, auth } from '@/lib/firebase';
 import {
   collection,
@@ -10,8 +11,12 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
+  setDoc,
+  DocumentData,
   QueryDocumentSnapshot,
-  DocumentData
+  arrayRemove,
+  arrayUnion
 } from '@/lib/firestore-shim';
 import { createPoller } from '@/lib/polling';
 import { onAuthStateChanged } from '@/lib/auth-shim';
@@ -21,6 +26,17 @@ const USE_D1 =
   String(
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
   ).toLowerCase() === 'true' || false;
+
+const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+
+const RESIDENCES_LS_KEY = 'estatecare_residences';
+const saveToLocalStorage = (list: any[]) => {
+  try {
+    localStorage.setItem(RESIDENCES_LS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn('Could not save residences to localStorage', e);
+  }
+};
 
 // Define types for our data structure
 export interface Room {
@@ -226,7 +242,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      console.log("Firebase not configured, using local storage");
+      console.log("Firebase not configured and D1 not enabled, using local storage");
       try {
         const storedResidences = localStorage.getItem('estatecare_residences');
         const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
@@ -317,7 +333,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     };
 
     try {
-      await D1Server.createResidence(newComplex);
+      await D1Client.createResidence(newComplex);
       // Optimistic update
       setResidences(prev => [...prev, newComplex]);
       toast({ title: "Success", description: "New residential complex added." });
@@ -473,7 +489,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const updated = residences.map(c => c.id === complexId ? updateInComplex(c) : c);
         setResidences(updated);
         const changed = updated.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: 'تم', description: 'تم تحديث اسم التجهيز.' });
       } catch (e: any) {
         if (e.message !== 'Duplicate') {
@@ -536,7 +552,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         }
         setResidences(updated);
         const changed = updated.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: 'تم', description: 'تم تحديث اسم الطابق.' });
       } catch (e) {
         console.error(e);
@@ -878,8 +894,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Deep copy to modify
-        const newFromRes: Residence = JSON.parse(JSON.stringify(fromRes));
-        const newToRes: Residence = JSON.parse(JSON.stringify(toRes));
+        const newFromRes: Complex = JSON.parse(JSON.stringify(fromRes));
+        const newToRes: Complex = JSON.parse(JSON.stringify(toRes));
 
         // 1. Locate and remove from source
         let facility: Facility | undefined;
@@ -946,8 +962,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           return r;
         }));
 
-        await D1Server.updateResidence(fromComplexId, newFromRes);
-        await D1Server.updateResidence(toComplexId, newToRes);
+        await D1Client.updateResidence(fromComplexId, newFromRes);
+        await D1Client.updateResidence(toComplexId, newToRes);
         toast({ title: 'تم', description: 'تم نقل التجهيز بنجاح (D1).' });
       } catch (e) {
         console.error(e);
@@ -1128,7 +1144,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         });
         setResidences(updated);
         const changed = updated.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: 'Success', description: 'Room moved (D1).' });
       } catch (e) {
         console.error(e);
@@ -1245,25 +1261,25 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
         const updatedList = residences.map(r => r.id === id ? { ...r, ...payload } : r);
         setResidences(updatedList);
-        await D1Server.updateResidence(id, payload);
+        await D1Client.updateResidence(id, payload);
 
         // Sync users if manager changed
         if (prevManagerId && prevManagerId !== newManagerId) {
           try {
-            const prevManager = await D1Server.getUser(prevManagerId);
+            const prevManager = await D1Client.getUser(prevManagerId);
             if (prevManager) {
-              const updatedAssigned = (prevManager.assignedResidences || []).filter(rid => rid !== id);
-              await D1Server.updateUser(prevManagerId, { assignedResidences: updatedAssigned });
+              const updatedAssigned = (prevManager.assignedResidences || []).filter((rid: any) => rid !== id);
+              await D1Client.updateUser(prevManagerId, { assignedResidences: updatedAssigned });
             }
           } catch (e) { console.warn('Failed to remove residence from prev manager (D1)', e); }
         }
         if (newManagerId && newManagerId !== prevManagerId) {
           try {
-            const newManager = await D1Server.getUser(newManagerId);
+            const newManager = await D1Client.getUser(newManagerId);
             if (newManager) {
               const currentAssigned = newManager.assignedResidences || [];
               if (!currentAssigned.includes(id)) {
-                await D1Server.updateUser(newManagerId, { assignedResidences: [...currentAssigned, id] });
+                await D1Client.updateUser(newManagerId, { assignedResidences: [...currentAssigned, id] });
               }
             }
           } catch (e) { console.warn('Failed to add residence to new manager (D1)', e); }
@@ -1367,7 +1383,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         );
         setResidences(updatedResidences);
         const changed = updatedResidences.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: "Success", description: "New building added to the complex (D1)." });
       } catch (e) {
         console.error(e);
@@ -1434,7 +1450,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         );
         setResidences(updatedResidences);
         const changed = updatedResidences.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: "Success", description: "New floor added to the building (D1)." });
       } catch (e) {
         console.error(e);
@@ -1520,7 +1536,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         );
         setResidences(updatedResidences);
         const changed = updatedResidences.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: "Success", description: "New room added to the floor (D1)." });
       } catch (e) {
         console.error(e);
@@ -1646,7 +1662,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         );
         setResidences(updatedResidences);
         const changed = updatedResidences.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
 
         let toastDescription = `Added ${addedCount} new rooms.`;
         if (skippedCount > 0) {
@@ -1790,7 +1806,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         });
         setResidences(updated);
         const changed = updated.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: "Success", description: `Added ${quantity} new facility/facilities (D1).` });
       } catch (e) {
         console.error(e);
@@ -1906,7 +1922,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       try {
         const updatedResidences = residences.filter(r => r.id !== id);
         setResidences(updatedResidences);
-        await D1Server.deleteResidence(id);
+        await D1Client.deleteResidence(id);
         // TODO: Update users? (remove from assigned). Skipping for now as it's cleaner.
         toast({ title: "Success", description: "Complex deleted successfully (D1)." });
       } catch (e) {
@@ -1937,7 +1953,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const updated = residences.map(c => c.id === complexId ? { ...c, buildings: c.buildings.filter(b => b.id !== buildingId) } : c);
         setResidences(updated);
         const changed = updated.find(c => c.id === complexId);
-        if (changed) await D1Server.updateResidence(complexId, changed);
+        if (changed) await D1Client.updateResidence(complexId, changed);
         toast({ title: 'Success', description: 'Building deleted (D1).' });
       } catch (e) {
         console.error(e);
@@ -2359,7 +2375,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const checkResidenceHasStock = async (residenceId: string): Promise<boolean> => {
     if (USE_D1) {
       try {
-        const inventory = await D1Server.getInventory();
+        const inventory = await D1Client.getInventory();
         for (const item of inventory) {
           const stock = item.stockByResidence || {};
           const val = Number(stock[residenceId] || 0);

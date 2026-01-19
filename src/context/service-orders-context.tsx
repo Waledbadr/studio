@@ -14,6 +14,7 @@ import {
   orderBy,
   runTransaction,
   Timestamp,
+  Firestore,
 } from "@/lib/firestore-shim";
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
@@ -111,7 +112,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
     if (!db) {
       setLoading(false);
-      toast({ title: "Config error", description: "Firebase not configured.", variant: "destructive" });
+      toast({ title: "Config error", description: "Firebase not configured or D1 not available. Ensure NEXT_PUBLIC_USE_D1=true and D1 bindings are configured.", variant: "destructive" });
       return;
     }
     // Wait for auth to satisfy Firestore rules
@@ -125,12 +126,12 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     const qRef = query(collection(fdb, "serviceOrders"), orderBy("dateCreated", "desc"));
     subRef.current = onSnapshot(
       qRef,
-      (snap) => {
-        const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as ServiceOrder[];
+      (snap: any) => {
+        const arr = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as ServiceOrder[];
         setServiceOrders(arr);
         setLoading(false);
       },
-      (err) => {
+      (err: any) => {
         console.error("Error fetching service orders:", err);
         toast({ title: "Error", description: "Could not fetch service orders.", variant: "destructive" });
         setLoading(false);
@@ -169,11 +170,11 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     const counterRef = doc(fdb, "counters", counterId);
 
     let nextSeq = 0;
-    await runTransaction(fdb, async (trx) => {
+    await runTransaction(fdb, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
-      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
     });
     return `SVC-${yy}${mmNoPad}${nextSeq}`; // e.g., SVC-2583
   };
@@ -202,13 +203,12 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
     const codeShort = await reserveNewSvcId();
 
-    await runTransaction(fdb, async (trx) => {
+    await runTransaction(fdb, async (trx: any) => {
       const now = Timestamp.now();
       // 1) Read all inventory items first and validate stock
       const uniqueItemIds = [...new Set(validItems.map((i) => i.id))];
       const itemRefs = uniqueItemIds.map((id) => doc(fdb, "inventory", id));
       const itemSnaps = await Promise.all(itemRefs.map((r) => trx.get(r)));
-
       for (let i = 0; i < uniqueItemIds.length; i++) {
         if (!itemSnaps[i].exists()) throw new Error(`الصنف غير موجود: ${uniqueItemIds[i]}`);
       }

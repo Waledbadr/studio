@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body: any = await request.json();
     // Expected: { from?:{residenceId,roomId}, to: {residenceId,roomId?}, workerIds: [], requestedBy }
     const { from, to, workerIds, requestedBy, reason } = body || {};
     if (!to || !to.residenceId || !Array.isArray(workerIds) || workerIds.length === 0 || !requestedBy) return NextResponse.json({ ok: false, error: 'missing-params' }, { status: 400 });

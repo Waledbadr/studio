@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { serverTimestamp } from '@/lib/firestore-shim';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from '@/lib/firestore-shim';
 import { generateMonthlySequentialTicketId } from '@/lib/feedback';
 import { db as _db } from '@/lib/firebase';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
+    if (!_db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const id = params.id;
-    const body = await req.json();
+    const body: any = await req.json();
   const { status, developerComment, updatedBy, priority, ticketId, autoRenumber } = body || {};
 
-    const ref = doc(db, 'feedback', id);
+    const ref = doc(_db, 'feedback', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

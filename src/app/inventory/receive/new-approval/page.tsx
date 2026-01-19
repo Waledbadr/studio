@@ -274,10 +274,10 @@ export default function NewMRVApprovalPage() {
         fd.append('file', file);
         const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
+          const err: any = await res.json().catch(() => ({}));
           throw new Error(err.error || `Upload failed for ${file.name}`);
         }
-        const data = await res.json();
+        const data: any = await res.json();
         attachments.push({ url: data.url, path: data.path, name: file.name });
       }
       // Use first attachment for backward compatibility
@@ -295,7 +295,7 @@ export default function NewMRVApprovalPage() {
         const snap = await trx.get(counterRef);
         const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
         nextSeq = current + 1;
-        trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+        trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
       });
       const reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
       const reqRef = doc(collection(db, 'mrvRequests'));

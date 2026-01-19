@@ -137,11 +137,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const ordersCollection = collection(db, "orders");
-    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot) => {
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot: any) => {
+      const ordersData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Order));
       setOrders(ordersData);
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error fetching orders:", error);
       toast({ title: "Firestore Error", description: "Could not fetch orders data.", variant: "destructive" });
       setLoading(false);
@@ -178,11 +178,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     const counterRef = doc(db!, 'counters', `mr-${yy}-${mm}`);
 
     let nextSeq = 0;
-    await runTransaction(db, async (trx) => {
+    await runTransaction(db, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
-      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
     });
 
     // New ID format: MR-yy<m><seq>, e.g., MR-25828
@@ -236,7 +236,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
           // Fallback to Firestore query if users context is not yet loaded
           const adminsQ = query(collection(db, 'users'), where('role', '==', 'Admin'));
           const adminsSnap = await getDocs(adminsQ);
-          adminUserIds = adminsSnap.docs.map(d => d.id);
+          adminUserIds = adminsSnap.docs.map((d: any) => d.id);
         }
 
         await Promise.all(
@@ -408,7 +408,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
   let outMrvId: string | null = null;
   try {
   // We no longer "skip" lines. If any item is missing from inventory, we fail the whole transaction.
-  await runTransaction(firestore, async (transaction) => {
+  await runTransaction(firestore, async (transaction: any) => {
             // --- STAGE 1: ALL READS ---
             const orderSnap = await transaction.get(orderRef);
             if (!orderSnap.exists()) {
@@ -503,7 +503,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
       // --- STAGE 3: ALL WRITES ---
       // 3.a Persist counter reservation first (if any)
       if (itemsToProcess.length > 0 && reservedMrvShort) {
-        transaction.set(counterRef, { seq: nextSeqFromCounter, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+        transaction.set(counterRef, { last: nextSeqFromCounter, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
       }
 
       // 3.b Update inventory stock (stockByResidence and total stock) per item

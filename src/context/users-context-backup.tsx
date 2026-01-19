@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc } from '@/lib/firestore-shim';
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -82,14 +82,14 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const usersCollection = collection(db, "users");
-    unsubscribeRef.current = onSnapshot(usersCollection, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    unsubscribeRef.current = onSnapshot(usersCollection, (snapshot: any) => {
+      const usersData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as User));
       setUsers(usersData);
       
       const storedUserId = localStorage.getItem('currentUser');
-      const activeUser = usersData.find(u => u.id === storedUserId) || usersData[0];
+      const activeUser = usersData.find((u: any) => u.id === storedUserId) || usersData[0];
 
-      if (usersData.length > 0 && (!currentUser || !usersData.find(u => u.id === currentUser.id))) {
+      if (usersData.length > 0 && (!currentUser || !usersData.find((u: any) => u.id === currentUser.id))) {
            const newCurrentUser = activeUser;
            setCurrentUser(newCurrentUser);
            
@@ -100,7 +100,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
            }
       }
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error fetching users:", error);
       toast({ title: "Firestore Error", description: "Could not fetch users data.", variant: "destructive" });
       setLoading(false);

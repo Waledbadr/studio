@@ -98,21 +98,24 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       if (USE_D1) {
         try {
           const usersData = await D1Client.getUsers();
-          setUsers(usersData || []);
-          const storedUserId = localStorage.getItem('currentUser');
-          const activeUser = (usersData || []).find((u: User) => u.id === storedUserId) || (usersData || [])[0] || null;
-          setCurrentUser(activeUser || null);
-          if (activeUser?.themeSettings) applyTheme(activeUser.themeSettings);
+          if (usersData && usersData.length > 0) {
+            setUsers(usersData);
+            const storedUserId = localStorage.getItem('currentUser');
+            const activeUser = usersData.find((u: User) => u.id === storedUserId) || usersData[0] || null;
+            setCurrentUser(activeUser || null);
+            if (activeUser?.themeSettings) applyTheme(activeUser.themeSettings);
+            setLoading(false);
+            isLoaded.current = true;
+            return;
+          } else {
+            console.warn('D1 returned no users or binding not available; falling back to local storage');
+          }
         } catch (e) {
-          console.error('Error fetching users from D1:', e);
-          setUsers([]);
+          console.warn('D1 RPC failed, falling back to local storage:', e);
         }
-        setLoading(false);
-        isLoaded.current = true;
-        return;
       }
 
-      console.log("Firebase not configured, using local storage");
+      console.log("Firebase not configured and D1 not available, using local storage");
       
       // Load from localStorage
       try {
@@ -144,17 +147,17 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const usersCollection = collection(db!, "users");
-    unsubscribeRef.current = onSnapshot(usersCollection, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    unsubscribeRef.current = onSnapshot(usersCollection, (snapshot: any) => {
+      const usersData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as User));
       setUsers(usersData);
       
       const authUid = lastAuthUidRef.current;
       const authEmail = auth?.currentUser?.email?.toLowerCase?.() || null;
       const storedUserId = localStorage.getItem('currentUser');
 
-      const byUid = authUid ? usersData.find(u => u.id === authUid) : null;
-      const byEmail = authEmail ? usersData.find(u => (u.email || '').toLowerCase() === authEmail) : null;
-      const byStored = storedUserId ? usersData.find(u => u.id === storedUserId) : null;
+      const byUid = authUid ? usersData.find((u: any) => u.id === authUid) : null;
+      const byEmail = authEmail ? usersData.find((u: any) => (u.email || '').toLowerCase() === authEmail) : null;
+      const byStored = storedUserId ? usersData.find((u: any) => u.id === storedUserId) : null;
 
       const activeUser = byUid || byEmail || byStored || usersData[0] || null;
 

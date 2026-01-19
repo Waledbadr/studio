@@ -56,4 +56,42 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// For local Next.js development with Cloudflare D1 / next-on-pages, ensure the dev platform
+// shim is initialized so getRequestContext() works in dev. This is a no-op in production and
+// safely requires the internal helper only in development to avoid compile-time issues.
+let _export = nextConfig as any;
+if (process.env.NODE_ENV === 'development') {
+  try {
+    // We import at runtime to avoid TypeScript / bundler type issues with internal module
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
+    let maybe: any;
+    try {
+      maybe = require('@cloudflare/next-on-pages/next-dev');
+    } catch (_err) {
+      // Fallback for older versions or alternative layouts
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
+      maybe = require('@cloudflare/next-on-pages/internal/next-dev');
+    }
+    // The package exports a helper named `setupDevPlatform` (subject to version); check safely
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const setupDevPlatform: any = maybe && (maybe.setupDevPlatform || maybe.default || maybe);
+    if (typeof setupDevPlatform === 'function') {
+      // `setupDevPlatform` mutates runtime / monkey-patches to enable next-on-pages dev behavior
+      // and does not return a modified config, so call it for side-effects and keep our config export.
+      try {
+        setupDevPlatform(nextConfig);
+        console.log('✔ setupDevPlatform applied for local development (side-effects only)');
+      } catch (err) {
+        console.warn('setupDevPlatform threw an error during initialization:', (err as any)?.message || err);
+      }
+    }
+  } catch (e) {
+    // If the internal helper isn't available, it's okay — dev environment will still run but
+    // some next-on-pages features (like getRequestContext) may not be present.
+    // We intentionally swallow errors here to keep dev builds robust.
+    // eslint-disable-next-line no-console
+    console.warn('setupDevPlatform not applied (helper not found):', (e as any)?.message || e);
+  }
+}
+
+export default _export;

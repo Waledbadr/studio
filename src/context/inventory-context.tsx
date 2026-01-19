@@ -408,17 +408,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
             if (categories.length === 0 && uniqueCategories.length > 0) setCategories(uniqueCategories);
           } catch (e) {
-            console.warn('Failed to load inventory from D1:', e);
-            setItems([]);
-            setCategories([]);
+            console.warn('D1 RPC failed (inventory), falling back to local storage:', e);
+            // continue to localStorage fallback below
           }
-          setLoading(false);
-          isLoaded.current = true;
-          return;
-        }
+        } // end if (USE_D1)
 
         // Non-D1 fallback: use local storage, but keep quiet (no error spam)
-        console.log("Firebase not configured, using local storage");
+        console.log("Firebase not configured and D1 unavailable, using local storage");
         try {
           const storedItems = localStorage.getItem('estatecare_inventory');
           const ds = storedItems ? JSON.parse(storedItems) : [];
@@ -467,7 +463,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           }
         } else if (db) {
           const snapshot = await getDocs(collection(db, 'inventory'));
-          const inventoryData = snapshot.docs.map(doc => {
+          const inventoryData = snapshot.docs.map((doc: any) => {
               const data = doc.data();
               const stockByResidence = data.stockByResidence || {};
               const totalStock = Object.values(stockByResidence).reduce((sum: number, current) => {
@@ -504,13 +500,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         // Transfers (kept in Firestore for now)
         if (db) {
           const tSnap = await getDocs(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')));
-          setTransfers(tSnap.docs.map(doc => doc.data() as StockTransfer));
+          setTransfers(tSnap.docs.map((doc: any) => doc.data() as StockTransfer));
         }
 
         // Audits
         if (db) {
           const aSnap = await getDocs(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')));
-          setAudits(aSnap.docs.map(doc => doc.data() as InventoryAudit));
+          setAudits(aSnap.docs.map((doc: any) => doc.data() as InventoryAudit));
         }
 
         setLoading(false);
@@ -690,11 +686,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const counterRef = doc(db!, 'counters', `miv-${yy}-${mm}`);
 
         let nextSeq = 0;
-        await runTransaction(db!, async (trx) => {
+        await runTransaction(db!, async (trx: any) => {
           const snap = await trx.get(counterRef);
           const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
           nextSeq = current + 1;
-          trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+          trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
         });
 
         return `MIV-${yy}${mmNoPad}${nextSeq}`; // e.g., MIV-25814
@@ -736,11 +732,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const counterRef = doc(db!, 'counters', `recon-${yy}-${mmNoPad}`);
 
     let nextSeq = 0;
-    await runTransaction(db!, async (trx) => {
+    await runTransaction(db!, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
-      trx.set(counterRef, { seq: nextSeq, yy, mm: mmNoPad, updatedAt: Timestamp.now() }, { merge: true });
+      trx.set(counterRef, { last: nextSeq, yy, mm: mmNoPad, updatedAt: Timestamp.now() }, { merge: true });
     });
     return `CON-${yy}${mmNoPad}${nextSeq}`;
   };
@@ -755,11 +751,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const counterRef = doc(db!, 'counters', `trs-${yy}-${mm}`);
 
     let nextSeq = 0;
-    await runTransaction(db!, async (trx) => {
+    await runTransaction(db!, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
-      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
     });
     return `TRS-${yy}${mmNoPad}${nextSeq}`;
   };
@@ -793,7 +789,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const mivId = await generateNewMivId();
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (transaction: any) => {
         const allIssuedItems = voucherLocations.flatMap(loc => loc.items);
         const uniqueItemIds = [...new Set(allIssuedItems.map(item => item.id))];
 
@@ -932,7 +928,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       mrvShort = r.short;
     }
 
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction: any) => {
       // Read all item documents first
       const uniqueItemIds = [...new Set(valid.map(i => i.id))];
       const itemRefs = uniqueItemIds.map(id => doc(db!, 'inventory', id));
@@ -1024,9 +1020,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // 1. Query old transactions (outside transaction)
     const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
     const oldTxSnap = await getDocs(txQ);
-    const oldTxs = oldTxSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryTransaction));
+    const oldTxs = oldTxSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as InventoryTransaction));
 
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction: any) => {
       // 2. Read MRV to lock it
       const mrvRef = doc(db!, 'mrvs', mrvId);
       const mrvSnap = await transaction.get(mrvRef);
@@ -1146,9 +1142,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // 1. Query old transactions
     const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
     const oldTxSnap = await getDocs(txQ);
-    const oldTxs = oldTxSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryTransaction));
+    const oldTxs = oldTxSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as InventoryTransaction));
 
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction: any) => {
       // 2. Read MIV to lock
       const mivRef = doc(db!, 'mivs', mivId);
       const mivSnap = await transaction.get(mivRef);
@@ -1270,9 +1266,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         );
 
         const querySnapshot = await getDocs(q);
-        const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+        const transactions = querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
-  transactions.sort((a, b) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
+  transactions.sort((a: any, b: any) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
         
         return transactions;
 
@@ -1293,9 +1289,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         where("type", "==", "OUT")
     );
     const querySnapshot = await getDocs(q);
-    const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+    const transactions = querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
 
-  return transactions.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+  return transactions.sort((a: any, b: any) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
   }
 
   // Fetch all transfer transactions (IN/OUT) by reference code (e.g., TRS-2582)
@@ -1307,7 +1303,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       where('type', 'in', ['TRANSFER_IN', 'TRANSFER_OUT'] as any)
     );
     const snap = await getDocs(qRef);
-    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
+    const rows = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
     // Sort by item name for nicer display
     return rows.sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
   };
@@ -1323,7 +1319,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         // Our transactions are stored in a top-level collection "inventoryTransactions",
         const q = query(collection(db, "inventoryTransactions"));
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+        return querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
     } catch (error) {
         console.error("Error fetching all inventory transactions:", error);
         toast({ title: "Error", description: "Failed to fetch all transactions.", variant: "destructive" });
@@ -1346,7 +1342,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       );
       const snap = await getDocs(qRef);
       if (snap.empty) return null;
-      const txs = snap.docs.map(d => d.data() as any);
+      const txs = snap.docs.map((d: any) => d.data() as any);
       txs.sort((a: any, b: any) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
       return txs[0]?.date || null;
     } catch (error) {
@@ -1393,7 +1389,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const qRef = query(collection(db, 'mivs'), orderBy('date', 'desc'), limit(20));
       const snap = await getDocs(qRef);
-      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MIV[];
+      return snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as MIV[];
     } catch (error) {
       console.error('Error fetching MIVs:', error);
       toast({ title: 'Error', description: 'Failed to fetch MIVs.', variant: 'destructive' });
@@ -1411,7 +1407,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
       const txSnap = await getDocs(txQ);
       if (txSnap.empty) return null;
-      const txs = txSnap.docs.map(d => d.data() as InventoryTransaction);
+      const txs = txSnap.docs.map((d: any) => d.data() as InventoryTransaction);
 
       const locations: MIVDetails['locations'] = {};
       for (const tx of txs) {
@@ -1448,7 +1444,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
       const snap = await getDocs(qRef);
-      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRV[];
+      return snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as MRV[];
     } catch (error) {
       console.error('Error fetching MRVs:', error);
       toast({ title: 'Error', description: 'Failed to fetch MRVs.', variant: 'destructive' });
@@ -1466,7 +1462,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
       const txSnap = await getDocs(txQ);
       if (txSnap.empty) return null;
-      const items = txSnap.docs.map(d => d.data() as InventoryTransaction);
+      const items = txSnap.docs.map((d: any) => d.data() as InventoryTransaction);
       // Fetch MRV master for meta
       const mrvRef = doc(db, 'mrvs', mrvId);
       const mrvSnap = await getDoc(mrvRef);
@@ -1476,7 +1472,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         id: mrvId,
         date: items[0].date,
         residenceId: items[0].residenceId,
-        items: items.map(tx => ({
+        items: items.map((tx: any) => ({
           itemId: tx.itemId,
           itemNameEn: tx.itemNameEn,
           itemNameAr: tx.itemNameAr,
@@ -1509,7 +1505,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const counterRef = doc(db!, 'counters', counterId);
 
     let nextSeq = 0;
-    await runTransaction(db, async (trx) => {
+    await runTransaction(db, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
@@ -1533,7 +1529,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         qRef = query(qRef, where('status', '==', status));
       }
       const snap = await getDocs(qRef);
-      const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as MRVRequest[];
+      const arr = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as MRVRequest[];
       // Sort by requestedAt desc if available
       arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
       return arr;
@@ -1560,7 +1556,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const reqRef = doc(db!, 'mrvRequests', requestId);
 
     // Step 1: Atomically move Pending -> Processing to prevent double approvals
-    await runTransaction(db, async (trx) => {
+    await runTransaction(db, async (trx: any) => {
       const snap = await trx.get(reqRef);
       if (!snap.exists()) throw new Error('Request not found');
       const data = snap.data() as MRVRequest;
@@ -1700,7 +1696,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             // Fallback to Firestore path
             try {
                 const trsId = await reserveNewTrsId();
-                await runTransaction(db!, async (transaction) => {
+                await runTransaction(db!, async (transaction: any) => {
                     const itemRefs = itemsToTransfer.map(item => doc(db!, 'inventory', item.id));
                     const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
                     const updates: Array<{ ref: any, updates: any }> = [];
@@ -1834,7 +1830,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
             // Firestore fallback
             const trsId = await reserveNewTrsId();
-            await runTransaction(db, async (transaction) => {
+            await runTransaction(db, async (transaction: any) => {
                 const transferDoc = await transaction.get(transferRef);
                 if (!transferDoc.exists()) throw new Error('Transfer request not found or already processed.');
                 const transferData = transferDoc.data() as StockTransfer;
@@ -1948,7 +1944,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (transaction: any) => {
                 // Get the item to verify it exists and get its names
                 const itemRef = doc(db!, "inventory", depreciationRequest.itemId);
                 const itemSnap = await transaction.get(itemRef);
@@ -1970,7 +1966,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           stockByResidence: newStockByResidence
         });
         // Update counter (write after all reads)
-        transaction.set(depCounterRef, { seq: depNextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+        transaction.set(depCounterRef, { last: depNextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
 
                 // Create depreciation transaction
                 const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
@@ -2044,7 +2040,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         try {
             const q = query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc'));
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as InventoryAudit);
+            return querySnapshot.docs.map((doc: any) => doc.data() as InventoryAudit);
         } catch (error) {
             console.error('Error fetching audits:', error);
             toast({ title: "Error", description: "Failed to fetch audits.", variant: "destructive" });
@@ -2105,7 +2101,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         try {
             const q = query(collection(db, 'auditItems'), where('auditId', '==', auditId));
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as AuditItem);
+            return querySnapshot.docs.map((doc: any) => doc.data() as AuditItem);
         } catch (error) {
             console.error('Error fetching audit items:', error);
             toast({ title: "Error", description: "Could not fetch audit items.", variant: "destructive" });
@@ -2206,7 +2202,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!db) throw new Error(firebaseErrorMessage);
         
         try {
-            await runTransaction(db, async (transaction) => {
+            await runTransaction(db, async (transaction: any) => {
                 const now = Timestamp.now();
 
                 // 1) Read all required docs first (no writes yet)
@@ -2432,7 +2428,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           where('residenceId', '==', residenceId)
         );
         const snap = await getDocs(qRef);
-        const recs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
+        const recs = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
         // Sort client-side by date desc to avoid composite indexes
 
         recs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
@@ -2473,7 +2469,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           return sum + (isNaN(n) ? 0 : Math.max(0, n));
         }, 0);
 
-        await runTransaction(db!, async (trx) => {
+        await runTransaction(db!, async (trx: any) => {
           const itemRef = doc(db!, 'inventory', d.id);
           const fresh = await trx.get(itemRef);
           if (!fresh.exists()) return;
@@ -2518,7 +2514,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
       try {
         const snap = await getDocs(collection(db, 'stockReconciliations'));
-        const recs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
+        const recs = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as StockReconciliation[];
         recs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
         return recs;
       } catch (error) {
@@ -2560,7 +2556,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           where('referenceDocId', '==', referenceDocId)
                );
         const snap = await getDocs(qRef);
-        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
+        const items = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as InventoryTransaction[];
         // Sort by date desc for display
         items.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
         return items;
@@ -2586,7 +2582,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           qRef = query(qRef, ...clauses);
         }
         const snap = await getDocs(qRef);
-        const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ReconciliationRequest[];
+        const arr = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as ReconciliationRequest[];
         arr.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
         return arr;
       } catch (e) {

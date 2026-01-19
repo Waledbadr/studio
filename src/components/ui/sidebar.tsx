@@ -565,7 +565,7 @@ const SidebarMenuButton = React.forwardRef<
 
     const button = (
       <Comp
-        ref={ref}
+        ref={asChild ? undefined : ref}
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
@@ -574,9 +574,11 @@ const SidebarMenuButton = React.forwardRef<
       />
     )
 
-    if (!tooltip) {
-      return button
-    }
+    const shouldShowTooltip = !!tooltip && state === "collapsed" && !isMobile
+
+    // Avoid nesting TooltipTrigger(asChild) around Slot/Link in the common expanded state.
+    // This prevents ref attach/detach cycles that can cause "Maximum update depth exceeded".
+    if (!shouldShowTooltip) return button
 
     if (typeof tooltip === "string") {
       tooltip = {
@@ -587,12 +589,7 @@ const SidebarMenuButton = React.forwardRef<
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="center"
-          hidden={state !== "collapsed" || isMobile}
-          {...tooltip}
-        />
+        <TooltipContent side="right" align="center" {...tooltip} />
       </Tooltip>
     )
   }

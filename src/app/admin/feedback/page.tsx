@@ -55,7 +55,7 @@ export default function AdminFeedbackPage() {
   const qRef = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(effectiveLimit + 1));
       // Filters will be applied after fetch for simplicity; Firestore supports where but with indexes
       const snap = await getDocs(qRef);
-      const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const all = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
       setHasMore(all.length > effectiveLimit);
       setItems(all.slice(0, effectiveLimit));
     } catch (e) {

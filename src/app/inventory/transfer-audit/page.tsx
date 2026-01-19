@@ -54,7 +54,7 @@ export default function TransferAuditPage() {
                 const transactionsQuery = query(transactionsRef, where('referenceDocId', '==', transferId));
                 const transactionsSnapshot = await getDocs(transactionsQuery);
                 
-                const transactions = transactionsSnapshot.docs.map(doc => doc.data());
+                const transactions = transactionsSnapshot.docs.map((doc: any) => doc.data());
 
                 const auditResult: TransferAuditResult = {
                     transferId,

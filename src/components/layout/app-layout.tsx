@@ -13,6 +13,7 @@ import { enablePushIfGranted } from '@/lib/messaging';
 import { LanguageProvider, useLanguage } from '@/context/language-context';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
+const D1Init = dynamic(() => import('@/components/d1/d1-init'), { ssr: false });
 
 function AppLayoutInner({ children }: PropsWithChildren) {
   const { currentUser } = useUsers();
@@ -22,8 +23,6 @@ function AppLayoutInner({ children }: PropsWithChildren) {
     enablePushIfGranted(currentUser?.id);
   }, [currentUser?.id]);
 
-  // Initialize D1 client-side adjustments (suppress Firebase noise in D1-only)
-  const D1Init = dynamic(() => import('@/components/d1/d1-init'), { ssr: false });
   const pathname = usePathname();
 
   // Render bare page for login route (no sidebar/header/guard)

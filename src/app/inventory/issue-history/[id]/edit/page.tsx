@@ -110,7 +110,7 @@ export default function EditMIVPage() {
                // I'll try to match location names to residence locations.
                // `residences` context has locations.
                
-               const miv = await getMRVById(id); // Wait, getMRVById is for MRV. getMIVById is for MIV.
+               const miv = await getMIVById(id);
                // I need `getMIVById`.
                // But `getMIVById` returns `MIVDetails`.
                

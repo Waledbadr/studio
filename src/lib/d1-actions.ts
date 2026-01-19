@@ -1,18 +1,18 @@
 export async function createWorker(env: any, data: any) {
     const d1 = getD1FromEnv(env);
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     await db.insert(workers).values(data);
     return { ok: true };
 }
 export async function deleteWorker(env: any, id: string) {
     const d1 = getD1FromEnv(env);
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     await db.delete(workers).where(eq(workers.id, id));
     return { ok: true };
 }
 export async function updateTransferRequest(env: any, id: string, data: any) {
     const d1 = getD1FromEnv(env);
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     await db.update(transferRequests).set(data).where(eq(transferRequests.id, id));
     return { ok: true };
 }
@@ -45,11 +45,11 @@ export interface D1Env {
 /**
  * Helper to validate and get D1 binding from env
  */
-function getD1FromEnv(env: any): D1Database | null {
+function getD1FromEnv(env: any): D1Database | undefined {
     if (!env || !env.DB) {
-        return null;
+        return undefined;
     }
-    return env.DB;
+    return env.DB as D1Database;
 }
 
 export async function getWorkers(env: any) {
@@ -151,7 +151,8 @@ export async function checkInWorker(env: any, params: {
         roomId: params.roomId,
         since: params.since,
         checkInBy: params.checkInBy,
-        isEmergency: params.isEmergency ? 1 : 0,
+        // Drizzle boolean-backed column expects boolean; coerce to boolean
+        isEmergency: !!params.isEmergency,
         updatedAt: new Date().toISOString()
     });
 
@@ -183,7 +184,7 @@ export async function checkOutWorker(env: any, params: {
             checkoutType: params.checkoutType,
             transferCity: params.transferCity,
             updatedAt: new Date().toISOString()
-        })
+        } as any)
         .where(and(
             eq(occupants.workerId, params.workerId),
             eq(occupants.residenceId, params.residenceId),
@@ -202,7 +203,7 @@ export async function checkOutWorker(env: any, params: {
             status,
             transferDestination: params.transferCity,
             updatedAt: new Date().toISOString()
-        })
+        } as any)
         .where(eq(workers.id, params.workerId));
 
     return { ok: true };
@@ -216,24 +217,24 @@ export async function createServiceOrder(env: any, payload: any) {
 
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
-    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
     const mmNoPad = (now.getMonth() + 1).toString();
-    const counterId = `svc-${yy}-${mm}`;
+    const mm = now.getMonth() + 1;
+    const counterId = `svc-${yy}-${String(mm).padStart(2, '0')}`;
 
     // Read and increment counter (simple upsert)
     const existing = await db.select().from(counters).where(eq(counters.id, counterId));
     let nextSeq = 1;
     if (existing.length > 0) {
         try {
-            const curr = Number((existing[0] as any).seq || 0);
+            const curr = Number((existing[0] as any).last || 0);
             nextSeq = curr + 1;
-            await db.update(counters).set({ seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
             // fallback - try insert
-            await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
     }
 
     const codeShort = `SVC-${yy}${mmNoPad}${nextSeq}`;
@@ -250,7 +251,7 @@ export async function createServiceOrder(env: any, payload: any) {
 
     // Read inventory rows for involved items
     const itemIds = Array.from(totals.keys());
-    const invRows = await db.select().from(inventory).where(inventory.id.in(itemIds));
+    const invRows = await db.select().from(inventory).where((inventory.id as any).in(itemIds));
     const invMap = new Map<string, any>();
     for (const r of invRows) invMap.set((r as any).id, r);
 
@@ -276,6 +277,7 @@ export async function createServiceOrder(env: any, payload: any) {
 
         // Insert transaction record
         await db.insert(inventoryTransactions).values({
+            id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
             itemId,
             itemNameEn: (row?.nameEn) || '',
             itemNameAr: (row?.nameAr) || '',
@@ -306,7 +308,13 @@ export async function createServiceOrder(env: any, payload: any) {
     return { ok: true, id: codeShort };
 }
 
-export async function receiveServiceOrder(env: any, orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) {
+export async function receiveServiceOrder(...args: any[]) {
+    // Support both (env, orderId, updates, receivedById, forceComplete) and (orderId, updates, receivedById, forceComplete) signatures
+    const env = (args[0] && typeof args[0] === 'object' && 'DB' in args[0]) ? args[0] : undefined;
+    const orderId = env ? args[1] : args[0];
+    const updates = env ? args[2] : args[1];
+    const receivedById = env ? args[3] : args[2];
+    const forceComplete = env ? args[4] : args[3];
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
@@ -332,7 +340,7 @@ export async function receiveServiceOrder(env: any, orderId: string, updates: an
 
     // Read inventory items for affected lines
     const affectedIds = Array.from(updMap.keys());
-    const invRows = await db.select().from(inventory).where(inventory.id.in(affectedIds));
+    const invRows = await db.select().from(inventory).where((inventory.id as any).in(affectedIds));
     const invMap = new Map<string, any>();
     for (const r of invRows) invMap.set((r as any).id, r);
 
@@ -351,6 +359,7 @@ export async function receiveServiceOrder(env: any, orderId: string, updates: an
             const newTotal = Object.values(sbr).reduce((s: number, v: any) => s + (isNaN(Number(v)) ? 0 : Math.max(0, Number(v))), 0);
             await db.update(inventory).set({ stockByResidence: JSON.stringify(sbr), stock: newTotal }).where(eq(inventory.id, itemId));
             await db.insert(inventoryTransactions).values({
+                id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
                 itemId,
                 itemNameEn: inv?.nameEn || '',
                 itemNameAr: inv?.nameAr || '',
@@ -364,6 +373,7 @@ export async function receiveServiceOrder(env: any, orderId: string, updates: an
         }
         if (addS > 0) {
             await db.insert(inventoryTransactions).values({
+                id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
                 itemId,
                 itemNameEn: inv?.nameEn || '',
                 itemNameAr: inv?.nameAr || '',
@@ -373,7 +383,8 @@ export async function receiveServiceOrder(env: any, orderId: string, updates: an
                 quantity: addS,
                 referenceDocId: order.codeShort,
                 locationName: `Scrapped at workshop: ${order.destination?.name || ''}`,
-                depreciationReason: 'Scrapped at workshop',
+                // Use field defined in schema
+                overrideReason: 'Scrapped at workshop',
             });
         }
         // Update order line totals in-memory
@@ -485,7 +496,10 @@ export async function getMrvs(env: any) {
     return await db.select().from(mrvs);
 }
 
-export async function createMRV(env: any, payload: any) {
+export async function createMRV(envOrPayload: any, payload?: any) {
+    // Support both (env, payload) and (payload) signatures for tests and RPC callers
+    const env = (envOrPayload && typeof envOrPayload === 'object' && 'DB' in envOrPayload) ? envOrPayload : undefined;
+    payload = payload === undefined ? envOrPayload : payload;
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
@@ -499,23 +513,23 @@ export async function createMRV(env: any, payload: any) {
     if (!mrvId) {
         const nowDate = new Date();
         const yy = nowDate.getFullYear().toString().slice(-2);
-        const mm = (nowDate.getMonth() + 1).toString().padStart(2, '0');
         const mmNoPad = (nowDate.getMonth() + 1).toString();
-        const counterId = `mrv-${yy}-${mm}`;
+        const mm = nowDate.getMonth() + 1;
+        const counterId = `mrv-${yy}-${String(mm).padStart(2, '0')}`;
         const existing = await db.select().from(counters).where(eq(counters.id, counterId));
         let nextSeq = 1;
         if (existing.length > 0) {
             try {
-                nextSeq = Number((existing[0] as any).seq || 0) + 1;
-                await db.update(counters).set({ seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+                nextSeq = Number((existing[0] as any).last || 0) + 1;
+                await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
             } catch {
-                await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+                await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
             }
         } else {
-            await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
         }
         const seqPadded = String(nextSeq).padStart(3, '0');
-        mrvId = `MRV-${yy}-${mm}-${seqPadded}`;
+        mrvId = `MRV-${yy}-${String(mm).padStart(2, '0')}-${seqPadded}`;
         mrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
     }
 
@@ -531,7 +545,7 @@ export async function createMRV(env: any, payload: any) {
 
     // Read inventory rows for items
     const itemIds = Array.from(totals.keys());
-    const invRows = await db.select().from(inventory).where(inventory.id.in(itemIds));
+    const invRows = await db.select().from(inventory).where((inventory.id as any).in(itemIds));
     const invMap = new Map<string, any>();
     for (const r of invRows) invMap.set((r as any).id, r);
 
@@ -546,6 +560,7 @@ export async function createMRV(env: any, payload: any) {
         await db.update(inventory).set({ stockByResidence: JSON.stringify(sbr), stock: newTotal }).where(eq(inventory.id, itemId));
 
         await db.insert(inventoryTransactions).values({
+            id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
             itemId,
             itemNameEn: (row?.nameEn) || '',
             itemNameAr: (row?.nameAr) || '',
@@ -571,18 +586,21 @@ export async function createMRV(env: any, payload: any) {
         attachmentPath: payload.meta?.attachmentPath || null,
         codeShort: mrvShort || null,
         orderId: payload.meta?.orderId || null,
-        receivedBy: payload.meta?.receivedBy || null,
-        receivedByName: payload.meta?.receivedByName || null
+        // schema does not include receivedBy/receivedByName; omit them to match schema
     });
 
     return { ok: true, id: mrvId };
 }
 
-export async function approveMRVRequest(env: any, requestId: string, approverId: string) {
+export async function approveMRVRequest(envOrRequestId: any, requestId?: string, approverId?: string) {
+    // Support both (env, requestId, approverId) and (requestId, approverId)
+    const env = (envOrRequestId && typeof envOrRequestId === 'object' && 'DB' in envOrRequestId) ? envOrRequestId : undefined;
+    requestId = requestId === undefined ? envOrRequestId : requestId;
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
 
+    if (!requestId) return { ok: false, error: 'requestId required' };
     const rows = await db.select().from(mrvRequests).where(eq(mrvRequests.id, requestId));
     if (!rows || rows.length === 0) return { ok: false, error: 'Request not found' };
     const req = rows[0] as any;
@@ -614,7 +632,7 @@ export async function approveMRVRequest(env: any, requestId: string, approverId:
     try {
         const requesterId = req.requestedById || null;
         if (requesterId) {
-            await db.insert(notifications).values({ userId: requesterId, title: 'MRV Approved', message: `Your MRV request has been approved and posted (${created.id}).`, type: 'generic', href: `/inventory/receive/receipts/${created.id}`, referenceId: created.id, date: new Date().toISOString() });
+            await db.insert(notifications).values({ id: `notif-${Date.now()}-${Math.random().toString(36).slice(2,9)}`, userId: requesterId, title: 'MRV Approved', body: `Your MRV request has been approved and posted (${created.id}).`, createdAt: new Date().toISOString() });
         }
     } catch {};
 
@@ -651,25 +669,33 @@ export async function getUsers(env: any) {
     return await db.select().from(users);
 }
 
-export async function setUserPasswordHash(env: any, id: string, hash: string) {
+export async function setUserPasswordHash(envOrId: any, idOrHash?: any, hashMaybe?: any) {
+    // Accept (env, id, hash) or (id, hash)
+    const env = (envOrId && typeof envOrId === 'object' && 'DB' in envOrId) ? envOrId : undefined;
+    const id = env ? idOrHash : envOrId;
+    const hash = env ? hashMaybe : idOrHash;
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     await db.update(users).set({ passwordHash: hash }).where(eq(users.id, id));
     return { ok: true };
 }
 export async function updateUser(env: any, id: string, data: any) {
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     await db.update(users).set(data).where(eq(users.id, id));
     return { ok: true };
 }
 
-export async function createUser(env: any, id: string, data: any) {
+export async function createUser(envOrId: any, idOrData?: any, dataMaybe?: any) {
+    // signature: (env, id, data) or (id, data)
+    const env = (envOrId && typeof envOrId === 'object' && 'DB' in envOrId) ? envOrId : undefined;
+    const id = env ? idOrData : envOrId;
+    const data = env ? dataMaybe : idOrData;
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
-    const db = getDb(d1);
+    const db = getDb(d1 as any);
     // Insert a new user with provided id. If a row with same id exists, ignore or return error.
     await db.insert(users).values({ id, ...data });
     return { ok: true };
@@ -708,21 +734,21 @@ export async function issueStock(env: any, payload: any) {
 
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
-    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
     const mmNoPad = (now.getMonth() + 1).toString();
-    const counterId = `miv-${yy}-${mm}`;
+    const mm = now.getMonth() + 1;
+    const counterId = `miv-${yy}-${String(mm).padStart(2, '0')}`;
 
     const existing = await db.select().from(counters).where(eq(counters.id, counterId));
     let nextSeq = 1;
     if (existing.length > 0) {
         try {
-            nextSeq = Number((existing[0] as any).seq || 0) + 1;
-            await db.update(counters).set({ seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            nextSeq = Number((existing[0] as any).last || 0) + 1;
+            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
-            await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
     }
 
     const codeShort = `MIV-${yy}${mmNoPad}${nextSeq}`;
@@ -737,7 +763,7 @@ export async function issueStock(env: any, payload: any) {
     for (const it of items) totals.set(String(it.id), (totals.get(String(it.id)) || 0) + Number(it.quantity || 0));
 
     const itemIds = Array.from(totals.keys());
-    const invRows = await db.select().from(inventory).where(inventory.id.in(itemIds));
+    const invRows = await db.select().from(inventory).where((inventory.id as any).in(itemIds));
     const invMap = new Map<string, any>();
     for (const r of invRows) invMap.set((r as any).id, r);
 
@@ -766,6 +792,7 @@ export async function issueStock(env: any, payload: any) {
         await db.update(inventory).set({ stockByResidence: JSON.stringify(sbr), stock: newTotal }).where(eq(inventory.id, itemId));
 
         await db.insert(inventoryTransactions).values({
+            id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
             itemId,
             itemNameEn: row?.nameEn || '',
             itemNameAr: row?.nameAr || '',
@@ -798,7 +825,7 @@ export async function transferStock(env: any, payload: any) {
     for (const it of items) totals.set(String(it.id), (totals.get(String(it.id)) || 0) + Number(it.quantity || 0));
 
     const itemIds = Array.from(totals.keys());
-    const invRows = await db.select().from(inventory).where(inventory.id.in(itemIds));
+    const invRows = await db.select().from(inventory).where((inventory.id as any).in(itemIds));
     const invMap = new Map<string, any>();
     for (const r of invRows) invMap.set((r as any).id, r);
 
@@ -829,6 +856,7 @@ export async function transferStock(env: any, payload: any) {
         await db.update(inventory).set({ stockByResidence: JSON.stringify(sbr), stock: newTotal }).where(eq(inventory.id, itemId));
 
         await db.insert(inventoryTransactions).values({
+            id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
             itemId,
             itemNameEn: row?.nameEn || '',
             itemNameAr: row?.nameAr || '',
@@ -840,6 +868,7 @@ export async function transferStock(env: any, payload: any) {
             locationName: `Transfer to ${toResidenceId}`
         });
         await db.insert(inventoryTransactions).values({
+            id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
             itemId,
             itemNameEn: row?.nameEn || '',
             itemNameAr: row?.nameAr || '',
@@ -865,21 +894,21 @@ export async function reconcileStock(env: any, payload: any) {
 
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
-    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
     const mmNoPad = (now.getMonth() + 1).toString();
-    const counterId = `recon-${yy}-${mm}`;
+    const mm = now.getMonth() + 1;
+    const counterId = `recon-${yy}-${String(mm).padStart(2, '0')}`;
 
     const existing = await db.select().from(counters).where(eq(counters.id, counterId));
     let nextSeq = 1;
     if (existing.length > 0) {
         try {
-            nextSeq = Number((existing[0] as any).seq || 0) + 1;
-            await db.update(counters).set({ seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            nextSeq = Number((existing[0] as any).last || 0) + 1;
+            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
-            await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, seq: nextSeq, yy, mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
     }
 
     const reconId = `RECON-${yy}${mmNoPad}${nextSeq}`;
@@ -904,6 +933,7 @@ export async function reconcileStock(env: any, payload: any) {
         if (diff !== 0) {
             if (diff > 0) increase += diff; else decrease += Math.abs(diff);
             await db.insert(inventoryTransactions).values({
+                id: `invtx-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
                 itemId,
                 itemNameEn: row?.nameEn || '',
                 itemNameAr: row?.nameAr || '',
@@ -999,7 +1029,7 @@ export async function createNotification(env: any, payload: any) {
     const db = getDb(d1);
     const id = `N-${Date.now()}`;
     const nowIso = new Date().toISOString();
-    await db.insert(notifications).values({ id, title: payload.title || '', body: payload.body || '', createdAt: nowIso, read: 0, userId: payload.userId || null });
+    await db.insert(notifications).values({ id, title: payload.title || '', body: payload.body || '', createdAt: nowIso, read: false, userId: payload.userId || null });
     return { ok: true, id };
 }
 
@@ -1007,7 +1037,7 @@ export async function markAsRead(env: any, notificationId: string) {
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
-    await db.update(notifications).set({ read: 1 }).where(eq(notifications.id, notificationId));
+    await db.update(notifications).set({ read: true }).where(eq(notifications.id, notificationId));
     return { ok: true };
 }
 

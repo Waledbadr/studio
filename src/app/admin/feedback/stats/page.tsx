@@ -30,7 +30,7 @@ export default function FeedbackStatsPage() {
     try {
       if (!db) return;
       const snap = await getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc')));
-      setItems(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+      setItems(snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })));
     } catch (e) {
       console.error(e);
     } finally {

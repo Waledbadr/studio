@@ -8,7 +8,7 @@ import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
 import { differenceInDays, isWithinInterval, max, min, parseISO, startOfDay, endOfDay } from 'date-fns';
 import * as D1Client from '@/lib/d1-client';
 import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer } from '@/lib/firestore-shim';
+import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer, getDoc, writeBatch, deleteDoc } from '@/lib/firestore-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 
 const USE_D1 =
@@ -538,10 +538,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       // const newWorkers = workersSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Worker[];
       // const newOccupants = occupantsSnap.docs.map(d => { ... }) as Occupant[];
-      const newCompanies = companiesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Company[];
-      const newContracts = contractsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Contract[];
-      const newInvoices = invoicesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Invoice[];
-      const newResidences = residencesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[]; // Cast to any to avoid type mismatch with Residence vs Complex
+      const newCompanies = companiesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as Company[];
+      const newContracts = contractsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as Contract[];
+      const newInvoices = invoicesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as Invoice[];
+      const newResidences = residencesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as any[]; // Cast to any to avoid type mismatch with Residence vs Complex
 
       // setWorkers(newWorkers);
       // setOccupants(newOccupants);
@@ -725,7 +725,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         } else {
           // Fetch all workers (bounded) - this may be large
           const snap = await getDocs(query(collection(db, 'workers')));
-          list = snap.docs.map(d => {
+          list = snap.docs.map((d: any) => {
             const data = d.data();
             const role = data?.role;
             const normalizedRole: Worker["role"] = role === "Supervisor" || role === "Engineer" ? role : "Worker";
@@ -808,7 +808,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
               }
             } else if (_db) {
               const snap = await getDocs(collection(_db, 'residences'));
-              const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+              const docs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
               const activeDocs = docs.filter((d: any) => !d.disabled);
               setResidences(activeDocs.map(mapComplexToResidence));
             }
@@ -927,12 +927,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           getDocs(query(collection(db, 'transferRequests'))),
         ]);
 
-        setCompanies(companiesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Company)));
-        setContracts(contractsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Contract)));
-        setInvoices(invoicesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)));
-        setOccupants(occupantsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
-        setAccommodationHistory(historySnap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory)));
-        setTransferRequests(transfersSnap.docs.map(d => ({ id: d.id, ...d.data() } as TransferRequest)));
+        setCompanies(companiesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Company)));
+        setContracts(contractsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Contract)));
+        setInvoices(invoicesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Invoice)));
+        setOccupants(occupantsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any)));
+        setAccommodationHistory(historySnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as AccommodationHistory)));
+        setTransferRequests(transfersSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as TransferRequest)));
       } catch (e) {
         console.error('Polling fetchAll failed', e);
       }
@@ -1445,7 +1445,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     const snapId = await getDocs(qId);
     if (!snapId.empty) {
       console.log(`✅ [Search] Found ${snapId.size} by ID in ${Date.now() - startTime}ms (${snapId.size} reads)`);
-      return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      return snapId.docs.map((d: any) => ({ id: d.id, ...d.data() } as Worker));
     }
 
     // 2. Try Employee ID (Prefix/Range)
@@ -1453,7 +1453,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     const snapEmp = await getDocs(qEmp);
     if (!snapEmp.empty) {
       console.log(`✅ [Search] Found ${snapEmp.size} by EmployeeID in ${Date.now() - startTime}ms (${snapEmp.size} reads)`);
-      return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      return snapEmp.docs.map((d: any) => ({ id: d.id, ...d.data() } as Worker));
     }
 
     // 3. Try Name (Prefix) - efficient range query for names starting with term
@@ -1461,7 +1461,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     const snapName = await getDocs(qName);
     if (!snapName.empty) {
       console.log(`✅ [Search] Found ${snapName.size} by Name (prefix) in ${Date.now() - startTime}ms (${snapName.size} reads)`);
-      return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      return snapName.docs.map((d: any) => ({ id: d.id, ...d.data() } as Worker));
     }
 
     // 4. Search in cached workers for partial name match (contains any part of name)
@@ -1492,7 +1492,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (snap.empty) break;
 
       totalReads += snap.size;
-      const batchWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      const batchWorkers = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Worker));
 
       // Check for matches in this batch
       const batchMatches = batchWorkers.filter(workerMatchesTerm);
@@ -1634,7 +1634,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         where('status', '==', 'Transferring')
       );
       const snap = await getDocs(q);
-      const workers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      const workers = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Worker));
       console.log(`[getTransferringWorkers] Found ${workers.length} transferring workers`);
       return workers;
     } catch (e) {
@@ -1653,7 +1653,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         where('until', '==', null)
       );
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Occupant[];
+      return snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any)) as Occupant[];
     } catch (e) {
       console.error("getRoomOccupantsAsync failed", e);
       return [];
@@ -1690,7 +1690,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         return;
       }
 
-      const floorOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Occupant[];
+      const floorOccupants = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any)) as Occupant[];
 
       setOccupants(prev => {
         // Remove existing occupants for this scope to avoid duplicates/stale data
@@ -2662,7 +2662,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const q = query(collection(db, 'accommodationHistory'), where('workerId', '==', workerId));
       const snap = await getDocs(q);
       return snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+        .map((d: any) => ({ id: d.id, ...d.data() } as AccommodationHistory))
         .filter(h => h.notes !== 'Auto-archived from occupants collection')
         .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
     } catch (e) {
@@ -2683,9 +2683,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       const allDocs = [...s1.docs, ...s2.docs, ...s3.docs];
       // Deduplicate by ID
-      const uniqueDocs = Array.from(new Map(allDocs.map(d => [d.id, d])).values());
+      const uniqueDocs = Array.from(new Map(allDocs.map((d: any) => [d.id, d])).values());
 
-      return uniqueDocs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+      return uniqueDocs.map((d: any) => ({ id: d.id, ...d.data() } as AccommodationHistory))
         .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
     } catch (e) {
       console.error("Failed to fetch room history", e);
@@ -3527,7 +3527,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       for (const chunk of chunks) {
         const batch = writeBatch(db);
-        chunk.forEach(doc => {
+        chunk.forEach((doc: any) => {
           batch.delete(doc.ref);
         });
         await batch.commit();

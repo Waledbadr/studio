@@ -50,7 +50,7 @@ describe('createMRV integration', () => {
 
             // counters query
             if (contains(`mrv-${yy}-${mm}`) || String(pred || '').includes('mrv-')) {
-              return [{ id: `mrv-${yy}-${mm}`, seq: 7, yy, mm }];
+              return [{ id: `mrv-${yy}-${mm}`, last: 7, yy, mm }];
             }
             if (contains('item-1') || String(pred || '').includes('inventory')) return inventoryRows;
             return [];

@@ -283,8 +283,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     isLoaded.current = true;
     setLoading(true);
 
-    inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      const inventoryData = snapshot.docs.map(doc => {
+    inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot: any) => {
+      const inventoryData = snapshot.docs.map((doc: any) => {
           const data = doc.data();
           const stockByResidence = data.stockByResidence || {};
           // Ensure totalStock is a valid number, defaulting to 0 if not.
@@ -310,34 +310,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
            });
        }
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
         console.error("Error fetching inventory:", error);
         toast({ title: "Firestore Error", description: "Could not fetch inventory data. Check your Firebase config and security rules.", variant: "destructive" });
         setLoading(false);
     });
 
-    categoriesUnsubscribeRef.current = onSnapshot(collection(db, "inventory-categories"), (snapshot) => {
+    categoriesUnsubscribeRef.current = onSnapshot(collection(db, "inventory-categories"), (snapshot: any) => {
       if (snapshot.docs.length > 0) {
         const categoriesData = snapshot.docs[0].data();
         setCategories(categoriesData.names || []);
       }
-    }, (error) => {
+    }, (error: any) => {
        console.error("Error fetching categories:", error);
        toast({ title: "Firestore Error", description: "Could not fetch categories data.", variant: "destructive" });
     });
     
-    transfersUnsubscribeRef.current = onSnapshot(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')), (snapshot) => {
-        const transfersData = snapshot.docs.map(doc => doc.data() as StockTransfer);
+    transfersUnsubscribeRef.current = onSnapshot(query(collection(db, 'stockTransfers'), orderBy('date', 'desc')), (snapshot: any) => {
+        const transfersData = snapshot.docs.map((doc: any) => doc.data() as StockTransfer);
         setTransfers(transfersData);
-    }, (error) => {
+    }, (error: any) => {
         console.error("Error fetching transfers:", error);
         toast({ title: "Firestore Error", description: "Could not fetch stock transfers.", variant: "destructive" });
     });
 
-    auditsUnsubscribeRef.current = onSnapshot(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')), (snapshot) => {
-        const auditsData = snapshot.docs.map(doc => doc.data() as InventoryAudit);
+    auditsUnsubscribeRef.current = onSnapshot(query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc')), (snapshot: any) => {
+        const auditsData = snapshot.docs.map((doc: any) => doc.data() as InventoryAudit);
         setAudits(auditsData);
-    }, (error) => {
+    }, (error: any) => {
         console.error("Error fetching audits:", error);
         toast({ title: "Firestore Error", description: "Could not fetch audits.", variant: "destructive" });
     });
@@ -605,7 +605,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         );
 
         const querySnapshot = await getDocs(q);
-        const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+        const transactions = querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
         
         transactions.sort((a, b) => a.date.toMillis() - b.date.toMillis());
         
@@ -628,7 +628,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         where("type", "==", "OUT")
     );
     const querySnapshot = await getDocs(q);
-    const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
+const transactions = querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as InventoryTransaction));
 
     return transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
   }
@@ -668,7 +668,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const q = query(mivsCollection, orderBy("date", "desc"));
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => doc.data() as MIV);
+    return querySnapshot.docs.map((doc: any) => doc.data() as MIV);
   };
   
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
@@ -1114,7 +1114,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         try {
             const q = query(collection(db, 'inventoryAudits'), orderBy('createdAt', 'desc'));
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as InventoryAudit);
+            return querySnapshot.docs.map((doc: any) => doc.data() as InventoryAudit);
         } catch (error) {
             console.error('Error fetching audits:', error);
             toast({ title: "Error", description: "Failed to fetch audits.", variant: "destructive" });

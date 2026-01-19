@@ -15,7 +15,7 @@ function getSafeRpID(hostname: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body: any = await req.json();
     const { type, user } = body as { type: 'register' | 'authenticate'; user: { id: string; name: string; email: string } };
 
     if (!user?.id) return NextResponse.json({ error: 'Missing user id' }, { status: 400 });

@@ -206,7 +206,7 @@ export async function POST(req: Request) {
         return sum + (isNaN(n) ? 0 : Math.max(0, n));
       }, 0);
 
-      await runTransaction(db, async (trx) => {
+      await runTransaction(db, async (trx: any) => {
         const itemRef = doc(db!, 'inventory', d.id);
         const fresh = await trx.get(itemRef);
         if (!fresh.exists()) return;

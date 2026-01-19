@@ -481,7 +481,7 @@ export function AccommodationManager() {
           where('until', '==', null)
         );
         const snap = await getDocs(q);
-        freshOccupants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        freshOccupants = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       } else {
         freshOccupants = occupants.filter(o => o.residenceId === selectedResidenceId && o.floorId === selectedFloorId);
       }

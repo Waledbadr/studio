@@ -141,7 +141,7 @@ export default function FeedbackWidget({ className }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataUrl: screenshotDataUrl }),
         });
-        const data = await res.json();
+        const data: any = await res.json();
         if (data?.url) screenshotUrl = data.url;
       }
 

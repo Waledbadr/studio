@@ -104,7 +104,7 @@ export default function ProfilePage() {
         try {
           await updatePassword(auth.currentUser, newPass);
           toast({ title: 'Password changed', description: 'Your password was updated. Please sign in again.' });
-          try { await signOut(auth); } catch {}
+          try { await signOut(); } catch {}
           try { router.replace('/login'); } catch {}
           return;
         } catch (err: any) {
@@ -118,7 +118,7 @@ export default function ProfilePage() {
             await reauthenticateWithCredential(auth.currentUser, cred);
             await updatePassword(auth.currentUser, newPass);
             toast({ title: 'Password changed', description: 'Your password was updated. Please sign in again.' });
-            try { await signOut(auth); } catch {}
+            try { await signOut(); } catch {}
             try { router.replace('/login'); } catch {}
             return;
           } catch (e: any) {
@@ -161,7 +161,7 @@ export default function ProfilePage() {
           const newCred = EmailAuthProvider.credential(email, newPass);
           await linkWithCredential(auth.currentUser, newCred);
           toast({ title: 'Password set', description: 'A password has been added to your account. Please sign in again.' });
-          try { await signOut(auth); } catch {}
+          try { await signOut(); } catch {}
           try { router.replace('/login'); } catch {}
         } catch (e: any) {
           const code = e?.code || '';

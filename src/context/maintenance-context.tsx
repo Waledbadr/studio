@@ -104,12 +104,12 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const requestsCollection = collection(db, "maintenanceRequests");
-    unsubscribeRef.current = onSnapshot(requestsCollection, (snapshot) => {
-      const requestsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRequest));
-      requestsData.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    unsubscribeRef.current = onSnapshot(requestsCollection, (snapshot: any) => {
+      const requestsData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as MaintenanceRequest));
+      requestsData.sort((a: any, b: any) => b.date.toMillis() - a.date.toMillis());
       setRequests(requestsData);
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error fetching maintenance requests:", error);
       toast({ title: "Firestore Error", description: "Could not fetch maintenance requests data.", variant: "destructive" });
       setLoading(false);
@@ -159,11 +159,11 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     const counterRef = doc(db, 'counters', counterId);
     let nextSeq = 0;
     // We are not in a broader transaction context here; rely on Firestore transaction for atomicity of the counter
-    await runTransaction(db, async (trx) => {
+    await runTransaction(db, async (trx: any) => {
       const snap = await trx.get(counterRef);
       const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
       nextSeq = current + 1;
-      trx.set(counterRef, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+      trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
     });
     return `MNT-${yy}${mmNoPad}${nextSeq}`;
   };

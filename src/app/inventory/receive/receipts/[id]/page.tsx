@@ -132,10 +132,10 @@ export default function MRVDetailsPage() {
         form.append('file', file);
         const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
+          const err: any = await res.json().catch(() => ({}));
           throw new Error(err.error || `Upload failed (${res.status})`);
         }
-        const body = await res.json();
+        const body: any = await res.json();
         newAttachments.push({ url: body.url, path: body.path, name: file.name });
       }
       

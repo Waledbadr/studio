@@ -234,7 +234,7 @@ export default function ImportWorkersPage() {
         if (!db) return;
         const q = query(collection(db, 'companies'), orderBy('name'));
         const snap = await getDocs(q);
-        setCompanies(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+        setCompanies(snap.docs.map((d: any) => ({ id: d.id, name: d.data().name })));
       } catch (e) {
         console.error("Failed to fetch companies", e);
       }

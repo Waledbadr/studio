@@ -95,7 +95,7 @@ export default function OrderDetailPage() {
                 if (em) {
                     const q = fbQuery(collection(db, 'users'), where('email', '==', em));
                     const qs = await getDocs(q);
-                    const nm = qs.docs.map(d => (d.data() as any)?.name).find(Boolean);
+                    const nm = qs.docs.map((d: any) => (d.data() as any)?.name).find(Boolean);
                     if (nm) { setRequestedByNameLocal(nm as string); return; }
                 }
             } catch {}
@@ -124,7 +124,7 @@ export default function OrderDetailPage() {
         if (!db || typeof id !== 'string') return;
         setLoading(true);
         const ref = doc(db, 'orders', id);
-        const unsub = onSnapshot(ref, (snap) => {
+        const unsub = onSnapshot(ref, (snap: any) => {
             if (snap.exists()) {
                 const data = snap.data() as any;
                 // Ensure items is always an array

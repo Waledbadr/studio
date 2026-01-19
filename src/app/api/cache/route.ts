@@ -35,7 +35,7 @@ export async function GET() {
 // POST /api/cache/clear
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body: any = await request.json();
     const { action, key, pattern } = body;
     
     if (action === 'clear') {

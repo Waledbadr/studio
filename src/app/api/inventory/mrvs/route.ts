@@ -12,11 +12,11 @@ async function reserveNewMrvId(): Promise<{ id: string; short: string }> {
   const counterId = `mrv-${yy}-${mm}`; // e.g., counters/mrv-25-08
   const ref = doc(db, 'counters', counterId);
   let nextSeq = 0;
-  await runTransaction(db, async (trx) => {
+  await runTransaction(db, async (trx: any) => {
     const snap = await trx.get(ref);
     const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
     nextSeq = current + 1;
-    trx.set(ref, { seq: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
+    trx.set(ref, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
   });
   const seqPadded = nextSeq.toString().padStart(3, '0');
   return {
@@ -30,7 +30,7 @@ export async function GET() {
     if (!db) return NextResponse.json({ mrvs: [] });
     const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
     const snap = await getDocs(qRef);
-    const mrvs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+    const mrvs = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
     return NextResponse.json({ mrvs });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to list MRVs' }, { status: 500 });
@@ -40,7 +40,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
-    const body = await request.json();
+    const body: any = await request.json();
     const { residenceId, items, meta } = body || {};
     if (!residenceId || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'residenceId and items[] are required' }, { status: 400 });
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const reserved = await reserveNewMrvId();
 
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction: any) => {
       // Read items
       const uniqueItemIds = [...new Set(lines.map((i: any) => i.id))];
       const itemRefs = uniqueItemIds.map((id: string) => doc(db!, 'inventory', id));

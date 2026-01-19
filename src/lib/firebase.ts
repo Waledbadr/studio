@@ -43,10 +43,10 @@ if (USE_D1) {
   }
 }
 
-const app = null as null;
-const db = null as null;
-const auth = null as null;
-const storage = null as null;
+const app = null as any;
+const db = null as any;
+const auth = null as any;
+const storage = null as any;
 const authReady: Promise<void> = Promise.resolve();
 
 export { app, db, auth, storage, authReady };

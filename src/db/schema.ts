@@ -185,6 +185,8 @@ export const auditLogs = sqliteTable('audit_logs', {
 export const counters = sqliteTable('counters', {
     id: text('id').primaryKey(),
     last: integer('last'),
+    yy: integer('yy'),
+    mm: integer('mm'),
     updatedAt: text('updated_at', { mode: 'json' }),
 });
 

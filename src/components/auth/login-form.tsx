@@ -104,7 +104,7 @@ export default function LoginForm() {
   // Handle OAuth redirect result if popup fallback was used
   useEffect(() => {
     if (typeof getRedirectResult !== 'function') return;
-    getRedirectResult(null as any)
+    (getRedirectResult(null as any) as Promise<any>)
       .then(async (res: any) => {
         // Type guard: check res and res.user
         if (res && res.user && typeof res.user === 'object' && 'uid' in res.user) {
@@ -181,7 +181,7 @@ export default function LoginForm() {
               return;
             }
           } catch (e) {
-            console.warn('D1 getUsers failed:', e?.message);
+            console.warn('D1 getUsers failed:', (e as any)?.message);
           }
         }
 

@@ -5,6 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 // In-memory user store for local development only
 const localUsers: Map<string, any> = new Map();
@@ -34,18 +35,22 @@ export async function POST(req: Request) {
 
     localUsers.set(email.toLowerCase(), user);
     
-    // Also try to write to actual D1 if available (will fail gracefully)
+    // Also try to write to actual D1 if available.
     try {
-      const { createUser, setUserPasswordHash } = await import('@/lib/d1-actions');
-      await createUser(id, {
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        assignedResidences: [],
-        themeSettings: user.themeSettings,
-        createdAt: user.createdAt,
-      });
-      await setUserPasswordHash(id, passwordHash);
+      const { env } = getRequestContext();
+      if (env?.DB) {
+        const { createUser, setUserPasswordHash } = await import('@/lib/d1-actions');
+        await createUser(env, id, {
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          assignedResidences: [],
+          themeSettings: user.themeSettings,
+          createdAt: user.createdAt,
+          disabled: false,
+        });
+        await setUserPasswordHash(env, id, passwordHash);
+      }
     } catch (d1Err) {
       console.warn('D1 write failed (expected in pure Next dev):', d1Err);
     }

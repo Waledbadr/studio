@@ -21,7 +21,7 @@ describe.skipIf(!ENABLED)('Cloudflare D1 smoke tests (requires running server + 
       headers: makeHeaders(),
       body: JSON.stringify({ action: 'getServiceOrders' })
     });
-    const json = await res.json();
+    const json: any = await res.json();
     expect(json.ok).toBe(true);
     expect(Array.isArray(json.result)).toBe(true);
   });
@@ -33,7 +33,7 @@ describe.skipIf(!ENABLED)('Cloudflare D1 smoke tests (requires running server + 
       headers: makeHeaders(),
       body: JSON.stringify({ action: 'createMRV', args: [payload] })
     });
-    const json = await res.json();
+    const json: any = await res.json();
     expect(json.ok).toBe(true);
     expect(json.result && (json.result.ok === true || json.result.id !== undefined)).toBe(true);
   });
@@ -51,14 +51,14 @@ describe.skipIf(!ENABLED)('Cloudflare D1 smoke tests (requires running server + 
       items: [{ id: 'item-smoke', nameEn: 'Smoke Item', nameAr: 'عنصر', quantity: 2 }]
     };
     const createRes = await fetch(`${BASE}/api/d1`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ action: 'createServiceOrder', args: [orderPayload] }) });
-    const createJson = await createRes.json();
+    const createJson: any = await createRes.json();
     expect(createJson.ok).toBe(true);
     const soId = createJson.result?.id || createJson.result?.codeShort || null;
     expect(soId).toBeTruthy();
 
     // receive it
     const recvRes = await fetch(`${BASE}/api/d1`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ action: 'receiveServiceOrder', args: [soId, [{ itemId: 'item-smoke', addReturned: 2, addScrapped: 0 }], 'smoke-user'] }) });
-    const recvJson = await recvRes.json();
+    const recvJson: any = await recvRes.json();
     expect(recvJson.ok).toBe(true);
     // success can be { ok:true } or { ok:true, result: { ok:true }} depending on server
     const okFlag = recvJson.result ? recvJson.result.ok !== false : true;

@@ -1,8 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut, User } from '@/lib/auth-shim';
+import { onAuthStateChanged, refreshMe, User } from '@/lib/auth-shim';
 import { useRouter, usePathname } from "next/navigation";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
@@ -12,23 +11,42 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (!auth) {
-      // If auth isn't configured, let the app load (local mode)
-      setReady(true);
+    let isMounted = true;
+
+    // Subscribe once; changes propagate via polling inside the shim.
+    const unsub = onAuthStateChanged(null, (u) => {
+      if (!isMounted) return;
+      setUser(u);
+    });
+
+    // Initial check: wait for /api/auth/me so we don't redirect based on the initial null.
+    setReady(false);
+    void refreshMe()
+      .then((u) => {
+        if (!isMounted) return;
+        setUser(u);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setReady(true);
+      });
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!user && pathname !== "/login") {
+      router.replace("/login");
       return;
     }
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setReady(true);
-      if (!u && pathname !== "/login") {
-        router.replace("/login");
-      }
-      if (u && pathname === "/login") {
-        router.replace("/");
-      }
-    });
-    return () => unsub();
-  }, [router, pathname]);
+    if (user && pathname === "/login") {
+      router.replace("/");
+    }
+  }, [ready, user, pathname, router]);
 
   // While determining auth state, render nothing to avoid layout shift
   if (!ready) return null;

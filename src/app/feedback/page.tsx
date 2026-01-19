@@ -35,7 +35,7 @@ export default function MyFeedbackPage() {
         where('userId', '==', currentUser.id)
       );
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const list = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
       list.sort((a: any, b: any) => {
         const da = a.createdAt ? (typeof a.createdAt === 'object' ? a.createdAt.toDate?.() || new Date(0) : new Date(a.createdAt)) : new Date(0);
         const dbb = b.createdAt ? (typeof b.createdAt === 'object' ? b.createdAt.toDate?.() || new Date(0) : new Date(b.createdAt)) : new Date(0);

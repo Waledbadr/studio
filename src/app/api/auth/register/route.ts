@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     return res;
   } catch (e: any) {
     const msg = e?.message || 'Registration failed';
+    console.error('Register error:', e);
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }

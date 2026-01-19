@@ -80,11 +80,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const ordersCollection = collection(db, "orders");
-    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot) => {
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot: any) => {
+      const ordersData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Order));
       setOrders(ordersData);
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error fetching orders:", error);
       toast({ title: "Firestore Error", description: "Could not fetch orders data.", variant: "destructive" });
       setLoading(false);

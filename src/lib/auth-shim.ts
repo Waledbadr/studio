@@ -18,7 +18,7 @@ async function fetchMe() {
       listeners.forEach(l => { try { l(null); } catch {} });
       return null;
     }
-    const json = await res.json();
+    const json: any = await res.json();
     const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null } : null;
     const changed = JSON.stringify(user) !== JSON.stringify(currentUser);
     if (changed) {
@@ -32,6 +32,14 @@ async function fetchMe() {
   } finally {
     fetchMeInFlight = false;
   }
+}
+
+export function getCurrentUser() {
+  return currentUser;
+}
+
+export async function refreshMe() {
+  return await fetchMe();
 }
 
 export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
@@ -57,7 +65,7 @@ export async function signOut() {
 
 export async function signInWithEmailAndPassword(_auth: any, email: string, password: string) {
   const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-  const j = await res.json();
+  const j: any = await res.json();
   if (!j.ok) {
     const msg = j.error || 'Login failed';
     const err: any = new Error(msg);
@@ -71,7 +79,7 @@ export async function signInWithEmailAndPassword(_auth: any, email: string, pass
 
 export async function createUserWithEmailAndPassword(_auth: any, email: string, password: string) {
   const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-  const j = await res.json();
+  const j: any = await res.json();
   if (!j.ok) {
     const msg = j.error || 'Register failed';
     const err: any = new Error(msg);

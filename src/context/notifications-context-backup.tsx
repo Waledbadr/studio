@@ -63,7 +63,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
         unsubscribeRef.current = onSnapshot(q, 
           (snapshot) => {
-            const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+            const notificationsData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
             setNotifications(notificationsData);
             setLoading(false);
           },

@@ -16,7 +16,6 @@ import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
-import { auth } from '@/lib/firebase';
 import { signOut } from '@/lib/auth-shim';
 import dynamic from 'next/dynamic';
 
@@ -62,9 +61,8 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const handleLogout = async () => {
-    if (!auth) { router.push('/login'); return; }
     try {
-      await signOut(auth);
+      await signOut();
       router.replace('/login');
     } catch (e) {
       console.error(e);

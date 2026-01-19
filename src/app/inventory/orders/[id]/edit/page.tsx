@@ -355,7 +355,7 @@ export default function EditOrderPage() {
 
             // Live subscription
             const ref = doc(db, 'orders', id as string);
-            unsub = onSnapshot(ref, (snap) => {
+            unsub = onSnapshot(ref, (snap: any) => {
                 if (!snap.exists()) {
                     if (isMounted) setPageLoading(false);
                     return;
@@ -375,7 +375,7 @@ export default function EditOrderPage() {
                 }
                 setStatus(data.status);
                 setPageLoading(false);
-            }, (err) => {
+            }, (err: any) => {
                 console.error('Error listening to order in edit page:', err);
                 if (isMounted) setPageLoading(false);
             });

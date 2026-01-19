@@ -96,8 +96,12 @@ export async function POST(req: Request) {
     
     return NextResponse.json({ ok: true, result: res });
   } catch (e: any) {
-    console.error('D1 API error', e);
-    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
+    // Log full error including possible nested cause for Drizzle/D1 errors
+    try { console.error('D1 API error:', e?.message || e); } catch {}
+    try { if (e && e.cause) console.error('D1 API cause:', e.cause); } catch {}
+    try { console.error(e); } catch {}
+    const errMsg = (e?.message || String(e)) + (e?.cause && e.cause?.message ? ` -- cause: ${e.cause.message}` : '');
+    return NextResponse.json({ ok: false, error: errMsg, stack: e?.stack || null }, { status: 500 });
   }
 }
 

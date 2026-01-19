@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name } = await req.json();
+    const body: any = await req.json();
+  const { name } = body;
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'Invalid payload: name is required' }, { status: 400 });
     }

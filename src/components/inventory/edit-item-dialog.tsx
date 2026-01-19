@@ -228,7 +228,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: source }),
 			});
-			const translationResult = await res.json();
+				const translationResult: any = await res.json();
 			if (!res.ok) {
 				const msg = translationResult?.error || `Translation API failed: ${res.status}`;
 				toast({ title: 'Translation Error', description: msg, variant: 'destructive' });

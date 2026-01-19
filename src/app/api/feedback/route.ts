@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { serverTimestamp } from '@/lib/firestore-shim';
+import { serverTimestamp, collection, addDoc, query, where, limit, getDocs } from '@/lib/firestore-shim';
 import { generateMonthlySequentialTicketId } from '@/lib/feedback';
+import { db } from '@/lib/firebase';
 
 export async function POST(req: NextRequest) {
   try {
     if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
-    const body = await req.json();
+    const body: any = await req.json();
     const { userId, title, description, category, screenshotUrl, errorCode, errorMessage, stack, deviceInfo, appInfo, settings } = body || {};
     if (!title || !category) return NextResponse.json({ error: 'Missing title or category' }, { status: 400 });
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     q = query(q, limit(100));
     const snap = await getDocs(q);
     const items = snap.docs
-      .map(d => ({ id: d.id, ...(d.data() as any) }))
+      .map((d: any) => ({ id: d.id, ...(d.data() as any) }))
       .sort((a: any, b: any) => {
         const da = a.createdAt ? (typeof a.createdAt === 'object' ? a.createdAt.toDate?.() || new Date(0) : new Date(a.createdAt)) : new Date(0);
         const dbb = b.createdAt ? (typeof b.createdAt === 'object' ? b.createdAt.toDate?.() || new Date(0) : new Date(b.createdAt)) : new Date(0);

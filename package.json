@@ -5,7 +5,7 @@
   "scripts": {
     "dev:base": "next dev --turbopack -p 9002",
     "dev": "npm run dev:base",
-    "dev:d1": "next build && npx wrangler pages dev .next --binding DB=estatecare-d1 --port 9002",
+    "dev:d1": "next build && npx @cloudflare/next-on-pages && npx wrangler pages dev .vercel/output/static --port 9002",
     "deploy": "npx @cloudflare/next-on-pages && npx wrangler pages deploy .vercel/output/static --project-name estatecare-studio",
     "dev:prod": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",

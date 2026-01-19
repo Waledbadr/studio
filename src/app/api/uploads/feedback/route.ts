@@ -4,7 +4,8 @@ export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
-    const { dataUrl } = await req.json();
+    const body: any = await req.json();
+  const { dataUrl } = body;
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
       return NextResponse.json({ error: 'Invalid image' }, { status: 400 });
     }

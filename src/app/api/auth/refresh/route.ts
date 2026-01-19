@@ -5,12 +5,12 @@ import { isHttpsRequest } from '@/lib/runtime-env';
 
 export async function POST(req: Request) {
   try {
-    const cookieStore = cookies();
+    const cookieStore: any = cookies();
     const token = cookieStore.get('refresh_token')?.value;
     if (!token) return NextResponse.json({ ok: false, error: 'No refresh token' }, { status: 401 });
-    const payload: any = verifyRefreshToken(token);
-    const access = signAccessToken({ sub: payload.sub, email: payload.email, role: payload.role });
-    const refresh = signRefreshToken({ sub: payload.sub, email: payload.email, role: payload.role });
+    const payload: any = await verifyRefreshToken(token);
+    const access = await signAccessToken({ sub: payload.sub, email: payload.email, role: payload.role });
+    const refresh = await signRefreshToken({ sub: payload.sub, email: payload.email, role: payload.role });
     const res = NextResponse.json({ ok: true });
     const secure = isHttpsRequest(req);
     res.cookies.set('access_token', access, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 15 * 60 });

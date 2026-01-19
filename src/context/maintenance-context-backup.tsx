@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc } from '@/lib/firestore-shim';
 
 export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
 export type MaintenancePriority = 'Low' | 'Medium' | 'High';
@@ -65,12 +65,12 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const requestsCollection = collection(db, "maintenanceRequests");
-    unsubscribeRef.current = onSnapshot(requestsCollection, (snapshot) => {
-      const requestsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRequest));
-      requestsData.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    unsubscribeRef.current = onSnapshot(requestsCollection, (snapshot: any) => {
+      const requestsData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as MaintenanceRequest));
+      requestsData.sort((a: any, b: any) => b.date.toMillis() - a.date.toMillis());
       setRequests(requestsData);
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error fetching maintenance requests:", error);
       toast({ title: "Firestore Error", description: "Could not fetch maintenance requests data.", variant: "destructive" });
       setLoading(false);
@@ -97,7 +97,7 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     const querySnapshot = await getDocs(requestsQuery);
     
     let maxNum = 0;
-    querySnapshot.forEach(doc => {
+    querySnapshot.forEach((doc: any) => {
         const docId = doc.id;
         if (docId.startsWith(prefix)) {
             const numPart = parseInt(docId.substring(prefix.length), 10);

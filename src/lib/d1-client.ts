@@ -35,10 +35,13 @@ export function createUser(id: string, data: any) { return rpc('createUser', [id
 export function updateUser(id: string, data: any) { return rpc('updateUser', [id, data]); }
 export function setUserPasswordHash(id: string, hash: string) { return rpc('setUserPasswordHash', [id, hash]); }
 export function getServiceOrders() { return rpc('getServiceOrders'); }
+export function getInventoryCategories() { return rpc('getInventoryCategories'); }
+export function issueStock(payload: any) { return rpc('issueStock', [payload]); }
 export function createMRV(payload: any) { return rpc('createMRV', [payload]); }
 export function approveMRVRequest(requestId: string, approverId: string) { return rpc('approveMRVRequest', [requestId, approverId]); }
 export function createResidence(data: any) { return rpc('createResidence', [data]); }
 export function updateResidence(id: string, data: any) { return rpc('updateResidence', [id, data]); }
+export function deleteResidence(id: string) { return rpc('deleteResidence', [id]); }
 export function createWorker(data: any) { return rpc('createWorker', [data]); }
 export function updateWorker(id: string, data: any) { return rpc('updateWorker', [id, data]); }
 export function deleteWorker(id: string) { return rpc('deleteWorker', [id]); }
@@ -48,3 +51,5 @@ export function checkInWorker(params: any) { return rpc('checkInWorker', [params
 export function checkOutWorker(params: any) { return rpc('checkOutWorker', [params]); }
 export function createServiceOrder(payload: any) { return rpc('createServiceOrder', [payload]); }
 export function receiveServiceOrder(orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) { return rpc('receiveServiceOrder', [orderId, updates, receivedById, forceComplete]); }
+export function transferStock(payload: any) { return rpc('transferStock', [payload]); }
+export function reconcileStock(payload: any) { return rpc('reconcileStock', [payload]); }

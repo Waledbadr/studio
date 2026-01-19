@@ -234,7 +234,7 @@ export function AddItemDialog({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: source }),
         });
-        const data = await res.json();
+        const data: any = await res.json();
         if (data?.error === 'TRANSLATION_DISABLED_NO_KEY') return null;
         if (!res.ok) throw new Error(data?.error || `Translation API failed: ${res.status}`);
         return data;

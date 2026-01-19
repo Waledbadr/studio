@@ -124,10 +124,10 @@ export default function MRVApprovalDetailPage() {
       fd.append('file', file);
       const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err: any = await res.json().catch(() => ({}));
         throw new Error(err.error || `Upload failed for ${file.name}`);
       }
-      const data = await res.json();
+      const data: any = await res.json();
       attachments.push({ url: data.url, path: data.path, name: file.name });
     }
     return attachments;

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
-    const body = await request.json();
+    const body: any = await request.json();
 
     // Support both { workers: [...] } and direct array
     const workersData = Array.isArray(body) ? body : (body.workers || []);

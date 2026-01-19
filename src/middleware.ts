@@ -8,7 +8,7 @@ import { getRuntimeEnv } from '@/lib/runtime-env';
 // Always access env vars via a safe helper.
 const DEFAULT_SECRET = 'development_secret_key_must_be_long';
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/d1', '/_next', '/static', '/favicon.ico', '/robots.txt'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/d1', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
 
 async function verifyToken(token: string) {
   const TEAM = await getRuntimeEnv('CLOUDFLARE_ACCESS_TEAM_DOMAIN', '');

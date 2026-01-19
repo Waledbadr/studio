@@ -41,13 +41,13 @@ export async function generateMonthlySequentialTicketId(year: number, month1Base
   const m = String(month1Based);
   const counterId = `feedback-${yy}${m}`;
   const ref = doc(db, 'counters', counterId);
-  const next = await runTransaction(db, async (tx) => {
+  const next = (await runTransaction(db, async (tx: any) => {
     const snap = await tx.get(ref);
     const last = snap.exists() ? (snap.data() as any).last || 0 : 0;
     const n = last + 1;
     tx.set(ref, { last: n, updatedAt: serverTimestamp() }, { merge: true });
     return n as number;
-  });
+  })) as unknown as number;
   return formatMonthlyTicketId(year, month1Based, next);
 }
 

@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
+import './setimmediate-polyfill';
 import * as bcrypt from 'bcryptjs';
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 import { getRuntimeEnv } from './runtime-env';
@@ -103,11 +104,13 @@ async function getBcryptRounds() {
 
 export async function hashPassword(password: string) {
   const rounds = await getBcryptRounds();
-  return bcrypt.hash(password, rounds);
+  // Use sync API to avoid Edge runtime restrictions (bcryptjs async uses setImmediate).
+  return bcrypt.hashSync(password, rounds);
 }
 
 export async function verifyPassword(password: string, hash: string) {
-  return bcrypt.compare(password, hash);
+  // Use sync API to avoid Edge runtime restrictions (bcryptjs async uses setImmediate).
+  return bcrypt.compareSync(password, hash);
 }
 
 export async function signAccessToken(payload: any) {

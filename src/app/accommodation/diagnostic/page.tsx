@@ -21,7 +21,7 @@ export default function DiagnosticPage() {
         return;
       }
       const snapshot = await getDocs(collection(db, 'workers'));
-      const workers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const workers = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       setFirestoreWorkers(workers);
       console.log('Firestore workers:', workers);
     } catch (e) {
