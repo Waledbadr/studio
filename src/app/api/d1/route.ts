@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   getWorkers: D1Actions.getWorkers,
@@ -14,6 +14,8 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   getNotifications: D1Actions.getNotifications,
   getInventory: D1Actions.getInventory,
   getInventoryCategories: D1Actions.getInventoryCategories,
+  upsertInventoryCategories: D1Actions.upsertInventoryCategories,
+  renameInventoryCategory: D1Actions.renameInventoryCategory,
   getInventoryTransactions: D1Actions.getInventoryTransactions,
   createInventoryItem: D1Actions.createInventoryItem,
   updateInventoryItem: D1Actions.updateInventoryItem,
@@ -74,9 +76,16 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 export async function POST(req: Request) {
   try {
     // Get env from request context
-    const { env } = getRequestContext();
+    const env = await getCloudflareEnvRecord();
     if (!env || !env.DB) {
-      return NextResponse.json({ ok: false, error: 'D1 binding not available' }, { status: 500 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
     }
 
     const text = await req.text();

@@ -1,13 +1,12 @@
 "use server";
 
 import * as D1Actions from '@/lib/d1-actions';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 // Helper to get env for server actions
-function getEnv() {
+async function getEnv() {
   try {
-    const { env } = getRequestContext();
-    return env;
+    return (await getCloudflareEnvRecord()) ?? null;
   } catch (e) {
     console.error('Failed to get request context in server action:', e);
     return null;
@@ -15,83 +14,83 @@ function getEnv() {
 }
 
 export async function createResidence(data: any) {
-  return D1Actions.createResidence(getEnv(), data);
+  return D1Actions.createResidence(await getEnv(), data);
 }
 
 export async function updateResidence(id: string, data: any) {
-  return D1Actions.updateResidence(getEnv(), id, data);
+  return D1Actions.updateResidence(await getEnv(), id, data);
 }
 
 export async function getWorkers() {
-  return D1Actions.getWorkers(getEnv());
+  return D1Actions.getWorkers(await getEnv());
 }
 
 export async function getResidences() {
-  return D1Actions.getResidences(getEnv());
+  return D1Actions.getResidences(await getEnv());
 }
 
 export async function getOccupants(residenceId?: string) {
-  return D1Actions.getOccupants(getEnv(), residenceId);
+  return D1Actions.getOccupants(await getEnv(), residenceId);
 }
 
 export async function getCompanies() {
-  return D1Actions.getCompanies(getEnv());
+  return D1Actions.getCompanies(await getEnv());
 }
 
 export async function getContracts() {
-  return D1Actions.getContracts(getEnv());
+  return D1Actions.getContracts(await getEnv());
 }
 
 export async function getInvoices() {
-  return D1Actions.getInvoices(getEnv());
+  return D1Actions.getInvoices(await getEnv());
 }
 
 export async function getHistory() {
-  return D1Actions.getHistory(getEnv());
+  return D1Actions.getHistory(await getEnv());
 }
 
 export async function getTransferRequests() {
-  return D1Actions.getTransferRequests(getEnv());
+  return D1Actions.getTransferRequests(await getEnv());
 }
 
 export async function getNotifications() {
-  return D1Actions.getNotifications(getEnv());
+  return D1Actions.getNotifications(await getEnv());
 }
 
 export async function updateWorker(id: string, data: any) {
-  return D1Actions.updateWorker(getEnv(), id, data);
+  return D1Actions.updateWorker(await getEnv(), id, data);
 }
 
 export async function createWorker(data: any) {
-  return D1Actions.createWorker(getEnv(), data);
+  return D1Actions.createWorker(await getEnv(), data);
 }
 
 export async function deleteWorker(id: string) {
-  return D1Actions.deleteWorker(getEnv(), id);
+  return D1Actions.deleteWorker(await getEnv(), id);
 }
 
 export async function createTransferRequest(tr: any) {
-  return D1Actions.createTransferRequest(getEnv(), tr);
+  return D1Actions.createTransferRequest(await getEnv(), tr);
 }
 
 export async function updateTransferRequest(id: string, data: any) {
-  return D1Actions.updateTransferRequest(getEnv(), id, data);
+  return D1Actions.updateTransferRequest(await getEnv(), id, data);
 }
 
 export async function checkInWorker(params: any) {
-  return D1Actions.checkInWorker(getEnv(), params);
+  return D1Actions.checkInWorker(await getEnv(), params);
 }
 
 export async function checkOutWorker(params: any) {
-  return D1Actions.checkOutWorker(getEnv(), params);
+  return D1Actions.checkOutWorker(await getEnv(), params);
 }
 
 export async function getUser(id: string) {
-  return D1Actions.getUser(getEnv(), id);
+  return D1Actions.getUser(await getEnv(), id);
 }
 
 export async function updateUser(id: string, data: any) {
-  return D1Actions.updateUser(getEnv(), id, data);
+  return D1Actions.updateUser(await getEnv(), id, data);
 }
 
 // Add more proxies as needed

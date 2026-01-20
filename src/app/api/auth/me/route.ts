@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { getUser } from '@/lib/d1-actions';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export async function GET() {
   try {
@@ -18,7 +18,7 @@ export async function GET() {
       console.warn('[AUTH ME] token verify failed:', verErr?.message || verErr);
       return NextResponse.json({ ok: true, user: null });
     }
-    const { env } = getRequestContext();
+    const env = await getCloudflareEnvRecord();
     const user = await getUser(env, payload.sub);
     if (!user) return NextResponse.json({ ok: true, user: null });
     console.log('[AUTH ME] found user:', user?.id, user?.email);
@@ -39,7 +39,7 @@ export async function PATCH(req: Request) {
     const updates: any = {};
     if (body.name) updates.name = body.name;
     if (body.email) updates.email = body.email;
-    const { env } = getRequestContext();
+    const env = await getCloudflareEnvRecord();
     await (await import('@/lib/d1-actions')).updateUser(env, payload.sub, updates);
     return NextResponse.json({ ok: true });
   } catch (e: any) {

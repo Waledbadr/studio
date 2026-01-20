@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
 import { collection, doc, getDocs, runTransaction, Timestamp } from '@/lib/firestore-shim';
 import { db } from '@/lib/firebase';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 type ScanResult = {
   itemId: string;
@@ -78,10 +78,7 @@ export async function GET(req: Request) {
     const apply = url.searchParams.get('apply');
 
     // Get env for D1 operations
-    let env: any;
-    try {
-      env = getRequestContext().env;
-    } catch {}
+    const env = await getCloudflareEnvRecord();
 
     if (apply === '1' || apply === 'true') {
       // Applying fixes requires write access; not supported in D1-only read-only mode here
@@ -168,10 +165,7 @@ export async function POST(req: Request) {
     }
 
     // Get env for D1 operations
-    let env: any;
-    try {
-      env = getRequestContext().env;
-    } catch {}
+    const env = await getCloudflareEnvRecord();
 
     if (!db) {
       // D1 mode: applying fixes via this endpoint is not supported here

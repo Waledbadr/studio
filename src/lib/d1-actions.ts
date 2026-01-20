@@ -727,6 +727,52 @@ export async function deleteInventoryItem(env: any, id: string) {
     return { ok: true };
 }
 
+// --- Inventory categories (D1 only) ---
+export async function upsertInventoryCategories(env: any, names: string[]) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const db = getDb(d1);
+    const id = 'all-categories';
+    const existing = await db.select().from(inventoryCategories).where(eq(inventoryCategories.id, id));
+    if (existing.length > 0) {
+        await db.update(inventoryCategories).set({ names }).where(eq(inventoryCategories.id, id));
+    } else {
+        await db.insert(inventoryCategories).values({ id, names });
+    }
+    return { ok: true };
+}
+
+export async function renameInventoryCategory(env: any, oldName: string, newName: string) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const db = getDb(d1);
+
+    // Update inventory items category
+    await db.update(inventory).set({ category: newName }).where(eq(inventory.category, oldName));
+
+    // Update stored categories list if present
+    const id = 'all-categories';
+    const existing = await db.select().from(inventoryCategories).where(eq(inventoryCategories.id, id));
+    if (existing.length > 0) {
+        const row: any = existing[0] as any;
+        const currentNames: string[] = Array.isArray(row?.names) ? row.names : (row?.names ? JSON.parse(row.names) : []);
+        const updated = (currentNames || []).map((c) => (c === oldName ? newName : c));
+        // Deduplicate (case-insensitive)
+        const seen = new Set<string>();
+        const deduped: string[] = [];
+        for (const c of updated) {
+            const key = String(c || '').trim().toLowerCase();
+            if (!key) continue;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(String(c).trim());
+        }
+        await db.update(inventoryCategories).set({ names: deduped }).where(eq(inventoryCategories.id, id));
+    }
+
+    return { ok: true };
+}
+
 export async function issueStock(env: any, payload: any) {
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };

@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 // In-memory user store for local development only
 const localUsers: Map<string, any> = new Map();
@@ -37,8 +37,8 @@ export async function POST(req: Request) {
     
     // Also try to write to actual D1 if available.
     try {
-      const { env } = getRequestContext();
-      if (env?.DB) {
+      const env = await getCloudflareEnvRecord();
+      if ((env as any)?.DB) {
         const { createUser, setUserPasswordHash } = await import('@/lib/d1-actions');
         await createUser(env, id, {
           email: user.email,

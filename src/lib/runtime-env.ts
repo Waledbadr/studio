@@ -1,25 +1,41 @@
-let cachedNextOnPages: any | null | undefined;
+type CloudflareEnv = Record<string, unknown>;
+type GetRequestContextFn = () => any;
 
-async function tryGetCloudflareEnv(key: string): Promise<string | undefined> {
-  if (cachedNextOnPages === undefined) {
-    try {
-      cachedNextOnPages = await import('@cloudflare/next-on-pages');
-    } catch {
-      cachedNextOnPages = null;
-    }
+let cachedGetRequestContext: GetRequestContextFn | null | undefined;
+
+async function loadGetRequestContext(): Promise<GetRequestContextFn | null> {
+  if (cachedGetRequestContext !== undefined) return cachedGetRequestContext;
+  try {
+    const mod: any = await import('@cloudflare/next-on-pages');
+    const fn = mod?.getRequestContext;
+    cachedGetRequestContext = typeof fn === 'function' ? (fn as GetRequestContextFn) : null;
+  } catch {
+    cachedGetRequestContext = null;
   }
+  return cachedGetRequestContext;
+}
 
-  const getRequestContext = cachedNextOnPages?.getRequestContext as undefined | (() => any);
+export async function getCloudflareEnvRecord(): Promise<CloudflareEnv | undefined> {
+  const getRequestContext = await loadGetRequestContext();
   if (!getRequestContext) return undefined;
-
   try {
     const ctx = getRequestContext();
-    const env = ctx?.env as Record<string, unknown> | undefined;
-    const value = env?.[key];
-    return typeof value === 'string' ? value : value == null ? undefined : String(value);
+    const env = ctx?.env as CloudflareEnv | undefined;
+    return env;
   } catch {
     return undefined;
   }
+}
+
+export async function getCloudflareBinding<T = unknown>(key: string): Promise<T | undefined> {
+  const env = await getCloudflareEnvRecord();
+  const value = env?.[key];
+  return value as T | undefined;
+}
+
+async function tryGetCloudflareEnvString(key: string): Promise<string | undefined> {
+  const value = await getCloudflareBinding<unknown>(key);
+  return typeof value === 'string' ? value : value == null ? undefined : String(value);
 }
 
 function tryGetProcessEnv(key: string): string | undefined {
@@ -40,7 +56,7 @@ function tryGetProcessEnv(key: string): string | undefined {
  */
 export async function getRuntimeEnv(key: string, fallback?: string): Promise<string> {
   // Try Cloudflare context first (Edge Runtime)
-  const fromCf = await tryGetCloudflareEnv(key);
+  const fromCf = await tryGetCloudflareEnvString(key);
   if (fromCf !== undefined && fromCf !== '') return fromCf;
 
   // Fall back to process.env (Node.js or dev)

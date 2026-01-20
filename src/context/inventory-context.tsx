@@ -560,10 +560,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const addCategory = async (newCategory: string) => {
-    if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      return;
-    }
     const trimmedCategory = newCategory.trim().toLowerCase();
     if (categories.map(c => c.toLowerCase()).includes(trimmedCategory)) {
        toast({ title: "Error", description: "This category already exists.", variant: "destructive" });
@@ -571,8 +567,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const updatedCategories = [...categories, newCategory.trim()];
-      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
-      await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
+      if (USE_D1) {
+        const res: any = await (await import('@/lib/d1-client')).upsertInventoryCategories(updatedCategories);
+        if (!res || res.ok === false) throw new Error(res?.error || 'D1 upsertInventoryCategories failed');
+        setCategories(updatedCategories);
+      } else {
+        if (!db) {
+          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+          return;
+        }
+        const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
+        await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
+      }
       toast({ title: "Success", description: "Category added." });
     } catch(error) {
       console.error("Error adding category: ", error);
@@ -581,32 +587,39 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const updateCategory = async (oldName: string, newName: string) => {
-     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      return;
-    }
     const trimmedNewName = newName.trim();
     if (categories.map(c => c.toLowerCase()).includes(trimmedNewName.toLowerCase())) {
         toast({ title: "Error", description: "A category with this name already exists.", variant: "destructive" });
         return;
     }
     try {
-      const batch = writeBatch(db);
+      if (USE_D1) {
+        const res: any = await (await import('@/lib/d1-client')).renameInventoryCategory(oldName, trimmedNewName);
+        if (!res || res.ok === false) throw new Error(res?.error || 'D1 renameInventoryCategory failed');
+        setCategories(categories.map(c => c === oldName ? trimmedNewName : c));
+        setItems(prev => prev.map(it => it.category === oldName ? ({ ...it, category: trimmedNewName }) : it));
+      } else {
+        if (!db) {
+          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+          return;
+        }
+        const batch = writeBatch(db);
 
-      // 1. Update categories document
-      const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
-      const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
-      batch.set(categoriesDocRef, { names: updatedCategories });
-      
-      // 2. Update all items with the old category name
-      const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
-      const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
-      itemsToUpdateSnapshot.forEach(itemDoc => {
-        const itemRef = doc(db!, "inventory", itemDoc.id);
-        batch.update(itemRef, { category: trimmedNewName });
-      });
+        // 1. Update categories document
+        const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
+        const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
+        batch.set(categoriesDocRef, { names: updatedCategories });
+        
+        // 2. Update all items with the old category name
+        const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
+        const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
+        itemsToUpdateSnapshot.forEach(itemDoc => {
+          const itemRef = doc(db!, "inventory", itemDoc.id);
+          batch.update(itemRef, { category: trimmedNewName });
+        });
 
-      await batch.commit();
+        await batch.commit();
+      }
       toast({ title: "Success", description: "Category updated successfully." });
     } catch (error) {
        console.error("Error updating category: ", error);
@@ -615,23 +628,48 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addItem = async (newItem: Omit<InventoryItem, 'id' | 'stock'>): Promise<InventoryItem | void> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
     if (isDuplicate) {
       toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
       return;
     }
     try {
+      if (USE_D1) {
+        const payload: any = {
+          ...newItem,
+          // D1 schema requires `name` (not null)
+          name: (newItem as any).name || (newItem as any).nameEn || (newItem as any).nameAr || 'Item',
+          stock: 0,
+          stockByResidence: {},
+          lifespanDays: (newItem as any).lifespanDays || 0,
+          variants: (newItem as any).variants || [],
+        };
+        const res: any = await (await import('@/lib/d1-client')).createInventoryItem(payload);
+        if (!res || res.ok === false) throw new Error(res?.error || 'D1 createInventoryItem failed');
+        const id = res.id || payload.id;
+        const itemWithId = { ...payload, id, stock: 0, stockByResidence: {} } as InventoryItem;
+        setItems(prev => [itemWithId, ...prev]);
+        const newCategory = String((newItem as any).category || '').trim();
+        if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
+          // keep local list in sync; D1 table gets updated too
+          await addCategory(newCategory);
+        }
+        toast({ title: "Success", description: "New item added to inventory (D1)." });
+        return itemWithId;
+      }
+
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+      }
+
       const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: newItem.lifespanDays || 0, variants: newItem.variants || [] };
+      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: (newItem as any).lifespanDays || 0, variants: (newItem as any).variants || [] };
       await setDoc(docRef, itemWithId);
       
-      const newCategory = newItem.category.toLowerCase();
-      if (!categories.map(c => c.toLowerCase()).includes(newCategory)) {
-        addCategory(newItem.category);
+      const newCategory = String((newItem as any).category || '').toLowerCase();
+      if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory)) {
+        addCategory((newItem as any).category);
       }
 
       toast({ title: "Success", description: "New item added to inventory." });
@@ -643,11 +681,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateItem = async (itemToUpdate: InventoryItem) => {
-    if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      return;
-    }
     try {
+      if (USE_D1) {
+        const { id, stock, ...itemData } = itemToUpdate as any;
+        const res: any = await (await import('@/lib/d1-client')).updateInventoryItem(id, itemData);
+        if (!res || res.ok === false) throw new Error(res?.error || 'D1 updateInventoryItem failed');
+        setItems(prev => prev.map(it => it.id === itemToUpdate.id ? itemToUpdate : it));
+        toast({ title: "Success", description: "Item updated (D1)." });
+        return;
+      }
+
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+      }
+
       const itemDocRef = doc(db!, "inventory", itemToUpdate.id);
       const { stock, ...itemData } = itemToUpdate; // Exclude total stock from being written to DB
       await updateDoc(itemDocRef, { ...itemData });
@@ -659,16 +707,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteItem = async (id: string) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
     // Enforce admin-only deletion in the client as a first line of defense
     if (!currentUser || currentUser.role !== 'Admin') {
       toast({ title: "Forbidden", description: "Only admins can delete items.", variant: "destructive" });
       return;
     }
     try {
+      if (USE_D1) {
+        const res: any = await (await import('@/lib/d1-client')).deleteInventoryItem(id);
+        if (!res || res.ok === false) throw new Error(res?.error || 'D1 deleteInventoryItem failed');
+        setItems(prev => prev.filter(it => it.id !== id));
+        toast({ title: "Success", description: "Item has been deleted (D1)." });
+        return;
+      }
+
+      if (!db) {
+        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        return;
+      }
+
       await deleteDoc(doc(db!, "inventory", id));
       toast({ title: "Success", description: "Item has been deleted." });
     } catch (error) {

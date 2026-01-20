@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -32,7 +32,8 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
 
     if (!r2Key) return new NextResponse('Not found', { status: 404 });
 
-    const bucket = getRequestContext().env.STORAGE_BUCKET;
+    const env = await getCloudflareEnvRecord();
+    const bucket = (env as any)?.STORAGE_BUCKET;
     if (!bucket) {
       console.error('No R2 bucket binding found');
       return new NextResponse('Storage configuration error', { status: 500 });

@@ -8,7 +8,7 @@
 // However, accessing bindings in Next.js App Router (Edge) is tricky.
 // We typically use: import { getRequestContext } from '@cloudflare/next-on-pages'
 
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export type SaveResult = { path: string; url: string; size: number; mimeType: string };
 
@@ -38,7 +38,8 @@ export async function saveBuffer(opts: { buffer: Buffer; dir?: string; filename?
   const r2Key = `${dir}/${subdir}/${finalName}`;
 
   try {
-    const bucket = getRequestContext().env.STORAGE_BUCKET;
+    const env = await getCloudflareEnvRecord();
+    const bucket = (env as any)?.STORAGE_BUCKET;
     if (!bucket) {
       throw new Error('R2 Bucket binding STORAGE_BUCKET not found');
     }
@@ -63,7 +64,8 @@ export async function getAbsolutePath(relPath: string) {
 }
 
 export async function statFile(relPath: string) {
-  const bucket = getRequestContext().env.STORAGE_BUCKET;
+  const env = await getCloudflareEnvRecord();
+  const bucket = (env as any)?.STORAGE_BUCKET;
   if (!bucket) throw new Error('No bucket');
 
   // R2 doesn't have stat exactly, checking head

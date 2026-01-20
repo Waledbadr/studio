@@ -36,6 +36,11 @@ export function updateUser(id: string, data: any) { return rpc('updateUser', [id
 export function setUserPasswordHash(id: string, hash: string) { return rpc('setUserPasswordHash', [id, hash]); }
 export function getServiceOrders() { return rpc('getServiceOrders'); }
 export function getInventoryCategories() { return rpc('getInventoryCategories'); }
+export function upsertInventoryCategories(names: string[]) { return rpc('upsertInventoryCategories', [names]); }
+export function renameInventoryCategory(oldName: string, newName: string) { return rpc('renameInventoryCategory', [oldName, newName]); }
+export function createInventoryItem(data: any) { return rpc('createInventoryItem', [data]); }
+export function updateInventoryItem(id: string, data: any) { return rpc('updateInventoryItem', [id, data]); }
+export function deleteInventoryItem(id: string) { return rpc('deleteInventoryItem', [id]); }
 export function issueStock(payload: any) { return rpc('issueStock', [payload]); }
 export function createMRV(payload: any) { return rpc('createMRV', [payload]); }
 export function approveMRVRequest(requestId: string, approverId: string) { return rpc('approveMRVRequest', [requestId, approverId]); }
