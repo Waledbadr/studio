@@ -5,8 +5,18 @@ import Link from 'next/link';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useToast } from '@/hooks/use-toast';
 import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, SlidersHorizontal, X } from 'lucide-react';
 import type { Occupant, Worker } from '@/context/accommodation-context';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function WorkersPage() {
   const ctx = useAccommodation();
@@ -31,6 +41,7 @@ export default function WorkersPage() {
   const [filterResidenceId, setFilterResidenceId] = useState<string>('all');
   const [pageSize, setPageSize] = useState<number>(50);
   const [page, setPage] = useState<number>(1);
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
 
   useEffect(() => { if (!editing) setForm({ id: '', name: '', employeeId: '', idNumber: '', nationality: '', company: '', role: 'Worker' }); }, [editing]);
 
@@ -60,6 +71,73 @@ export default function WorkersPage() {
       .replace(/\s+/g, ' ')
       .trim();
   }
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setFilterCompany('all');
+    setFilterRole('all');
+    setFilterStatus('all');
+    setFilterAssignment('all');
+    setFilterResidenceId('all');
+    setPageSize(50);
+    setPage(1);
+  };
+
+  const activeFilters = useMemo(() => {
+    const items: Array<{ key: string; label: string; onClear: () => void }> = [];
+
+    if (normalizeSearch(searchQuery)) {
+      items.push({
+        key: 'q',
+        label: `بحث: ${searchQuery.trim()}`,
+        onClear: () => setSearchQuery(''),
+      });
+    }
+
+    if (filterCompany !== 'all') {
+      items.push({
+        key: 'company',
+        label: `الشركة: ${filterCompany}`,
+        onClear: () => setFilterCompany('all'),
+      });
+    }
+
+    if (filterRole !== 'all') {
+      items.push({
+        key: 'role',
+        label: `الدور: ${filterRole}`,
+        onClear: () => setFilterRole('all'),
+      });
+    }
+
+    if (filterStatus !== 'all') {
+      items.push({
+        key: 'status',
+        label: `الحالة: ${filterStatus}`,
+        onClear: () => setFilterStatus('all'),
+      });
+    }
+
+    if (filterAssignment !== 'all') {
+      const assignmentLabel = filterAssignment === 'assigned' ? 'مسكّن' : 'غير مسكّن';
+      items.push({
+        key: 'assignment',
+        label: `التسكين: ${assignmentLabel}`,
+        onClear: () => setFilterAssignment('all'),
+      });
+    }
+
+    if (filterResidenceId !== 'all') {
+      const residenceName = residences.find((r) => r.id === filterResidenceId)?.name || filterResidenceId;
+      items.push({
+        key: 'residence',
+        label: `السكن: ${residenceName}`,
+        onClear: () => setFilterResidenceId('all'),
+      });
+    }
+
+    return items;
+  }, [searchQuery, filterCompany, filterRole, filterStatus, filterAssignment, filterResidenceId, residences]);
 
   const filteredWorkers = useMemo(() => {
     const q = normalizeSearch(searchQuery);
@@ -189,14 +267,11 @@ export default function WorkersPage() {
             </svg>
             استيراد من Excel
           </Link>
-          <button onClick={startAdd} className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent">إضافة عامل</button>
-          <button
-            onClick={() => handleCreateTransfer([])}
-            className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent flex items-center gap-2"
-          >
+          <Button onClick={startAdd} variant="outline">إضافة عامل</Button>
+          <Button onClick={() => handleCreateTransfer([])} variant="outline" className="flex items-center gap-2">
             <ArrowRightLeft className="h-4 w-4" />
             طلب نقل
-          </button>
+          </Button>
           <Link href="/accommodation/assign" className="rounded-md bg-primary text-primary-foreground px-3 py-1 hover:bg-primary/90">التسكين</Link>
           <button onClick={async () => {
             if (!migrate) { toast({ title: 'Not configured', description: 'Migration requires Firestore configured.', variant: 'destructive' }); return; }
@@ -212,152 +287,174 @@ export default function WorkersPage() {
         preSelectedWorkers={selectedWorkersForTransfer}
       />
 
-      <div className="rounded-md border border-border p-4 bg-card">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-foreground mb-1">بحث (بالاسم / رقم الموظف / رقم الهوية)</label>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border border-border bg-background text-foreground rounded px-3 py-2 w-full"
-              placeholder="ابحث عن عامل..."
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">الشركة</label>
-              <select
-                value={filterCompany}
-                onChange={(e) => setFilterCompany(e.target.value)}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="all">الكل</option>
-                {uniqueCompanies.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1 text-right">
+              <CardTitle className="text-lg">بحث وفلاتر</CardTitle>
+              <div className="text-sm text-muted-foreground">
+                عرض {pagedWorkers.length} من {filteredWorkers.length} (إجمالي {workers.length})
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">الدور</label>
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="all">الكل</option>
-                <option value="Worker">Worker</option>
-                <option value="Supervisor">Supervisor</option>
-                <option value="Engineer">Engineer</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">الحالة</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="all">الكل</option>
-                <option value="Active">Active</option>
-                <option value="Transferring">Transferring</option>
-                <option value="Vacation">Vacation</option>
-                <option value="Exit">Exit</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">التسكين</label>
-              <select
-                value={filterAssignment}
-                onChange={(e) => setFilterAssignment(e.target.value as any)}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="all">الكل</option>
-                <option value="assigned">مسكّن</option>
-                <option value="unassigned">غير مسكّن</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">السكن</label>
-              <select
-                value={filterResidenceId}
-                onChange={(e) => setFilterResidenceId(e.target.value)}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="all">الكل</option>
-                {residences.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">حجم الصفحة</label>
-              <select
-                value={String(pageSize)}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="border border-border bg-background text-foreground rounded px-3 py-2"
-              >
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
-              </select>
-            </div>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setFilterCompany('all');
-                setFilterRole('all');
-                setFilterStatus('all');
-                setFilterAssignment('all');
-                setFilterResidenceId('all');
-                setPageSize(50);
-                setPage(1);
-              }}
-              className="rounded-md border border-border bg-background px-3 py-2 hover:bg-accent"
-            >
-              مسح الفلاتر
-            </button>
-          </div>
-        </div>
 
-        <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="text-sm text-muted-foreground">
-            عرض {pagedWorkers.length} من {filteredWorkers.length} (إجمالي {workers.length})
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(1)}
-              disabled={safePage <= 1}
-              className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent disabled:opacity-50"
-            >
-              الأولى
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent disabled:opacity-50"
-            >
-              السابق
-            </button>
-            <div className="text-sm text-muted-foreground">
-              صفحة {safePage} / {totalPages}
+            <div className="flex flex-wrap gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetFilters}
+                disabled={activeFilters.length === 0 && pageSize === 50 && safePage === 1}
+              >
+                مسح الكل
+              </Button>
+
+              <CollapsibleTrigger asChild>
+                <Button variant="secondary" size="sm" className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  فلاتر متقدمة
+                </Button>
+              </CollapsibleTrigger>
             </div>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent disabled:opacity-50"
-            >
-              التالي
-            </button>
-            <button
-              onClick={() => setPage(totalPages)}
-              disabled={safePage >= totalPages}
-              className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent disabled:opacity-50"
-            >
-              الأخيرة
-            </button>
           </div>
-        </div>
+
+          {activeFilters.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2 justify-end">
+              {activeFilters.map((f) => (
+                <Badge
+                  key={f.key}
+                  variant="secondary"
+                  className="gap-2 pr-1 pl-2 py-1 rounded-full flex items-center"
+                >
+                  <span className="text-xs">{f.label}</span>
+                  <button
+                    type="button"
+                    onClick={f.onClear}
+                    className="rounded-full p-1 hover:bg-background/60"
+                    aria-label={`إزالة فلتر: ${f.label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <Label className="block text-right mb-1">بحث (بالاسم / رقم الموظف / رقم الهوية)</Label>
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ابحث عن عامل..."
+                dir="auto"
+              />
+            </div>
+
+            <div>
+              <Label className="block text-right mb-1">التسكين</Label>
+              <Tabs value={filterAssignment} onValueChange={(v) => setFilterAssignment(v as any)}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="all">الكل</TabsTrigger>
+                  <TabsTrigger value="assigned">مسكّن</TabsTrigger>
+                  <TabsTrigger value="unassigned">غير مسكّن</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
+
+          <CollapsibleContent>
+            <Separator className="my-4" />
+
+            <div className="grid gap-3 md:grid-cols-5">
+                <div>
+                  <Label className="block text-right mb-1">الشركة</Label>
+                  <Select value={filterCompany} onValueChange={setFilterCompany}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      {uniqueCompanies.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="block text-right mb-1">الدور</Label>
+                  <Select value={filterRole} onValueChange={setFilterRole}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="Worker">Worker</SelectItem>
+                      <SelectItem value="Supervisor">Supervisor</SelectItem>
+                      <SelectItem value="Engineer">Engineer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="block text-right mb-1">الحالة</Label>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Transferring">Transferring</SelectItem>
+                      <SelectItem value="Vacation">Vacation</SelectItem>
+                      <SelectItem value="Exit">Exit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label className="block text-right mb-1">السكن</Label>
+                  <Select value={filterResidenceId} onValueChange={setFilterResidenceId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      {residences.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+            </div>
+          </CollapsibleContent>
+
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2 justify-end">
+              <Label className="text-sm text-muted-foreground">حجم الصفحة</Label>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                <SelectTrigger className="w-[110px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={safePage <= 1}>الأولى</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>السابق</Button>
+              <div className="text-sm text-muted-foreground">صفحة {safePage} / {totalPages}</div>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}>التالي</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={safePage >= totalPages}>الأخيرة</Button>
+            </div>
+          </div>
 
         {editing === null ? (
           <div>
@@ -457,7 +554,9 @@ export default function WorkersPage() {
             </tbody>
           </table>
         </div>
-      </div>
+        </CardContent>
+      </Card>
+      </Collapsible>
     </div>
   );
 }

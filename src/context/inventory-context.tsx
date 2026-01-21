@@ -386,35 +386,54 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     ).toLowerCase() === 'true';
   const POLL_INTERVAL_MS = 7000; // polling interval (5-10s window)
   const d1PollWarnedRef = useRef(false);
+  const backendFallbackWarnedRef = useRef(false);
 
 
   const loadInventory = useCallback(async () => {
      if (isLoaded.current) return;
      if (!db) {
-        // In D1-only mode, try to fetch inventory via D1 RPC instead of erroring
-        if (USE_D1) {
-          try {
-            const inv: any[] = await (await import('@/lib/d1-client')).getInventory();
-            const inventoryData = (inv || []).map((data: any) => {
-              const sbr = typeof data.stockByResidence === 'string' ? JSON.parse(data.stockByResidence || '{}') : (data.stockByResidence || {});
-              const totalStock = Object.values(sbr).reduce((sum: number, current) => {
-                const num = Number(current);
-                const safe = isNaN(num) ? 0 : Math.max(0, num);
-                return sum + safe;
-              }, 0);
-              return { id: data.id, ...data, stockByResidence: sbr, stock: totalStock } as InventoryItem;
-            });
-            setItems(inventoryData);
-            const uniqueCategories = Array.from(new Set(inventoryData.map(item => item.category)));
-            if (categories.length === 0 && uniqueCategories.length > 0) setCategories(uniqueCategories);
-          } catch (e) {
-            console.warn('D1 RPC failed (inventory), falling back to local storage:', e);
-            // continue to localStorage fallback below
-          }
-        } // end if (USE_D1)
+        // When Firestore is not configured, prefer D1 automatically.
+        // This avoids empty inventory when NEXT_PUBLIC_USE_D1 wasn't set.
+        try {
+          const inv: any[] = await (await import('@/lib/d1-client')).getInventory();
+          const inventoryData = (inv || []).map((data: any) => {
+            const sbr = typeof data.stockByResidence === 'string' ? JSON.parse(data.stockByResidence || '{}') : (data.stockByResidence || {});
+            const totalStock = Object.values(sbr).reduce((sum: number, current) => {
+              const num = Number(current);
+              const safe = isNaN(num) ? 0 : Math.max(0, num);
+              return sum + safe;
+            }, 0);
+            return { id: data.id, ...data, stockByResidence: sbr, stock: totalStock } as InventoryItem;
+          });
+          setItems(inventoryData);
 
-        // Non-D1 fallback: use local storage, but keep quiet (no error spam)
+          // Categories (best-effort)
+          try {
+            const cats: any[] = await (await import('@/lib/d1-client')).getInventoryCategories();
+            if (cats && cats.length) setCategories(cats.map((c: any) => c.names).flat().filter(Boolean));
+          } catch {
+            // ignore
+          }
+
+          setLoading(false);
+          isLoaded.current = true;
+          return;
+        } catch (e) {
+          console.warn('D1 RPC failed (inventory), falling back to local storage:', e);
+          // continue to localStorage fallback below
+        }
+
+        // Fallback: use local storage.
+        // IMPORTANT: this is not synced to D1.
         console.log("Backend not configured (D1 unavailable), using local storage");
+        if (!backendFallbackWarnedRef.current) {
+          backendFallbackWarnedRef.current = true;
+          toast({
+            title: 'Backend غير متاح',
+            description: 'التطبيق يعمل حالياً بوضع محلي (localStorage). لن تظهر بيانات D1 ولن يتم حفظ التغييرات في قاعدة البيانات حتى يتم تشغيل D1 بشكل صحيح.',
+            variant: 'destructive'
+          });
+        }
         try {
           const storedItems = localStorage.getItem('estatecare_inventory');
           const ds = storedItems ? JSON.parse(storedItems) : [];
@@ -459,7 +478,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             setItems(inventoryData);
           } catch (e) {
             console.error('D1 getInventory failed', e);
-            if (!d1PollWarnedRef.current) { d1PollWarnedRef.current = true; toast({ title: 'D1 unavailable', description: 'ظپط´ظ„ ط§ظ„ط­طµظˆظ„ ط¹ظ„ظ‰ ط¨ظٹط§ظ†ط§طھ ط§ظ„ظ…ط®ط²ظˆظ† ظ…ظ† Cloudflare D1', variant: 'destructive' }); }
+            if (!d1PollWarnedRef.current) {
+              d1PollWarnedRef.current = true;
+              toast({ title: 'D1 unavailable', description: 'فشل الحصول على بيانات المخزون من Cloudflare D1', variant: 'destructive' });
+            }
           }
         } else if (db) {
           const snapshot = await getDocs(collection(db, 'inventory'));
@@ -634,7 +656,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      if (USE_D1) {
+      const shouldTryD1 = USE_D1 || !db;
+      if (shouldTryD1) {
         const payload: any = {
           ...newItem,
           // D1 schema requires `name` (not null)
@@ -682,7 +705,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const updateItem = async (itemToUpdate: InventoryItem) => {
     try {
-      if (USE_D1) {
+      const shouldTryD1 = USE_D1 || !db;
+      if (shouldTryD1) {
         const { id, stock, ...itemData } = itemToUpdate as any;
         const res: any = await (await import('@/lib/d1-client')).updateInventoryItem(id, itemData);
         if (!res || res.ok === false) throw new Error(res?.error || 'D1 updateInventoryItem failed');
@@ -713,7 +737,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      if (USE_D1) {
+      const shouldTryD1 = USE_D1 || !db;
+      if (shouldTryD1) {
         const res: any = await (await import('@/lib/d1-client')).deleteInventoryItem(id);
         if (!res || res.ok === false) throw new Error(res?.error || 'D1 deleteInventoryItem failed');
         setItems(prev => prev.filter(it => it.id !== id));
