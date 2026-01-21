@@ -357,3 +357,27 @@ export const users = sqliteTable('users', {
     lastSeen: text('last_seen'),
     disabled: integer('disabled', { mode: 'boolean' }).default(false),
 });
+
+export const webauthnCredentials = sqliteTable('webauthn_credentials', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    credentialId: text('credential_id').notNull(),
+    publicKey: text('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    transports: text('transports', { mode: 'json' }),
+    deviceType: text('device_type'),
+    backedUp: integer('backed_up', { mode: 'boolean' }).default(false),
+    createdAt: text('created_at'),
+    updatedAt: text('updated_at'),
+});
+
+export const passwordResetTokens = sqliteTable('password_reset_tokens', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull(),
+    usedAt: text('used_at'),
+    requestedIp: text('requested_ip'),
+    requestedUa: text('requested_ua'),
+});

@@ -108,7 +108,21 @@ export const signInWithEmailLink: undefined | ((...args: any[]) => Promise<any>)
 export const signInWithPopup: undefined | ((...args: any[]) => Promise<any>) = undefined;
 export const signInWithRedirect: undefined | ((...args: any[]) => Promise<any>) = undefined;
 export const getRedirectResult: undefined | ((...args: any[]) => Promise<any>) = undefined;
-export const sendPasswordResetEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const sendPasswordResetEmail: undefined | ((...args: any[]) => Promise<void>) = async (_auth: any, email: string, _actionCodeSettings?: any) => {
+  const res = await fetch('/api/auth/password-reset/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const j: any = await res.json().catch(() => ({}));
+  if (!res.ok || !j?.ok) {
+    const msg = j?.error || 'Failed to request reset email';
+    const err: any = new Error(msg);
+    if (/invalid.*email/i.test(msg)) err.code = 'auth/invalid-email';
+    if (/too many/i.test(msg)) err.code = 'auth/too-many-requests';
+    throw err;
+  }
+};
 export const sendSignInLinkToEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;
 export const updatePassword: undefined | ((...args: any[]) => Promise<void>) = undefined;
 export const updateEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;

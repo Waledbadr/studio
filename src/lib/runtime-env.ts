@@ -1,25 +1,10 @@
+import { tryGetRequestContext } from '@/lib/cf-context';
+
 type CloudflareEnv = Record<string, unknown>;
-type GetRequestContextFn = () => any;
-
-let cachedGetRequestContext: GetRequestContextFn | null | undefined;
-
-async function loadGetRequestContext(): Promise<GetRequestContextFn | null> {
-  if (cachedGetRequestContext !== undefined) return cachedGetRequestContext;
-  try {
-    const mod: any = await import('@cloudflare/next-on-pages');
-    const fn = mod?.getRequestContext;
-    cachedGetRequestContext = typeof fn === 'function' ? (fn as GetRequestContextFn) : null;
-  } catch {
-    cachedGetRequestContext = null;
-  }
-  return cachedGetRequestContext;
-}
 
 export async function getCloudflareEnvRecord(): Promise<CloudflareEnv | undefined> {
-  const getRequestContext = await loadGetRequestContext();
-  if (!getRequestContext) return undefined;
   try {
-    const ctx = getRequestContext();
+    const ctx = tryGetRequestContext();
     const env = ctx?.env as CloudflareEnv | undefined;
     return env;
   } catch {

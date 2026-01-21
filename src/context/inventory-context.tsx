@@ -1390,7 +1390,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return rows.sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
   };
 
- const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
+ const getAllInventoryTransactions = useCallback(async (): Promise<InventoryTransaction[]> => {
     if (!db) {
         toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
@@ -1407,7 +1407,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "Failed to fetch all transactions.", variant: "destructive" });
         return [];
     }
-  };
+  }, [toast]);
 
   // Helper: last issue date for an item at a specific location
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
@@ -1463,7 +1463,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // List recent MIVs
-  const getMIVs = async (): Promise<MIV[]> => {
+  const getMIVs = useCallback(async (): Promise<MIV[]> => {
     if (!db) {
       toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return [];
@@ -1477,7 +1477,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Error', description: 'Failed to fetch MIVs.', variant: 'destructive' });
       return [];
     }
-  };
+  }, [toast]);
 
   // Get MIV details by ID
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
@@ -1518,7 +1518,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // List recent MRVs
-  const getMRVs = async (): Promise<MRV[]> => {
+  const getMRVs = useCallback(async (): Promise<MRV[]> => {
     if (!db) {
       toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return [];
@@ -1532,7 +1532,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Error', description: 'Failed to fetch MRVs.', variant: 'destructive' });
       return [];
     }
-  };
+  }, [toast]);
 
   // Get MRV details by ID
   const getMRVById = async (mrvId: string): Promise<MRVDetails | null> => {
@@ -2599,7 +2599,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return { fixedCount, affectedItems: affected };
     };
 
-    const getAllReconciliations = async (): Promise<StockReconciliation[]> => {
+    const getAllReconciliations = useCallback(async (): Promise<StockReconciliation[]> => {
       if (!db) {
         toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
@@ -2614,7 +2614,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: 'Error', description: 'Failed to fetch all reconciliations.', variant: 'destructive' });
         return [];
       }
-    };
+    }, [toast]);
 
    
 
@@ -2660,7 +2660,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     // Reconciliation approval workflow implementations
-  const getReconciliationRequests = async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
+  const getReconciliationRequests = useCallback(async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
       if (!db) {
         toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
         return [];
@@ -2682,7 +2682,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: 'Error', description: 'Failed to fetch reconciliation requests.', variant: 'destructive' });
         return [];
       }
-    };
+    }, [toast]);
 
     const createReconciliationRequest = async (resId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string): Promise<string> => {
       if (!db) throw new Error(backendErrorMessage);

@@ -3,16 +3,11 @@ import './setimmediate-polyfill';
 import * as bcrypt from 'bcryptjs';
 import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 import { getRuntimeEnv } from './runtime-env';
+import { getCloudflareEnvRecord } from './runtime-env';
 
 // Helper to get env for D1 actions
 async function getEnvForD1() {
-  try {
-    const { getRequestContext } = await import('@cloudflare/next-on-pages');
-    const { env } = getRequestContext();
-    return env;
-  } catch {
-    return null;
-  }
+  return (await getCloudflareEnvRecord()) ?? null;
 }
 
 // Fallback in-memory store when D1 binding is missing (local dev only)
