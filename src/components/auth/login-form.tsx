@@ -46,6 +46,40 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
 
+  // First-run helper: if D1 is enabled and there are no users yet, guide the user to create the first account.
+  useEffect(() => {
+    const USE_D1 =
+      String(
+        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
+      ).toLowerCase() === 'true';
+    if (!USE_D1) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('D1 timeout')), 3500));
+        const users = await Promise.race([
+          (await import('@/lib/d1-client')).getUsers(),
+          timeout,
+        ]) as any[];
+        if (cancelled) return;
+        if (Array.isArray(users) && users.length === 0) {
+          setMode('signup');
+          toast({
+            title: 'First-time setup',
+            description: 'لا يوجد مستخدمون في قاعدة البيانات. قم بإنشاء أول حساب (سيتم تعيينه Admin تلقائيًا).',
+          });
+        }
+      } catch {
+        // Ignore: D1 may be offline or protected; normal sign-in will show an error if needed.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [toast]);
+
   // Restrict inputs to ASCII (English) characters only for email & password
   const toASCII = (s: string) => s.replace(/[^\x00-\x7F]/g, "");
   const [emailNonAscii, setEmailNonAscii] = useState(false);

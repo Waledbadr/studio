@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import './setimmediate-polyfill';
 import * as bcrypt from 'bcryptjs';
-import { getUserByEmail, getUser, createUser, updateUser, setUserPasswordHash } from './d1-actions';
+import { getUserByEmail, getUser, getUsers, createUser, updateUser, setUserPasswordHash } from './d1-actions';
 import { getRuntimeEnv } from './runtime-env';
 import { getCloudflareEnvRecord } from './runtime-env';
 
@@ -167,11 +167,62 @@ export async function registerUser({ name, email, password }: { name: string; em
     const local = await getLocalUsers();
     existing = local.get(email.toLowerCase()) || null;
   }
-  if (existing) throw new Error('User exists');
+
+  // If the user already exists but has no password set (pre-provisioned / imported user),
+  // allow this "signup" to set their initial password.
+  if (existing) {
+    if ((existing as any)?.disabled) throw new Error('User disabled');
+    const existingHash = (existing as any)?.passwordHash;
+    const hasPassword = typeof existingHash === 'string' && existingHash.length > 0;
+    if (hasPassword) throw new Error('User exists');
+
+    const hash = await hashPassword(password);
+
+    // Try to persist password to D1 if available; otherwise update local fallback.
+    try {
+      if (env && (env as any).DB) {
+        await setUserPasswordHash(env, (existing as any).id, hash);
+        await updateUser(env, (existing as any).id, {
+          name: name || (existing as any).name || email,
+          email,
+          disabled: false,
+        });
+        const updated = await getUser(env, (existing as any).id);
+        if (updated) return updated as any;
+      }
+    } catch (e) {
+      console.warn('D1 update failed, using in-memory fallback', e);
+    }
+
+    const local = await getLocalUsers();
+    const next = {
+      ...(existing as any),
+      name: name || (existing as any).name || email,
+      email,
+      passwordHash: hash,
+      disabled: false,
+    };
+    local.set(email.toLowerCase(), next);
+    return next;
+  }
+
+  // Bootstrap: if this is the first user in D1, make them Admin.
+  // This avoids a "locked out" production where no admin exists yet.
+  let role: any = 'Technician';
+  try {
+    if (env && (env as any).DB) {
+      const all = await getUsers(env);
+      if (Array.isArray(all) && all.length === 0) {
+        role = 'Admin';
+      }
+    }
+  } catch {
+    // If counting users fails, keep default Technician.
+  }
 
   const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const hash = await hashPassword(password);
-  const created = { name, email, role: 'Technician', passwordHash: hash, createdAt: new Date().toISOString(), disabled: false } as any;
+  const created = { name, email, role, passwordHash: hash, createdAt: new Date().toISOString(), disabled: false } as any;
 
   try {
     // Only call createUser, which includes the passwordHash in `created` object
