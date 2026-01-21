@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
-import { getAdminDb } from '@/lib/firebase-admin';
-import serverCache from '@/lib/server-cache';
+import { NextResponse } from 'next/server';
+import * as D1Actions from '@/lib/d1-actions';
+import { getDb } from '@/lib/db';
+import { residences, occupants, workers as workersTable } from '@/db/schema';
+import { eq, and, isNull } from 'drizzle-orm';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body: any = await request.json();
     // Expected body: { workerId | workerIds, residenceId, roomId }
     const { workerId, workerIds, residenceId, roomId } = body || {};
 
@@ -15,64 +18,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'missing-params' }, { status: 400 });
     }
 
-    const adminDb = getAdminDb();
-    if (!adminDb) {
-      return NextResponse.json({
-        ok: false,
-        error: 'Firebase Admin not configured'
-      }, { status: 500 });
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
     }
+
+    const db = getDb((env as any).DB);
 
     try {
       const toAssign = Array.isArray(workerIds) ? workerIds : [workerId];
       const assigned: any[] = [];
 
-      // Get ONLY the specific workers we need using cache
-      const workers: any[] = [];
+      // Workers to assign
+      const workerRows = await db.select().from(workersTable).where((workersTable.id as any).in(toAssign));
+      const workers = workerRows as any[];
 
-      // Try to get all workers from cache first
-      const allWorkers = await serverCache.get(
-        'workers:all',
-        async () => {
-          console.log('📡 [Assign] Fetching all workers from Firestore (cache miss)');
-          const snap = await adminDb.collection('workers').get();
-          return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-        },
-        10 * 60 * 1000 // 10 min cache
-      );
+      // Current active occupants
+      const activeOccupants = await db
+        .select()
+        .from(occupants)
+        .where(and(eq(occupants.residenceId, residenceId), eq(occupants.roomId, roomId), isNull(occupants.until)));
 
-      // Filter only the workers we need from cached data
-      for (const wid of toAssign) {
-        const worker = allWorkers.find((w: any) => w.id === wid);
-        if (worker) {
-          workers.push(worker);
-        }
-      }
+      const allActiveOccupants = await db.select().from(occupants).where(isNull(occupants.until));
 
-      // Get occupants from cache and filter
-      const allOccupants = await serverCache.get(
-        'occupants:all',
-        async () => {
-          console.log('📡 [Assign] Fetching all occupants from Firestore (cache miss)');
-          const snap = await adminDb.collection('occupants').get();
-          return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-        },
-        2 * 60 * 1000 // 2 min cache (occupants change frequently)
-      );
-
-      // Filter occupants for this room from cached data
-      const existingOccupants = allOccupants.filter((o: any) =>
-        o.roomId === roomId && o.residenceId === residenceId
-      );
-
-      // Check if workers are already assigned (from cached data)
-      const alreadyAssignedWorkers = toAssign.filter(wid =>
-        allOccupants.some((o: any) => o.workerId === wid)
+      // Check if workers are already assigned (active)
+      const alreadyAssignedWorkers = toAssign.filter((wid: string) =>
+        (allActiveOccupants as any[]).some((o: any) => o.workerId === wid)
       );
 
       // Get residence data to check room capacity
-      const residenceDoc = await adminDb.collection('residences').doc(residenceId).get();
-      const residence = residenceDoc.data();
+      const residenceRows = await db.select().from(residences).where(eq(residences.id, residenceId));
+      const residence = (residenceRows && residenceRows[0]) as any;
 
       if (!residence) {
         return NextResponse.json({ ok: false, error: 'Residence not found' }, { status: 404 });
@@ -80,12 +63,11 @@ export async function POST(request: Request) {
 
       // Find the room in the residence structure
       let roomData: any = null;
-      if (residence.rooms) {
-        roomData = residence.rooms.find((r: any) => r.id === roomId);
-      } else if (residence.buildings) {
-        for (const building of residence.buildings) {
-          for (const floor of building.floors || []) {
-            const found = floor.rooms?.find((r: any) => r.id === roomId);
+      const buildings = residence?.buildings && typeof residence.buildings === 'string' ? JSON.parse(residence.buildings) : residence?.buildings;
+      if (Array.isArray(buildings)) {
+        for (const building of buildings) {
+          for (const floor of building?.floors || []) {
+            const found = floor?.rooms?.find((r: any) => r.id === roomId);
             if (found) {
               roomData = found;
               break;
@@ -100,7 +82,7 @@ export async function POST(request: Request) {
       }
 
       // Check room capacity
-      const currentOccupants = existingOccupants.filter((o: any) => o.roomId === roomId);
+      const currentOccupants = activeOccupants as any[];
       const roomCapacity = roomData.capacity || 0;
 
       if (currentOccupants.length + toAssign.length > roomCapacity) {
@@ -122,9 +104,8 @@ export async function POST(request: Request) {
       // Check nationality rule (all occupants in same room must have same nationality)
       if (currentOccupants.length > 0) {
         const firstOccupant = currentOccupants[0] as any;
-        // Get the first occupant's worker from cached workers
-        const firstWorker: any = allWorkers.find((w: any) => w.id === firstOccupant.workerId);
-        const firstNationality = firstWorker?.nationality;
+        const firstWorkerRows = await db.select().from(workersTable).where(eq(workersTable.id, firstOccupant.workerId));
+        const firstNationality = (firstWorkerRows[0] as any)?.nationality;
 
         for (const worker of workers) {
           const w = worker as any;
@@ -156,20 +137,19 @@ export async function POST(request: Request) {
         }
       }
 
-      // Assign workers to room
+      // Assign workers to room (check-in)
       for (const wid of toAssign) {
         const worker = workers.find((w: any) => w.id === wid);
         if (!worker) continue;
 
-        await adminDb.collection('occupants').add({
+        const res = await D1Actions.checkInWorker(env, {
           workerId: wid,
           residenceId,
           roomId,
           since: new Date().toISOString(),
-          createdAt: new Date().toISOString()
+          checkInBy: 'system',
         });
-
-        assigned.push(wid);
+        if (res && (res as any).ok) assigned.push(wid);
       }
 
       return NextResponse.json({ ok: true, assigned, count: assigned.length });

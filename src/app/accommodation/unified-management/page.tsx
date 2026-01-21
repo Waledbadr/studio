@@ -127,7 +127,7 @@ export default function UnifiedManagementPage() {
       try {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
-          const data = await res.json();
+          const data: any = await res.json();
           if (data.user) {
             setCurrentUserId(data.user.id);
             setUserRole(data.user.role || null);

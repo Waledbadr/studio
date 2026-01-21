@@ -36,9 +36,9 @@ import { AddWorkerDialog } from "./add-worker-dialog";
 import { WorkerHistoryDialog } from "./worker-history-dialog";
 import { RoomHistoryDialog } from "./room-history-dialog";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/platform";
 import { onAuthStateChanged } from '@/lib/auth-shim';
-import { doc, getDoc, collection, query, where, getDocs } from '@/lib/firestore-shim';
+import { doc, getDoc, collection, query, where, getDocs } from '@/lib/realtime-shim';
 
 export function AccommodationManager() {
   // const { residences } = useResidences(); // Use residences from AccommodationContext for better type support
@@ -79,7 +79,7 @@ export function AccommodationManager() {
   const accessibleResidences = React.useMemo(() => {
     if (!currentUser) return [];
     // Filter out disabled residences
-    const activeResidences = residences.filter(r => !r.disabled);
+    const activeResidences = residences.filter((r: any) => !r.disabled);
     if (currentUser.role === 'Admin') return activeResidences;
     // Filter by assignedResidences array
     return activeResidences.filter(r => currentUser.assignedResidences?.includes(r.id));
@@ -804,7 +804,7 @@ export function AccommodationManager() {
                         w.idNumber === searchQuery.trim()
                       );
 
-                      let toSelect = [];
+                      let toSelect: any[] = [];
                       if (exactMatch) {
                         // If exact match found, ONLY select that one (unless already selected)
                         if (!selectedWorkerIds.includes(exactMatch.id)) {

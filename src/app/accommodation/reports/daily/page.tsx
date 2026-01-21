@@ -11,7 +11,7 @@ export default function DailyReportPage() {
   async function load() {
     try {
       const res = await fetch('/api/accommodation/reports/daily', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dateISO }) });
-      const data = await res.json();
+      const data: any = await res.json();
       if (data?.ok) setReport(data.report || {});
     } catch (e) { console.error(e); }
   }

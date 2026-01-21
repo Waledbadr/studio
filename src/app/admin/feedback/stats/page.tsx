@@ -3,8 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis } from 'recharts';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from '@/lib/firestore-shim';
 import { useUsers } from '@/context/users-context';
 
 interface Item {
@@ -28,9 +26,10 @@ export default function FeedbackStatsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (!db) return;
-      const snap = await getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc')));
-      setItems(snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })));
+      const res = await fetch('/api/feedback');
+      const data: any = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setItems(Array.isArray(data?.items) ? data.items : []);
     } catch (e) {
       console.error(e);
     } finally {

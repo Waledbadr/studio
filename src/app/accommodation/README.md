@@ -118,7 +118,7 @@ Firestore Collections:
 ├── ac_occupants*        # Room assignments (localStorage + Firestore planned)
 └── ac_transfers*        # Transfer requests (localStorage + Firestore planned)
 
-*Currently localStorage-backed with Firestore migration path
+*Currently D1-backed with localStorage fallback
 ```
 
 ### Context Provider
@@ -133,7 +133,7 @@ Exports:
 
 ### Integration with Main App
 - **Residences**: Reuses existing `residences-context.tsx` data (buildings, floors, rooms)
-- **Auth**: Shares Firebase auth from main app
+- **Auth**: Shares auth session from main app
 - **Layout**: Nested under main `AppLayout` with dedicated `AccommodationProvider`
 - **Theming**: Uses same Tailwind config and shadcn/ui components
 
@@ -181,7 +181,7 @@ Following existing pattern from inventory module:
 ## Development Roadmap
 
 ### Phase 1: Core Functionality ✅
-- [x] Worker CRUD with Firestore
+- [x] Worker CRUD
 - [x] Company management
 - [x] Contract lifecycle
 - [x] Invoice generation
@@ -227,7 +227,7 @@ Following existing pattern from inventory module:
 - [ ] Duplicate invoice prevention
 
 ### Integration Tests
-- [ ] Firestore persistence
+- [ ] D1 persistence
 - [ ] localStorage fallback
 - [ ] Tab synchronization
 - [ ] Navigation between modules
@@ -238,10 +238,9 @@ Following existing pattern from inventory module:
 ## Troubleshooting
 
 ### Workers not syncing
-- Check Firestore rules allow read/write on `workers` collection
-- Verify Firebase config in `.env.local`
+- Ensure D1 bindings are configured and reachable
 - Check browser console for permission errors
-- Try migration tool: "Migrate local → Firestore" button
+- Try refreshing and reloading data
 
 ### Invoice generation not working
 - Ensure contracts exist with status "Active"

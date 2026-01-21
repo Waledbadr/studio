@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
+import { getDb } from '@/lib/db';
+import { workers as workersTable } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -7,7 +10,7 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/workers/import
  * 
- * Imports workers data from JSON file into Firestore 'workers' collection.
+ * Imports workers data from JSON file into Cloudflare D1 'workers' table.
  * Accepts JSON array of workers with fields: id, name, nationality, role
  * 
  * Body: { workers: Worker[] } or Worker[]
@@ -27,14 +30,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate Firebase Admin is initialized
-    const adminDb = getAdminDb();
-    if (!adminDb) {
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
       return NextResponse.json(
-        { error: 'Firebase Admin not configured' },
-        { status: 500 }
+        {
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
       );
     }
+
+    const db = getDb((env as any).DB);
 
     const results = {
       total: workersData.length,
@@ -75,17 +82,20 @@ export async function POST(request: NextRequest) {
           role,
         };
 
-        // Check if worker already exists
-        const docRef = adminDb.collection('workers').doc(workerId);
-        const docSnap = await docRef.get();
-
-        if (docSnap.exists) {
-          // Update existing worker
-          await docRef.set(workerData, { merge: true });
+        // Upsert worker in D1
+        const existing = await db.select().from(workersTable).where(eq(workersTable.id, workerId));
+        if (existing.length > 0) {
+          await db.update(workersTable).set({
+            ...workerData,
+            updatedAt: new Date().toISOString(),
+          } as any).where(eq(workersTable.id, workerId));
           results.updated++;
         } else {
-          // Create new worker
-          await docRef.set(workerData);
+          await db.insert(workersTable).values({
+            id: workerId,
+            ...workerData,
+            updatedAt: new Date().toISOString(),
+          } as any);
           results.imported++;
         }
 
@@ -122,7 +132,7 @@ export async function GET() {
   return NextResponse.json({
     endpoint: '/api/workers/import',
     method: 'POST',
-    description: 'Import workers data from JSON file',
+    description: 'Import workers data from JSON file into Cloudflare D1',
     bodyFormat: {
       workers: [
         {

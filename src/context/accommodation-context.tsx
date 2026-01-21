@@ -7,14 +7,15 @@ import { useUsers } from '@/context/users-context';
 import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
 import { differenceInDays, isWithinInterval, max, min, parseISO, startOfDay, endOfDay } from 'date-fns';
 import * as D1Client from '@/lib/d1-client';
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer, getDoc, writeBatch, deleteDoc } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer, getDoc, writeBatch, deleteDoc } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 
+// Enable D1 mode either explicitly via env var, or implicitly when Firestore isn't configured.
 const USE_D1 =
-  String(
+  (String(
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-  ).toLowerCase() === 'true' || false;
+  ).toLowerCase() === 'true') || !db;
 const POLL_INTERVAL_MS = 7000; // 5-10s polling window (7s chosen)
 
 export type Location = { lat: number; lng: number } | null;
@@ -623,12 +624,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       console.log('✅ [D1 Sync] Sync complete');
       setLoading(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error('❌ [D1 Sync] Failed:', e);
       setLoading(false);
+
+      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      const isBindingMissing = /D1 binding not available/i.test(msg);
       toast({
         title: "فشل تحديث البيانات",
-        description: "حدث خطأ أثناء الاتصال بـ Cloudflare D1",
+        description: isBindingMissing
+          ? "قاعدة بيانات D1 غير متاحة في وضع التشغيل الحالي. شغّل التطبيق عبر `npm run dev:d1` (Cloudflare Pages dev) لعرض بيانات العمال من D1."
+          : "حدث خطأ أثناء الاتصال بـ Cloudflare D1",
         variant: "destructive"
       });
     }
@@ -897,8 +903,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Polling replacement for Firestore listeners (also supports D1 mode)
   useEffect(() => {
-    if (!db || !auth) return;
-
     let unsubscribeAuth: (() => void) | null = null;
     let pollId: number | null = null;
 
@@ -938,29 +942,30 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       }
     };
 
-    unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        if (USE_D1) {
-          console.log('✅ [D1 Poll] Auth ready - performing initial sync and starting poll...');
+    // In D1 mode we don't require Firestore auth/db; start immediately.
+    if (USE_D1) {
+      console.log('✅ [D1 Poll] Starting initial sync and poll (no Firestore)');
+      fetchAll();
+      pollId = window.setInterval(fetchAll, POLL_INTERVAL_MS);
+    } else {
+      if (!db || !auth) return;
+      unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          console.log('✅ [Firestore Polling] Auth ready - starting periodic fetch...');
           fetchAll();
           pollId = window.setInterval(fetchAll, POLL_INTERVAL_MS);
-          return;
+        } else {
+          console.log('🔓 [Polling] User logged out, stopping poll and clearing data...');
+          if (pollId) { clearInterval(pollId); pollId = null; }
+          setCompanies([]);
+          setContracts([]);
+          setInvoices([]);
+          setOccupants([]);
+          setAccommodationHistory([]);
+          setTransferRequests([]);
         }
-
-        console.log('✅ [Firestore Polling] Auth ready - starting periodic fetch...');
-        fetchAll();
-        pollId = window.setInterval(fetchAll, POLL_INTERVAL_MS);
-      } else {
-        console.log('🔓 [Polling] User logged out, stopping poll and clearing data...');
-        if (pollId) { clearInterval(pollId); pollId = null; }
-        setCompanies([]);
-        setContracts([]);
-        setInvoices([]);
-        setOccupants([]);
-        setAccommodationHistory([]);
-        setTransferRequests([]);
-      }
-    });
+      });
+    }
 
     return () => {
       if (unsubscribeAuth) unsubscribeAuth();
@@ -2040,7 +2045,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // ============ COMPANY CRUD ============
   async function saveCompany(company: Company | Omit<Company, 'id' | 'createdAt'>) {
     try {
-      if (!db) throw new Error('Firestore not configured');
       const id = ('id' in company && company.id) ? company.id : `comp_${Date.now()}`;
       const now = new Date().toISOString();
       const payload: Company = {
@@ -2054,7 +2058,42 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         createdAt: ('createdAt' in company) ? company.createdAt : now,
         updatedAt: now,
       };
-      await setDoc(doc(db, 'companies', id), payload, { merge: true } as any);
+
+      if (db) {
+        await setDoc(doc(db, 'companies', id), payload, { merge: true } as any);
+      } else {
+        // Cloudflare-only path (D1)
+        const exists = companies.some((c) => c.id === id);
+        if (exists) {
+          await (D1Client as any).updateCompany(id, payload);
+        } else {
+          await (D1Client as any).createCompany(payload);
+        }
+      }
+
+      // Update local cache immediately
+      setCompanies((prev) => {
+        const idx = prev.findIndex((c) => c.id === id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [...prev, payload];
+      });
+      try {
+        const nextCompanies = (() => {
+          const idx = companies.findIndex((c) => c.id === id);
+          if (idx >= 0) {
+            const next = [...companies];
+            next[idx] = { ...next[idx], ...payload };
+            return next;
+          }
+          return [...companies, payload];
+        })();
+        localStorage.setItem('ac_companies', JSON.stringify(nextCompanies));
+      } catch {}
+
       toast({ title: 'Success', description: 'Company saved successfully' });
     } catch (e) {
       console.error('saveCompany failed:', e);
@@ -2065,14 +2104,25 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   async function deleteCompany(id: string) {
     try {
-      if (!db) throw new Error('Firestore not configured');
       // Check if company has active contracts
       const activeContracts = contracts.filter(c => c.companyId === id && c.status === 'Active');
       if (activeContracts.length > 0) {
         toast({ title: 'Cannot delete', description: 'Company has active contracts', variant: 'destructive' });
         return;
       }
-      await deleteDoc(doc(db, 'companies', id));
+
+      if (db) {
+        await deleteDoc(doc(db, 'companies', id));
+      } else {
+        await (D1Client as any).deleteCompany(id);
+      }
+
+      setCompanies((prev) => prev.filter((c) => c.id !== id));
+      try {
+        const next = companies.filter((c) => c.id !== id);
+        localStorage.setItem('ac_companies', JSON.stringify(next));
+      } catch {}
+
       toast({ title: 'Deleted', description: 'Company deleted successfully' });
     } catch (e) {
       console.error('deleteCompany failed:', e);
@@ -2663,8 +2713,8 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const snap = await getDocs(q);
       return snap.docs
         .map((d: any) => ({ id: d.id, ...d.data() } as AccommodationHistory))
-        .filter(h => h.notes !== 'Auto-archived from occupants collection')
-        .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+        .filter((h: AccommodationHistory) => h.notes !== 'Auto-archived from occupants collection')
+        .sort((a: AccommodationHistory, b: AccommodationHistory) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
     } catch (e) {
       console.error("Failed to fetch worker history", e);
       return [];

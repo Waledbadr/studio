@@ -31,9 +31,7 @@ export async function POST(req: Request) {
 
     // Sanitize filename
     const originalName = typeof (fileValue as any)?.name === 'string' ? (fileValue as any).name : 'upload.bin';
-    const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const detectedType = typeof (fileValue as any)?.type === 'string' ? (fileValue as any).type : 'application/octet-stream';
-    const blobPath = `orders/approvals/${Date.now()}_${safeName}`;
 
     const arrayBuffer = await (fileValue as any).arrayBuffer();
     const body = Buffer.from(arrayBuffer);
@@ -46,11 +44,10 @@ export async function POST(req: Request) {
     console.error('[Upload Error]', {
       message: err?.message,
       stack: err?.stack,
-      hasToken: Boolean(typeof process !== 'undefined' && (process as any)?.env?.BLOB_READ_WRITE_TOKEN),
     });
     return NextResponse.json({
       error: err?.message || 'فشل رفع الملف - Upload failed',
-      hint: 'تحقق من إعدادات Vercel Blob وصلاحية Token',
+      hint: 'تأكد من إعداد Cloudflare R2 bindings (STORAGE_BUCKET).',
       details: err?.stack?.split('\n').slice(0, 3).join('\n'),
     }, { status: 500 });
   }

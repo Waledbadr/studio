@@ -20,11 +20,6 @@ export async function GET() {
         root: safeEnv.STORAGE_ROOT || safeEnv.STORAGE_PATH || safeEnv.STORAGE_DIR || 'default ./storage',
         status: (safeEnv.STORAGE_ROOT || safeEnv.STORAGE_PATH || safeEnv.STORAGE_DIR) ? '✅' : '⚠️ (using ./storage)',
       },
-      firebaseConfig: {
-        apiKey: Boolean(safeEnv.NEXT_PUBLIC_FIREBASE_API_KEY),
-        projectId: safeEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'NOT SET',
-        status: safeEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅' : '❌',
-      },
       geminiApi: {
         configured: Boolean(safeEnv.GEMINI_API_KEY),
         status: safeEnv.GEMINI_API_KEY ? '✅' : '❌',
@@ -47,10 +42,6 @@ export async function GET() {
     );
   } else {
     diagnostics.recommendations.push(`✅ Storage root: ${diagnostics.checks.storageRoot.root}`);
-  }
-
-  if (!diagnostics.checks.firebaseConfig.apiKey) {
-    diagnostics.recommendations.push('⚠️ Firebase API Key غير محدد');
   }
 
   return NextResponse.json(diagnostics, {

@@ -1,11 +1,5 @@
-// Temporary Firebase disable for deployment
-// This file replaces firebase.ts to ensure the app works without Firebase
+// Vendor SDK disabled stub.
+// This exists so any legacy imports can be redirected without pulling in external SDK packages.
 
-import type { FirebaseApp } from "firebase/app";
-import type { Firestore } from "firebase/firestore";
-
-// Export null values to disable Firebase
-export const app: FirebaseApp | null = null;
-export const db: Firestore | null = null;
-
-console.log("🔧 Firebase disabled - using local storage mode");
+export const app: unknown | null = null;
+export const db: unknown | null = null;

@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUsers } from '@/context/users-context';
 import { formatDistanceToNow } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from '@/lib/firestore-shim';
 
 interface Item {
   id: string;
@@ -29,19 +27,11 @@ export default function MyFeedbackPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (!db || !currentUser?.id) { setItems([]); return; }
-      const q = query(
-        collection(db, 'feedback'),
-        where('userId', '==', currentUser.id)
-      );
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
-      list.sort((a: any, b: any) => {
-        const da = a.createdAt ? (typeof a.createdAt === 'object' ? a.createdAt.toDate?.() || new Date(0) : new Date(a.createdAt)) : new Date(0);
-        const dbb = b.createdAt ? (typeof b.createdAt === 'object' ? b.createdAt.toDate?.() || new Date(0) : new Date(b.createdAt)) : new Date(0);
-        return +dbb - +da;
-      });
-      setItems(list as any);
+      if (!currentUser?.id) { setItems([]); return; }
+      const res = await fetch(`/api/feedback?userId=${encodeURIComponent(currentUser.id)}`);
+      const data: any = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setItems((data?.items || []) as any);
     } catch (e) {
       console.error('Failed to load feedback', e);
       setItems([]);

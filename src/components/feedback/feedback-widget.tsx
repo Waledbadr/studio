@@ -11,9 +11,6 @@ import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 import { Camera, LifeBuoy, Send } from 'lucide-react';
 import { useErrorCapture } from '@/hooks/use-error-capture';
-import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, query, where, getDocs } from '@/lib/firestore-shim';
-import { gitInfo } from '@/lib/git-info';
 
 interface Props {
   className?: string;
@@ -113,9 +110,8 @@ export default function FeedbackWidget({ className }: Props) {
   const submit = async () => {
     setLoading(true);
     try {
-      if (!db) throw new Error('Firestore غير مُهيأ');
-  const deviceInfo = captureDeviceInfo();
-  const appInfo = captureAppInfo();
+      const deviceInfo = captureDeviceInfo();
+      const appInfo = captureAppInfo();
       const payload = {
         userId: currentUser?.id,
         title: title.trim() || 'No title',
@@ -145,43 +141,18 @@ export default function FeedbackWidget({ className }: Props) {
         if (data?.url) screenshotUrl = data.url;
       }
 
-  const autoCat = autoCategorize(payload.title, payload.description);
-  // Generate sequential ticket id per (YY)(M)(counter)
-  const { generateMonthlySequentialTicketId } = await import('@/lib/feedback');
-  const now = new Date();
-  const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
-  const feedbackRef = await addDoc(collection(db, 'feedback'), {
-        ...payload,
-        categoryAuto: autoCat,
-        ticketId,
-        status: 'new',
-        priority: 'medium',
-        screenshotUrl: screenshotUrl || null,
-        createdAt: serverTimestamp(),
+      const autoCat = autoCategorize(payload.title, payload.description);
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          categoryAuto: autoCat,
+          screenshotUrl: screenshotUrl || null,
+        })
       });
-
-      // Notify all Admin users about the new feedback
-  try {
-        const adminsQ = query(collection(db, 'users'), where('role', '==', 'Admin'));
-        const adminsSnap = await getDocs(adminsQ);
-        const adminIds = adminsSnap.docs.map((d) => d.id);
-        await Promise.all(
-          adminIds.map((adminId) =>
-    addDoc(collection(db!, 'notifications'), {
-              userId: adminId,
-              title: 'New feedback',
-              message: `${payload.title}`,
-              type: 'feedback_update',
-              href: '/admin/feedback',
-              referenceId: feedbackRef.id,
-              isRead: false,
-              createdAt: serverTimestamp(),
-            })
-          )
-        );
-      } catch (notifyErr) {
-        console.warn('Failed to notify admins about new feedback:', notifyErr);
-      }
+      const out: any = await res.json();
+      if (!res.ok) throw new Error(out?.error || `HTTP ${res.status}`);
 
   toast({ title: 'Feedback sent', description: 'Thanks for helping us improve the app.' });
       setOpen(false);

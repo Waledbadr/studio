@@ -629,7 +629,7 @@ export default function ContractsPage() {
               {contracts
                 .filter(c => c.status === 'Active')
                 .reduce((sum, c) => {
-                  const workers = getActualWorkers(c.residenceId, c.companyId);
+                  const workers = getActualWorkers(c);
                   return sum + (workers * c.ratePerPersonPerMonth);
                 }, 0)
                 .toFixed(2)} SAR

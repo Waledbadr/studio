@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
@@ -47,7 +47,7 @@ interface UsersContextType {
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
@@ -67,7 +67,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     } catch {}
   };
 
-  // Track Firebase Auth state to prefer the signed-in UID and trigger loading
+  // Track client auth state to prefer the signed-in UID and trigger loading
   useEffect(() => {
     if (!auth) return; // local mode
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -115,7 +115,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      console.log("Firebase not configured and D1 not available, using local storage");
+      console.log("Backend not configured (D1 unavailable), using local storage");
       
       // Load from localStorage
       try {
@@ -137,7 +137,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // If Firebase is configured but no signed-in user yet, defer until auth is available
+    // If auth is enabled but no signed-in user yet, defer until auth is available
     if (auth && !auth.currentUser) {
       setLoading(false);
       return;
@@ -205,7 +205,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const saveUser = async (user: Omit<User, 'id'> | User) => {
     if (!db) {
-      // Use localStorage when Firebase is not available
+      // Use localStorage when backend is not available
       try {
         const storedUsers = localStorage.getItem('estatecare_users');
         const usersData: User[] = storedUsers ? JSON.parse(storedUsers) : [];
@@ -350,7 +350,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteUser = async (id: string) => {
     if (!db) {
-        // Use localStorage when Firebase is not available
+        // Use localStorage when backend is not available
         try {
             const storedUsers = localStorage.getItem('estatecare_users');
             const usersData = storedUsers ? JSON.parse(storedUsers) : [];

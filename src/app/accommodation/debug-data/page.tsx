@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/platform";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +81,7 @@ export default function DebugDataPage() {
   const issues: { type: 'error' | 'warning' | 'info'; message: string }[] = [];
 
   if (!db) {
-    issues.push({ type: 'error', message: 'Firebase DB غير مهيأ - تحقق من .env.local' });
+    issues.push({ type: 'error', message: 'قاعدة البيانات غير مهيأة - تحقق من الإعدادات' });
   }
   if (!auth?.currentUser) {
     issues.push({ type: 'warning', message: 'لم يتم تسجيل الدخول - قد لا تظهر البيانات' });
@@ -131,7 +131,7 @@ export default function DebugDataPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Database className="h-4 w-4" />
-              حالة Firebase
+              حالة الخدمة
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -435,7 +435,7 @@ export default function DebugDataPage() {
                 console.log('Occupants:', occupants);
                 console.log('Residences:', residences);
                 console.log('Auth:', authStatus);
-                console.log('Firebase DB:', !!db);
+                console.log('Backend DB:', !!db);
                 alert('تم طباعة جميع البيانات في Console (اضغط F12)');
               }}
             >

@@ -11,7 +11,7 @@ export default function MonthlyReportPage() {
   async function load() {
     try {
       const res = await fetch('/api/accommodation/reports/monthly', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, month }) });
-      const data = await res.json();
+      const data: any = await res.json();
       if (data?.ok) setReport(data.report);
     } catch (e) { console.error(e); }
   }

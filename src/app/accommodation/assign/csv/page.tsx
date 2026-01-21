@@ -197,7 +197,7 @@ export default function BulkAssignCsvPage() {
         const form = new FormData();
         form.set("file", file);
         const res = await fetch("/api/accommodation/assign/csv", { method: "POST", body: form });
-        const data = await res.json().catch(() => ({}));
+        const data: any = await res.json().catch(() => ({} as any));
         if (res.ok && data && data.ok !== false) {
           setResult(data);
           toast({ title: "Import finished", description: `Assigned: ${data.assigned}, Skipped: ${data.skipped}` });

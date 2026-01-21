@@ -17,8 +17,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { useResidences } from '@/context/residences-context';
 import { ApprovalAttachmentDialog } from '@/components/inventory/approval-attachment-dialog';
 // Subscribe to Firestore document for real-time updates
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, updateDoc, orderBy, limit } from '@/lib/realtime-shim';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -55,7 +55,7 @@ export default function OrderDetailPage() {
                 const recvQ = fbQuery(txCol, where('residenceId', '==', residenceId), where('itemId', '==', baseId), where('type', 'in', ['RECEIVE', 'IN'] as any));
                 const recvSnap = await getDocs(recvQ);
                 let lastRecv: Date | null = null;
-                recvSnap.forEach(docu => {
+                recvSnap.forEach((docu: any) => {
                     const d = (docu.data() as any)?.date;
                     const dt = d?.toDate ? d.toDate() : (d ? new Date(d) : null);
                     if (dt && (!lastRecv || dt > lastRecv)) lastRecv = dt;
@@ -64,7 +64,7 @@ export default function OrderDetailPage() {
                 const outQ = fbQuery(txCol, where('residenceId', '==', residenceId), where('itemId', '==', baseId), where('type', '==', 'OUT'));
                 const outSnap = await getDocs(outQ);
                 let lastOut: Date | null = null;
-                outSnap.forEach(docu => {
+                outSnap.forEach((docu: any) => {
                     const d = (docu.data() as any)?.date;
                     const dt = d?.toDate ? d.toDate() : (d ? new Date(d) : null);
                     if (dt && (!lastOut || dt > lastOut)) lastOut = dt;
@@ -141,7 +141,7 @@ export default function OrderDetailPage() {
                 setOrder(null);
             }
             setLoading(false);
-        }, (err) => {
+        }, (err: any) => {
             console.error('Error listening to order doc:', err);
             setLoading(false);
         });

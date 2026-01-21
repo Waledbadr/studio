@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X } from 'lucide-react';
-import { updateDoc, doc, Timestamp } from '@/lib/firestore-shim';
-import { db } from '@/lib/firebase';
+import { updateDoc, doc, Timestamp } from '@/lib/realtime-shim';
+import { db } from '@/lib/platform';
 import { useUsers } from '@/context/users-context';
 import { FileUploadArea } from '@/components/ui/file-upload-area';
 
@@ -52,11 +52,11 @@ export function QuickUploadAttachmentDialog({
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
+        const error: any = await response.json().catch(() => ({}));
         throw new Error(error.error || 'Upload failed');
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
 
       // Update order in Firestore
       const orderRef = doc(db, 'orders', orderId);

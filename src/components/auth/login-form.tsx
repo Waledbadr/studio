@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/platform";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -18,7 +18,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
 } from '@/lib/auth-shim';
-import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, deleteDoc } from '@/lib/firestore-shim';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, deleteDoc } from '@/lib/realtime-shim';
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +124,7 @@ export default function LoginForm() {
   // Complete magic link sign-in if applicable
   useEffect(() => {
     if (typeof isSignInWithEmailLink !== 'function') return;
+    if (typeof signInWithEmailLink !== 'function') return;
     if (typeof window === 'undefined') return;
     if (isSignInWithEmailLink(null as any, window.location.href)) {
       const savedEmail = window.localStorage.getItem('pendingEmailForLink');
@@ -322,7 +323,11 @@ export default function LoginForm() {
         const msg = popupErr?.message || '';
         // Fallback to redirect for browsers/extensions that block popups or third-party cookies
         if (c === 'auth/popup-blocked' || c === 'auth/popup-closed-by-user' || /blocked|cookies|third.?party/i.test(msg)) {
-          await signInWithRedirect(auth, prov);
+          if (typeof signInWithRedirect === 'function') {
+            await signInWithRedirect(auth, prov);
+          } else {
+            window.location.href = "/api/auth/microsoft";
+          }
           return; // result handled in getRedirectResult effect
         }
         throw popupErr;
@@ -396,7 +401,7 @@ export default function LoginForm() {
   const handlePasskeyRegister = async () => {
     try {
       const meRes = await fetch('/api/auth/me');
-      const meJson = await meRes.json();
+      const meJson: any = await meRes.json().catch(() => ({} as any));
       const user = meJson?.user;
       if (!user) {
         toast({ title: 'Error', description: 'Sign in once, then register a passkey.', variant: 'destructive' });

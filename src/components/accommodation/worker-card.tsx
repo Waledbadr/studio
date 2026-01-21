@@ -105,10 +105,10 @@ export function WorkerCard({
                     {worker.employeeId}
                   </span>
                 )}
-                {worker.nationaliy && (
+                {worker.nationality && (
                   <span className="flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
-                    {worker.nationaliy}
+                    {worker.nationality}
                   </span>
                 )}
                 {worker.company && (

@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 
 export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
@@ -42,7 +42,7 @@ interface MaintenanceContextType {
 
 const MaintenanceContext = createContext<MaintenanceContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
 const LS_KEY = 'estatecare_maintenance_requests';
 
 // Helpers for localStorage fallback
@@ -187,7 +187,7 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     try {
   const newId = await generateNewRequestId();
   const newRequestRef = doc(db, "maintenanceRequests", newId);
-      // Ensure requester is the actual signed-in Firebase Auth UID to satisfy security rules
+      // Ensure requester is the actual signed-in auth UID to satisfy security rules
       const authUid = auth?.currentUser?.uid;
       if (!authUid) {
         toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });

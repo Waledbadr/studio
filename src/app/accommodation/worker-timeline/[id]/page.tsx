@@ -50,7 +50,8 @@ export default function WorkerTimelinePage() {
   const stats = useMemo(() => {
     const checkIns = history.filter(h => h.actionType === 'CHECK_IN').length;
     const checkOuts = history.filter(h => h.actionType === 'CHECK_OUT').length;
-    const transfers = history.filter(h => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
+    const transfers = history.filter(h => h.actionType === 'TRANSFER').length;
+    const swaps = history.filter(h => h.actionType === 'SWAP').length;
 
     // Calculate total days stayed dynamically from dates
     let totalDays = 0;
@@ -90,7 +91,7 @@ export default function WorkerTimelinePage() {
       totalDays += diffDays + 1;
     }
 
-    return { checkIns, checkOuts, transfers, totalDays };
+    return { checkIns, checkOuts, transfers, swaps, totalDays };
   }, [history, currentOccupancy]);
 
   const getActionIcon = (type: string) => {

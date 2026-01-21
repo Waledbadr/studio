@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { collection, doc, getDocs, runTransaction, Timestamp } from '@/lib/firestore-shim';
-import { db } from '@/lib/firebase';
+import { collection, doc, getDocs, runTransaction, Timestamp } from '@/lib/realtime-shim';
+import { db } from '@/lib/platform';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 type ScanResult = {
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
           return sum + (isNaN(n) ? 0 : Math.max(0, n));
         }, 0);
 
-        await runTransaction(db, async (trx) => {
+        await runTransaction(db, async (trx: any) => {
           const itemRef = doc(db!, 'inventory', d.id);
           const fresh = await trx.get(itemRef);
           if (!fresh.exists()) return;

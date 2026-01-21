@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { dateISO } = await request.json();
+    const body: any = await request.json();
+    const { dateISO } = body || {};
     if (typeof window === 'undefined') return NextResponse.json({ ok: true, report: {} });
     try {
       const oRaw = localStorage.getItem('ac_occupants');

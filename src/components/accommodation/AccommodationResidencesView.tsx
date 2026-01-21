@@ -511,12 +511,7 @@ export default function AccommodationResidencesView() {
         updatedComplex.rooms[roomIndex] = { ...updatedComplex.rooms[roomIndex], ...updatedRoom };
       }
 
-      // Update Firestore directly
-      // const { db } = await import('@/lib/firebase');
-      // if (db) {
-      //   const { doc, setDoc } = await import('@/lib/firestore-shim');
-      //   await setDoc(doc(db, 'residences', complexId), updatedComplex);
-      // } else {
+      // Update backend state
       updateFirestore(complexId, updatedComplex);
       return; // updateFirestore will handle it (stubbed)
       /* 

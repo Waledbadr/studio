@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { auth, authReady } from "@/lib/firebase";
+import { auth, authReady } from "@/lib/platform";
 
 interface Props {
   children: React.ReactNode;

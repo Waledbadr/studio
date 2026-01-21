@@ -39,6 +39,7 @@
     "node_modules",
     ".next",
     ".next/**",
+    "scripts/**",
     "src/context/inventory-context-backup.tsx",
     "src/context/inventory-context-new.tsx",
     "src/context/orders-context-backup.tsx"

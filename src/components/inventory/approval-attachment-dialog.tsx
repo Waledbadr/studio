@@ -55,11 +55,11 @@ export function ApprovalAttachmentDialog({
         });
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
+          const error: any = await response.json().catch(() => ({}));
           throw new Error(error.error || 'Upload failed');
         }
 
-        const data = await response.json();
+        const data: any = await response.json();
         attachmentData = {
           url: data.url,
           path: data.path,

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, updateDoc, limit, query, orderBy } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, getDocs, doc, getDoc, updateDoc, limit, query, orderBy } from '@/lib/realtime-shim';
 import { useUsers } from '@/context/users-context';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

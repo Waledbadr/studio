@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { auth } from '@/lib/firebase';
+import { auth } from '@/lib/platform';
 import { updatePassword, updateEmail, reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, linkWithCredential, sendPasswordResetEmail, signOut } from '@/lib/auth-shim';
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -41,30 +41,37 @@ export default function ProfilePage() {
     try {
       const updated: User = { ...currentUser, name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, language: locale, themeSettings: { colorTheme, mode: themeMode } };
       await saveUser(updated);
-      // If email changed and Firebase auth available, update auth email as well
+      // If email changed and auth is available, update auth email as well
       try {
         if (auth && auth.currentUser && auth.currentUser.email !== email.trim()) {
           const targetEmail = email.trim();
           try {
-            await updateEmail(auth.currentUser, targetEmail);
+            await updateEmail?.(auth.currentUser as any, targetEmail);
           } catch (err: any) {
             const code = err?.code || '';
             if (code === 'auth/requires-recent-login') {
               // Re-auth then retry updateEmail
-              const hasPassword = !!auth.currentUser.providerData.find(p => p.providerId === 'password');
+              const hasPassword = !!auth.currentUser.providerData.find((p: any) => p.providerId === 'password');
               try {
                 if (hasPassword) {
                   const current = prompt('For security, enter your current password to confirm email change:');
                   if (!current) throw new Error('Canceled');
-                  const cred = EmailAuthProvider.credential(auth.currentUser.email || '', current);
-                  await reauthenticateWithCredential(auth.currentUser, cred);
+                  if (!EmailAuthProvider || typeof (EmailAuthProvider as any).credential !== 'function') {
+                    throw new Error('Re-authentication is not available. Please sign in again and retry.');
+                  }
+                  const cred = (EmailAuthProvider as any).credential(auth.currentUser.email || '', current);
+                  await reauthenticateWithCredential?.(auth.currentUser as any, cred);
                 } else {
                   // Try popup reauth for the primary provider
                   const provId = auth.currentUser.providerData[0]?.providerId;
-                  const prov = provId === 'google.com' ? new GoogleAuthProvider() : new OAuthProvider(provId || 'microsoft.com');
-                  await reauthenticateWithPopup(auth.currentUser, prov);
+                  if (!provId) throw new Error('Re-authentication provider is not available.');
+                  const prov: any = provId === 'google.com' && typeof GoogleAuthProvider === 'function'
+                    ? new (GoogleAuthProvider as any)()
+                    : (typeof OAuthProvider === 'function' ? new (OAuthProvider as any)(provId || 'microsoft.com') : null);
+                  if (!prov) throw new Error('Re-authentication is not available. Please sign in again and retry.');
+                  await reauthenticateWithPopup?.(auth.currentUser as any, prov);
                 }
-                await updateEmail(auth.currentUser, targetEmail);
+                await updateEmail?.(auth.currentUser as any, targetEmail);
               } catch (reauthErr: any) {
                 const c = reauthErr?.code || '';
                 if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') {
@@ -92,19 +99,23 @@ export default function ProfilePage() {
 
   const handleChangePassword = async () => {
     if (!auth || !auth.currentUser) { toast({ title: 'Unavailable', description: 'Auth not configured.' }); return; }
+    if (typeof updatePassword !== 'function') {
+      toast({ title: 'Unavailable', description: 'Password management is not available in this deployment.' });
+      return;
+    }
     const newPass = prompt('Enter new password (min 6 chars):');
     if (!newPass) return;
     if (newPass.length < 6) { toast({ title: 'Weak password', description: 'Password must be at least 6 characters.', variant: 'destructive' }); return; }
     try {
-      // First, try to update directly. Firebase will enforce recent login if needed.
+      // First, try to update directly. Auth will enforce recent login if needed.
       const email = auth.currentUser.email || '';
-      const hasPasswordProvider = !!auth.currentUser.providerData.find(p => p.providerId === 'password');
+      const hasPasswordProvider = !!auth.currentUser.providerData.find((p: any) => p.providerId === 'password');
 
       if (hasPasswordProvider) {
         try {
-          await updatePassword(auth.currentUser, newPass);
+          await updatePassword?.(auth.currentUser as any, newPass);
           toast({ title: 'Password changed', description: 'Your password was updated. Please sign in again.' });
-          try { await signOut(); } catch {}
+          try { await signOut?.(); } catch {}
           try { router.replace('/login'); } catch {}
           return;
         } catch (err: any) {
@@ -113,12 +124,15 @@ export default function ProfilePage() {
           // Need re-auth: ask for current password only in this case
           const current = prompt('Enter your current password to confirm:');
           if (!current) return;
-          const cred = EmailAuthProvider.credential(email, current);
+          if (!EmailAuthProvider || typeof (EmailAuthProvider as any).credential !== 'function') {
+            throw new Error('Re-authentication is not available. Please sign in again and retry.');
+          }
+          const cred = (EmailAuthProvider as any).credential(email, current);
           try {
-            await reauthenticateWithCredential(auth.currentUser, cred);
-            await updatePassword(auth.currentUser, newPass);
+            await reauthenticateWithCredential?.(auth.currentUser as any, cred);
+            await updatePassword?.(auth.currentUser as any, newPass);
             toast({ title: 'Password changed', description: 'Your password was updated. Please sign in again.' });
-            try { await signOut(); } catch {}
+            try { await signOut?.(); } catch {}
             try { router.replace('/login'); } catch {}
             return;
           } catch (e: any) {
@@ -131,7 +145,7 @@ export default function ProfilePage() {
                     url: typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost/login',
                     handleCodeInApp: false,
                   } as const;
-                  await sendPasswordResetEmail(auth, email, actionCodeSettings);
+                  await sendPasswordResetEmail?.(auth as any, email, actionCodeSettings as any);
                   toast({ title: 'Reset email sent', description: `Password reset link sent to ${email}.` });
                 } catch (err2: any) {
                   const c2 = err2?.code || '';
@@ -158,10 +172,13 @@ export default function ProfilePage() {
       } else {
         // If the user doesn't have a password provider (e.g., signed in with Google), link a password to the account.
         try {
-          const newCred = EmailAuthProvider.credential(email, newPass);
-          await linkWithCredential(auth.currentUser, newCred);
+          if (!EmailAuthProvider || typeof (EmailAuthProvider as any).credential !== 'function') {
+            throw new Error('Password provider is not available for this account.');
+          }
+          const newCred = (EmailAuthProvider as any).credential(email, newPass);
+          await linkWithCredential?.(auth.currentUser as any, newCred);
           toast({ title: 'Password set', description: 'A password has been added to your account. Please sign in again.' });
-          try { await signOut(); } catch {}
+          try { await signOut?.(); } catch {}
           try { router.replace('/login'); } catch {}
         } catch (e: any) {
           const code = e?.code || '';

@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, writeBatch, query, where, Timestamp } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, getDocs, doc, getDoc, writeBatch, query, where, Timestamp } from '@/lib/realtime-shim';
 
 interface TransferAuditResult {
     transferId: string;
@@ -32,7 +32,7 @@ export default function TransferAuditPage() {
 
     const scanTransfers = async () => {
         if (!db) {
-            toast({ title: 'Error', description: 'Firebase not configured', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Backend not configured', variant: 'destructive' });
             return;
         }
 
@@ -66,14 +66,14 @@ export default function TransferAuditPage() {
                 };
 
                 // Check each item in the transfer
-                for (const item of transferData.items || []) {
-                    const transferOutRecord = transactions.find(t => 
+                for (const item of (transferData.items || []) as any[]) {
+                    const transferOutRecord = transactions.find((t: any) => 
                         t.itemId === item.id && 
                         t.type === 'TRANSFER_OUT' && 
                         t.residenceId === transferData.fromResidenceId
                     );
                     
-                    const transferInRecord = transactions.find(t => 
+                    const transferInRecord = transactions.find((t: any) => 
                         t.itemId === item.id && 
                         t.type === 'TRANSFER_IN' && 
                         t.residenceId === transferData.toResidenceId
@@ -106,7 +106,7 @@ export default function TransferAuditPage() {
 
     const fixMissingTransactions = async () => {
         if (!db) {
-            toast({ title: 'Error', description: 'Firebase not configured', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Backend not configured', variant: 'destructive' });
             return;
         }
 

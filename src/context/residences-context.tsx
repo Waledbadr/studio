@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { useToast } from "@/hooks/use-toast";
 import * as D1Client from '@/lib/d1-client'; // server RPC client for D1
 // Legacy references to D1Server replaced with D1Client to use current RPC helpers.
-import { db, auth } from '@/lib/firebase';
+import { db, auth } from '@/lib/platform';
 import {
   collection,
   doc,
@@ -17,7 +17,7 @@ import {
   QueryDocumentSnapshot,
   arrayRemove,
   arrayUnion
-} from '@/lib/firestore-shim';
+} from '@/lib/realtime-shim';
 import { createPoller } from '@/lib/polling';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
@@ -27,7 +27,7 @@ const USE_D1 =
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
   ).toLowerCase() === 'true' || false;
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
 
 const RESIDENCES_LS_KEY = 'estatecare_residences';
 const saveToLocalStorage = (list: any[]) => {
@@ -242,7 +242,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      console.log("Firebase not configured and D1 not enabled, using local storage");
+      console.log("Backend not configured (D1 not enabled), using local storage");
       try {
         const storedResidences = localStorage.getItem('estatecare_residences');
         const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
@@ -295,7 +295,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           if (!isLoaded.current) loadResidences();
         } else {
           if (pollerRef.current) {
-            try { pollerRef.current.stop(); } catch { }
+            try { pollerRef.current?.stop?.(); } catch { }
             pollerRef.current = null;
           }
           isLoaded.current = false;
@@ -306,7 +306,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
     }
     return () => {
       if (pollerRef.current) {
-        try { pollerRef.current.stop(); } catch { }
+        try { pollerRef.current?.stop?.(); } catch { }
         pollerRef.current = null;
         isLoaded.current = false;
       }
@@ -1459,7 +1459,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
       return;
     }
     try {
@@ -1545,7 +1545,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
       return;
     }
     try {
@@ -1676,7 +1676,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
       return;
     }
     try {
@@ -1867,10 +1867,10 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       if (!complexDoc.exists()) throw new Error("Complex not found");
       const complexData = complexDoc.data() as Complex;
 
-      const newFacilitiesForFirebase: Facility[] = [];
+      const newFacilitiesToAdd: Facility[] = [];
       for (let i = 1; i <= quantity; i++) {
         const facilityName = quantity > 1 ? `${name} ${i}` : name;
-        newFacilitiesForFirebase.push({
+        newFacilitiesToAdd.push({
           id: `facility-${Date.now()}-${Math.random()}`,
           name: facilityName,
           type: type.trim()
@@ -1879,13 +1879,13 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
       if (level === 'complex') {
         const existingFacilities = complexData.facilities || [];
-        const updatedFacilities = [...existingFacilities, ...newFacilitiesForFirebase];
+        const updatedFacilities = [...existingFacilities, ...newFacilitiesToAdd];
         await updateDoc(complexDocRef, { facilities: updatedFacilities });
       } else if (level === 'building' && buildingId) {
         const updatedBuildings = complexData.buildings.map(b => {
           if (b.id === buildingId) {
             const existingFacilities = b.facilities || [];
-            return { ...b, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
+            return { ...b, facilities: [...existingFacilities, ...newFacilitiesToAdd] };
           }
           return b;
         });
@@ -1898,7 +1898,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
               floors: b.floors.map(f => {
                 if (f.id === floorId) {
                   const existingFacilities = f.facilities || [];
-                  return { ...f, facilities: [...existingFacilities, ...newFacilitiesForFirebase] };
+                  return { ...f, facilities: [...existingFacilities, ...newFacilitiesToAdd] };
                 }
                 return f;
               })
@@ -2573,7 +2573,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Firebase implementation
+    // Backend implementation
     try {
       const ref = doc(db, 'residences', complexId);
       const snap = await getDoc(ref);
@@ -2632,7 +2632,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
       toast({ title: 'تم', description: 'تم إضافة المكون بنجاح.' });
     } catch (e) {
-      console.error('addFacilityComponent Firebase error:', e);
+      console.error('addFacilityComponent backend error:', e);
       toast({ title: 'خطأ', description: 'فشل إضافة المكون.', variant: 'destructive' });
     }
   };
@@ -2707,7 +2707,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Firebase implementation would go here
+    // Backend implementation would go here
     toast({ title: 'تم', description: 'تم تحديث المكون بنجاح.' });
   };
 
@@ -2778,7 +2778,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Firebase implementation would go here
+    // Backend implementation would go here
     toast({ title: 'تم', description: 'تم حذف المكون بنجاح.' });
   };
 

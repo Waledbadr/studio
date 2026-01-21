@@ -9,10 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 /**
  * 🚨 EMERGENCY MODE: Manual Sync Button
  * 
- * Since we disabled all real-time Firestore listeners to prevent 12K reads per operation,
- * this button allows users to manually sync data from Firestore when needed.
+ * Since we disabled heavy real-time listeners to prevent excessive reads,
+ * this button allows users to manually sync data when needed.
  * 
- * Shows read count to help users understand Firebase usage.
+ * Shows read count to help users understand usage.
  */
 export function ManualSyncButton() {
   const { manualSyncFromFirestore } = useAccommodation();

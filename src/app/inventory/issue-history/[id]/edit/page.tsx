@@ -77,7 +77,7 @@ export default function EditMIVPage() {
                 // But `getMIVById` is already doing that.
                 // Let's just fetch the MIV doc to get residenceId, then fetch transactions.
                 
-                // Since I can't import `db` here easily (it's not exported from context, only from firebase lib), I should use a context function.
+                // Since I can't import `db` here easily (it's not exported from context, only from the platform module), I should use a context function.
                 // `getTransferItems` is close but filters by type.
                 // `getMIVById` returns `MIVDetails` which has `locations: { [name]: items }`.
                 // This is insufficient.

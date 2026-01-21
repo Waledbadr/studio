@@ -1,4 +1,4 @@
-import { onSnapshot as fbOnSnapshot, type DocumentData, type Query, type Unsubscribe } from '@/lib/firestore-shim';
+import { onSnapshot as fbOnSnapshot, type DocumentData, type Query, type Unsubscribe } from '@/lib/realtime-shim';
 
 /**
  * A small wrapper over Firestore onSnapshot that logs detailed errors

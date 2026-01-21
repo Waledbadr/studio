@@ -9,8 +9,8 @@ import { Upload, FileJson, CheckCircle, XCircle, AlertCircle, Loader2, FileText,
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, getDocs, query, orderBy } from '@/lib/realtime-shim';
 
 interface ImportResult {
   success: boolean;

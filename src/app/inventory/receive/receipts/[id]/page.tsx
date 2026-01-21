@@ -10,8 +10,8 @@ import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
 import { Printer, Edit, Loader2, Upload } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, arrayUnion } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { doc, getDoc, updateDoc, arrayUnion } from '@/lib/realtime-shim';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -41,7 +41,7 @@ export default function MRVDetailsPage() {
     if (data?.receivedByName) {
       setReceivedByNameLocal(data.receivedByName);
     } else if (data?.receivedBy) {
-      const u = users.find(u => u.id === data.receivedBy);
+      const u = users.find((u: any) => u.id === data.receivedBy);
       if (u) {
         setReceivedByNameLocal(u.name);
       } else if (db) {
@@ -69,7 +69,7 @@ export default function MRVDetailsPage() {
     })();
   }, [mrvId, getMRVById, residences.length, loadResidences, users.length, loadUsers]);
 
-  const residenceName = (id: string) => residences.find(r => r.id === id)?.name || id;
+  const residenceName = (id: string) => residences.find((r: any) => r.id === id)?.name || id;
 
   // Merge duplicate items by itemId and attach unit from inventory
   const mergedItems = useMemo(() => {

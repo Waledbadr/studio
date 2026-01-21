@@ -5,7 +5,7 @@ import { useInventory, InventoryItem } from '@/context/inventory-context';
 import { PrintLayout } from '@/components/reports/print-layout';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
-import { Timestamp } from '@/lib/firestore-shim';
+import { Timestamp } from '@/lib/realtime-shim';
 
 interface SlowMovingItem {
     item: InventoryItem;

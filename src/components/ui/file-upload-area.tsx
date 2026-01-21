@@ -86,6 +86,8 @@ export interface FileUploadAreaProps {
   showFileSize?: boolean;
   /** Compact mode for smaller spaces */
   compact?: boolean;
+  /** Read-only mode: show existing uploads, disable add/remove */
+  viewOnly?: boolean;
   /** Error message to display */
   error?: string;
   /** Whether to show image previews */
@@ -121,6 +123,7 @@ export function FileUploadArea({
   description,
   showFileSize = true,
   compact = false,
+  viewOnly = false,
   error,
   showImagePreview = true,
 }: FileUploadAreaProps) {
@@ -151,6 +154,7 @@ export function FileUploadArea({
 
   const handleFiles = useCallback((newFiles: FileList | File[]) => {
     if (!onFilesChange) return;
+    if (viewOnly) return;
 
     const fileArray = Array.from(newFiles);
     const totalFiles = files.length + fileArray.length;
@@ -198,7 +202,7 @@ export function FileUploadArea({
     if (validFiles.length > 0) {
       onFilesChange([...files, ...validFiles]);
     }
-  }, [files, onFilesChange, maxFiles, validateFile, showImagePreview]);
+  }, [files, onFilesChange, maxFiles, validateFile, showImagePreview, viewOnly]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -234,6 +238,7 @@ export function FileUploadArea({
 
   const handleRemoveFile = useCallback((index: number) => {
     if (!onFilesChange) return;
+    if (viewOnly) return;
     const file = files[index];
     
     // Remove preview
@@ -245,14 +250,15 @@ export function FileUploadArea({
     
     onFilesChange(files.filter((_, i) => i !== index));
     setLocalError(null);
-  }, [files, onFilesChange]);
+  }, [files, onFilesChange, viewOnly]);
 
   const handleBrowseClick = useCallback(() => {
+    if (viewOnly) return;
     inputRef.current?.click();
-  }, []);
+  }, [viewOnly]);
 
   const totalFilesCount = files.length + uploadedFiles.length;
-  const canAddMore = totalFilesCount < maxFiles;
+  const canAddMore = !viewOnly && totalFilesCount < maxFiles;
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -463,7 +469,7 @@ export function FileUploadArea({
                     >
                       <Download className="h-4 w-4" />
                     </a>
-                    {onRemoveUploaded && (
+                    {onRemoveUploaded && !viewOnly && (
                       <Button
                         type="button"
                         variant="ghost"

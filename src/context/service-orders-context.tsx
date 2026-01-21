@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from "@/lib/firebase";
+import { db, auth } from "@/lib/platform";
 import {
   collection,
   onSnapshot,
@@ -14,8 +14,7 @@ import {
   orderBy,
   runTransaction,
   Timestamp,
-  Firestore,
-} from "@/lib/firestore-shim";
+} from "@/lib/realtime-shim";
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
@@ -45,7 +44,7 @@ export type ServiceOrderStatus =
   | "CANCELLED";
 
 export interface ServiceOrder {
-  id: string; // Firestore doc id
+  id: string;
   codeShort: string; // SVC-YYM#
   dateCreated: Date | any;
   residenceId: string;
@@ -112,10 +111,10 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
     if (!db) {
       setLoading(false);
-      toast({ title: "Config error", description: "Firebase not configured or D1 not available. Ensure NEXT_PUBLIC_USE_D1=true and D1 bindings are configured.", variant: "destructive" });
+      toast({ title: "Config error", description: "Backend not configured or D1 not available. Ensure NEXT_PUBLIC_USE_D1=true and D1 bindings are configured.", variant: "destructive" });
       return;
     }
-    // Wait for auth to satisfy Firestore rules
+    // Wait for auth to satisfy backend rules
     if (auth && !auth.currentUser) {
       setLoading(false);
       return;
@@ -159,7 +158,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   }, [load]);
 
   const reserveNewSvcId = async (): Promise<string> => {
-    if (!db) throw new Error("Firebase not initialized");
+    if (!db) throw new Error("Backend not initialized");
     const fdb = db as any;
     // Use counters/svc-YY-MM similar to other counters
     const now = new Date();
@@ -198,8 +197,8 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       throw new Error(res?.error || 'Failed to create service order');
     }
 
-    if (!db) throw new Error("Firebase not configured");
-    const fdb = db as Firestore;
+    if (!db) throw new Error("Backend not configured");
+    const fdb = db as any;
 
     const codeShort = await reserveNewSvcId();
 
@@ -308,10 +307,10 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       return;
     }
 
-    if (!db) throw new Error("Firebase not configured");
+    if (!db) throw new Error("Backend not configured");
     const fdb = db as any;
 
-    await runTransaction(fdb, async (trx) => {
+    await runTransaction(fdb, async (trx: any) => {
       const orderRef = doc(fdb, "serviceOrders", orderId);
       const orderSnap = await trx.get(orderRef);
       if (!orderSnap.exists()) throw new Error("Service order not found");
@@ -434,7 +433,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const getServiceOrderByCode = async (codeShort: string): Promise<ServiceOrder | null> => {
     if (!db) return null;
-    const fdb = db as Firestore;
+    const fdb = db as any;
     const qRef = query(collection(fdb, "serviceOrders"), where("codeShort", "==", codeShort));
     const res = await getDocs(qRef);
     if (res.empty) return null;

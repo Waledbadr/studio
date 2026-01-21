@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, writeBatch, doc, updateDoc } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, getDocs, writeBatch, doc, updateDoc } from '@/lib/realtime-shim';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';

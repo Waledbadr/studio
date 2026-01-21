@@ -22,6 +22,9 @@ export function getWorkers() { return rpc('getWorkers'); }
 export function getResidences() { return rpc('getResidences'); }
 export function getOccupants(residenceId?: string) { return rpc('getOccupants', [residenceId]); }
 export function getCompanies() { return rpc('getCompanies'); }
+export function createCompany(data: any) { return rpc('createCompany', [data]); }
+export function updateCompany(id: string, data: any) { return rpc('updateCompany', [id, data]); }
+export function deleteCompany(id: string) { return rpc('deleteCompany', [id]); }
 export function getContracts() { return rpc('getContracts'); }
 export function getInvoices() { return rpc('getInvoices'); }
 export function getHistory() { return rpc('getHistory'); }

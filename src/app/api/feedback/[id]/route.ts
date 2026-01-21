@@ -1,74 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from '@/lib/firestore-shim';
-import { generateMonthlySequentialTicketId } from '@/lib/feedback';
-import { db as _db } from '@/lib/firebase';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    if (!_db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const id = params.id;
     const body: any = await req.json();
-  const { status, developerComment, updatedBy, priority, ticketId, autoRenumber } = body || {};
+    const { status, priority, ticketId, autoRenumber } = body || {};
 
-    const ref = doc(_db, 'feedback', id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
+      return NextResponse.json(
+        {
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
+    }
 
+    const existing = await D1Actions.getFeedback(env, id);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const patch: any = { updatedAt: new Date().toISOString() };
     if (status) {
-      const patch: any = { status, updatedAt: serverTimestamp() };
-      if (status === 'resolved') patch.resolvedAt = serverTimestamp();
-      if (status === 'in_progress') patch.startedAt = serverTimestamp();
-      await updateDoc(ref, patch);
+      patch.status = status;
+      if (status === 'resolved') patch.resolvedAt = new Date().toISOString();
+      if (status === 'in_progress') patch.startedAt = new Date().toISOString();
     }
-    if (priority) {
-      await updateDoc(ref, { priority });
-    }
+    if (priority) patch.priority = priority;
+
     let newTicketId: string | undefined;
     if (typeof ticketId === 'string' && ticketId.trim()) {
       newTicketId = ticketId.trim().toUpperCase();
-      await updateDoc(ref, { ticketId: newTicketId, updatedAt: serverTimestamp() });
+      patch.ticketId = newTicketId;
     } else if (autoRenumber) {
-      const data = snap.data() as any;
-      const createdAt = data?.createdAt;
-      let year: number;
-      let month1: number;
-      if (createdAt && typeof createdAt === 'object' && typeof createdAt.toDate === 'function') {
-        const d = createdAt.toDate();
-        year = d.getFullYear();
-        month1 = d.getMonth() + 1;
-      } else {
-        const d = new Date();
-        year = d.getFullYear();
-        month1 = d.getMonth() + 1;
+      const createdAt = (existing as any)?.createdAt ? new Date((existing as any).createdAt) : new Date();
+      const gen = await D1Actions.generateFeedbackTicketId(env, createdAt.getFullYear(), createdAt.getMonth() + 1);
+      if (gen && (gen as any).ok) {
+        newTicketId = (gen as any).ticketId;
+        patch.ticketId = newTicketId;
       }
-      newTicketId = await generateMonthlySequentialTicketId(year, month1);
-      await updateDoc(ref, { ticketId: newTicketId, updatedAt: serverTimestamp() });
-    }
-    if (developerComment) {
-      await addDoc(collection(ref, 'updates'), {
-        developerComment,
-        updatedBy: updatedBy || 'system',
-        updatedAt: serverTimestamp(),
-      });
     }
 
-    // Notify the feedback owner
-    const userId = (snap.data() as any)?.userId;
-    if (userId && _db) {
-      await addDoc(collection(_db, 'notifications'), {
-        userId,
-        title: 'Feedback status updated',
-        message: `Status changed to: ${status || 'updated'}`,
-        type: 'feedback_update',
-        href: '/feedback',
-        referenceId: id,
-        isRead: false,
-        createdAt: serverTimestamp(),
-      });
-    }
+    await D1Actions.updateFeedback(env, id, patch);
 
-  return NextResponse.json({ ok: true, ticketId: newTicketId });
+    return NextResponse.json({ ok: true, ticketId: newTicketId });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }

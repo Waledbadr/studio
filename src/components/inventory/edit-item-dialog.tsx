@@ -135,7 +135,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 	const isAdmin = currentUser?.role === 'Admin';
 
 	// Only show residences that currently have stock for this item
-	const residencesWithStock = residences.filter(res => (item?.stockByResidence?.[res.id] ?? 0) > 0);
+	const residencesWithStock = residences.filter((res: any) => (item?.stockByResidence?.[res.id] ?? 0) > 0);
 	// Total aggregated stock across residences that have stock
 	const totalStock = residencesWithStock.reduce((acc, res) => acc + (item?.stockByResidence?.[res.id] ?? 0), 0);
 
@@ -293,7 +293,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 						body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),
 					});
 					if (res.ok) {
-						const t = await res.json();
+						const t: any = await res.json();
 						finalNameAr = finalNameAr || t.arabicName || '';
 						finalNameEn = finalNameEn || t.englishName || '';
 					}

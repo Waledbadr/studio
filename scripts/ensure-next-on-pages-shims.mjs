@@ -35,6 +35,54 @@ function walkDirs(rootDir, predicate, results = []) {
   return results;
 }
 
+function patchImportsInFile(filePath) {
+  try {
+    const src = fs.readFileSync(filePath, "utf8");
+    let next = src;
+
+    // Older builds referenced an internal specifier without an extension.
+    next = next.replaceAll(
+      '"__next-on-pages-dist__/functions/src/async_hooks"',
+      '"__next-on-pages-dist__/functions/src/async_hooks.js"'
+    );
+
+    // Newer builds can emit a direct Node builtin import which fails in workerd.
+    // Patch to our local shim in the same directory.
+    next = next
+      .replaceAll('"async_hooks"', '"./async_hooks.js"')
+      .replaceAll("'async_hooks'", "'./async_hooks.js'")
+      .replaceAll("`async_hooks`", "`./async_hooks.js`");
+
+    // Handle dynamic import / require forms if present.
+    next = next
+      .replaceAll('import("async_hooks")', 'import("./async_hooks.js")')
+      .replaceAll("require('async_hooks')", "require('./async_hooks.js')")
+      .replaceAll('require("async_hooks")', 'require("./async_hooks.js")');
+
+    if (next === src) return false;
+    fs.writeFileSync(filePath, next, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function patchImportsInDir(dirPath) {
+  let patchedAny = false;
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith(".js")) continue;
+      const fullPath = path.join(dirPath, entry.name);
+      patchedAny = patchImportsInFile(fullPath) || patchedAny;
+    }
+  } catch {
+    // ignore
+  }
+  return patchedAny;
+}
+
 const ASYNC_HOOKS_SHIM = `// Generated shim for Cloudflare Pages dev.
 // Provides minimal AsyncLocalStorage used by Next/next-on-pages middleware bundles.
 
@@ -114,6 +162,7 @@ if (candidateDirs.length === 0) {
 }
 
 let wroteAny = false;
+let patchedAny = false;
 for (const dir of candidateDirs) {
   ensureDir(dir);
 
@@ -126,10 +175,18 @@ for (const dir of candidateDirs) {
   const wrote2 = writeIfMissing(shimJs, ASYNC_HOOKS_SHIM);
 
   wroteAny = wroteAny || wrote1 || wrote2;
+
+  // Patch generated bundles to import the explicit .js shim.
+  // (We patch all JS files in the folder because the emitted specifier varies by version.)
+  patchedAny = patchImportsInDir(dir) || patchedAny;
 }
 
 if (wroteAny) {
   console.log("[ensure-next-on-pages-shims] Wrote async_hooks shim into next-on-pages output.");
 } else {
   console.log("[ensure-next-on-pages-shims] async_hooks shim already present.");
+}
+
+if (patchedAny) {
+  console.log("[ensure-next-on-pages-shims] Patched middleware async_hooks import to use .js extension.");
 }

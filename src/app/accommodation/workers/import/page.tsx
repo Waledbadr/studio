@@ -74,7 +74,7 @@ export default function ImportWorkersPage() {
 
   const importWorkers = async () => {
     if (!importWorkersBatch) {
-      toast({ title: 'خطأ', description: 'Firebase غير مهيأ', variant: 'destructive' });
+      toast({ title: 'خطأ', description: 'الخدمة غير مهيأة', variant: 'destructive' });
       return;
     }
 

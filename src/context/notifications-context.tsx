@@ -1,9 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { db, auth } from '@/lib/firebase';
-import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from '@/lib/firestore-shim';
-import type { QueryDocumentSnapshot, DocumentData, Query } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from '@/lib/realtime-shim';
+import type { QueryDocumentSnapshot, DocumentData, Query } from '@/lib/realtime-shim';
 import safeOnSnapshot from '@/lib/firestore-utils';
 import { useUsers } from './users-context';
 import { useToast } from '@/hooks/use-toast';
@@ -44,7 +44,7 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured.";
+const backendErrorMessage = "Backend is not configured.";
 
 export const NotificationsProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -71,7 +71,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     const baseCol = collection(db!, 'notifications');
 
     // Subscribe by email when available AND also by userId to cover docs missing userEmail
-  const queries: Query<DocumentData, DocumentData>[] = [];
+  const queries: Query[] = [];
     // Prefer email when available (most flexible with current rules)
     if (authEmail) {
       queries.push(query(baseCol, where('userEmail', '==', authEmail), orderBy('createdAt', 'desc')));
@@ -106,7 +106,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
         },
         (error) => {
           console.error('Error fetching notifications:', error);
-          toast({ title: 'Firestore Error', description: 'Could not fetch notifications.', variant: 'destructive' });
+          toast({ title: 'Backend Error', description: 'Could not fetch notifications.', variant: 'destructive' });
           setLoading(false);
         },
         { retryOnClose: true }
@@ -121,7 +121,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   const addNotification = async (payload: NewNotificationPayload) => {
     if (!db) {
       // Silent failure with optional toast for developers
-      console.warn(firebaseErrorMessage);
+      console.warn(backendErrorMessage);
       return;
     }
     try {

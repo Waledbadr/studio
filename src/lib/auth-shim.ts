@@ -101,17 +101,19 @@ export async function updateProfile(user: any, updates: any) {
 export const EmailAuthProvider = { credential: (..._args: any[]) => ({}) };
 export const GoogleAuthProvider = function(..._args: any[]) { return {}; } as any;
 export const OAuthProvider = function(..._args: any[]) { return {}; } as any;
-export function isSignInWithEmailLink(..._args: any[]) { return false; }
-export async function signInWithEmailLink(..._args: any[]) { throw new Error('Not implemented'); }
-export async function signInWithPopup(..._args: any[]) { throw new Error('Not implemented'); }
-export async function signInWithRedirect(..._args: any[]) { throw new Error('Not implemented'); }
-export async function getRedirectResult(..._args: any[]) { return null; }
-export async function sendPasswordResetEmail(..._args: any[]) { throw new Error('Not implemented'); }
-export async function sendSignInLinkToEmail(..._args: any[]) { throw new Error('Not implemented'); }
-export async function updatePassword(..._args: any[]) { throw new Error('Not implemented'); }
-export async function updateEmail(..._args: any[]) { throw new Error('Not implemented'); }
-export async function reauthenticateWithCredential(..._args: any[]) { throw new Error('Not implemented'); }
-export async function reauthenticateWithPopup(..._args: any[]) { throw new Error('Not implemented'); }
+// Optional OAuth/email-link APIs are not supported by the session-based shim.
+// Export them as `undefined` so UI code can feature-detect via `typeof fn === 'function'`.
+export const isSignInWithEmailLink: undefined | ((...args: any[]) => boolean) = undefined;
+export const signInWithEmailLink: undefined | ((...args: any[]) => Promise<any>) = undefined;
+export const signInWithPopup: undefined | ((...args: any[]) => Promise<any>) = undefined;
+export const signInWithRedirect: undefined | ((...args: any[]) => Promise<any>) = undefined;
+export const getRedirectResult: undefined | ((...args: any[]) => Promise<any>) = undefined;
+export const sendPasswordResetEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const sendSignInLinkToEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const updatePassword: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const updateEmail: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const reauthenticateWithCredential: undefined | ((...args: any[]) => Promise<void>) = undefined;
+export const reauthenticateWithPopup: undefined | ((...args: any[]) => Promise<void>) = undefined;
 export async function linkWithCredential(..._args: any[]) { throw new Error('Not implemented'); }
 export async function sendPasswordResetEmailAdmin(..._args: any[]) { throw new Error('Not implemented'); }
 

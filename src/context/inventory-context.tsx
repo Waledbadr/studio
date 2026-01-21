@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from '@/lib/firestore-shim';
-import type { Firestore } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from '@/lib/realtime-shim';
+import type { Database as Firestore } from '@/lib/realtime-shim';
 import { useUsers } from './users-context';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import type { User } from './users-context';
@@ -362,7 +362,7 @@ interface InventoryContextType {
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
 
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
@@ -414,7 +414,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         } // end if (USE_D1)
 
         // Non-D1 fallback: use local storage, but keep quiet (no error spam)
-        console.log("Firebase not configured and D1 unavailable, using local storage");
+        console.log("Backend not configured (D1 unavailable), using local storage");
         try {
           const storedItems = localStorage.getItem('estatecare_inventory');
           const ds = storedItems ? JSON.parse(storedItems) : [];
@@ -459,7 +459,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             setItems(inventoryData);
           } catch (e) {
             console.error('D1 getInventory failed', e);
-            if (!d1PollWarnedRef.current) { d1PollWarnedRef.current = true; toast({ title: 'D1 unavailable', description: 'فشل الحصول على بيانات المخزون من Cloudflare D1', variant: 'destructive' }); }
+            if (!d1PollWarnedRef.current) { d1PollWarnedRef.current = true; toast({ title: 'D1 unavailable', description: 'ظپط´ظ„ ط§ظ„ط­طµظˆظ„ ط¹ظ„ظ‰ ط¨ظٹط§ظ†ط§طھ ط§ظ„ظ…ط®ط²ظˆظ† ظ…ظ† Cloudflare D1', variant: 'destructive' }); }
           }
         } else if (db) {
           const snapshot = await getDocs(collection(db, 'inventory'));
@@ -573,7 +573,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         setCategories(updatedCategories);
       } else {
         if (!db) {
-          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+          toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
           return;
         }
         const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
@@ -600,7 +600,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         setItems(prev => prev.map(it => it.category === oldName ? ({ ...it, category: trimmedNewName }) : it));
       } else {
         if (!db) {
-          toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+          toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
           return;
         }
         const batch = writeBatch(db);
@@ -613,7 +613,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         // 2. Update all items with the old category name
         const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
         const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
-        itemsToUpdateSnapshot.forEach(itemDoc => {
+        itemsToUpdateSnapshot.forEach((itemDoc: any) => {
           const itemRef = doc(db!, "inventory", itemDoc.id);
           batch.update(itemRef, { category: trimmedNewName });
         });
@@ -659,7 +659,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
       }
 
@@ -692,7 +692,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
       }
 
@@ -722,7 +722,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
       }
 
@@ -735,7 +735,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
   
     const generateNewMivId = async (): Promise<string> => {
-        if (!db) throw new Error("Firebase not initialized");
+        if (!db) throw new Error("Backend not initialized");
         const now = new Date();
         const yy = now.getFullYear().toString().slice(-2);
         const mm = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -755,7 +755,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // MRV ID generator: MRV-YY-MM-###
     const generateNewMrvId = async (): Promise<string> => {
-      if (!db) throw new Error("Firebase not initialized");
+      if (!db) throw new Error("Backend not initialized");
       const now = new Date();
       const year = now.getFullYear().toString().slice(-2);
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -782,7 +782,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   // Reserve reconciliation id via counters: CON-<YY><M><seq>
   const reserveNewReconciliationId = async (): Promise<string> => {
-    if (!db) throw new Error("Firebase not initialized");
+    if (!db) throw new Error("Backend not initialized");
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
     const mmNoPad = (now.getMonth() + 1).toString();
@@ -800,7 +800,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   // Reserve a monthly TRS code: TRS-<YY><M><seq>
   const reserveNewTrsId = async (): Promise<string> => {
-    if (!db) throw new Error("Firebase not initialized");
+    if (!db) throw new Error("Backend not initialized");
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
     const mm = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -841,7 +841,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // Fallback to Firestore implementation
     if (!db) {
-      throw new Error(firebaseErrorMessage);
+      throw new Error(backendErrorMessage);
     }
 
     try {
@@ -965,8 +965,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // Firestore path (unchanged)
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
-      throw new Error(firebaseErrorMessage);
+      toast({ title: "Error", description: backendErrorMessage, variant: "Destructive" as any });
+      throw new Error(backendErrorMessage);
     }
     // Client-side guard: only Admin or Supervisor can post MRVs
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
@@ -1068,7 +1068,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     items: { id: string; nameEn: string; nameAr: string; quantity: number }[],
     meta: { supplierName?: string; invoiceNo?: string; notes?: string; editReason: string }
   ): Promise<void> => {
-    if (!db) throw new Error(firebaseErrorMessage);
+    if (!db) throw new Error(backendErrorMessage);
     if (!currentUser || currentUser.role !== 'Admin') {
       toast({ title: 'Permission Denied', description: 'Only Admins can edit MRVs.', variant: 'destructive' });
       throw new Error('Forbidden');
@@ -1086,7 +1086,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       if (!mrvSnap.exists()) throw new Error('MRV not found');
 
       // 3. Identify all items (old + new)
-      const oldItemIds = oldTxs.map(t => t.itemId);
+      const oldItemIds = oldTxs.map((t: any) => t.itemId);
       const newItemIds = items.map(i => i.id);
       const allItemIds = [...new Set([...oldItemIds, ...newItemIds])];
       
@@ -1190,7 +1190,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     locations: { locationId: string; locationName: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[] }[],
     meta: { editReason: string }
   ): Promise<void> => {
-    if (!db) throw new Error(firebaseErrorMessage);
+    if (!db) throw new Error(backendErrorMessage);
     if (!currentUser || currentUser.role !== 'Admin') {
       toast({ title: 'Permission Denied', description: 'Only Admins can edit MIVs.', variant: 'destructive' });
       throw new Error('Forbidden');
@@ -1209,7 +1209,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const residenceId = mivSnap.data().residenceId;
 
       // 3. Identify items
-      const oldItemIds = oldTxs.map(t => t.itemId);
+      const oldItemIds = oldTxs.map((t: any) => t.itemId);
       const newItemIds = locations.flatMap(l => l.items.map(i => i.id));
       const allItemIds = [...new Set([...oldItemIds, ...newItemIds])];
 
@@ -1312,7 +1312,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
    const getInventoryTransactions = async (itemId: string, residenceId: string): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
     }
     try {
@@ -1338,7 +1338,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getAllIssueTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
     }
      const q = query(
@@ -1353,7 +1353,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   // Fetch all transfer transactions (IN/OUT) by reference code (e.g., TRS-2582)
   const getTransferItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
-    if (!db) throw new Error(firebaseErrorMessage);
+    if (!db) throw new Error(backendErrorMessage);
     const qRef = query(
       collection(db!, 'inventoryTransactions'),
       where('referenceDocId', '==', referenceDocId),
@@ -1367,7 +1367,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
  const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
     }
 
@@ -1387,7 +1387,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // Helper: last issue date for an item at a specific location
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return null;
     }
     try {
@@ -1415,7 +1415,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     locationId: string
   ): Promise<{ lifespanDays: number | null; lastIssueDate: Timestamp | null; daysSinceLastIssue: number | null; withinLifespan: boolean }> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return { lifespanDays: null, lastIssueDate: null, daysSinceLastIssue: null, withinLifespan: false };
     }
     try {
@@ -1440,7 +1440,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // List recent MIVs
   const getMIVs = async (): Promise<MIV[]> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return [];
     }
     try {
@@ -1457,7 +1457,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // Get MIV details by ID
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return null;
     }
     try {
@@ -1495,7 +1495,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // List recent MRVs
   const getMRVs = async (): Promise<MRV[]> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return [];
     }
     try {
@@ -1512,7 +1512,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // Get MRV details by ID
   const getMRVById = async (mrvId: string): Promise<MRVDetails | null> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return null;
     }
     try {
@@ -1553,7 +1553,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const reserveNewMrvId = async (): Promise<{ id: string; short: string }> => {
-    if (!db) throw new Error("Firebase not initialized");
+    if (!db) throw new Error("Backend not initialized");
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2); // e.g., 25
     const mm = (now.getMonth() + 1).toString().padStart(2, '0'); // e.g., 08
@@ -1577,7 +1577,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   // MRV Requests (Admin approval flow)
   const getMRVRequests = async (status?: MRVRequest['status']): Promise<MRVRequest[]> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+      toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
       return [];
     }
     try {
@@ -1609,7 +1609,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return res.id;
     }
 
-    if (!db) throw new Error(firebaseErrorMessage);
+    if (!db) throw new Error(backendErrorMessage);
     const reqRef = doc(db!, 'mrvRequests', requestId);
 
     // Step 1: Atomically move Pending -> Processing to prevent double approvals
@@ -1681,7 +1681,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const rejectMRVRequest = async (requestId: string, rejecterId: string, reason?: string) => {
-    if (!db) throw new Error(firebaseErrorMessage);
+    if (!db) throw new Error(backendErrorMessage);
     const reqRef = doc(db!, 'mrvRequests', requestId);
     const snap = await getDoc(reqRef);
     if (!snap.exists()) throw new Error('Request not found');
@@ -1857,7 +1857,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const approveTransfer = async (transferId: string, approverId: string) => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         const transferRef = doc(db!, 'stockTransfers', transferId);
         try {
             const snap = await getDoc(transferRef);
@@ -1959,7 +1959,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
     
     const rejectTransfer = async (transferId: string, rejecterId: string) => {
-         if (!db) throw new Error(firebaseErrorMessage);
+         if (!db) throw new Error(backendErrorMessage);
          const transferRef = doc(db!, 'stockTransfers', transferId);
          await updateDoc(transferRef, {
              status: 'Rejected',
@@ -1998,7 +1998,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
       await runTransaction(db, async (transaction: any) => {
@@ -2017,16 +2017,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 if (currentStock < depreciationRequest.quantity) {
                     throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${depreciationRequest.quantity}`);
                 }
-        // Prepare counter read BEFORE any writes (Firestore rule)
+        const newStockByResidence: Record<string, number> = {
+          ...(itemData.stockByResidence || {}),
+        };
+        newStockByResidence[depreciationRequest.residenceId] = Math.max(
+          0,
+          currentStock - depreciationRequest.quantity
+        );
+        const newTotalStock = Object.values(newStockByResidence).reduce(
+          (sum, v) => sum + Math.max(0, Number(v || 0)),
+          0
+        );
+
         transaction.update(itemRef, {
           stock: newTotalStock,
-          stockByResidence: newStockByResidence
+          stockByResidence: newStockByResidence,
         });
-        // Update counter (write after all reads)
-        transaction.set(depCounterRef, { last: depNextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
 
                 // Create depreciation transaction
                 const depreciationTransactionRef = doc(collection(db!, "inventoryTransactions"));
+                const referenceDocId = `DEPR-${depreciationTransactionRef.id}`;
                 const transactionData: Omit<InventoryTransaction, 'id'> = {
                     itemId: depreciationRequest.itemId,
                     itemNameEn: itemData.nameEn,
@@ -2035,7 +2045,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     date: Timestamp.now(),
                     type: 'DEPRECIATION',
                     quantity: depreciationRequest.quantity,
-          referenceDocId: depCodeShort,
+                  referenceDocId,
                     locationId: depreciationRequest.locationId,
                     locationName: depreciationRequest.locationName,
                     depreciationReason: depreciationRequest.reason
@@ -2062,7 +2072,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // Audit functions
     const createAudit = async (auditData: Omit<InventoryAudit, 'id' | 'createdAt' | 'summary'>): Promise<string> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
             const auditRef = doc(collection(db, 'inventoryAudits'));
@@ -2090,7 +2100,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAudits = async (): Promise<InventoryAudit[]> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
             return [];
         }
         
@@ -2107,7 +2117,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAuditById = async (auditId: string): Promise<InventoryAudit | null> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
             return null;
         }
         
@@ -2128,7 +2138,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateAuditStatus = async (auditId: string, status: InventoryAudit['status']): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
             const auditRef = doc(db!, 'inventoryAudits', auditId);
@@ -2151,7 +2161,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAuditItems = async (auditId: string): Promise<AuditItem[]> => {
         if (!db) {
-            toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+            toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
             return [];
         }
         
@@ -2167,7 +2177,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateAuditItem = async (auditItem: AuditItem): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
             const itemRef = doc(db!, 'auditItems', auditItem.id);
@@ -2186,7 +2196,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         notes: string, 
         countedBy: string
     ): Promise<void> => {
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
             const q = query(
@@ -2256,7 +2266,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        if (!db) throw new Error(firebaseErrorMessage);
+        if (!db) throw new Error(backendErrorMessage);
         
         try {
             await runTransaction(db, async (transaction: any) => {
@@ -2361,7 +2371,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       overrideReferenceId?: string
     ): Promise<string | void> => {
       if (!db) {
-        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
         return;
       }
       if (!residenceId) {
@@ -2379,7 +2389,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         let totalDecrease = 0;
         let itemCount = 0;
 
-        await runTransaction(db, async (transaction) => {
+        await runTransaction(db, async (transaction: any) => {
           const now = Timestamp.now();
 
           // 1) Read all required documents first (no writes yet)
@@ -2476,7 +2486,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // Reconciliation query helpers
     const getReconciliations = async (residenceId: string): Promise<StockReconciliation[]> => {
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
       }
       try {
@@ -2499,7 +2509,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     // Maintenance: scan and fix any negative stock values at the residence level
     const fixNegativeStocks = async (): Promise<{ fixedCount: number; affectedItems: string[] }> => {
-      if (!db) throw new Error(firebaseErrorMessage);
+      if (!db) throw new Error(backendErrorMessage);
       // Read all inventory docs
       const snap = await getDocs(collection(db!, 'inventory'));
       if (snap.empty) return { fixedCount: 0, affectedItems: [] };
@@ -2566,7 +2576,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAllReconciliations = async (): Promise<StockReconciliation[]> => {
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
       }
       try {
@@ -2587,7 +2597,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getReconciliationById = async (id: string): Promise<StockReconciliation | null> => {
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return null;
       }
       try {
@@ -2604,7 +2614,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getReconciliationItems = async (referenceDocId: string): Promise<InventoryTransaction[]> => {
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return [];
       }
       try {
@@ -2627,7 +2637,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // Reconciliation approval workflow implementations
   const getReconciliationRequests = async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
       if (!db) {
-        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        toast({ title: 'Error', description: backendErrorMessage, variant: 'destructive' });
         return [];
       }
       try {
@@ -2650,7 +2660,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const createReconciliationRequest = async (resId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string): Promise<string> => {
-      if (!db) throw new Error(firebaseErrorMessage);
+      if (!db) throw new Error(backendErrorMessage);
       if (!resId || !adjustments || adjustments.length === 0) throw new Error('Residence and at least one adjustment are required');
       // Reserve a reconciliation code for display
       const reservedId = await reserveNewReconciliationId();
@@ -2684,7 +2694,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const approveReconciliationRequest = async (requestId: string, approverId: string): Promise<string> => {
-      if (!db) throw new Error(firebaseErrorMessage);
+      if (!db) throw new Error(backendErrorMessage);
       const reqRef = doc(db, 'reconciliationRequests', requestId);
       const snap = await getDoc(reqRef);
       if (!snap.exists()) throw new Error('Request not found');
@@ -2717,7 +2727,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const rejectReconciliationRequest = async (requestId: string, rejecterId: string, reason?: string) => {
-      if (!db) throw new Error(firebaseErrorMessage);
+      if (!db) throw new Error(backendErrorMessage);
       const reqRef = doc(db, 'reconciliationRequests', requestId);
       const snap = await getDoc(reqRef);
       if (!snap.exists()) throw new Error('Request not found');
@@ -2815,3 +2825,4 @@ export const useInventory = () => {
   }
   return context;
 };
+

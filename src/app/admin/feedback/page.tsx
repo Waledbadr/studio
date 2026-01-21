@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { useUsers } from '@/context/users-context';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query, updateDoc, doc, addDoc, serverTimestamp, limit } from '@/lib/firestore-shim';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const PAGE_STEP = 50;
@@ -50,12 +48,12 @@ export default function AdminFeedbackPage() {
   const load = useCallback(async (requestedLimit?: number) => {
     setLoading(true);
     try {
-      if (!db) return;
   const effectiveLimit = requestedLimit ?? pageLimit;
-  const qRef = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(effectiveLimit + 1));
-      // Filters will be applied after fetch for simplicity; Firestore supports where but with indexes
-      const snap = await getDocs(qRef);
-      const all = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
+      const res = await fetch('/api/feedback');
+      const data: any = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+      const all = Array.isArray(data?.items) ? data.items : [];
       setHasMore(all.length > effectiveLimit);
       setItems(all.slice(0, effectiveLimit));
     } catch (e) {
@@ -109,41 +107,17 @@ export default function AdminFeedbackPage() {
   const updateItem = async (id: string, status?: string, priority?: Item['priority']) => {
     setLoading(true);
     try {
-      if (!db) return;
-      const ref = doc(db, 'feedback', id);
       const patch: any = {};
-      if (status) {
-        patch.status = status;
-        patch.updatedAt = serverTimestamp();
-        if (status === 'resolved') patch.resolvedAt = serverTimestamp();
-        if (status === 'in_progress') patch.startedAt = serverTimestamp();
-      }
+      if (status) patch.status = status;
       if (priority) patch.priority = priority;
-      if (Object.keys(patch).length) await updateDoc(ref, patch);
+      const res = await fetch(`/api/feedback/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data: any = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed');
 
-      const note = comments[id]?.trim();
-      if (note) {
-        await addDoc(collection(ref, 'updates'), {
-          developerComment: note,
-          updatedBy: currentUser?.id || 'system',
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      // Also create an in-app notification for the owner
-      const target = items.find(x => x.id === id);
-      if (target?.userId) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: target.userId,
-          title: 'Feedback status updated',
-          message: `Status changed to: ${status || 'updated'}`,
-          type: 'feedback_update',
-          href: '/feedback',
-          referenceId: id,
-          isRead: false,
-          createdAt: serverTimestamp(),
-        });
-      }
       setComments((prev) => ({ ...prev, [id]: '' }));
       await load();
     } catch (e) {
@@ -161,7 +135,7 @@ export default function AdminFeedbackPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTicketId ? { ticketId: newTicketId } : { autoRenumber: true }),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed');
       setTicketEdits((p) => ({ ...p, [id]: '' }));
       await load();

@@ -1,30 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import * as D1Actions from '@/lib/d1-actions';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { q } = await request.json();
+    const body: any = await request.json();
+    const { q } = body || {};
     console.log('🔍 Search API called with query:', q);
 
-    const adminDb = getAdminDb();
-    if (!adminDb) {
-      console.error('❌ Firebase Admin not configured');
-      return NextResponse.json({
-        ok: false,
-        error: 'Firebase Admin not configured'
-      }, { status: 500 });
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
     }
 
     try {
-      // Get all workers from Firestore using Admin SDK
-      console.log('📡 Fetching workers from Firestore using Admin SDK...');
-      const workersSnapshot = await adminDb.collection('workers').get();
-      console.log('📦 Firestore returned', workersSnapshot.docs.length, 'documents');
-
-      const workers = workersSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
+      // Get all workers from D1
+      console.log('📡 Fetching workers from D1...');
+      const workers = (await D1Actions.getWorkers(env)) as any[];
+      console.log('📦 D1 returned', workers.length, 'rows');
 
       console.log('👥 Processed workers:', workers.length, workers);
 

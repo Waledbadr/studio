@@ -592,6 +592,24 @@ export async function createMRV(envOrPayload: any, payload?: any) {
     return { ok: true, id: mrvId };
 }
 
+export async function updateMRVAttachment(env: any, mrvId: string, data: { attachmentUrl?: string | null; attachmentPath?: string | null; attachmentRef?: string | null; }) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const db = getDb(d1);
+    if (!mrvId) return { ok: false, error: 'mrvId required' };
+
+    await db
+        .update(mrvs)
+        .set({
+            attachmentUrl: data.attachmentUrl ?? null,
+            attachmentPath: data.attachmentPath ?? null,
+            attachmentRef: data.attachmentRef ?? null,
+        } as any)
+        .where(eq(mrvs.id, mrvId));
+
+    return { ok: true };
+}
+
 export async function approveMRVRequest(envOrRequestId: any, requestId?: string, approverId?: string) {
     // Support both (env, requestId, approverId) and (requestId, approverId)
     const env = (envOrRequestId && typeof envOrRequestId === 'object' && 'DB' in envOrRequestId) ? envOrRequestId : undefined;
@@ -1143,10 +1161,66 @@ export async function createFeedback(env: any, data: any) {
     const d1 = getD1FromEnv(env);
     if (!d1) return { ok: false, error: 'D1 binding missing' };
     const db = getDb(d1);
-    const id = `FB-${Date.now()}`;
+    const id = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    // Generate sequential ticket id per month: FB-(YY)(M)(counter)
+    const yy = now.getFullYear().toString().slice(-2);
+    const mNoPad = (now.getMonth() + 1).toString();
+    const counterId = `feedback-${yy}${mNoPad}`;
+
+    const existing = await db.select().from(counters).where(eq(counters.id, counterId));
+    let nextSeq = 1;
+    if (existing.length > 0) {
+        nextSeq = Number((existing[0] as any).last || 0) + 1;
+        await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any).where(eq(counters.id, counterId));
+    } else {
+        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any);
+    }
+    const ticketId = (data.ticketId && String(data.ticketId).trim()) ? String(data.ticketId).trim().toUpperCase() : `FB-${yy}${mNoPad}${nextSeq}`;
+
+    await db.insert(feedback).values({
+        id,
+        ticketId,
+        userId: data.userId || null,
+        title: data.title || null,
+        description: data.description || null,
+        category: data.category || null,
+        deviceInfo: data.deviceInfo ? JSON.stringify(data.deviceInfo) : null,
+        appInfo: data.appInfo ? JSON.stringify(data.appInfo) : null,
+        settings: data.settings ? JSON.stringify(data.settings) : null,
+        categoryAuto: data.categoryAuto || null,
+        priority: data.priority || 'medium',
+        screenshotUrl: data.screenshotUrl || null,
+        status: data.status || 'new',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+    } as any);
+
+    return { ok: true, id, ticketId };
+}
+
+export async function generateFeedbackTicketId(env: any, year: number, month1Based: number) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const db = getDb(d1);
+
+    const yy = String(year).slice(-2);
+    const mNoPad = String(month1Based);
     const nowIso = new Date().toISOString();
-    await db.insert(feedback).values({ id, userId: data.userId || null, title: data.title || null, description: data.description || null, category: data.category || null, deviceInfo: data.deviceInfo ? JSON.stringify(data.deviceInfo) : null, appInfo: data.appInfo ? JSON.stringify(data.appInfo) : null, settings: data.settings ? JSON.stringify(data.settings) : null, categoryAuto: data.categoryAuto || null, ticketId: data.ticketId || null, priority: data.priority || null, screenshotUrl: data.screenshotUrl || null, status: data.status || 'Open', createdAt: nowIso });
-    return { ok: true, id };
+    const counterId = `feedback-${yy}${mNoPad}`;
+
+    const existing = await db.select().from(counters).where(eq(counters.id, counterId));
+    let nextSeq = 1;
+    if (existing.length > 0) {
+        nextSeq = Number((existing[0] as any).last || 0) + 1;
+        await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any).where(eq(counters.id, counterId));
+    } else {
+        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any);
+    }
+    const ticketId = `FB-${yy}${mNoPad}${nextSeq}`;
+    return { ok: true, ticketId };
 }
 
 export async function updateFeedback(env: any, id: string, data: any) {
@@ -1157,13 +1231,23 @@ export async function updateFeedback(env: any, id: string, data: any) {
     return { ok: true };
 }
 
-export async function getFeedback(env: any, id?: string) {
+export async function getFeedback(env: any, arg?: string | { userId?: string; limit?: number }) {
     const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
-    if (id) {
-        const rows = await db.select().from(feedback).where(eq(feedback.id, id));
+
+    if (typeof arg === 'string' && arg) {
+        const rows = await db.select().from(feedback).where(eq(feedback.id, arg));
         return rows[0] || null;
     }
-    return await db.select().from(feedback);
+
+    let rows = await db.select().from(feedback);
+    if (arg && typeof arg === 'object' && arg.userId) {
+        rows = rows.filter((r: any) => (r as any).userId === arg.userId);
+    }
+
+    if (arg && typeof arg === 'object' && typeof arg.limit === 'number' && arg.limit > 0) {
+        rows = rows.slice(0, arg.limit);
+    }
+    return rows;
 }

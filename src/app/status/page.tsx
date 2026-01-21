@@ -23,7 +23,7 @@ export default function StatusPage() {
     (async () => {
       try {
         const res = await fetch('/api/health', { cache: 'no-store' });
-        const json = await res.json().catch(() => ({}));
+        const json: any = await res.json().catch(() => ({} as any));
         if (isMounted) setHealth({ ok: res.ok, status: res.status, uptime: json?.uptime, timestamp: json?.timestamp });
       } catch (e: any) {
         if (isMounted) setHealth({ ok: false, status: 0, error: e?.message || 'Request failed' });

@@ -223,7 +223,7 @@ export default function StockMatrixReportPage() {
       const res = await fetch('/api/inventory/fix-negative?apply=true', {
         method: 'GET'
       });
-      const data = await res.json();
+      const data: any = await res.json().catch(() => ({}));
       if (data.ok) {
         toast({
           title: locale === 'ar' ? 'تم الإصلاح' : 'Fixed Successfully',

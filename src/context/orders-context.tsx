@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from '@/lib/firestore-shim';
+import { db, auth } from '@/lib/platform';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
 import { useNotifications } from './notifications-context';
-import type { DocumentReference } from '@/lib/firestore-shim';
+import type { DocumentReference } from '@/lib/realtime-shim';
 
 
 export interface OrderItem extends InventoryItem {
@@ -105,7 +105,7 @@ interface OrdersContextType {
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
 
-const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
+const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
 
 export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -123,7 +123,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
     
     if (!db) {
-      console.warn("Firebase not configured, loading mock orders");
+      console.warn("Backend not configured, loading mock orders");
       setOrders([]); // Empty orders for now
       setLoading(false);
       return;
@@ -169,7 +169,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   
   const generateNewOrderId = async (): Promise<string> => {
     if (!db) {
-      throw new Error("Firebase not initialized");
+      throw new Error("Backend not initialized");
     }
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2); // e.g., 25
@@ -191,13 +191,13 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {
     if (!db || !orderData) {
-      toast({ title: "Error", description: !db ? firebaseErrorMessage : "Cannot create order with empty data.", variant: "destructive" });
+      toast({ title: "Error", description: !db ? backendErrorMessage : "Cannot create order with empty data.", variant: "destructive" });
       return null;
     }
     
     setLoading(true);
     try {
-      // Guard: ensure the requester on the document matches the signed-in Firebase Auth UID
+      // Guard: ensure the requester on the document matches the signed-in auth UID
       // This avoids Firestore rule failures when users docs don't use auth.uid as ID.
       const authUid = auth?.currentUser?.uid;
       if (!authUid) {
@@ -267,7 +267,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   
   const updateOrder = async (id: string, orderData: UpdateOrderPayload) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
     }
     setLoading(true);
@@ -312,7 +312,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     } | null
   ) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
     }
     try {
@@ -371,7 +371,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
 const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean): Promise<{ mrvId: string | null }> => {
   if (!db) {
-    toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+    toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
     return { mrvId: null };
   }
   // Client-side guard to avoid Firestore permission errors; allow Admin or Supervisor
@@ -655,7 +655,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
   const getOrderById = async (id: string): Promise<Order | null> => {
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
       return null;
     }
     const orderDocRef = doc(db, "orders", id);
@@ -670,7 +670,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
   const deleteOrder = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
         return;
     }
     try {

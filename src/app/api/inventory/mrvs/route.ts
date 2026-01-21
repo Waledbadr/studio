@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, Timestamp, where, increment, setDoc, updateDoc } from '@/lib/realtime-shim';
 
 // Direct MRV API now uses monthly counters for deterministic IDs and short codes.
 async function reserveNewMrvId(): Promise<{ id: string; short: string }> {
-  if (!db) throw new Error('Firebase not initialized');
+  if (!db) throw new Error('Backend not initialized');
   const now = new Date();
   const yy = now.getFullYear().toString().slice(-2);
   const mm = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -39,7 +39,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
+    if (!db) return NextResponse.json({ error: 'Backend not configured' }, { status: 500 });
     const body: any = await request.json();
     const { residenceId, items, meta } = body || {};
     if (!residenceId || !Array.isArray(items) || items.length === 0) {

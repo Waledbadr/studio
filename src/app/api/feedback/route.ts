@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
-import { serverTimestamp, collection, addDoc, query, where, limit, getDocs } from '@/lib/firestore-shim';
-import { generateMonthlySequentialTicketId } from '@/lib/feedback';
-import { db } from '@/lib/firebase';
+import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 
 export async function POST(req: NextRequest) {
   try {
-    if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
     const body: any = await req.json();
     const { userId, title, description, category, screenshotUrl, errorCode, errorMessage, stack, deviceInfo, appInfo, settings } = body || {};
     if (!title || !category) return NextResponse.json({ error: 'Missing title or category' }, { status: 400 });
 
-  const now = new Date();
-  const ticketId = await generateMonthlySequentialTicketId(now.getFullYear(), now.getMonth() + 1);
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
+      return NextResponse.json(
+        {
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
+    }
 
-    const ref = await addDoc(collection(db, 'feedback'), {
-      ticketId,
+    const created = await D1Actions.createFeedback(env, {
       userId: userId || null,
       title,
       description: description || null,
@@ -29,10 +33,13 @@ export async function POST(req: NextRequest) {
       deviceInfo: deviceInfo || null,
       appInfo: appInfo || null,
       settings: settings || null,
-      createdAt: serverTimestamp(),
     });
 
-    return NextResponse.json({ id: ref.id, ticketId });
+    if (!created || !(created as any).ok) {
+      return NextResponse.json({ error: (created as any)?.error || 'Failed' }, { status: 500 });
+    }
+
+    return NextResponse.json({ id: (created as any).id, ticketId: (created as any).ticketId });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
@@ -40,21 +47,24 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    if (!db) return NextResponse.json({ error: 'Firestore not configured' }, { status: 500 });
+    const env = await getCloudflareEnvRecord();
+    if (!env || !(env as any).DB) {
+      return NextResponse.json(
+        {
+          error:
+            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+        },
+        { status: 503 }
+      );
+    }
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
-    const qBase = collection(db, 'feedback');
-    let q = query(qBase) as any;
-    if (userId) q = query(qBase, where('userId', '==', userId)) as any;
-    q = query(q, limit(100));
-    const snap = await getDocs(q);
-    const items = snap.docs
-      .map((d: any) => ({ id: d.id, ...(d.data() as any) }))
-      .sort((a: any, b: any) => {
-        const da = a.createdAt ? (typeof a.createdAt === 'object' ? a.createdAt.toDate?.() || new Date(0) : new Date(a.createdAt)) : new Date(0);
-        const dbb = b.createdAt ? (typeof b.createdAt === 'object' ? b.createdAt.toDate?.() || new Date(0) : new Date(b.createdAt)) : new Date(0);
-        return +dbb - +da;
-      });
+    const rows = (await D1Actions.getFeedback(env, { userId: userId || undefined, limit: 100 })) as any[];
+    const items = (rows || []).sort((a: any, b: any) => {
+      const da = a?.createdAt ? new Date(a.createdAt) : new Date(0);
+      const dbb = b?.createdAt ? new Date(b.createdAt) : new Date(0);
+      return +dbb - +da;
+    });
     return NextResponse.json({ items });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });

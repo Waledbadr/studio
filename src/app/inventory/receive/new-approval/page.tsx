@@ -13,8 +13,8 @@ import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
 import { FileUploadArea } from '@/components/ui/file-upload-area';
-import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from '@/lib/realtime-shim';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
@@ -290,7 +290,7 @@ export default function NewMRVApprovalPage() {
       const mmNoPad = (now.getMonth() + 1).toString();
       const counterId = `mrv-${yy}-${mm}`;
       let nextSeq = 0;
-      await runTransaction(db, async (trx) => {
+      await runTransaction(db, async (trx: any) => {
         const counterRef = doc(db!, 'counters', counterId);
         const snap = await trx.get(counterRef);
         const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;

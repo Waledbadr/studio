@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
-import { db } from '@/lib/firebase';
-import { collection, getDocs } from '@/lib/firestore-shim';
+import { db } from '@/lib/platform';
+import { collection, getDocs } from '@/lib/realtime-shim';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -17,7 +17,7 @@ export default function DiagnosticPage() {
     setLoading(true);
     try {
       if (!db) {
-        console.error('Firebase not configured');
+        console.error('Backend not configured');
         return;
       }
       const snapshot = await getDocs(collection(db, 'workers'));
@@ -49,7 +49,7 @@ export default function DiagnosticPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ q: '' })
       });
-      const data = await res.json();
+      const data: any = await res.json();
       console.log('Search API response:', data);
       alert(`Search returned ${data.results?.length || 0} workers`);
     } catch (e) {

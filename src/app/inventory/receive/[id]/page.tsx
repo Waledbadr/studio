@@ -29,8 +29,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { doc, getDoc, updateDoc } from '@/lib/firestore-shim';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from '@/lib/realtime-shim';
+import { db } from '@/lib/platform';
 
 interface ReceivedItem extends OrderItem {
     quantityReceived: number;
@@ -194,7 +194,7 @@ export default function ReceiveOrderPage() {
                             const err: any = await res.json().catch(() => ({}));
                             throw new Error(err.error || `Upload failed (${res.status})`);
                         }
-                        const data = await res.json();
+                        const data: any = await res.json().catch(() => ({}));
                         attachments.push({ url: data.url, path: data.path, name: file.name });
                     }
                     

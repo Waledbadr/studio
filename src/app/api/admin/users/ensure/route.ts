@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
 
     if (!emailKey) return NextResponse.json({ error: 'email required' }, { status: 400 });
 
-    // In this D1 migration, 'ensure' might create a user if they don't exist, 
-    // or just update them. The original logic looked up a firebase user. 
+    // In this D1 migration, 'ensure' might create a user if they don't exist,
+    // or just update them. The original logic looked up a vendor auth user.
     // Here we will check if the user exists in our DB.
 
     let targetUser = await db.select().from(users).where(eq(users.email, emailKey)).get();
@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
       // Update user
       await db.update(users).set(payload).where(eq(users.id, targetUser.id)).run();
       targetUser = { ...targetUser, ...payload };
+    }
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not created' }, { status: 500 });
     }
 
     // Parse assignedResidences back to array for response

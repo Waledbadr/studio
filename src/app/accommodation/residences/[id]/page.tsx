@@ -100,7 +100,7 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     setSubmitting(true);
     try {
       const resp = await fetch('/api/accommodation/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ residenceId: residence.id, roomId: selectedRoom, tenantName }) });
-      const data = await resp.json();
+      const data: any = await resp.json();
       if (!resp.ok) throw new Error(data?.error || 'Failed');
 
       // update local room state

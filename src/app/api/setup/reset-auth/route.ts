@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     // D1-only: this route is disabled or needs to be rewritten for D1
     return NextResponse.json({ error: 'Not implemented for D1' }, { status: 501 });
 
-    /* Firebase code removed
+    /* Legacy auth-provider code removed
     const { keepEmails, password } = await req.json();
     // naive guard so no one hits this by mistake in production
     if (password !== 'RESET123') {
