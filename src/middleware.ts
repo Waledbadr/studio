@@ -59,19 +59,10 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next();
 
-  // Redirect root to login if not authenticated
-  if (pathname === '/') {
-    const token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
-    let cookieToken = '';
-    try {
-      cookieToken = req.cookies.get?.('access_token')?.value || '';
-    } catch {
-      // Ignore cookie access errors
-    }
-    if (!token && !cookieToken) {
-      return NextResponse.redirect(new URL('/login', req.url));
-    }
-  }
+  // NOTE: We avoid redirecting page routes from middleware because cookie access can be flaky
+  // in some edge runtimes and causes a visible /login flash. Pages are guarded client-side by
+  // `RequireAuth`, while API routes still enforce auth here and/or in route handlers.
+  const isApiRoute = pathname.startsWith('/api/');
 
   let token = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/, '') || '';
   if (!token) {
@@ -83,7 +74,9 @@ export async function middleware(req: NextRequest) {
       console.warn('[Middleware] Cookie access failed:', e);
     }
   }
-  if (!token) return new NextResponse('Unauthorized', { status: 401 });
+  if (!token) {
+    return isApiRoute ? new NextResponse('Unauthorized', { status: 401 }) : NextResponse.next();
+  }
 
   try {
     // If we have runtime access to JWT/Access env vars, verify token strictly.
@@ -101,7 +94,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   } catch (e) {
     console.warn('Access JWT verify failed', e);
-    return new NextResponse('Unauthorized', { status: 401 });
+    return isApiRoute ? new NextResponse('Unauthorized', { status: 401 }) : NextResponse.next();
   }
 }
 

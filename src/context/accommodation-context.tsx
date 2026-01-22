@@ -1424,9 +1424,51 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // ⚡ Optimized Async Operations
   const findWorkerAsync = useCallback(async (queryStr: string) => {
-    if (!db || !queryStr.trim()) return [];
+    if (!queryStr.trim()) return [];
     const term = queryStr.trim();
     const termLower = term.toLowerCase();
+
+    // Cloudflare D1 mode: Firestore `db` is null, so use the in-memory list (refreshed by D1 polling)
+    // and fall back to a one-time D1 fetch if the list hasn't loaded yet.
+    if (USE_D1) {
+      const workerMatchesTerm = (w: any): boolean => {
+        if (w.name?.toLowerCase().includes(termLower)) return true;
+        if (w.nameAr?.toLowerCase().includes(termLower)) return true;
+        if (w.nameEn?.toLowerCase().includes(termLower)) return true;
+        if (w.fullName?.toLowerCase().includes(termLower)) return true;
+        if (w.id?.toLowerCase?.().includes?.(termLower)) return true;
+        if (w.idNumber?.toLowerCase?.().includes?.(termLower)) return true;
+        if (w.employeeId?.toLowerCase?.().includes?.(termLower)) return true;
+        if (w.nationality?.toLowerCase?.().includes?.(termLower)) return true;
+        if (w.company?.toLowerCase?.().includes?.(termLower)) return true;
+        return false;
+      };
+
+      let list: Worker[] = workersRef.current as Worker[];
+      if (!list || list.length === 0) {
+        try {
+          const w = await D1Client.getWorkers();
+          list = (w || []).map((d: any) => ({ id: d.id, ...d } as Worker));
+          setWorkers(list);
+          try { localStorage.setItem('ac_workers', JSON.stringify(list)); } catch {}
+        } catch (e) {
+          console.error('D1 getWorkers failed (search)', e);
+          // If D1 is unavailable or auth hasn't settled yet, return empty results gracefully.
+          return [];
+        }
+      }
+
+      // Prefer exact matches first for IDs
+      const exactMatches = list.filter((w: any) =>
+        String(w.id || '').toLowerCase() === termLower ||
+        String(w.idNumber || '').toLowerCase() === termLower ||
+        String(w.employeeId || '').toLowerCase() === termLower
+      );
+      if (exactMatches.length > 0) return exactMatches.slice(0, 15);
+
+      const matches = list.filter(workerMatchesTerm);
+      return matches.slice(0, 15);
+    }
 
     console.log('🔍 [Search] Looking for:', term);
     const startTime = Date.now();
@@ -1525,7 +1567,26 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Fetch multiple workers by ID (for display)
   const getWorkersByIds = useCallback(async (ids: string[]) => {
-    if (!db || ids.length === 0) return [];
+    if (ids.length === 0) return [];
+
+    if (USE_D1) {
+      const wanted = new Set(ids);
+      let list: Worker[] = workersRef.current as Worker[];
+      if (!list || list.length === 0) {
+        try {
+          const w = await D1Client.getWorkers();
+          list = (w || []).map((d: any) => ({ id: d.id, ...d } as Worker));
+          setWorkers(list);
+          try { localStorage.setItem('ac_workers', JSON.stringify(list)); } catch {}
+        } catch (e) {
+          console.error('D1 getWorkers failed (getWorkersByIds)', e);
+          return [];
+        }
+      }
+      return list.filter((w) => wanted.has(w.id));
+    }
+
+    if (!db) return [];
 
     // Filter out IDs we already have in state
     const missingIds = ids.filter(id => !workersRef.current.find(w => w.id === id));
@@ -1571,9 +1632,27 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // NEW: Get worker by ID or Employee ID
   const getWorkerByIdOrEmployeeId = useCallback(async (identifier: string): Promise<Worker | null> => {
-    if (!db || !identifier?.trim()) return null;
+    if (!identifier?.trim()) return null;
 
     const term = identifier.trim();
+
+    if (USE_D1) {
+      let list: Worker[] = workersRef.current as Worker[];
+      if (!list || list.length === 0) {
+        try {
+          const w = await D1Client.getWorkers();
+          list = (w || []).map((d: any) => ({ id: d.id, ...d } as Worker));
+          setWorkers(list);
+          try { localStorage.setItem('ac_workers', JSON.stringify(list)); } catch {}
+        } catch (e) {
+          console.error('D1 getWorkers failed (getWorkerByIdOrEmployeeId)', e);
+          return null;
+        }
+      }
+      return list.find((w) => w.id === term || w.employeeId === term) || null;
+    }
+
+    if (!db) return null;
 
     // First try to find in cached workers
     const cachedWorker = workersRef.current.find(w => w.id === term || w.employeeId === term);
@@ -1605,11 +1684,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }, [db]);
 
   const checkWorkerOccupancy = useCallback(async (workerId: string) => {
-    if (!db) return null;
     if (!workerId || typeof workerId !== 'string') {
       console.warn('checkWorkerOccupancy: invalid workerId', workerId);
       return null;
     }
+
+    if (USE_D1) {
+      const occ = occupants.find((o) => o.workerId === workerId && (o.until == null || o.until === ''));
+      return occ || null;
+    }
+
+    if (!db) return null;
     try {
       const q = query(
         collection(db, 'occupants'),
@@ -1624,7 +1709,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       console.error("checkWorkerOccupancy failed", e);
       return null;
     }
-  }, [db]);
+  }, [db, occupants]);
 
   // NEW: Get all workers with status 'Transferring'
   const getTransferringWorkers = useCallback(async (): Promise<Worker[]> => {

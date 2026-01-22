@@ -1,31 +1,28 @@
 import { sqliteTable, text, integer, real, customType } from 'drizzle-orm/sqlite-core';
 
-const jsonText = customType<{ data: unknown; driverData: string }>(
-    {
-        dataType() {
-            return 'text';
-        },
-        toDriver(value) {
-            // Mirror Drizzle's default `mode: 'json'` behavior: always JSON.stringify.
-            // This ensures strings are stored as JSON strings (quoted) rather than raw text.
-            return JSON.stringify(value);
-        },
-        fromDriver(value) {
-            if (value == null) return null;
-            if (typeof value !== 'string') return value as unknown;
-            const trimmed = value.trim();
-            if (!trimmed) return null;
-            try {
-                return JSON.parse(trimmed);
-            } catch {
-                // If the DB contains legacy/non-JSON text (e.g. ISO strings stored without quotes),
-                // return the raw string rather than crashing the entire request.
-                return value;
-            }
-        },
+const jsonText = customType<{ data: unknown; driverData: string }>({
+    dataType() {
+        return 'text';
     },
-    { mode: 'json' }
-);
+    toDriver(value) {
+        // Mirror Drizzle's `mode: 'json'` behavior: always JSON.stringify.
+        // This ensures strings are stored as JSON strings (quoted) rather than raw text.
+        return JSON.stringify(value);
+    },
+    fromDriver(value) {
+        if (value == null) return null;
+        if (typeof value !== 'string') return value as unknown;
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        try {
+            return JSON.parse(trimmed);
+        } catch {
+            // If the DB contains legacy/non-JSON text (e.g. ISO strings stored without quotes),
+            // return the raw string rather than crashing the entire request.
+            return value;
+        }
+    },
+});
 
 export const workers = sqliteTable('workers', {
     id: text('id').primaryKey(),

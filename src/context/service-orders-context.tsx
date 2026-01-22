@@ -102,10 +102,23 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     const USE_D1 =
       String(
         (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true';
+      ).toLowerCase() === 'true' || !db;
+
     if (USE_D1) {
-      // D1 fetch implementation or empty return for now to prevent error
-      setLoading(false);
+      // Cloudflare D1 mode
+      setLoading(true);
+      void D1Client.getServiceOrders()
+        .then((rows: any[]) => {
+          setServiceOrders((rows || []) as ServiceOrder[]);
+        })
+        .catch((e: any) => {
+          console.error('D1 getServiceOrders failed', e);
+          toast({ title: 'D1 unavailable', description: 'فشل الحصول على أوامر الصيانة من Cloudflare D1', variant: 'destructive' });
+        })
+        .finally(() => {
+          setLoading(false);
+          isLoaded.current = true;
+        });
       return;
     }
 
