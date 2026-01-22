@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAccommodation } from "@/context/accommodation-context";
 import { useResidences } from "@/context/residences-context";
 import { useUsers } from "@/context/users-context";
@@ -302,6 +302,11 @@ export function AccommodationManager() {
     }
   }, [findWorkerAsync, checkWorkerOccupancy]);
 
+  const handleSearchRef = useRef(handleSearch);
+  useEffect(() => {
+    handleSearchRef.current = handleSearch;
+  }, [handleSearch]);
+
   // Manage Search Logic
   const handleManageSearch = useCallback(async (query: string) => {
     setManageSearchQuery(query);
@@ -338,10 +343,10 @@ export function AccommodationManager() {
   // Debounce Search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery) handleSearch(searchQuery);
+      if (searchQuery) handleSearchRef.current(searchQuery);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, handleSearch]);
+  }, [searchQuery]);
 
   // Toggle Worker Selection
   const toggleWorkerSelection = (worker: any) => {

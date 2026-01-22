@@ -16,7 +16,10 @@ const USE_D1 =
   (String(
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
   ).toLowerCase() === 'true') || !db;
-const POLL_INTERVAL_MS = 7000; // 5-10s polling window (7s chosen)
+const POLL_INTERVAL_MS = 7000; // Firestore polling window
+const D1_POLL_INTERVAL_MS = 30000; // D1 polling window (reduce requests in Cloudflare)
+const D1_SYNC_COOLDOWN_MS = 5000;
+const D1_AUX_SYNC_INTERVAL_MS = 180000; // aux tables refresh (3 minutes)
 
 export type Location = { lat: number; lng: number } | null;
 
@@ -505,6 +508,26 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // 🆕 Manual sync from Firestore (call only when user requests)
   const manualSyncFromFirestore = useCallback(async () => {
+    if (USE_D1) {
+      try {
+        toast({
+          title: "جاري التحديث...",
+          description: "يتم تحديث البيانات من Cloudflare D1",
+        });
+        await syncFromD1('full', { silent: false, forceAux: true });
+        toast({ title: "تم التحديث بنجاح ✅", description: "تم تحديث البيانات من Cloudflare D1" });
+        return { ok: true, totalReads: 0 };
+      } catch (e: any) {
+        console.error('❌ [D1 Manual Sync] Failed:', e);
+        toast({
+          title: "فشل التحديث",
+          description: e.message || 'حدث خطأ غير متوقع',
+          variant: "destructive",
+        });
+        return { ok: false, totalReads: 0, error: String(e) };
+      }
+    }
+
     if (!db) {
       toast({
         title: "خطأ",
@@ -595,50 +618,88 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }, [db, toast]);
 
   // 🆕 Sync from D1
-  const syncFromD1 = useCallback(async () => {
-    try {
-      console.log('🔄 [D1 Sync] Starting sync from Cloudflare D1...');
-      setLoading(true);
+  type D1SyncScope = 'core' | 'full';
+  const lastD1AuxSyncAtRef = useRef(0);
 
-      const [w, r, o, c, ct, i, h, t, n] = await Promise.all([
+  const syncFromD1 = useCallback(async (scope: D1SyncScope = 'full', opts?: { silent?: boolean; forceAux?: boolean }) => {
+    const silent = !!opts?.silent;
+    const forceAux = !!opts?.forceAux;
+    try {
+      if (!silent) {
+        console.log('🔄 [D1 Sync] Starting sync from Cloudflare D1...');
+        setLoading(true);
+      }
+
+      // Core tables: always needed for accommodation assign/search.
+      const [w, r, o] = await Promise.all([
         D1Client.getWorkers(),
         D1Client.getResidences(),
         D1Client.getOccupants(),
-        D1Client.getCompanies(),
-        D1Client.getContracts(),
-        D1Client.getInvoices(),
-        D1Client.getHistory(),
-        D1Client.getTransferRequests(),
-        D1Client.getNotifications()
       ]);
 
       setWorkers(w as Worker[]);
       setResidences((r as any[]).map(mapComplexToResidence));
       setOccupants(o as Occupant[]);
-      setCompanies(c as Company[]);
-      setContracts(ct as Contract[]);
-      setInvoices(i as Invoice[]);
-      setAccommodationHistory(h as AccommodationHistory[]);
-      setTransferRequests(t as TransferRequest[]);
-      setNotifications(n as Notification[]);
 
-      console.log('✅ [D1 Sync] Sync complete');
-      setLoading(false);
+      // Aux tables: fetch less often to reduce Cloudflare/D1 RPC usage.
+      const now = Date.now();
+      const shouldSyncAux = scope === 'full' || forceAux || (now - lastD1AuxSyncAtRef.current > D1_AUX_SYNC_INTERVAL_MS);
+      if (shouldSyncAux) {
+        lastD1AuxSyncAtRef.current = now;
+        const [c, ct, i, h, t, n] = await Promise.all([
+          D1Client.getCompanies(),
+          D1Client.getContracts(),
+          D1Client.getInvoices(),
+          D1Client.getHistory(),
+          D1Client.getTransferRequests(),
+          D1Client.getNotifications(),
+        ]);
+        setCompanies(c as Company[]);
+        setContracts(ct as Contract[]);
+        setInvoices(i as Invoice[]);
+        setAccommodationHistory(h as AccommodationHistory[]);
+        setTransferRequests(t as TransferRequest[]);
+        setNotifications(n as Notification[]);
+      }
+
+      if (!silent) {
+        console.log('✅ [D1 Sync] Sync complete');
+      }
     } catch (e: any) {
       console.error('❌ [D1 Sync] Failed:', e);
-      setLoading(false);
+      if (!silent) setLoading(false);
 
       const msg = typeof e?.message === 'string' ? e.message : String(e);
       const isBindingMissing = /D1 binding not available/i.test(msg);
-      toast({
-        title: "فشل تحديث البيانات",
-        description: isBindingMissing
-          ? "قاعدة بيانات D1 غير متاحة في وضع التشغيل الحالي. شغّل التطبيق عبر `npm run dev:d1` (Cloudflare Pages dev) لعرض بيانات العمال من D1."
-          : "حدث خطأ أثناء الاتصال بـ Cloudflare D1",
-        variant: "destructive"
-      });
+      if (!silent) {
+        toast({
+          title: "فشل تحديث البيانات",
+          description: isBindingMissing
+            ? "قاعدة بيانات D1 غير متاحة في وضع التشغيل الحالي. شغّل التطبيق عبر `npm run dev:d1` (Cloudflare Pages dev) لعرض بيانات العمال من D1."
+            : "حدث خطأ أثناء الاتصال بـ Cloudflare D1",
+          variant: "destructive"
+        });
+      }
+      throw e;
+    } finally {
+      if (!silent) setLoading(false);
     }
   }, [toast]);
+
+  const d1SyncInFlightRef = useRef(false);
+  const lastD1SyncAtRef = useRef(0);
+
+  const scheduleD1Sync = useCallback(() => {
+    if (!USE_D1) return;
+    const now = Date.now();
+    if (d1SyncInFlightRef.current) return;
+    if (now - lastD1SyncAtRef.current < D1_SYNC_COOLDOWN_MS) return;
+    d1SyncInFlightRef.current = true;
+    lastD1SyncAtRef.current = now;
+    void syncFromD1('core', { silent: true }).finally(() => {
+      d1SyncInFlightRef.current = false;
+    });
+  }, [syncFromD1]);
 
   const handleWorkersSnapshotError = useCallback(
     (err: unknown) => {
@@ -910,7 +971,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       try {
         if (USE_D1) {
           try {
-            await syncFromD1();
+            await syncFromD1('core', { silent: true });
           } catch (e: any) {
             console.error('D1 sync failed during polling', e);
             if (!d1PollWarnedRef.current) {
@@ -945,8 +1006,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     // In D1 mode we don't require Firestore auth/db; start immediately.
     if (USE_D1) {
       console.log('✅ [D1 Poll] Starting initial sync and poll (no Firestore)');
+      // One-time full sync to populate less-frequent tables.
+      void syncFromD1('full', { silent: false, forceAux: true }).catch(() => {});
       fetchAll();
-      pollId = window.setInterval(fetchAll, POLL_INTERVAL_MS);
+      pollId = window.setInterval(fetchAll, D1_POLL_INTERVAL_MS);
     } else {
       if (!db || !auth) return;
       unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -972,6 +1035,22 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (pollId) clearInterval(pollId);
     };
   }, [db, auth, syncFromD1]);
+
+  function findRoomPath(residenceId: string, roomId: string): { buildingId?: string; floorId?: string } {
+    const res = residences.find((r) => r.id === residenceId);
+    if (!res) return {};
+    if (res.buildings) {
+      for (const b of res.buildings) {
+        if (!b.floors) continue;
+        for (const f of b.floors) {
+          if (!f.rooms) continue;
+          const rr = f.rooms.find((r: any) => r.id === roomId);
+          if (rr) return { buildingId: (b as any).id, floorId: (f as any).id };
+        }
+      }
+    }
+    return {};
+  }
 
   // Helpers: persist some data to localStorage (optional backup only)
   useEffect(() => {
@@ -1808,18 +1887,48 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }) => {
     if (USE_D1) {
       try {
+        const path = findRoomPath(params.residenceId, params.roomId);
+        const since = params.checkInDate || new Date().toISOString();
         const res = await D1Client.checkInWorker({
           workerId: params.workerId,
           residenceId: params.residenceId,
           roomId: params.roomId,
-          since: params.checkInDate || new Date().toISOString(),
+          buildingId: path.buildingId,
+          floorId: path.floorId,
+          since,
           checkInBy: params.performedBy,
-          isEmergency: params.emergencyMode
+          isEmergency: params.emergencyMode,
         });
+
         if (res.ok) {
-          // We'll trigger a background sync to keep client state updated
-          // In a real production app, we would update state optimistically
-          syncFromD1();
+          // Optimistic local update to reflect immediately in UI.
+          setOccupants((prev) => {
+            const withoutActive = prev.filter((o) => !(o.workerId === params.workerId && (o.until == null)));
+            return [
+              ...withoutActive,
+              {
+                id: (res as any).id || `occ_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                workerId: params.workerId,
+                residenceId: params.residenceId,
+                buildingId: path.buildingId,
+                floorId: path.floorId,
+                roomId: params.roomId,
+                since,
+                until: null,
+                checkInBy: params.performedBy,
+                isEmergency: !!params.emergencyMode,
+                updatedAt: new Date().toISOString(),
+              } as any,
+            ];
+          });
+          setWorkers((prev) =>
+            prev.map((w) =>
+              w.id === params.workerId
+                ? { ...w, status: 'Active', transferDestination: undefined }
+                : w
+            )
+          );
+          scheduleD1Sync();
           return { ok: true };
         }
         toast({ title: 'D1 error', description: res?.error || 'Failed to check-in (D1)', variant: 'destructive' });
@@ -2046,7 +2155,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           transferCity: params.transferCity
         });
         if (res.ok) {
-          syncFromD1();
+          scheduleD1Sync();
           return { ok: true };
         }
         toast({ title: 'D1 error', description: res?.error || 'Failed to check-out (D1)', variant: 'destructive' });
@@ -3691,6 +3800,74 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     performedBy: string;
     emergencyMode?: boolean;
   }): Promise<{ ok: boolean; results: Record<string, { success: boolean; error?: string; historyId?: string }> }> {
+    if (USE_D1) {
+      const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};
+      try {
+        const room = findRoom(params.residenceId, params.roomId);
+        if (!room) {
+          params.workerIds.forEach((id) => (results[id] = { success: false, error: 'room-not-found' }));
+          return { ok: false, results };
+        }
+        const path = findRoomPath(params.residenceId, params.roomId);
+        const since = params.checkInDate || new Date().toISOString();
+
+        // Run sequentially to avoid hammering D1 with a burst of requests.
+        for (const wid of params.workerIds) {
+          try {
+            const res = await D1Client.checkInWorker({
+              workerId: wid,
+              residenceId: params.residenceId,
+              roomId: params.roomId,
+              buildingId: path.buildingId,
+              floorId: path.floorId,
+              since,
+              checkInBy: params.performedBy,
+              isEmergency: params.emergencyMode,
+            });
+            if (res?.ok) {
+              results[wid] = { success: true };
+            } else {
+              results[wid] = { success: false, error: res?.error || 'D1 error' };
+            }
+          } catch (e: any) {
+            results[wid] = { success: false, error: String(e?.message || e || 'D1 error') };
+          }
+        }
+
+        // Optimistic local update for all successful check-ins
+        const successIds = Object.entries(results)
+          .filter(([, r]) => r.success)
+          .map(([id]) => id);
+        if (successIds.length > 0) {
+          setOccupants((prev) => {
+            const without = prev.filter((o) => !(successIds.includes(o.workerId) && (o.until == null)));
+            const added = successIds.map((wid) => ({
+              id: `occ_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+              workerId: wid,
+              residenceId: params.residenceId,
+              buildingId: path.buildingId,
+              floorId: path.floorId,
+              roomId: params.roomId,
+              since,
+              until: null,
+              checkInBy: params.performedBy,
+              isEmergency: !!params.emergencyMode,
+              updatedAt: new Date().toISOString(),
+            } as any));
+            return [...without, ...added];
+          });
+          setWorkers((prev) => prev.map((w) => (successIds.includes(w.id) ? { ...w, status: 'Active', transferDestination: undefined } : w)));
+        }
+
+        scheduleD1Sync();
+        const ok = Object.values(results).some((r) => r.success);
+        return { ok, results };
+      } catch (e: any) {
+        console.error('D1 bulkCheckIn failed', e);
+        return { ok: false, results };
+      }
+    }
+
     if (!db) return { ok: false, results: {} };
 
     const results: Record<string, { success: boolean; error?: string; historyId?: string }> = {};

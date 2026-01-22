@@ -152,6 +152,8 @@ export async function checkInWorker(env: any, params: {
     workerId: string;
     residenceId: string;
     roomId: string;
+    buildingId?: string;
+    floorId?: string;
     since: string;
     checkInBy: string;
     isEmergency?: boolean;
@@ -166,6 +168,8 @@ export async function checkInWorker(env: any, params: {
         id,
         workerId: params.workerId,
         residenceId: params.residenceId,
+        buildingId: params.buildingId ?? null,
+        floorId: params.floorId ?? null,
         roomId: params.roomId,
         since: params.since,
         checkInBy: params.checkInBy,
