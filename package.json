@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:smoke": "RUN_D1_SMOKE=true vitest src/lib/d1-smoke.test.ts",
+    "verify:d1": "node scripts/verify-d1-config.mjs",
     "migrate:workers": "node scripts/migrate-local-workers-to-firestore.mjs",
     "import:workers": "node scripts/import-workers-from-desktop.mjs",
     "convert:workers": "node scripts/convert-workers-data.mjs",

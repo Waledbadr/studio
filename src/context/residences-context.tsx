@@ -21,6 +21,7 @@ import {
 import { createPoller } from '@/lib/polling';
 import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
+import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 
 // Prefer D1 automatically when Firestore isn't configured.
 // NEXT_PUBLIC_USE_D1 can still force D1 when a vendor backend exists.
@@ -29,7 +30,7 @@ const USE_D1 =
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
   ).toLowerCase() === 'true' || !db;
 
-const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
+const backendErrorMessage = getBackendErrorMessage();
 
 const RESIDENCES_LS_KEY = 'estatecare_residences';
 const saveToLocalStorage = (list: any[]) => {

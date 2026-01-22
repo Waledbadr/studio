@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 import { db, auth } from '@/lib/platform';
 import { collection, query, where, orderBy, doc, updateDoc, writeBatch, Timestamp, addDoc, serverTimestamp, getDoc } from '@/lib/realtime-shim';
 import type { QueryDocumentSnapshot, DocumentData, Query } from '@/lib/realtime-shim';
@@ -44,7 +45,7 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
-const backendErrorMessage = "Backend is not configured.";
+const backendErrorMessage = getBackendErrorMessage();
 
 export const NotificationsProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

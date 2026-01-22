@@ -127,11 +127,15 @@ export async function POST(req: Request) {
     // Get env from request context
     const env = await getCloudflareEnvRecord();
     if (!env || !env.DB) {
+      const errorMsg = process.env.NODE_ENV === 'production'
+        ? 'D1 binding not available. Please verify the D1 database binding is linked in Cloudflare Pages Settings > Functions > D1 Bindings. See CLOUDFLARE_PAGES_DEPLOYMENT.md for setup instructions.'
+        : 'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.';
+      
       return NextResponse.json(
         {
           ok: false,
-          error:
-            'D1 binding not available. If running locally, start the app with `npm run dev:d1` (Cloudflare Pages dev) so `getRequestContext().env.DB` is present.'
+          error: errorMsg,
+          hint: 'Ensure D1 binding "DB" is configured in your Pages project settings.'
         },
         { status: 503 }
       );
