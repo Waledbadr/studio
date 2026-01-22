@@ -98,7 +98,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       unsub();
     };
-  }, [loadUsers]);
+  }, []);
 
   const loadUsers = useCallback(async () => {
     if (isLoaded.current) return;
