@@ -59,6 +59,24 @@ export async function getWorkers(env: any) {
     return await db.select().from(workers);
 }
 
+// --- Diagnostics ---
+export async function d1Ping(env: any) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const row = await d1.prepare('SELECT 1 as ok').first();
+    return { ok: true, row };
+}
+
+export async function listTables(env: any) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return [];
+    const res = await d1.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+    const rows = (res?.results as Array<{ name?: unknown }> | undefined) ?? [];
+    return rows
+        .map((r) => (typeof r.name === 'string' ? r.name : String(r.name ?? '')))
+        .filter(Boolean);
+}
+
 export async function getResidences(env: any) {
     const d1 = getD1FromEnv(env);
     if (!d1) return [];

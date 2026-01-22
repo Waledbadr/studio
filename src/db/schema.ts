@@ -1,4 +1,31 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, customType } from 'drizzle-orm/sqlite-core';
+
+const jsonText = customType<{ data: unknown; driverData: string }>(
+    {
+        dataType() {
+            return 'text';
+        },
+        toDriver(value) {
+            // Mirror Drizzle's default `mode: 'json'` behavior: always JSON.stringify.
+            // This ensures strings are stored as JSON strings (quoted) rather than raw text.
+            return JSON.stringify(value);
+        },
+        fromDriver(value) {
+            if (value == null) return null;
+            if (typeof value !== 'string') return value as unknown;
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            try {
+                return JSON.parse(trimmed);
+            } catch {
+                // If the DB contains legacy/non-JSON text (e.g. ISO strings stored without quotes),
+                // return the raw string rather than crashing the entire request.
+                return value;
+            }
+        },
+    },
+    { mode: 'json' }
+);
 
 export const workers = sqliteTable('workers', {
     id: text('id').primaryKey(),
@@ -18,11 +45,11 @@ export const residences = sqliteTable('residences', {
     name: text('name').notNull(),
     city: text('city'),
     address: text('address'),
-    location: text('location', { mode: 'json' }), // { lat: number, lng: number }
+    location: jsonText('location'), // { lat: number, lng: number }
     managerId: text('manager_id'),
     isEmergencyMode: integer('is_emergency_mode', { mode: 'boolean' }).default(false),
-    buildings: text('buildings', { mode: 'json' }), // Nested structure: Building[]
-    facilities: text('facilities', { mode: 'json' }),
+    buildings: jsonText('buildings'), // Nested structure: Building[]
+    facilities: jsonText('facilities'),
     disabled: integer('disabled', { mode: 'boolean' }).default(false),
     updatedAt: text('updated_at').default('CURRENT_TIMESTAMP'),
 });
@@ -97,7 +124,7 @@ export const contracts = sqliteTable('contracts', {
     id: text('id').primaryKey(),
     companyId: text('company_id').notNull(),
     residenceId: text('residence_id'),
-    residenceIds: text('residence_ids', { mode: 'json' }), // string[]
+    residenceIds: jsonText('residence_ids'), // string[]
     startDate: text('start_date').notNull(),
     endDate: text('end_date').notNull(),
     ratePerPersonPerMonth: real('rate_per_person_per_month').notNull(),
@@ -130,9 +157,9 @@ export const invoices = sqliteTable('invoices', {
 
 export const transferRequests = sqliteTable('transfer_requests', {
     id: text('id').primaryKey(),
-    from: text('from', { mode: 'json' }), // { residenceId?: string, roomId?: string }
-    to: text('to', { mode: 'json' }).notNull(), // { residenceId: string, roomId?: string }
-    workerIds: text('worker_ids', { mode: 'json' }).notNull(), // string[]
+    from: jsonText('from'), // { residenceId?: string, roomId?: string }
+    to: jsonText('to').notNull(), // { residenceId: string, roomId?: string }
+    workerIds: jsonText('worker_ids').notNull(), // string[]
     requestedBy: text('requested_by').notNull(),
     requestedAt: text('requested_at').notNull(),
     status: text('status', { enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'] }).default('Pending'),
@@ -164,8 +191,8 @@ export const assignments = sqliteTable('assignments', {
     status: text('status'),
     createdAt: integer('created_at'),
     updatedAt: integer('updated_at'),
-    updatedAtTS: text('updated_at_ts', { mode: 'json' }),
-    createdAtTS: text('created_at_ts', { mode: 'json' }),
+    updatedAtTS: jsonText('updated_at_ts'),
+    createdAtTS: jsonText('created_at_ts'),
 });
 
 export const auditLogs = sqliteTable('audit_logs', {
@@ -176,10 +203,10 @@ export const auditLogs = sqliteTable('audit_logs', {
     entityType: text('entity_type'),
     entityId: text('entity_id'),
     summary: text('summary'),
-    before: text('before', { mode: 'json' }),
-    after: text('after', { mode: 'json' }),
-    meta: text('meta', { mode: 'json' }),
-    timestamp: text('timestamp', { mode: 'json' }),
+    before: jsonText('before'),
+    after: jsonText('after'),
+    meta: jsonText('meta'),
+    timestamp: jsonText('timestamp'),
 });
 
 export const counters = sqliteTable('counters', {
@@ -187,7 +214,7 @@ export const counters = sqliteTable('counters', {
     last: integer('last'),
     yy: integer('yy'),
     mm: integer('mm'),
-    updatedAt: text('updated_at', { mode: 'json' }),
+    updatedAt: jsonText('updated_at'),
 });
 
 export const feedback = sqliteTable('feedback', {
@@ -196,17 +223,17 @@ export const feedback = sqliteTable('feedback', {
     title: text('title'),
     description: text('description'),
     category: text('category'),
-    deviceInfo: text('device_info', { mode: 'json' }),
-    appInfo: text('app_info', { mode: 'json' }),
-    settings: text('settings', { mode: 'json' }),
+    deviceInfo: jsonText('device_info'),
+    appInfo: jsonText('app_info'),
+    settings: jsonText('settings'),
     categoryAuto: text('category_auto'),
     ticketId: text('ticket_id'),
     priority: text('priority'),
     screenshotUrl: text('screenshot_url'),
     status: text('status'),
-    createdAt: text('created_at', { mode: 'json' }),
-    resolvedAt: text('resolved_at', { mode: 'json' }),
-    updatedAt: text('updated_at', { mode: 'json' }),
+    createdAt: jsonText('created_at'),
+    resolvedAt: jsonText('resolved_at'),
+    updatedAt: jsonText('updated_at'),
 });
 
 export const inventory = sqliteTable('inventory', {
@@ -217,16 +244,16 @@ export const inventory = sqliteTable('inventory', {
     category: text('category'),
     unit: text('unit'),
     lifespanDays: integer('lifespan_days'),
-    keywordsEn: text('keywords_en', { mode: 'json' }),
-    keywordsAr: text('keywords_ar', { mode: 'json' }),
-    variants: text('variants', { mode: 'json' }),
-    stockByResidence: text('stock_by_residence', { mode: 'json' }),
+    keywordsEn: jsonText('keywords_en'),
+    keywordsAr: jsonText('keywords_ar'),
+    variants: jsonText('variants'),
+    stockByResidence: jsonText('stock_by_residence'),
     stock: integer('stock'),
 });
 
 export const inventoryCategories = sqliteTable('inventory_categories', {
     id: text('id').primaryKey(),
-    names: text('names', { mode: 'json' }),
+    names: jsonText('names'),
 });
 
 export const inventoryTransactions = sqliteTable('inventory_transactions', {
@@ -235,7 +262,7 @@ export const inventoryTransactions = sqliteTable('inventory_transactions', {
     itemNameEn: text('item_name_en'),
     itemNameAr: text('item_name_ar'),
     residenceId: text('residence_id'),
-    date: text('date', { mode: 'json' }),
+    date: jsonText('date'),
     type: text('type'),
     quantity: real('quantity'),
     referenceDocId: text('reference_doc_id'),
@@ -246,7 +273,7 @@ export const inventoryTransactions = sqliteTable('inventory_transactions', {
 
 export const mivs = sqliteTable('mivs', {
     id: text('id').primaryKey(),
-    date: text('date', { mode: 'json' }),
+    date: jsonText('date'),
     residenceId: text('residence_id'),
     itemCount: integer('item_count'),
     locationName: text('location_name'),
@@ -255,26 +282,26 @@ export const mivs = sqliteTable('mivs', {
 export const mrvRequests = sqliteTable('mrv_requests', {
     id: text('id').primaryKey(),
     residenceId: text('residence_id'),
-    items: text('items', { mode: 'json' }),
+    items: jsonText('items'),
     supplierName: text('supplier_name'),
     invoiceNo: text('invoice_no'),
     attachmentUrl: text('attachment_url'),
     attachmentPath: text('attachment_path'),
     notes: text('notes'),
     requestedById: text('requested_by_id'),
-    requestedAt: text('requested_at', { mode: 'json' }),
+    requestedAt: jsonText('requested_at'),
     mrvShort: text('mrv_short'),
     processingById: text('processing_by_id'),
-    processingAt: text('processing_at', { mode: 'json' }),
+    processingAt: jsonText('processing_at'),
     mrvId: text('mrv_id'),
-    approvedAt: text('approved_at', { mode: 'json' }),
+    approvedAt: jsonText('approved_at'),
     approvedById: text('approved_by_id'),
     status: text('status'),
 });
 
 export const mrvs = sqliteTable('mrvs', {
     id: text('id').primaryKey(),
-    date: text('date', { mode: 'json' }),
+    date: jsonText('date'),
     residenceId: text('residence_id'),
     itemCount: integer('item_count'),
     supplierName: text('supplier_name'),
@@ -291,26 +318,26 @@ export const orders = sqliteTable('orders', {
     id: text('id').primaryKey(),
     residence: text('residence'),
     residenceId: text('residence_id'),
-    items: text('items', { mode: 'json' }),
+    items: jsonText('items'),
     requestedById: text('requested_by_id'),
     notes: text('notes'),
     requestedByName: text('requested_by_name'),
     requestedByEmail: text('requested_by_email'),
-    date: text('date', { mode: 'json' }),
+    date: jsonText('date'),
     approvedByName: text('approved_by_name'),
     approvedById: text('approved_by_id'),
-    itemsReceived: text('items_received', { mode: 'json' }),
+    itemsReceived: jsonText('items_received'),
     status: text('status'),
 });
 
 export const reconciliationRequests = sqliteTable('reconciliation_requests', {
     id: text('id').primaryKey(),
     residenceId: text('residence_id'),
-    adjustments: text('adjustments', { mode: 'json' }),
+    adjustments: jsonText('adjustments'),
     requestedById: text('requested_by_id'),
-    requestedAt: text('requested_at', { mode: 'json' }),
+    requestedAt: jsonText('requested_at'),
     reservedId: text('reserved_id'),
-    approvedAt: text('approved_at', { mode: 'json' }),
+    approvedAt: jsonText('approved_at'),
     approvedById: text('approved_by_id'),
     referenceId: text('reference_id'),
     status: text('status'),
@@ -319,21 +346,21 @@ export const reconciliationRequests = sqliteTable('reconciliation_requests', {
 export const serviceOrders = sqliteTable('service_orders', {
     id: text('id').primaryKey(),
     codeShort: text('code_short'),
-    dateCreated: text('date_created', { mode: 'json' }),
+    dateCreated: jsonText('date_created'),
     residenceId: text('residence_id'),
     residenceName: text('residence_name'),
-    destination: text('destination', { mode: 'json' }),
+    destination: jsonText('destination'),
     status: text('status'),
-    dispatchedAt: text('dispatched_at', { mode: 'json' }),
+    dispatchedAt: jsonText('dispatched_at'),
     createdById: text('created_by_id'),
     dispatchedById: text('dispatched_by_id'),
-    items: text('items', { mode: 'json' }),
+    items: jsonText('items'),
 });
 
 export const stockReconciliations = sqliteTable('stock_reconciliations', {
     id: text('id').primaryKey(),
     residenceId: text('residence_id'),
-    date: text('date', { mode: 'json' }),
+    date: jsonText('date'),
     itemCount: integer('item_count'),
     totalIncrease: integer('total_increase'),
     totalDecrease: integer('total_decrease'),
@@ -351,9 +378,9 @@ export const users = sqliteTable('users', {
     email: text('email'),
     passwordHash: text('password_hash'),
     role: text('role'),
-    themeSettings: text('theme_settings', { mode: 'json' }),
-    assignedResidences: text('assigned_residences', { mode: 'json' }),
-    createdAt: text('created_at', { mode: 'json' }),
+    themeSettings: jsonText('theme_settings'),
+    assignedResidences: jsonText('assigned_residences'),
+    createdAt: jsonText('created_at'),
     lastSeen: text('last_seen'),
     disabled: integer('disabled', { mode: 'boolean' }).default(false),
 });
@@ -364,7 +391,7 @@ export const webauthnCredentials = sqliteTable('webauthn_credentials', {
     credentialId: text('credential_id').notNull(),
     publicKey: text('public_key').notNull(),
     counter: integer('counter').notNull().default(0),
-    transports: text('transports', { mode: 'json' }),
+    transports: jsonText('transports'),
     deviceType: text('device_type'),
     backedUp: integer('backed_up', { mode: 'boolean' }).default(false),
     createdAt: text('created_at'),

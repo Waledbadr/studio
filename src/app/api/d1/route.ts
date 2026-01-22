@@ -5,6 +5,10 @@ import { cookies } from 'next/headers';
 import { verifyAccessToken } from '@/lib/auth';
 
 const allowed: Record<string, (...args: any[]) => Promise<any>> = {
+  // Diagnostics
+  d1Ping: D1Actions.d1Ping,
+  listTables: D1Actions.listTables,
+
   getWorkers: D1Actions.getWorkers,
   getResidences: D1Actions.getResidences,
   getOccupants: D1Actions.getOccupants,
@@ -79,6 +83,17 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 };
 
 export async function POST(req: Request) {
+  const requestId = (() => {
+    try {
+      // Edge runtime provides WebCrypto
+      return crypto.randomUUID();
+    } catch {
+      return `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+  })();
+
+  let actionName: string | null = null;
+
   try {
     // Auth gate: accept either Cloudflare Access JWT assertion header (when Access is in front)
     // or the app's session cookie (access_token).
@@ -118,14 +133,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const text = await req.text();
-    if (!text) {
-      return NextResponse.json({ ok: false, error: 'Empty body' }, { status: 400 });
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Invalid JSON body', requestId }, { status: 400 });
     }
-    const body = JSON.parse(text);
-    const { action, args } = body;
+
+    const { action, args } = body ?? {};
+    actionName = typeof action === 'string' ? action : null;
     if (!action || typeof action !== 'string' || !(action in allowed)) {
-      return NextResponse.json({ ok: false, error: 'Invalid action' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'Invalid action', requestId }, { status: 400 });
     }
     const fn = allowed[action];
     
@@ -133,14 +151,22 @@ export async function POST(req: Request) {
     const actionArgs = Array.isArray(args) ? args : [args];
     const res = await fn(env, ...actionArgs);
     
-    return NextResponse.json({ ok: true, result: res });
+    return NextResponse.json({ ok: true, result: res, requestId });
   } catch (e: any) {
     // Log full error including possible nested cause for Drizzle/D1 errors
     try { console.error('D1 API error:', e?.message || e); } catch {}
     try { if (e && e.cause) console.error('D1 API cause:', e.cause); } catch {}
     try { console.error(e); } catch {}
     const errMsg = (e?.message || String(e)) + (e?.cause && e.cause?.message ? ` -- cause: ${e.cause.message}` : '');
-    return NextResponse.json({ ok: false, error: errMsg, stack: e?.stack || null }, { status: 500 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: errMsg,
+        action: actionName,
+        requestId,
+      },
+      { status: 500 }
+    );
   }
 }
 

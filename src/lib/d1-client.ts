@@ -23,6 +23,8 @@ async function rpc(action: string, args?: any) {
 }
 
 export function getWorkers() { return rpc('getWorkers'); }
+export function d1Ping() { return rpc('d1Ping'); }
+export function listTables() { return rpc('listTables'); }
 export function getResidences() { return rpc('getResidences'); }
 export function getOccupants(residenceId?: string) { return rpc('getOccupants', [residenceId]); }
 export function getCompanies() { return rpc('getCompanies'); }
