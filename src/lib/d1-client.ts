@@ -1,10 +1,23 @@
-async function rpc(action: string, args?: any) {
+async function rpc(action: string, args?: any, _retry?: boolean) {
   const res = await fetch('/api/d1', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args })
   });
+
+  if (res.status === 401 && !_retry) {
+    // Attempt a single silent refresh (access tokens are short-lived).
+    try {
+      const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+      const j: any = await r.json().catch(() => ({}));
+      if (r.ok && j?.ok) {
+        return await rpc(action, args, true);
+      }
+    } catch {
+      // ignore refresh errors; fall through to original 401 handling
+    }
+  }
   let json: any = undefined;
   try {
     json = await res.json();

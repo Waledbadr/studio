@@ -6,8 +6,28 @@ let currentUser: User = null;
 let listeners: Array<(u: User) => void> = [];
 let pollingHandle: any = null;
 let fetchMeInFlight = false;
+let refreshInFlight = false;
+let lastRefreshAttemptAt = 0;
 
-async function fetchMe() {
+async function tryRefreshOnce() {
+  const now = Date.now();
+  if (refreshInFlight) return false;
+  // Avoid hammering refresh endpoint during logged-out states.
+  if (now - lastRefreshAttemptAt < 60_000) return false;
+  lastRefreshAttemptAt = now;
+  refreshInFlight = true;
+  try {
+    const res = await fetch('/api/auth/refresh', { method: 'POST' });
+    const j: any = await res.json().catch(() => ({}));
+    return !!(res.ok && j?.ok);
+  } catch {
+    return false;
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+async function fetchMe(opts?: { allowRefresh?: boolean }) {
   // Prevent concurrent fetches
   if (fetchMeInFlight) return currentUser;
   fetchMeInFlight = true;
@@ -20,6 +40,16 @@ async function fetchMe() {
     }
     const json: any = await res.json();
     const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null } : null;
+
+     if (!user && opts?.allowRefresh) {
+       // Token may have expired: try refresh once, then re-check.
+       const refreshed = await tryRefreshOnce();
+       if (refreshed) {
+         fetchMeInFlight = false;
+         return await fetchMe({ allowRefresh: false });
+       }
+     }
+
     const changed = JSON.stringify(user) !== JSON.stringify(currentUser);
     if (changed) {
       currentUser = user;
@@ -49,9 +79,9 @@ export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
   // start polling if not started
   if (!pollingHandle) {
     // First fetch immediately
-    void fetchMe().then(() => {
+    void fetchMe({ allowRefresh: true }).then(() => {
       // Then poll every 5 seconds for faster updates on registration
-      pollingHandle = setInterval(() => { void fetchMe(); }, 5_000);
+      pollingHandle = setInterval(() => { void fetchMe({ allowRefresh: true }); }, 5_000);
     });
   }
   return () => { listeners = listeners.filter(l => l !== cb); if (listeners.length === 0) { clearInterval(pollingHandle); pollingHandle = null; } };
