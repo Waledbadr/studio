@@ -6,7 +6,7 @@ import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from '@/lib/realtime-shim';
 import type { Database as Firestore } from '@/lib/realtime-shim';
 import { useUsers } from './users-context';
-import { onAuthStateChanged } from '@/lib/auth-shim';
+import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import type { User } from './users-context';
 import { useResidences } from './residences-context';
 import { useNotifications } from './notifications-context';
@@ -392,6 +392,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const loadInventory = useCallback(async () => {
      if (isLoaded.current) return;
      if (!db) {
+        // In Cloudflare D1 mode, wait until the user is authenticated.
+        // Otherwise /api/d1 returns 401 and we'd incorrectly lock into localStorage fallback.
+        if (!getCurrentUser()) {
+          setLoading(false);
+          return;
+        }
+
         // When Firestore is not configured, prefer D1 automatically.
         // This avoids empty inventory when NEXT_PUBLIC_USE_D1 wasn't set.
         try {
@@ -548,7 +555,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   useEffect(() => {
     loadInventory();
-    const unsub = auth ? onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(null, (u) => {
       if (u) {
         if (!isLoaded.current) loadInventory();
       } else {
@@ -564,7 +571,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         setAudits([]);
         setLoading(false);
       }
-    }) : undefined;
+    });
     return () => {
       if (inventoryUnsubscribeRef.current) inventoryUnsubscribeRef.current();
       if (categoriesUnsubscribeRef.current) categoriesUnsubscribeRef.current();

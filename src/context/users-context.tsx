@@ -4,13 +4,15 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/realtime-shim';
-import { onAuthStateChanged } from '@/lib/auth-shim';
+import { onAuthStateChanged, refreshMe } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
+// Prefer D1 automatically when Firestore isn't configured.
+// NEXT_PUBLIC_USE_D1 can still force D1 when a vendor backend exists.
 const USE_D1 =
   String(
     (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-  ).toLowerCase() === 'true' || false;
+  ).toLowerCase() === 'true' || !db;
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -47,7 +49,7 @@ interface UsersContextType {
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
-const backendErrorMessage = "Backend is not configured. Please ensure D1 bindings are available (and NEXT_PUBLIC_USE_D1=true if required).";
+const backendErrorMessage = "Backend is not configured. Please ensure Cloudflare D1 bindings are available.";
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
@@ -67,14 +69,15 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     } catch {}
   };
 
-  // Track client auth state to prefer the signed-in UID and trigger loading
+  // Track session-based auth state (auth-shim) and load users after login.
   useEffect(() => {
-    if (!auth) return; // local mode
-    const unsub = onAuthStateChanged(auth, (u) => {
+    let mounted = true;
+
+    const unsub = onAuthStateChanged(null, (u) => {
+      if (!mounted) return;
       lastAuthUidRef.current = u?.uid || null;
       if (!u) {
         // Signed out
-        // Unsubscribe any active listeners and reset state to avoid permission errors
         if (unsubscribeRef.current) {
           try { unsubscribeRef.current(); } catch {}
           unsubscribeRef.current = null;
@@ -84,12 +87,18 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(null);
         try { localStorage.removeItem('currentUser'); } catch {}
       } else if (!isLoaded.current) {
-        // First time we see a signed-in user, load users
         loadUsers();
       }
     });
-    return () => unsub();
-  }, []);
+
+    // Trigger initial /api/auth/me so the shim updates quickly on first load.
+    void refreshMe().catch(() => {});
+
+    return () => {
+      mounted = false;
+      unsub();
+    };
+  }, [loadUsers]);
 
   const loadUsers = useCallback(async () => {
     if (isLoaded.current) return;
@@ -177,31 +186,16 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [toast, currentUser]);
 
-  // Initialize users list depending on environment/auth
+  // Cleanup on unmount
   useEffect(() => {
-    if (!auth) {
-      // local-only mode
-      loadUsers();
-      return () => {
-        if (unsubscribeRef.current) {
-          unsubscribeRef.current();
-          isLoaded.current = false;
-        }
-      };
-    }
-
-    // If already signed in at load time
-    if (auth.currentUser && !isLoaded.current) {
-      loadUsers();
-    }
-
     return () => {
       if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        isLoaded.current = false;
+        try { unsubscribeRef.current(); } catch {}
+        unsubscribeRef.current = null;
       }
+      isLoaded.current = false;
     };
-  }, [loadUsers]);
+  }, []);
 
   const saveUser = async (user: Omit<User, 'id'> | User) => {
     if (!db) {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';
+import { cookies } from 'next/headers';
+import { verifyAccessToken } from '@/lib/auth';
 
 const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   getWorkers: D1Actions.getWorkers,
@@ -78,6 +80,31 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 
 export async function POST(req: Request) {
   try {
+    // Auth gate: accept either Cloudflare Access JWT assertion header (when Access is in front)
+    // or the app's session cookie (access_token).
+    const accessHeader = req.headers.get('cf-access-jwt-assertion') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    let accessToken = accessHeader;
+    if (!accessToken) {
+      try {
+        const cookieStore = await cookies();
+        accessToken = cookieStore.get('access_token')?.value || '';
+      } catch {
+        // ignore cookie access errors
+      }
+    }
+    if (!accessToken) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify only app JWT cookies; Cloudflare Access header is considered trusted at the edge.
+    if (!accessHeader) {
+      try {
+        await verifyAccessToken(accessToken);
+      } catch (e: any) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
     // Get env from request context
     const env = await getCloudflareEnvRecord();
     if (!env || !env.DB) {

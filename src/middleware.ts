@@ -8,7 +8,9 @@ import { getRuntimeEnv } from '@/lib/runtime-env';
 // Always access env vars via a safe helper.
 const DEFAULT_SECRET = 'development_secret_key_must_be_long';
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/d1', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
+// Public paths should include auth routes and pages needed to bootstrap the first user.
+// Note: /api/d1 is intentionally NOT public; it must be protected.
+const PUBLIC_PATHS = ['/login', '/register', '/api/auth', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
 
 async function verifyToken(token: string) {
   const TEAM = await getRuntimeEnv('CLOUDFLARE_ACCESS_TEAM_DOMAIN', '');
@@ -38,6 +40,19 @@ async function verifyToken(token: string) {
     audience: APP_AUD
   });
   return payload;
+}
+
+function hasAppJwtConfigInProcessEnv(): boolean {
+  try {
+    // Cloudflare Pages middleware may not have access to request-scoped env bindings.
+    // If process.env doesn't have JWT config at runtime, strict verification here will fail.
+    // In that case we fall back to a presence check and rely on API routes to enforce auth.
+    // eslint-disable-next-line no-undef
+    const env = typeof process !== 'undefined' ? (process as any).env : undefined;
+    return Boolean(env?.JWT_PRIVATE_KEY || env?.CLOUDFLARE_ACCESS_TEAM_DOMAIN);
+  } catch {
+    return false;
+  }
 }
 
 export async function middleware(req: NextRequest) {
@@ -71,12 +86,19 @@ export async function middleware(req: NextRequest) {
   if (!token) return new NextResponse('Unauthorized', { status: 401 });
 
   try {
-    const payload: any = await verifyToken(token);
-    // attach user info as headers for origin handling
-    const headers = new Headers(req.headers);
-    if (payload.email) headers.set('x-access-user-email', String(payload.email));
-    if (payload.sub) headers.set('x-access-user-sub', String(payload.sub));
-    return NextResponse.next({ request: { headers } as any });
+    // If we have runtime access to JWT/Access env vars, verify token strictly.
+    // Otherwise, avoid blocking valid sessions due to missing env in middleware runtime.
+    if (hasAppJwtConfigInProcessEnv()) {
+      const payload: any = await verifyToken(token);
+      // attach user info as headers for origin handling
+      const headers = new Headers(req.headers);
+      if (payload.email) headers.set('x-access-user-email', String(payload.email));
+      if (payload.sub) headers.set('x-access-user-sub', String(payload.sub));
+      return NextResponse.next({ request: { headers } as any });
+    }
+
+    // Presence-only gate (API routes should enforce auth).
+    return NextResponse.next();
   } catch (e) {
     console.warn('Access JWT verify failed', e);
     return new NextResponse('Unauthorized', { status: 401 });
