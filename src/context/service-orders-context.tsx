@@ -97,12 +97,20 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   const subRef = useRef<() => void>();
   const isLoaded = useRef(false);
 
+  const computeUseD1 = useCallback(() => {
+    return (
+      String(
+        (typeof process !== 'undefined' && (process as any).env
+          ? (process as any).env.NEXT_PUBLIC_USE_D1
+          : '') ||
+          ''
+      ).toLowerCase() === 'true' || !db
+    );
+  }, []);
+
   const load = useCallback(() => {
     if (isLoaded.current) return;
-    const USE_D1 =
-      String(
-        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true' || !db;
+    const USE_D1 = computeUseD1();
 
     if (USE_D1) {
       // Cloudflare D1 mode
@@ -113,7 +121,8 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
         })
         .catch((e: any) => {
           console.error('D1 getServiceOrders failed', e);
-          toast({ title: 'D1 unavailable', description: 'فشل الحصول على أوامر الصيانة من Cloudflare D1', variant: 'destructive' });
+          // Avoid destructive toasts here: this is often just an unauthenticated state during app startup.
+          setServiceOrders([]);
         })
         .finally(() => {
           setLoading(false);
@@ -124,7 +133,6 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
     if (!db) {
       setLoading(false);
-      toast({ title: "Config error", description: "Backend not configured or D1 not available. Ensure NEXT_PUBLIC_USE_D1=true and D1 bindings are configured.", variant: "destructive" });
       return;
     }
     // Wait for auth to satisfy backend rules
@@ -152,8 +160,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   }, [toast]);
 
   useEffect(() => {
-    load();
-    const unsub = auth ? onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth as any, (u) => {
       if (u) {
         if (!isLoaded.current) load();
       } else {
@@ -162,7 +169,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
         setServiceOrders([]);
         setLoading(false);
       }
-    }) : undefined;
+    });
     return () => {
       subRef.current?.();
       isLoaded.current = false;
@@ -197,10 +204,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
       throw new Error("يرجى اختيار السكن وإضافة صنف واحد على الأقل بكمية أكبر من 0.");
     }
 
-    const USE_D1 =
-      String(
-        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true';
+    const USE_D1 = computeUseD1();
     if (USE_D1) {
       const res = await D1Client.createServiceOrder({ ...payload, items: validItems });
       if (res && res.id) {
@@ -310,10 +314,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     updates: ReceiveLineUpdate[],
     receivedById: string
   ) => {
-    const USE_D1 =
-      String(
-        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true';
+    const USE_D1 = computeUseD1();
     if (USE_D1) {
       await D1Client.receiveServiceOrder(orderId, updates, receivedById);
       toast({ title: "Received", description: "Service order receipt posted." });
@@ -435,6 +436,9 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   };
 
   const getServiceOrderById = async (orderId: string): Promise<ServiceOrder | null> => {
+    if (computeUseD1()) {
+      return serviceOrders.find((o) => o.id === orderId) || null;
+    }
     if (!db) return null;
     const fdb = db as any;
     const ref = doc(fdb, "serviceOrders", orderId);
@@ -445,6 +449,9 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   };
 
   const getServiceOrderByCode = async (codeShort: string): Promise<ServiceOrder | null> => {
+    if (computeUseD1()) {
+      return serviceOrders.find((o) => o.codeShort === codeShort) || null;
+    }
     if (!db) return null;
     const fdb = db as any;
     const qRef = query(collection(fdb, "serviceOrders"), where("codeShort", "==", codeShort));

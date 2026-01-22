@@ -3,11 +3,20 @@ import { verifyAccessToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { getUser } from '@/lib/d1-actions';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';
+import { getCookieFromRequest } from '@/lib/http-cookies';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('access_token')?.value || '';
+    let token = '';
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('access_token')?.value || '';
+    } catch {
+      // ignore
+    }
+    if (!token) {
+      token = getCookieFromRequest(req, 'access_token') || '';
+    }
     console.log('[AUTH ME] token present:', Boolean(token), token ? token.slice(0, 12) + '...' : '');
     if (!token) return NextResponse.json({ ok: true, user: null });
     let payload: any;

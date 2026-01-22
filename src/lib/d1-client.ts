@@ -9,10 +9,19 @@ async function rpc(action: string, args?: any, _retry?: boolean) {
   if (res.status === 401 && !_retry) {
     // Attempt a single silent refresh (access tokens are short-lived).
     try {
-      const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-      const j: any = await r.json().catch(() => ({}));
-      if (r.ok && j?.ok) {
-        return await rpc(action, args, true);
+      const canRefresh = (() => {
+        try {
+          return typeof window !== 'undefined' && window.sessionStorage?.getItem('ec_had_session') === '1';
+        } catch {
+          return false;
+        }
+      })();
+      if (canRefresh) {
+        const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+        const j: any = await r.json().catch(() => ({}));
+        if (r.ok && j?.ok) {
+          return await rpc(action, args, true);
+        }
       }
     } catch {
       // ignore refresh errors; fall through to original 401 handling

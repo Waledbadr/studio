@@ -2,11 +2,20 @@ import { NextResponse } from 'next/server';
 import { verifyRefreshToken, signAccessToken, signRefreshToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { isHttpsRequest } from '@/lib/runtime-env';
+import { getCookieFromRequest } from '@/lib/http-cookies';
 
 export async function POST(req: Request) {
   try {
-    const cookieStore: any = cookies();
-    const token = cookieStore.get('refresh_token')?.value;
+    let token = '';
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('refresh_token')?.value || '';
+    } catch {
+      // ignore
+    }
+    if (!token) {
+      token = getCookieFromRequest(req, 'refresh_token') || '';
+    }
     if (!token) return NextResponse.json({ ok: false, error: 'No refresh token' }, { status: 401 });
     const payload: any = await verifyRefreshToken(token);
     const access = await signAccessToken({ sub: payload.sub, email: payload.email, role: payload.role });

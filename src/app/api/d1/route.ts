@@ -3,6 +3,7 @@ import * as D1Actions from '@/lib/d1-actions';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 import { cookies } from 'next/headers';
 import { verifyAccessToken } from '@/lib/auth';
+import { getCookieFromRequest } from '@/lib/http-cookies';
 
 const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   // Diagnostics
@@ -106,6 +107,9 @@ export async function POST(req: Request) {
       } catch {
         // ignore cookie access errors
       }
+    }
+    if (!accessToken) {
+      accessToken = getCookieFromRequest(req, 'access_token') || '';
     }
     if (!accessToken) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });

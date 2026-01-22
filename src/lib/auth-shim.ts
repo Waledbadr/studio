@@ -8,10 +8,35 @@ let pollingHandle: any = null;
 let fetchMeInFlight = false;
 let refreshInFlight = false;
 let lastRefreshAttemptAt = 0;
+let hadSession = false;
+
+function markHadSession() {
+  if (hadSession) return;
+  hadSession = true;
+  try {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.setItem('ec_had_session', '1');
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function initHadSessionFromStorage() {
+  if (hadSession) return;
+  try {
+    if (typeof window !== 'undefined') {
+      hadSession = window.sessionStorage?.getItem('ec_had_session') === '1';
+    }
+  } catch {
+    // ignore
+  }
+}
 
 async function tryRefreshOnce() {
   const now = Date.now();
   if (refreshInFlight) return false;
+  if (!hadSession) return false;
   // Avoid hammering refresh endpoint during logged-out states.
   if (now - lastRefreshAttemptAt < 60_000) return false;
   lastRefreshAttemptAt = now;
@@ -28,6 +53,7 @@ async function tryRefreshOnce() {
 }
 
 async function fetchMe(opts?: { allowRefresh?: boolean }) {
+  initHadSessionFromStorage();
   // Prevent concurrent fetches
   if (fetchMeInFlight) return currentUser;
   fetchMeInFlight = true;
@@ -41,10 +67,15 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
     const json: any = await res.json();
     const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null } : null;
 
+     if (user) {
+       markHadSession();
+     }
+
      if (!user && opts?.allowRefresh) {
        // Token may have expired: try refresh once, then re-check.
        const refreshed = await tryRefreshOnce();
        if (refreshed) {
+         markHadSession();
          fetchMeInFlight = false;
          return await fetchMe({ allowRefresh: false });
        }
@@ -103,6 +134,7 @@ export async function signInWithEmailAndPassword(_auth: any, email: string, pass
     throw err;
   }
   currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
+  markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
   return { user: { uid: j.user.id, email: j.user.email } } as any;
 }
@@ -116,6 +148,7 @@ export async function createUserWithEmailAndPassword(_auth: any, email: string, 
     throw err;
   }
   currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
+  markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
   return { user: { uid: j.user.id, email: j.user.email } } as any;
 }
