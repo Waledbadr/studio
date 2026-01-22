@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useToast } from "@/hooks/use-toast";
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/realtime-shim';
-import { onAuthStateChanged, refreshMe } from '@/lib/auth-shim';
+import { onAuthStateChanged, refreshMe, getCurrentUser } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
 // Prefer D1 automatically when Firestore isn't configured.
@@ -105,12 +105,20 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     
     if (!db) {
       if (USE_D1) {
+        // Avoid calling /api/d1 before we have an authenticated session.
+        if (!getCurrentUser()) {
+          setLoading(false);
+          return;
+        }
         try {
           const usersData = await D1Client.getUsers();
           if (usersData && usersData.length > 0) {
             setUsers(usersData);
+            const authUid = lastAuthUidRef.current;
             const storedUserId = localStorage.getItem('currentUser');
-            const activeUser = usersData.find((u: User) => u.id === storedUserId) || usersData[0] || null;
+            const byAuth = authUid ? usersData.find((u: User) => u.id === authUid) : null;
+            const byStored = storedUserId ? usersData.find((u: User) => u.id === storedUserId) : null;
+            const activeUser = byAuth || byStored || usersData[0] || null;
             setCurrentUser(activeUser || null);
             if (activeUser?.themeSettings) applyTheme(activeUser.themeSettings);
             setLoading(false);
@@ -199,7 +207,59 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const saveUser = async (user: Omit<User, 'id'> | User) => {
     if (!db) {
-      // Use localStorage when backend is not available
+      // In Cloudflare D1 mode, persist via /api/d1 when authenticated.
+      if (USE_D1 && getCurrentUser()) {
+        try {
+          if ('id' in user && user.id) {
+            const { id, ...payload } = user as User;
+            // Best-effort normalize email
+            const nextPayload: any = { ...payload };
+            if (typeof nextPayload.email === 'string') nextPayload.email = nextPayload.email.trim().toLowerCase();
+            await D1Client.updateUser(id, nextPayload);
+            // Refresh list
+            const usersData = await D1Client.getUsers();
+            setUsers(usersData || []);
+            const authUid = lastAuthUidRef.current;
+            const activeUser = (authUid ? (usersData || []).find((u: any) => u.id === authUid) : null) || (usersData || [])[0] || null;
+            setCurrentUser(activeUser);
+            toast({ title: 'Success', description: 'User updated successfully.' });
+            return;
+          }
+
+          // Create/link by email: if user exists, update it; otherwise insert.
+          const payload = user as Omit<User, 'id'>;
+          const emailKey = String(payload.email || '').trim().toLowerCase();
+          if (!emailKey) throw new Error('Email is required');
+          const existing = await D1Client.getUserByEmail(emailKey).catch(() => null);
+          if (existing && (existing as any).id) {
+            await D1Client.updateUser((existing as any).id, { ...payload, email: emailKey });
+            toast({ title: 'Linked', description: 'Existing user updated.' });
+          } else {
+            const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await D1Client.createUser(id, {
+              name: payload.name || 'User',
+              email: emailKey,
+              role: payload.role || 'Technician',
+              assignedResidences: payload.assignedResidences || [],
+              themeSettings: payload.themeSettings || { colorTheme: 'blue', mode: 'system' },
+              createdAt: new Date().toISOString(),
+              disabled: false,
+            });
+            toast({ title: 'Success', description: 'New user added.' });
+          }
+
+          const usersData = await D1Client.getUsers();
+          setUsers(usersData || []);
+          return;
+        } catch (error) {
+          console.error('Error saving user (D1):', error);
+          const msg = (error as Error)?.message || backendErrorMessage;
+          toast({ title: 'Error', description: msg, variant: 'destructive' });
+          return;
+        }
+      }
+
+      // Fallback: use localStorage when backend is not available
       try {
         const storedUsers = localStorage.getItem('estatecare_users');
         const usersData: User[] = storedUsers ? JSON.parse(storedUsers) : [];
@@ -344,6 +404,22 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteUser = async (id: string) => {
     if (!db) {
+        // In D1 mode, we soft-disable instead of deleting.
+        if (USE_D1 && getCurrentUser()) {
+          try {
+            await D1Client.updateUser(id, { disabled: true } as any);
+            const usersData = await D1Client.getUsers();
+            setUsers(usersData || []);
+            toast({ title: 'Success', description: 'User disabled successfully.' });
+            return;
+          } catch (error) {
+            console.error('Error disabling user (D1):', error);
+            const msg = (error as Error)?.message || backendErrorMessage;
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
+            return;
+          }
+        }
+
         // Use localStorage when backend is not available
         try {
             const storedUsers = localStorage.getItem('estatecare_users');
