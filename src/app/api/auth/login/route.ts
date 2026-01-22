@@ -7,7 +7,8 @@ export async function POST(req: Request) {
     const body: any = await req.json();
     const { email, password } = body;
     if (!email || !password) return NextResponse.json({ ok: false, error: 'Missing fields' }, { status: 400 });
-    const user = await authenticateUser({ email: email.toLowerCase(), password });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await authenticateUser({ email: normalizedEmail, password });
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access = await signAccessToken(payload);
     const refresh = await signRefreshToken(payload);

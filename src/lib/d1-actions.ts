@@ -35,7 +35,7 @@ export async function updateWorker(env: any, id: string, data: any) {
 
 import { getDb } from './db';
 import { workers, residences, occupants, accommodationHistory, companies, contracts, invoices, transferRequests, notifications, inventory, inventoryCategories, inventoryTransactions, mrvRequests, mrvs, orders, users, counters, serviceOrders, mivs, stockReconciliations, auditLogs, feedback } from '../db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 // Type for environment with D1 binding
 export interface D1Env {
@@ -694,7 +694,11 @@ export async function getUserByEmail(env: any, email: string) {
     const d1 = getD1FromEnv(env);
     if (!d1) return null;
     const db = getDb(d1);
-    const res = await db.select().from(users).where(eq(users.email, email));
+    const normalized = String(email ?? '').trim().toLowerCase();
+    const res = await db
+        .select()
+        .from(users)
+        .where(sql`lower(trim(${users.email})) = ${normalized}`);
     return res[0] || null;
 }
 

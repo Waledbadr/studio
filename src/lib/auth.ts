@@ -160,6 +160,7 @@ export async function verifyRefreshToken(token: string) {
 
 // High-level helpers
 export async function registerUser({ name, email, password }: { name: string; email: string; password: string }) {
+  email = String(email ?? '').trim().toLowerCase();
   const env = await getEnvForD1();
   let existing = await getUserByEmail(env, email);
   // Fallback: check in-memory store if D1 returned null
@@ -241,6 +242,7 @@ export async function registerUser({ name, email, password }: { name: string; em
 }
 
 export async function authenticateUser({ email, password }: { email: string; password: string }) {
+  email = String(email ?? '').trim().toLowerCase();
   const env = await getEnvForD1();
   let user = await getUserByEmail(env, email);
 
