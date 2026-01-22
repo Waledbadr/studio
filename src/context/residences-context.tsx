@@ -19,7 +19,7 @@ import {
   arrayUnion
 } from '@/lib/realtime-shim';
 import { createPoller } from '@/lib/polling';
-import { onAuthStateChanged } from '@/lib/auth-shim';
+import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
 
 const USE_D1 =
@@ -215,11 +215,18 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const loadResidences = useCallback(async () => {
     if (isLoaded.current) return;
 
-    isLoaded.current = true;
     setLoading(true);
 
     if (!db) {
       if (USE_D1) {
+        // In D1 mode, wait until the user is authenticated.
+        // Otherwise `/api/d1` returns 401 and we'd incorrectly fall back to local storage.
+        if (!getCurrentUser()) {
+          setLoading(false);
+          return;
+        }
+
+        isLoaded.current = true;
         const fetcher = async () => {
           const r = await D1Client.getResidences();
           return r || [];
@@ -242,6 +249,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      isLoaded.current = true;
       console.log("Backend not configured (D1 not enabled), using local storage");
       try {
         const storedResidences = localStorage.getItem('estatecare_residences');
@@ -255,12 +263,14 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Firestore mode: defer until signed in (if a vendor auth ever exists)
     if (auth && !auth.currentUser) {
       setLoading(false);
       return;
     }
 
     // db is available -> poll Firestore collection
+    isLoaded.current = true;
     const fetcher = async () => {
       try {
         const snap = await getDocs(collection(db, 'residences'));
@@ -288,22 +298,19 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     loadResidences();
-    let unsubAuth: (() => void) | undefined;
-    if (auth) {
-      unsubAuth = onAuthStateChanged(auth, (u) => {
-        if (u) {
-          if (!isLoaded.current) loadResidences();
-        } else {
-          if (pollerRef.current) {
-            try { pollerRef.current?.stop?.(); } catch { }
-            pollerRef.current = null;
-          }
-          isLoaded.current = false;
-          setResidences([]);
-          setLoading(false);
+    const unsubAuth = onAuthStateChanged(null, (u) => {
+      if (u) {
+        if (!isLoaded.current) loadResidences();
+      } else {
+        if (pollerRef.current) {
+          try { pollerRef.current?.stop?.(); } catch { }
+          pollerRef.current = null;
         }
-      });
-    }
+        isLoaded.current = false;
+        setResidences([]);
+        setLoading(false);
+      }
+    });
     return () => {
       if (pollerRef.current) {
         try { pollerRef.current?.stop?.(); } catch { }

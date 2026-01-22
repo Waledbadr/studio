@@ -9,8 +9,8 @@ import { getRuntimeEnv } from '@/lib/runtime-env';
 const DEFAULT_SECRET = 'development_secret_key_must_be_long';
 
 // Public paths should include auth routes and pages needed to bootstrap the first user.
-// Note: /api/d1 is intentionally NOT public; it must be protected.
-const PUBLIC_PATHS = ['/login', '/register', '/api/auth', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
+// NOTE: `/api/d1` must return JSON errors for RPC callers; auth is enforced inside the route.
+const PUBLIC_PATHS = ['/login', '/register', '/api/auth', '/api/d1', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
 
 async function verifyToken(token: string) {
   const TEAM = await getRuntimeEnv('CLOUDFLARE_ACCESS_TEAM_DOMAIN', '');

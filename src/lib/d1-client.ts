@@ -1,6 +1,7 @@
 async function rpc(action: string, args?: any) {
   const res = await fetch('/api/d1', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args })
   });
@@ -8,7 +9,10 @@ async function rpc(action: string, args?: any) {
   try {
     json = await res.json();
   } catch (e) {
-    throw new Error('Cloudflare D1 RPC failed: invalid JSON response');
+    let bodyText = '';
+    try { bodyText = await res.text(); } catch {}
+    const hint = bodyText ? ` Response: ${bodyText.slice(0, 200)}` : '';
+    throw new Error(`Cloudflare D1 RPC failed: invalid JSON response (HTTP ${res.status}).${hint}`);
   }
   if (!res.ok) {
     const msg = (json && json.error) ? json.error : `HTTP ${res.status}`;
