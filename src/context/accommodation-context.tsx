@@ -1268,7 +1268,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { perResidence, perOccupant };
   }
 
-  // ⚡ Optimized Async Operations
+  // ⚡ Optimized Async Operations - Fast Search
   const findWorkerAsync = useCallback(async (queryStr: string) => {
     if (!db || !queryStr.trim()) return [];
     const term = queryStr.trim();
@@ -1277,95 +1277,93 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     console.log('🔍 [Search] Looking for:', term);
     const startTime = Date.now();
 
-    // Helper function to check if worker matches search term (partial name match)
+    // Helper function to check if worker matches search term
     const workerMatchesTerm = (w: any): boolean => {
-      // Check name field (main field)
       if (w.name?.toLowerCase().includes(termLower)) return true;
-      // Check any other name-related fields that might exist
       if (w.nameAr?.toLowerCase().includes(termLower)) return true;
       if (w.nameEn?.toLowerCase().includes(termLower)) return true;
       if (w.fullName?.toLowerCase().includes(termLower)) return true;
-      // Check ID fields too
       if (w.idNumber?.toLowerCase().includes(termLower)) return true;
       if (w.employeeId?.toLowerCase().includes(termLower)) return true;
+      if (w.nationaliy?.toLowerCase().includes(termLower)) return true;
+      if (w.company?.toLowerCase().includes(termLower)) return true;
       return false;
     };
 
-    // 1. Try ID Number (Prefix/Range)
-    const qId = query(collection(db, 'workers'), where('idNumber', '>=', term), where('idNumber', '<=', term + '\uf8ff'), limit(10));
-    const snapId = await getDocs(qId);
-    if (!snapId.empty) {
-      console.log(`✅ [Search] Found ${snapId.size} by ID in ${Date.now() - startTime}ms (${snapId.size} reads)`);
-      return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    // STRATEGY: Use cache first for fast results, then fallback to DB queries
+    
+    // 1. Search in cached workers first (instant results!)
+    if (workersRef.current.length > 0) {
+      const cacheMatches = workersRef.current.filter(workerMatchesTerm).slice(0, 20);
+      if (cacheMatches.length > 0) {
+        console.log(`✅ [Search] Found ${cacheMatches.length} from cache in ${Date.now() - startTime}ms`);
+        return cacheMatches;
+      }
     }
 
-    // 2. Try Employee ID (Prefix/Range)
-    const qEmp = query(collection(db, 'workers'), where('employeeId', '>=', term), where('employeeId', '<=', term + '\uf8ff'), limit(10));
+    // 2. Try exact ID Number match (fastest DB query)
+    if (/^\d{10}$/.test(term)) {
+      const qId = query(collection(db, 'workers'), where('idNumber', '==', term), limit(1));
+      const snapId = await getDocs(qId);
+      if (!snapId.empty) {
+        console.log(`✅ [Search] Found by exact ID in ${Date.now() - startTime}ms`);
+        return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+      }
+    }
+
+    // 3. Try Employee ID prefix match
+    const qEmp = query(
+      collection(db, 'workers'), 
+      where('employeeId', '>=', term), 
+      where('employeeId', '<=', term + '\uf8ff'), 
+      limit(15)
+    );
     const snapEmp = await getDocs(qEmp);
     if (!snapEmp.empty) {
-      console.log(`✅ [Search] Found ${snapEmp.size} by EmployeeID in ${Date.now() - startTime}ms (${snapEmp.size} reads)`);
+      console.log(`✅ [Search] Found ${snapEmp.size} by EmployeeID in ${Date.now() - startTime}ms`);
       return snapEmp.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
     }
 
-    // 3. Try Name (Prefix) - efficient range query for names starting with term
-    const qName = query(collection(db, 'workers'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'), limit(10));
+    // 4. Try ID Number prefix match (for partial ID search)
+    const qId = query(
+      collection(db, 'workers'), 
+      where('idNumber', '>=', term), 
+      where('idNumber', '<=', term + '\uf8ff'), 
+      limit(15)
+    );
+    const snapId = await getDocs(qId);
+    if (!snapId.empty) {
+      console.log(`✅ [Search] Found ${snapId.size} by ID prefix in ${Date.now() - startTime}ms`);
+      return snapId.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
+    }
+
+    // 5. Try Name prefix match (case-sensitive in Firestore, but better than nothing)
+    const qName = query(
+      collection(db, 'workers'), 
+      where('name', '>=', term), 
+      where('name', '<=', term + '\uf8ff'), 
+      limit(15)
+    );
     const snapName = await getDocs(qName);
     if (!snapName.empty) {
-      console.log(`✅ [Search] Found ${snapName.size} by Name (prefix) in ${Date.now() - startTime}ms (${snapName.size} reads)`);
+      console.log(`✅ [Search] Found ${snapName.size} by Name prefix in ${Date.now() - startTime}ms`);
       return snapName.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
     }
 
-    // 4. Search in cached workers for partial name match (contains any part of name)
-    if (workersRef.current.length > 0) {
-      const partialMatches = workersRef.current.filter(workerMatchesTerm).slice(0, 15);
-
-      if (partialMatches.length > 0) {
-        console.log(`✅ [Search] Found ${partialMatches.length} by Name (partial) from cache in ${Date.now() - startTime}ms`);
-        return partialMatches;
-      }
+    // 6. Last resort: Search lowercase name prefix (if you have this field indexed)
+    const qNameLower = query(
+      collection(db, 'workers'), 
+      where('nameLower', '>=', termLower), 
+      where('nameLower', '<=', termLower + '\uf8ff'), 
+      limit(15)
+    );
+    const snapNameLower = await getDocs(qNameLower);
+    if (!snapNameLower.empty) {
+      console.log(`✅ [Search] Found ${snapNameLower.size} by nameLower prefix in ${Date.now() - startTime}ms`);
+      return snapNameLower.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
     }
 
-    // 5. Fallback: Fetch all workers and search for partial name match
-    // This handles searching by last name or any part of the name
-    console.log('🔄 [Search] Fetching all workers for partial match...');
-    const allWorkersFromDb: Worker[] = [];
-    let lastDoc: any = null;
-    const batchSize = 1000;
-    let totalReads = 0;
-
-    // Paginate through all workers until we find matches
-    while (true) {
-      let q = lastDoc
-        ? query(collection(db, 'workers'), limit(batchSize), startAfter(lastDoc))
-        : query(collection(db, 'workers'), limit(batchSize));
-
-      const snap = await getDocs(q);
-      if (snap.empty) break;
-
-      totalReads += snap.size;
-      const batchWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Worker));
-
-      // Check for matches in this batch
-      const batchMatches = batchWorkers.filter(workerMatchesTerm);
-
-      if (batchMatches.length > 0) {
-        console.log(`✅ [Search] Found ${batchMatches.length} by Name (partial) in ${Date.now() - startTime}ms (${totalReads} reads)`);
-        return batchMatches.slice(0, 15);
-      }
-
-      allWorkersFromDb.push(...batchWorkers);
-
-      if (snap.docs.length < batchSize) break;
-      lastDoc = snap.docs[snap.docs.length - 1];
-
-      // Safety limit to prevent too many reads
-      if (totalReads >= 5000) {
-        console.log(`⚠️ [Search] Reached safety limit of 5000 reads`);
-        break;
-      }
-    }
-
-    console.log(`❌ [Search] No results in ${Date.now() - startTime}ms (${totalReads} reads total)`);
+    console.log(`❌ [Search] No results in ${Date.now() - startTime}ms`);
     return [];
   }, [db]);
 
