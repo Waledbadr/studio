@@ -1,10 +1,103 @@
-async function rpc(action: string, args?: any, _retry?: boolean) {
-  const res = await fetch('/api/d1', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, args })
-  });
+// In-memory cache with TTL
+const cache = new Map<string, { data: any; expires: number }>();
+
+// Pending requests map to prevent duplicate concurrent requests
+const pendingRequests = new Map<string, Promise<any>>();
+
+// Load cache from localStorage on init (browser only)
+if (typeof window !== 'undefined') {
+  try {
+    const saved = localStorage.getItem('d1_cache');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const now = Date.now();
+      // Only restore non-expired entries
+      Object.entries(parsed).forEach(([key, value]: [string, any]) => {
+        if (value.expires > now) {
+          cache.set(key, value);
+        }
+      });
+      console.log(`[D1 Cache] Restored ${cache.size} entries from localStorage`);
+    }
+  } catch (e) {
+    console.warn('[D1 Cache] Failed to restore from localStorage:', e);
+  }
+}
+
+// Save cache to localStorage periodically
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    try {
+      const obj: any = {};
+      cache.forEach((value, key) => {
+        obj[key] = value;
+      });
+      localStorage.setItem('d1_cache', JSON.stringify(obj));
+    } catch (e) {
+      // Quota exceeded or other error - clear cache
+      cache.clear();
+      localStorage.removeItem('d1_cache');
+    }
+  }, 30000); // Save every 30 seconds
+}
+
+// Cache configuration (in milliseconds)
+const CACHE_TIMES = {
+  workers: 300000,       // 5 minutes (was 30s)
+  residences: 600000,    // 10 minutes (was 1m)
+  occupants: 120000,     // 2 minutes (was 15s)
+  companies: 1800000,    // 30 minutes (was 5m)
+  notifications: 180000, // 3 minutes
+  inventory: 240000,     // 4 minutes
+  default: 120000        // 2 minutes (was 10s)
+};
+
+function getCacheTTL(action: string): number {
+  if (action.includes('Worker')) return CACHE_TIMES.workers;
+  if (action.includes('Residence')) return CACHE_TIMES.residences;
+  if (action.includes('Occupant')) return CACHE_TIMES.occupants;
+  if (action.includes('Compan')) return CACHE_TIMES.companies;
+  if (action.includes('Notification')) return CACHE_TIMES.notifications;
+  if (action.includes('Inventory')) return CACHE_TIMES.inventory;
+  if (action.includes('User')) return CACHE_TIMES.workers;
+  if (action.includes('Contract')) return CACHE_TIMES.residences;
+  if (action.includes('Invoice')) return CACHE_TIMES.residences;
+  if (action.includes('Transfer')) return CACHE_TIMES.occupants;
+  return CACHE_TIMES.default;
+}
+
+async function rpc(action: string, args?: any, _retry?: boolean): Promise<any> {
+  // Generate cache key
+  const cacheKey = `${action}:${JSON.stringify(args || {})}`;
+  
+  // Check cache first (skip for write operations)
+  if (!action.toLowerCase().includes('create') && 
+      !action.toLowerCase().includes('update') && 
+      !action.toLowerCase().includes('delete')) {
+    const cached = cache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      console.log(`[D1 Cache] Hit for ${action}`);
+      return cached.data;
+    }
+    
+    // Check if request is already pending
+    const pending = pendingRequests.get(cacheKey);
+    if (pending) {
+      console.log(`[D1 Cache] Waiting for pending request: ${action}`);
+      return await pending;
+    }
+  }
+  
+  console.log(`[D1] Fetching ${action} from DB...`);
+  
+  // Create the fetch promise and store it
+  const fetchPromise: Promise<any> = (async (): Promise<any> => {
+    const res = await fetch('/api/d1', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, args })
+    });
 
   if (res.status === 401 && !_retry) {
     // Attempt a single silent refresh (access tokens are short-lived).
@@ -42,7 +135,60 @@ async function rpc(action: string, args?: any, _retry?: boolean) {
     throw new Error(`Cloudflare D1 error: ${msg}`);
   }
   if (!json.ok) throw new Error(json.error || 'D1 RPC failed');
+  
+  // Cache the result (except for write operations)
+  if (!action.toLowerCase().includes('create') && 
+      !action.toLowerCase().includes('update') && 
+      !action.toLowerCase().includes('delete')) {
+    const ttl = getCacheTTL(action);
+    cache.set(cacheKey, {
+      data: json.result,
+      expires: Date.now() + ttl
+    });
+    
+    // Clean old cache entries periodically
+    if (cache.size > 150) {
+      const now = Date.now();
+      for (const [key, value] of cache.entries()) {
+        if (value.expires < now) cache.delete(key);
+      }
+    }
+  }
+  
   return json.result;
+  })();
+  
+  // Store pending request
+  if (!action.toLowerCase().includes('create') && 
+      !action.toLowerCase().includes('update') && 
+      !action.toLowerCase().includes('delete')) {
+    pendingRequests.set(cacheKey, fetchPromise);
+  }
+  
+  try {
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    // Remove from pending requests
+    pendingRequests.delete(cacheKey);
+  }
+}
+
+// Cache management utilities
+export function clearD1Cache() {
+  const size = cache.size;
+  cache.clear();
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('d1_cache');
+  }
+  console.log(`[D1 Cache] Cleared ${size} entries`);
+}
+
+export function getD1CacheStats() {
+  const now = Date.now();
+  const valid = Array.from(cache.values()).filter(v => v.expires > now).length;
+  const expired = cache.size - valid;
+  return { total: cache.size, valid, expired };
 }
 
 export function getWorkers() { return rpc('getWorkers'); }

@@ -7,7 +7,7 @@ import { useUsers } from "@/context/users-context";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search, Users, Building, Home, ArrowRight, CheckCircle2,
-  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X
+  XCircle, Trash2, ArrowRightLeft, LogOut, Filter, RefreshCw, CloudCog, UserPlus, Sparkles, X, Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ import {
 import { AddWorkerDialog } from "./add-worker-dialog";
 import { WorkerHistoryDialog } from "./worker-history-dialog";
 import { RoomHistoryDialog } from "./room-history-dialog";
+import { clearD1Cache, getD1CacheStats } from "@/lib/d1-client";
 
 import { auth, db } from "@/lib/platform";
 import { onAuthStateChanged } from '@/lib/auth-shim';
@@ -62,6 +63,7 @@ export function AccommodationManager() {
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
+  const [cacheStats, setCacheStats] = useState({ total: 0, valid: 0, expired: 0 });
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -74,6 +76,26 @@ export function AccommodationManager() {
       setIsSyncing(false);
     }
   };
+  
+  const handleClearCache = () => {
+    clearD1Cache();
+    toast({ 
+      title: "Cache Cleared", 
+      description: "Database cache has been cleared. Fresh data will be loaded on next request." 
+    });
+    updateCacheStats();
+  };
+  
+  const updateCacheStats = () => {
+    const stats = getD1CacheStats();
+    setCacheStats(stats);
+  };
+  
+  useEffect(() => {
+    updateCacheStats();
+    const interval = setInterval(updateCacheStats, 10000); // Update every 10 seconds (was 5)
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter Residences
   const accessibleResidences = React.useMemo(() => {
@@ -340,11 +362,16 @@ export function AccommodationManager() {
     }
   }, [findWorkerAsync, checkWorkerOccupancy]);
 
-  // Debounce Search
+  // Debounce Search (increased to reduce DB calls)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery) handleSearchRef.current(searchQuery);
-    }, 300);
+      if (searchQuery && searchQuery.length >= 3) { // Minimum 3 characters (increased from 2)
+        handleSearchRef.current(searchQuery);
+      } else if (!searchQuery) {
+        setSearchResults([]);
+        setSearchOccupancies({});
+      }
+    }, 800); // Increased from 500ms to 800ms
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -769,6 +796,19 @@ export function AccommodationManager() {
           <Button variant="outline" onClick={handleSync} disabled={isSyncing}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
             Sync
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleClearCache}
+            title={`Cache: ${cacheStats.valid} active entries`}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Clear Cache
+            {cacheStats.valid > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                {cacheStats.valid}
+              </Badge>
+            )}
           </Button>
           <AddWorkerDialog />
         </div>
