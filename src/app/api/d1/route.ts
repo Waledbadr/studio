@@ -1,3 +1,5 @@
+import '@/lib/setimmediate-polyfill';
+
 import { NextResponse } from 'next/server';
 import * as D1Actions from '@/lib/d1-actions';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';

@@ -104,8 +104,51 @@ export async function hashPassword(password: string) {
 }
 
 export async function verifyPassword(password: string, hash: string) {
-  // Use sync API to avoid Edge runtime restrictions (bcryptjs async uses setImmediate).
-  return bcrypt.compareSync(password, hash);
+  // Check if it's a PBKDF2 hash (format: pbkdf2:iterations:salt:hash)
+  if (hash.startsWith('pbkdf2:')) {
+    const parts = hash.split(':');
+    if (parts.length !== 4) return false;
+    const iterations = parseInt(parts[1], 10);
+    const salt = Uint8Array.from(Buffer.from(parts[2], 'hex'));
+    const storedHash = parts[3];
+    
+    const encoder = new TextEncoder();
+    const passwordData = encoder.encode(password);
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      passwordData,
+      'PBKDF2',
+      false,
+      ['deriveBits']
+    );
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      256
+    );
+    const derivedArray = Array.from(new Uint8Array(derivedBits));
+    const computed = derivedArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Constant-time comparison
+    let match = computed.length === storedHash.length;
+    for (let i = 0; i < Math.max(computed.length, storedHash.length); i++) {
+      match = match && (computed[i] === storedHash[i]);
+    }
+    return match;
+  }
+  
+  // Legacy bcrypt hashes
+  if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
+    return bcrypt.compareSync(password, hash);
+  }
+  
+  // Reject any other format (including insecure SHA-256)
+  return false;
 }
 
 export async function signAccessToken(payload: any) {

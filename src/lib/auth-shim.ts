@@ -52,6 +52,8 @@ function markHadSession() {
   try {
     if (typeof window !== 'undefined') {
       window.sessionStorage?.setItem('ec_had_session', '1');
+      // Also persist across reloads/new tabs.
+      window.localStorage?.setItem('ec_had_session', '1');
     }
   } catch {
     // ignore
@@ -62,7 +64,7 @@ function initHadSessionFromStorage() {
   if (hadSession) return;
   try {
     if (typeof window !== 'undefined') {
-      hadSession = window.sessionStorage?.getItem('ec_had_session') === '1';
+      hadSession = window.sessionStorage?.getItem('ec_had_session') === '1' || window.localStorage?.getItem('ec_had_session') === '1';
     }
   } catch {
     // ignore
@@ -72,7 +74,6 @@ function initHadSessionFromStorage() {
 async function tryRefreshOnce() {
   const now = Date.now();
   if (refreshInFlight) return false;
-  if (!hadSession) return false;
   // Avoid hammering refresh endpoint during logged-out states.
   if (now - lastRefreshAttemptAt < 60_000) return false;
   lastRefreshAttemptAt = now;
@@ -96,6 +97,16 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
   try {
     const res = await fetch('/api/auth/me');
     if (!res.ok) {
+      // Access token might have expired. If we previously had a session, try refresh once.
+      if ((res.status === 401 || res.status === 403) && opts?.allowRefresh) {
+        const refreshed = await tryRefreshOnce();
+        if (refreshed) {
+          markHadSession();
+          fetchMeInFlight = false;
+          return await fetchMe({ allowRefresh: false });
+        }
+      }
+
       currentUser = null;
       listeners.forEach(l => { try { l(null); } catch {} });
       return null;
@@ -105,16 +116,6 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
 
      if (user) {
        markHadSession();
-     }
-
-     if (!user && opts?.allowRefresh) {
-       // Token may have expired: try refresh once, then re-check.
-       const refreshed = await tryRefreshOnce();
-       if (refreshed) {
-         markHadSession();
-         fetchMeInFlight = false;
-         return await fetchMe({ allowRefresh: false });
-       }
      }
 
     const changed = JSON.stringify(user) !== JSON.stringify(currentUser);
@@ -136,7 +137,7 @@ export function getCurrentUser() {
 }
 
 export async function refreshMe() {
-  return await fetchMe();
+  return await fetchMe({ allowRefresh: true });
 }
 
 export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
@@ -144,10 +145,10 @@ export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
   try { cb(currentUser); } catch {}
   listeners.push(cb);
   ensureAuthEventHandlers();
-  // Fetch once on first subscription; avoid continuous polling to reduce request volume.
+  // Fetch once on first subscription without forcing refresh (let fetchMe handle refresh only on 401/403)
   if (!pollingHandle) {
     pollingHandle = true;
-    void fetchMe({ allowRefresh: true });
+    void fetchMe();
   }
   return () => {
     listeners = listeners.filter(l => l !== cb);
@@ -199,7 +200,7 @@ export async function createUserWithEmailAndPassword(_auth: any, email: string, 
 export async function updateProfile(user: any, updates: any) {
   // call /api/auth/me PATCH
   await fetch('/api/auth/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
-  // refresh current user
+  // refresh current user without forcing token refresh
   await fetchMe();
 }
 

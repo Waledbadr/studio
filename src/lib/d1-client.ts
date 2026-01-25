@@ -11,7 +11,8 @@ async function rpc(action: string, args?: any, _retry?: boolean) {
     try {
       const canRefresh = (() => {
         try {
-          return typeof window !== 'undefined' && window.sessionStorage?.getItem('ec_had_session') === '1';
+          if (typeof window === 'undefined') return false;
+          return window.sessionStorage?.getItem('ec_had_session') === '1' || window.localStorage?.getItem('ec_had_session') === '1';
         } catch {
           return false;
         }

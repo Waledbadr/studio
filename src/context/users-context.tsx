@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/realtime-shim';
-import { onAuthStateChanged, refreshMe, getCurrentUser } from '@/lib/auth-shim';
+import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
 // Prefer D1 automatically when Firestore isn't configured.
@@ -91,9 +91,6 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         loadUsers();
       }
     });
-
-    // Trigger initial /api/auth/me so the shim updates quickly on first load.
-    void refreshMe().catch(() => {});
 
     return () => {
       mounted = false;

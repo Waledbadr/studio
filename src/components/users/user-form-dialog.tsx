@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -136,6 +137,13 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
   }, [loadResidences, residences.length]);
 
   useEffect(() => {
+    if (!isOpen) {
+      // If the residences Popover was left open, it can keep an overlay that blocks clicks.
+      setResidencesOpen(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isOpen) {
       setShowPassword(false);
       if (user) {
@@ -178,7 +186,15 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          setResidencesOpen(false);
+        }
+        onOpenChange(open);
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{user ? (dict.userForm?.editTitle || 'Edit User') : (dict.userForm?.addTitle || 'Add New User')}</DialogTitle>
@@ -274,7 +290,7 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                            <PopoverContent portalled={true} className="w-[--radix-popover-trigger-width] p-0" align="start">
                               <Command>
                                 <CommandInput placeholder={isRTL ? 'بحث بالسكن...' : 'Search residences...'} />
                                 <CommandList>
@@ -476,7 +492,9 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
             </ScrollArea>
             
             <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{dict.userForm?.cancel || 'Cancel'}</Button>
+              <DialogClose asChild>
+                <Button type="button" variant="ghost">{dict.userForm?.cancel || 'Cancel'}</Button>
+              </DialogClose>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className={`${inlineIconClass} h-4 w-4 animate-spin`} />}
                 {dict.userForm?.saveUser || 'Save User'}

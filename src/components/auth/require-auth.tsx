@@ -1,35 +1,26 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { onAuthStateChanged, refreshMe, User } from '@/lib/auth-shim';
-import { useRouter, usePathname } from "next/navigation";
+import { onAuthStateChanged, User } from '@/lib/auth-shim';
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
-    // Subscribe once; changes propagate via polling inside the shim.
+    // Subscribe to auth state changes; onAuthStateChanged already calls fetchMe() once
     const unsub = onAuthStateChanged(null, (u) => {
       if (!isMounted) return;
       setUser(u);
+      // Mark ready after we receive the first auth state
+      setReady(true);
     });
-
-    // Initial check: wait for /api/auth/me so we don't redirect based on the initial null.
-    setReady(false);
-    void refreshMe()
-      .then((u) => {
-        if (!isMounted) return;
-        setUser(u);
-      })
-      .finally(() => {
-        if (!isMounted) return;
-        setReady(true);
-      });
 
     return () => {
       isMounted = false;
@@ -40,13 +31,19 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     if (!user && pathname !== "/login") {
-      router.replace("/login");
+      const qs = (() => {
+        try {
+          const s = searchParams?.toString();
+          return s ? `?${s}` : '';
+        } catch {
+          return '';
+        }
+      })();
+      const next = `${pathname}${qs}`;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
       return;
     }
-    if (user && pathname === "/login") {
-      router.replace("/");
-    }
-  }, [ready, user, pathname, router]);
+  }, [ready, user, pathname, router, searchParams]);
 
   // While determining auth state, render nothing to avoid layout shift
   if (!ready) return null;
