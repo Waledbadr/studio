@@ -15,16 +15,25 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLanguage } from '@/context/language-context';
+import * as D1Client from '@/lib/d1-client';
 
 
 export default function UsersPage() {
     const { users, loading: usersLoading, saveUser, deleteUser, loadUsers, currentUser } = useUsers();
     const { residences, loadResidences } = useResidences();
+    const { locale, dict } = useLanguage();
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [activeTab, setActiveTab] = useState("staff");
     const { toast } = useToast();
+
+    const isRTL = locale === 'ar';
+    const align = isRTL ? 'text-right' : 'text-left';
+    const justifyResidences = isRTL ? 'justify-end' : 'justify-start';
+    const addIconClass = isRTL ? 'ml-2' : 'mr-2';
+    const workersIconClass = isRTL ? 'mr-2' : 'ml-2';
 
     const staffUsers = useMemo(() => users.filter(u => u.role !== 'Worker'), [users]);
     const workers = useMemo(() => users.filter(u => u.role === 'Worker'), [users]);
@@ -45,10 +54,28 @@ export default function UsersPage() {
         setIsUserDialogOpen(true);
     };
 
-    const handleSaveUser = async (userToSave: User) => {
+    const handleSaveUser = async (userToSave: User, password?: string) => {
         setIsSaving(true);
         try {
             await saveUser(userToSave);
+
+            // Optional: set/reset the login password (D1 auth) after user save.
+            if (password) {
+                try {
+                    const emailKey = String(userToSave.email || '').trim().toLowerCase();
+                    let id = String(userToSave.id || '');
+                    if (!id) {
+                        const existing: any = await D1Client.getUserByEmail(emailKey).catch(() => null);
+                        id = String(existing?.id || '');
+                    }
+                    if (!id) throw new Error('Could not resolve user id');
+                    await D1Client.setUserPassword(id, password);
+                    toast({ title: "Success", description: "Password updated." });
+                } catch (e: any) {
+                    toast({ title: "Warning", description: e?.message || "Password could not be updated.", variant: "destructive" });
+                }
+            }
+
             setIsUserDialogOpen(false);
             setSelectedUser(null);
         } catch (error) {
@@ -97,55 +124,55 @@ export default function UsersPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">إدارة المستخدمين والعمال</h1>
-                    <p className="text-muted-foreground">إدارة الموظفين والعمال والصلاحيات</p>
+                    <h1 className="text-2xl font-bold">{dict.usersPage?.title || 'Users'}</h1>
+                    <p className="text-muted-foreground">{dict.usersPage?.description || ''}</p>
                 </div>
                 <Button onClick={handleAddNewUser}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> إضافة مستخدم
+                    <PlusCircle className={`${addIconClass} h-4 w-4`} /> {dict.usersPage?.addUser || 'Add User'}
                 </Button>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
+            <Tabs value={activeTab} onValueChange={setActiveTab} dir={isRTL ? 'rtl' : 'ltr'}>
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="staff">الموظفين ({staffUsers.length})</TabsTrigger>
+                    <TabsTrigger value="staff">{dict.usersPage?.staffTab || 'Staff'} ({staffUsers.length})</TabsTrigger>
                     <TabsTrigger value="workers">
-                        <Users className="ml-2 h-4 w-4" />
-                        العمال ({workers.length})
+                        <Users className={`${workersIconClass} h-4 w-4`} />
+                        {dict.usersPage?.workersTab || 'Workers'} ({workers.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="staff">
                     <Card>
                         <CardHeader>
-                            <CardTitle>الموظفين</CardTitle>
-                            <CardDescription>قائمة الموظفين والمشرفين في النظام</CardDescription>
+                            <CardTitle>{dict.usersPage?.staffTitle || 'Staff'}</CardTitle>
+                            <CardDescription>{dict.usersPage?.staffDescription || ''}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="text-right">الاسم</TableHead>
-                                            <TableHead className="text-right">البريد الإلكتروني</TableHead>
-                                            <TableHead className="text-right">الدور</TableHead>
-                                            <TableHead className="text-right">المقرات المخصصة</TableHead>
-                                            <TableHead className="text-right">الإجراءات</TableHead>
+                                            <TableHead className={align}>{dict.usersPage?.name || 'Name'}</TableHead>
+                                            <TableHead className={align}>{dict.usersPage?.email || 'Email'}</TableHead>
+                                            <TableHead className={align}>{dict.usersPage?.role || 'Role'}</TableHead>
+                                            <TableHead className={align}>{dict.usersPage?.assignedResidences || 'Assigned residences'}</TableHead>
+                                            <TableHead className={align}>{dict.usersPage?.actions || 'Actions'}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {usersLoading ? renderStaffSkeleton() : staffUsers.map((user) => (
                                             <TableRow key={user.id}>
-                                                <TableCell className="font-medium text-right">{user.name}</TableCell>
-                                                <TableCell className="text-right">{user.email}</TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className={`font-medium ${align}`}>{user.name}</TableCell>
+                                                <TableCell className={align}>{user.email}</TableCell>
+                                                <TableCell className={align}>
                                                     <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>{user.role}</Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex flex-wrap gap-1 justify-end">
+                                                <TableCell className={align}>
+                                                    <div className={`flex flex-wrap gap-1 ${justifyResidences}`}>
                                                         {getResidenceNames(user.assignedResidences).map(name => <Badge key={name} variant="outline">{name}</Badge>)}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className={align}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon">
@@ -155,23 +182,26 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => handleEditUser(user)}>
                                                                 <Edit className="mr-2 h-4 w-4" />
-                                                                تعديل
+                                                                {dict.usersPage?.edit || 'Edit'}
                                                             </DropdownMenuItem>
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
                                                                     <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                                         <Trash2 className="mr-2 h-4 w-4" />
-                                                                        حذف
+                                                                        {dict.usersPage?.delete || 'Delete'}
                                                                     </button>
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
                                                                     <AlertDialogHeader>
-                                                                        <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
-                                                                        <AlertDialogDescription>سيتم حذف المستخدم "{user.name}" نهائياً</AlertDialogDescription>
+                                                                        <AlertDialogTitle>{dict.usersPage?.confirmTitle || 'Are you sure?'}</AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            {(dict.usersPage?.confirmDeleteUser || 'This will permanently delete the user "{name}".')
+                                                                                .replace('{name}', user.name)}
+                                                                        </AlertDialogDescription>
                                                                     </AlertDialogHeader>
                                                                     <AlertDialogFooter>
-                                                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                                        <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>حذف</AlertDialogAction>
+                                                                        <AlertDialogCancel>{dict.usersPage?.cancel || 'Cancel'}</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>{dict.usersPage?.confirmDelete || 'Delete'}</AlertDialogAction>
                                                                     </AlertDialogFooter>
                                                                 </AlertDialogContent>
                                                             </AlertDialog>
@@ -190,39 +220,41 @@ export default function UsersPage() {
                 <TabsContent value="workers">
                     <Card>
                         <CardHeader>
-                            <CardTitle>معاينة البيانات ({workers.length} سجل)</CardTitle>
-                            <CardDescription>قائمة العمال في النظام</CardDescription>
+                            <CardTitle>
+                                {(dict.usersPage?.workersTitleWithCount || 'Workers ({count})').replace('{count}', String(workers.length))}
+                            </CardTitle>
+                            <CardDescription>{dict.usersPage?.workersDescription || ''}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="text-right min-w-[200px]">الاسم</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">رقم الوظيفة</TableHead>
-                                            <TableHead className="text-right min-w-[120px]">رقم الهوية</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">الجنسية</TableHead>
-                                            <TableHead className="text-right min-w-[120px]">الشركة</TableHead>
-                                            <TableHead className="text-right min-w-[80px]">الدور</TableHead>
-                                            <TableHead className="text-right min-w-[100px]">الإجراءات</TableHead>
+                                            <TableHead className={`${align} min-w-[200px]`}>{dict.usersPage?.name || 'Name'}</TableHead>
+                                            <TableHead className={`${align} min-w-[100px]`}>{dict.usersPage?.jobNumber || 'Job number'}</TableHead>
+                                            <TableHead className={`${align} min-w-[120px]`}>{dict.usersPage?.idNumber || 'ID number'}</TableHead>
+                                            <TableHead className={`${align} min-w-[100px]`}>{dict.usersPage?.nationality || 'Nationality'}</TableHead>
+                                            <TableHead className={`${align} min-w-[120px]`}>{dict.usersPage?.company || 'Company'}</TableHead>
+                                            <TableHead className={`${align} min-w-[80px]`}>{dict.usersPage?.role || 'Role'}</TableHead>
+                                            <TableHead className={`${align} min-w-[100px]`}>{dict.usersPage?.actions || 'Actions'}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {usersLoading ? renderWorkersSkeleton() : workers.map((worker) => (
                                             <TableRow key={worker.id}>
-                                                <TableCell className="font-medium text-right">
+                                                <TableCell className={`font-medium ${align}`}>
                                                     <div className="max-w-[200px] truncate" title={worker.name}>
                                                         {worker.name}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right">{worker.employeeId || '-'}</TableCell>
-                                                <TableCell className="text-right font-mono text-sm">{worker.idNumber || '-'}</TableCell>
-                                                <TableCell className="text-right">{worker.nationality || '-'}</TableCell>
-                                                <TableCell className="text-right">{worker.company || '-'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Badge variant="outline">Worker</Badge>
+                                                <TableCell className={align}>{worker.employeeId || '-'}</TableCell>
+                                                <TableCell className={`${align} font-mono text-sm`}>{worker.idNumber || '-'}</TableCell>
+                                                <TableCell className={align}>{worker.nationality || '-'}</TableCell>
+                                                <TableCell className={align}>{worker.company || '-'}</TableCell>
+                                                <TableCell className={align}>
+                                                    <Badge variant="outline">{dict.usersPage?.workerRoleLabel || 'Worker'}</Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className={align}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon">
@@ -232,23 +264,26 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => handleEditUser(worker)}>
                                                                 <Edit className="mr-2 h-4 w-4" />
-                                                                تعديل
+                                                                {dict.usersPage?.edit || 'Edit'}
                                                             </DropdownMenuItem>
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
                                                                     <button className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-destructive">
                                                                         <Trash2 className="mr-2 h-4 w-4" />
-                                                                        حذف
+                                                                        {dict.usersPage?.delete || 'Delete'}
                                                                     </button>
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
                                                                     <AlertDialogHeader>
-                                                                        <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
-                                                                        <AlertDialogDescription>سيتم حذف العامل "{worker.name}" نهائياً</AlertDialogDescription>
+                                                                        <AlertDialogTitle>{dict.usersPage?.confirmTitle || 'Are you sure?'}</AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            {(dict.usersPage?.confirmDeleteWorker || 'This will permanently delete the worker "{name}".')
+                                                                                .replace('{name}', worker.name)}
+                                                                        </AlertDialogDescription>
                                                                     </AlertDialogHeader>
                                                                     <AlertDialogFooter>
-                                                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                                        <AlertDialogAction onClick={() => handleDeleteUser(worker.id)}>حذف</AlertDialogAction>
+                                                                        <AlertDialogCancel>{dict.usersPage?.cancel || 'Cancel'}</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteUser(worker.id)}>{dict.usersPage?.confirmDelete || 'Delete'}</AlertDialogAction>
                                                                     </AlertDialogFooter>
                                                                 </AlertDialogContent>
                                                             </AlertDialog>

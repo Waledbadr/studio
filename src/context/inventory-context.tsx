@@ -384,7 +384,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     String(
       (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
     ).toLowerCase() === 'true';
-  const POLL_INTERVAL_MS = 7000; // polling interval (5-10s window)
+  const POLL_INTERVAL_MS = USE_D1 ? 30000 : 7000; // reduce D1 request volume
   const d1PollWarnedRef = useRef(false);
   const backendFallbackWarnedRef = useRef(false);
 
@@ -469,6 +469,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 // Polling fetch that supports D1 when enabled
     const fetchAll = async () => {
       try {
+        try {
+          if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        } catch {
+          // ignore
+        }
         // Inventory
         if (USE_D1) {
           try {

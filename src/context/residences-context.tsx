@@ -211,7 +211,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const isLoaded = useRef(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  const POLL_INTERVAL_MS = 7000;
+  const POLL_INTERVAL_MS = USE_D1 ? 30000 : 7000;
   const d1PollWarnedRef = useRef(false);
   const pollerRef = useRef<{ stop?: () => void } | null>(null);
 
@@ -230,11 +230,17 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         }
 
         isLoaded.current = true;
-        const fetcher = async () => {
+        const fetcher = async (): Promise<Complex[] | undefined> => {
+          try {
+            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+          } catch {
+            // ignore
+          }
           const r = await D1Client.getResidences();
           return r || [];
         };
-        pollerRef.current = createPoller(fetcher, (d: Complex[]) => {
+        pollerRef.current = createPoller(fetcher, (d: Complex[] | undefined) => {
+          if (!Array.isArray(d)) return;
           setResidences(d as Complex[]);
           setLoading(false);
         }, {

@@ -51,6 +51,7 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   updateUser: D1Actions.updateUser,
   createUser: D1Actions.createUser,
   setUserPasswordHash: D1Actions.setUserPasswordHash,
+  setUserPassword: D1Actions.setUserPassword,
   createServiceOrder: D1Actions.createServiceOrder,
   receiveServiceOrder: D1Actions.receiveServiceOrder,
 

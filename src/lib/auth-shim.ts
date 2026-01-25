@@ -10,6 +10,42 @@ let refreshInFlight = false;
 let lastRefreshAttemptAt = 0;
 let hadSession = false;
 
+let eventHandlersAttached = false;
+
+function broadcastAuthChange() {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage?.setItem('ec_auth_changed_at', String(Date.now()));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function ensureAuthEventHandlers() {
+  if (eventHandlersAttached) return;
+  if (typeof window === 'undefined') return;
+  eventHandlersAttached = true;
+
+  const refreshIfVisible = () => {
+    try {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    } catch {
+      // ignore
+    }
+    void fetchMe({ allowRefresh: true });
+  };
+
+  window.addEventListener('focus', refreshIfVisible);
+  window.addEventListener('online', refreshIfVisible);
+  document.addEventListener('visibilitychange', refreshIfVisible);
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'ec_auth_changed_at') {
+      refreshIfVisible();
+    }
+  });
+}
+
 function markHadSession() {
   if (hadSession) return;
   hadSession = true;
@@ -107,21 +143,26 @@ export function onAuthStateChanged(_auth: any, cb: (u: User) => void) {
   // Immediately call with current user (or null)
   try { cb(currentUser); } catch {}
   listeners.push(cb);
-  // start polling if not started
+  ensureAuthEventHandlers();
+  // Fetch once on first subscription; avoid continuous polling to reduce request volume.
   if (!pollingHandle) {
-    // First fetch immediately
-    void fetchMe({ allowRefresh: true }).then(() => {
-      // Then poll every 5 seconds for faster updates on registration
-      pollingHandle = setInterval(() => { void fetchMe({ allowRefresh: true }); }, 5_000);
-    });
+    pollingHandle = true;
+    void fetchMe({ allowRefresh: true });
   }
-  return () => { listeners = listeners.filter(l => l !== cb); if (listeners.length === 0) { clearInterval(pollingHandle); pollingHandle = null; } };
+  return () => {
+    listeners = listeners.filter(l => l !== cb);
+    // Keep event handlers attached (cheap) but reset the one-time guard.
+    if (listeners.length === 0) {
+      pollingHandle = null;
+    }
+  };
 }
 
 export async function signOut() {
   await fetch('/api/auth/logout', { method: 'POST' });
   currentUser = null;
   listeners.forEach(l => { try { l(null); } catch {} });
+  broadcastAuthChange();
 }
 
 export async function signInWithEmailAndPassword(_auth: any, email: string, password: string) {
@@ -136,6 +177,7 @@ export async function signInWithEmailAndPassword(_auth: any, email: string, pass
   currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
   markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
+  broadcastAuthChange();
   return { user: { uid: j.user.id, email: j.user.email } } as any;
 }
 
@@ -150,6 +192,7 @@ export async function createUserWithEmailAndPassword(_auth: any, email: string, 
   currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
   markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
+  broadcastAuthChange();
   return { user: { uid: j.user.id, email: j.user.email } } as any;
 }
 

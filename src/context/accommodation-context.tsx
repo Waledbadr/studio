@@ -779,6 +779,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     const fetchWorkers = async () => {
       try {
+        try {
+          if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        } catch {
+          // ignore
+        }
         let list: Worker[] = [];
         if (USE_D1) {
           try {
@@ -820,7 +825,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     // Start immediate fetch and then poll
     fetchWorkers();
-    const intervalId = window.setInterval(fetchWorkers, POLL_INTERVAL_MS);
+    const intervalId = window.setInterval(fetchWorkers, USE_D1 ? D1_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
     workersUnsubRef.current = () => clearInterval(intervalId);
   }, [handleWorkersSnapshotError]);
 
@@ -861,6 +866,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
         const fetchResidences = async () => {
           try {
+            try {
+              if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+            } catch {
+              // ignore
+            }
             if (USE_D1) {
               try {
                 const r = await D1Client.getResidences();
@@ -887,7 +897,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         };
 
         fetchResidences();
-        pollId = window.setInterval(fetchResidences, POLL_INTERVAL_MS);
+        pollId = window.setInterval(fetchResidences, USE_D1 ? D1_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
       } else {
         if (pollId) { clearInterval(pollId); pollId = null; }
         setResidences([]);

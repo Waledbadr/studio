@@ -65,6 +65,7 @@ export function getUserByEmail(email: string) { return rpc('getUserByEmail', [em
 export function createUser(id: string, data: any) { return rpc('createUser', [id, data]); }
 export function updateUser(id: string, data: any) { return rpc('updateUser', [id, data]); }
 export function setUserPasswordHash(id: string, hash: string) { return rpc('setUserPasswordHash', [id, hash]); }
+export function setUserPassword(id: string, password: string) { return rpc('setUserPassword', [id, password]); }
 export function getServiceOrders() { return rpc('getServiceOrders'); }
 export function getInventoryCategories() { return rpc('getInventoryCategories'); }
 export function upsertInventoryCategories(names: string[]) { return rpc('upsertInventoryCategories', [names]); }

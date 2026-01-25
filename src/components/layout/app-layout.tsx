@@ -17,11 +17,20 @@ const D1Init = dynamic(() => import('@/components/d1/d1-init'), { ssr: false });
 
 function AppLayoutInner({ children }: PropsWithChildren) {
   const { currentUser } = useUsers();
-  const { locale } = useLanguage();
+  const { locale, setLocale } = useLanguage();
 
   useEffect(() => {
     enablePushIfGranted(currentUser?.id);
   }, [currentUser?.id]);
+
+  // Prefer the user's saved language (profile) over localStorage.
+  useEffect(() => {
+    const userLocale = currentUser?.language;
+    if (!userLocale) return;
+    if (userLocale !== 'en' && userLocale !== 'ar') return;
+    if (userLocale === locale) return;
+    setLocale(userLocale);
+  }, [currentUser?.language, locale, setLocale]);
 
   const pathname = usePathname();
 

@@ -36,6 +36,7 @@ export async function updateWorker(env: any, id: string, data: any) {
 import { getDb } from './db';
 import { workers, residences, occupants, accommodationHistory, companies, contracts, invoices, transferRequests, notifications, inventory, inventoryCategories, inventoryTransactions, mrvRequests, mrvs, orders, users, counters, serviceOrders, mivs, stockReconciliations, auditLogs, feedback } from '../db/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import * as bcrypt from 'bcryptjs';
 
 // Type for environment with D1 binding
 export interface D1Env {
@@ -723,6 +724,33 @@ export async function setUserPasswordHash(envOrId: any, idOrHash?: any, hashMayb
     const db = getDb(d1 as any);
     await db.update(users).set({ passwordHash: hash }).where(eq(users.id, id));
     return { ok: true };
+}
+
+export async function setUserPassword(env: any, id: string, password: string) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const pwd = String(password ?? '');
+    if (pwd.length < 6) return { ok: false, error: 'Password too short' };
+
+    const roundsRaw = (env as any)?.BCRYPT_ROUNDS ?? (typeof process !== 'undefined' ? (process as any).env?.BCRYPT_ROUNDS : undefined);
+    const roundsNum = Number(roundsRaw);
+    const rounds = Number.isFinite(roundsNum) && roundsNum > 0 ? roundsNum : 10;
+        const hash = await bcrypt.hash(pwd, rounds);
+
+    const db = getDb(d1 as any);
+        const result: any = await db.update(users).set({ passwordHash: hash }).where(eq(users.id, id));
+
+        const changed =
+            (typeof result?.meta?.changes === 'number' ? result.meta.changes : undefined) ??
+            (typeof result?.changes === 'number' ? result.changes : undefined) ??
+            (typeof result?.rowsAffected === 'number' ? result.rowsAffected : undefined) ??
+            (typeof result?.rowCount === 'number' ? result.rowCount : undefined);
+
+        if (typeof changed === 'number' && changed <= 0) {
+            return { ok: false, error: 'User not found' };
+        }
+
+        return { ok: true };
 }
 export async function updateUser(env: any, id: string, data: any) {
     const d1 = getD1FromEnv(env);
