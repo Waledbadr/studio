@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access = await signAccessToken(payload);
     const refresh = await signRefreshToken(payload);
-    const res = NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name } });
+    const res = NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
     const secure = isHttpsRequest(req);
     res.cookies.set('access_token', access, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 15 * 60 });
     res.cookies.set('refresh_token', refresh, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 60 * 60 * 24 * 30 });

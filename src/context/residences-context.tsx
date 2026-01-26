@@ -23,12 +23,8 @@ import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
 import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 
-// Prefer D1 automatically when Firestore isn't configured.
-// NEXT_PUBLIC_USE_D1 can still force D1 when a vendor backend exists.
-const USE_D1 =
-  String(
-    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-  ).toLowerCase() === 'true' || !db;
+// Use D1 only when explicitly enabled via NEXT_PUBLIC_USE_D1
+const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
 
 const backendErrorMessage = getBackendErrorMessage();
 
@@ -247,10 +243,6 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
           intervalMs: POLL_INTERVAL_MS,
           onError: (e) => {
             console.error('Error polling D1 residences:', e);
-            if (!d1PollWarnedRef.current) {
-              d1PollWarnedRef.current = true;
-              toast({ title: 'D1 Error', description: 'Could not reach D1; falling back to local data.', variant: 'destructive' });
-            }
             setResidences([]);
             setLoading(false);
           }
@@ -259,7 +251,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       }
 
       isLoaded.current = true;
-      console.log("Backend not configured (D1 not enabled), using local storage");
+      console.log("Using local storage for residences");
       try {
         const storedResidences = localStorage.getItem('estatecare_residences');
         const residencesData = storedResidences ? JSON.parse(storedResidences) : [];

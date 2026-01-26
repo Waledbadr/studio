@@ -56,7 +56,7 @@ const nextConfig: NextConfig = {
 // shim is initialized so getRequestContext() works in dev. This is a no-op in production and
 // safely requires the internal helper only in development to avoid compile-time issues.
 let _export = nextConfig as any;
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === 'development' && process.env.SKIP_CLOUDFLARE_SETUP !== 'true') {
   try {
     // We import at runtime to avoid TypeScript / bundler type issues with internal module
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment

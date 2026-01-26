@@ -11,11 +11,8 @@ import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, getDocs, query, limit, startAfter, where, addDoc, doc, setDoc, updateDoc, getCountFromServer, getDoc, writeBatch, deleteDoc } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
 
-// Enable D1 mode either explicitly via env var, or implicitly when Firestore isn't configured.
-const USE_D1 =
-  (String(
-    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-  ).toLowerCase() === 'true') || !db;
+// Enable D1 mode only when explicitly enabled via NEXT_PUBLIC_USE_D1
+const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
 const POLL_INTERVAL_MS = 7000; // Firestore polling window
 const D1_POLL_INTERVAL_MS = 30000; // D1 polling window (reduce requests in Cloudflare)
 const D1_SYNC_COOLDOWN_MS = 5000;

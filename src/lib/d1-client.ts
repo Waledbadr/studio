@@ -208,11 +208,60 @@ export function getNotifications() { return rpc('getNotifications'); }
 export function getInventory() { return rpc('getInventory'); }
 export function getUsers() { return rpc('getUsers'); }
 export function getUser(id: string) { return rpc('getUser', [id]); }
-export function getUserByEmail(email: string) { return rpc('getUserByEmail', [email]); }
+
+// Local storage fallback for user functions
+async function localGetUserByEmail(email: string): Promise<any> {
+  try {
+    const users = localStorage.getItem('estatecare_users');
+    if (!users) return null;
+    const parsed = JSON.parse(users);
+    const normalized = String(email).trim().toLowerCase();
+    return parsed.find((u: any) => String(u.email).trim().toLowerCase() === normalized) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function localSetUserPassword(id: string, password: string): Promise<any> {
+  try {
+    const users = localStorage.getItem('estatecare_users');
+    const parsed = users ? JSON.parse(users) : [];
+    const user = parsed.find((u: any) => u.id === id);
+    if (!user) throw new Error('User not found');
+    
+    // Fallback: Store plain password (not ideal, but for dev purposes)
+    // In production, this would use bcrypt
+    user.passwordHash = password;
+    localStorage.setItem('estatecare_users', JSON.stringify(parsed));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as any)?.message || 'Failed to update password' };
+  }
+}
+
+export async function getUserByEmail(email: string) {
+  try {
+    return await rpc('getUserByEmail', [email]);
+  } catch (e: any) {
+    // Fallback to local storage
+    console.warn('D1 getUserByEmail failed, using local fallback:', e?.message);
+    return await localGetUserByEmail(email);
+  }
+}
+
+export async function setUserPassword(id: string, password: string) {
+  try {
+    return await rpc('setUserPassword', [id, password]);
+  } catch (e: any) {
+    // Fallback to local storage
+    console.warn('D1 setUserPassword failed, using local fallback:', e?.message);
+    return await localSetUserPassword(id, password);
+  }
+}
+
 export function createUser(id: string, data: any) { return rpc('createUser', [id, data]); }
 export function updateUser(id: string, data: any) { return rpc('updateUser', [id, data]); }
 export function setUserPasswordHash(id: string, hash: string) { return rpc('setUserPasswordHash', [id, hash]); }
-export function setUserPassword(id: string, password: string) { return rpc('setUserPassword', [id, password]); }
 export function getServiceOrders() { return rpc('getServiceOrders'); }
 export function getInventoryCategories() { return rpc('getInventoryCategories'); }
 export function upsertInventoryCategories(names: string[]) { return rpc('upsertInventoryCategories', [names]); }

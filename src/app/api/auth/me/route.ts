@@ -28,6 +28,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, user: null });
     }
     const env = await getCloudflareEnvRecord();
+    // If D1 is not available (local dev mode), return user info from JWT payload
+    if (!env || !env.DB) {
+      console.log('[AUTH ME] D1 not available, using JWT payload only');
+      return NextResponse.json({ 
+        ok: true, 
+        user: { 
+          id: payload.sub, 
+          email: payload.email || null, 
+          name: payload.name || 'User', 
+          role: payload.role || 'Admin' 
+        } 
+      });
+    }
     const user = await getUser(env, payload.sub);
     if (!user) return NextResponse.json({ ok: true, user: null });
     console.log('[AUTH ME] found user:', user?.id, user?.email);

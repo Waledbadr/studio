@@ -1,7 +1,7 @@
 // Auth shim that calls the app API endpoints for session-based JWT auth
 // Provides a small compatibility layer for existing client code.
 
-type User = { uid: string; email?: string | null; displayName?: string | null } | null;
+type User = { uid: string; email?: string | null; displayName?: string | null; role?: string } | null;
 let currentUser: User = null;
 let listeners: Array<(u: User) => void> = [];
 let pollingHandle: any = null;
@@ -112,7 +112,7 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
       return null;
     }
     const json: any = await res.json();
-    const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null } : null;
+    const user = json?.user ? { uid: json.user.id, email: json.user.email || null, displayName: json.user.name || null, role: json.user.role || 'Technician' } : null;
 
      if (user) {
        markHadSession();
@@ -175,7 +175,7 @@ export async function signInWithEmailAndPassword(_auth: any, email: string, pass
     if (/password/i.test(msg)) err.code = 'auth/wrong-password';
     throw err;
   }
-  currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
+  currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null, role: j.user.role || 'Technician' };
   markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
   broadcastAuthChange();
@@ -190,7 +190,7 @@ export async function createUserWithEmailAndPassword(_auth: any, email: string, 
     const err: any = new Error(msg);
     throw err;
   }
-  currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null };
+  currentUser = { uid: j.user.id, email: j.user.email || null, displayName: j.user.name || null, role: j.user.role || 'Technician' };
   markHadSession();
   listeners.forEach(l => { try { l(currentUser); } catch {} });
   broadcastAuthChange();

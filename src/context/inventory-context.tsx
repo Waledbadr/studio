@@ -380,10 +380,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { residences } = useResidences();
   const { addNotification } = useNotifications();
   const { users, currentUser } = useUsers();
-  const USE_D1 =
-    String(
-      (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-    ).toLowerCase() === 'true';
+  const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
   const POLL_INTERVAL_MS = USE_D1 ? 30000 : 7000; // reduce D1 request volume
   const d1PollWarnedRef = useRef(false);
   const backendFallbackWarnedRef = useRef(false);
@@ -391,7 +388,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const loadInventory = useCallback(async () => {
      if (isLoaded.current) return;
-     if (!db) {
+     
+     // Check if D1 is explicitly enabled
+     if (USE_D1) {
         // In Cloudflare D1 mode, wait until the user is authenticated.
         // Otherwise /api/d1 returns 401 and we'd incorrectly lock into localStorage fallback.
         if (!getCurrentUser()) {
@@ -399,8 +398,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
-        // When Firestore is not configured, prefer D1 automatically.
-        // This avoids empty inventory when NEXT_PUBLIC_USE_D1 wasn't set.
+        // Use D1 when explicitly enabled
         try {
           const inv: any[] = await (await import('@/lib/d1-client')).getInventory();
           const inventoryData = (inv || []).map((data: any) => {
@@ -429,18 +427,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           console.warn('D1 RPC failed (inventory), falling back to local storage:', e);
           // continue to localStorage fallback below
         }
-
+     }
+     
+     // Use localStorage when D1 is not enabled or when no backend is configured
+     if (!db || !USE_D1) {
         // Fallback: use local storage.
-        // IMPORTANT: this is not synced to D1.
-        console.log("Backend not configured (D1 unavailable), using local storage");
-        if (!backendFallbackWarnedRef.current) {
-          backendFallbackWarnedRef.current = true;
-          toast({
-            title: 'Backend غير متاح',
-            description: 'التطبيق يعمل حالياً بوضع محلي (localStorage). لن تظهر بيانات D1 ولن يتم حفظ التغييرات في قاعدة البيانات حتى يتم تشغيل D1 بشكل صحيح.',
-            variant: 'destructive'
-          });
-        }
+        console.log("Using local storage for inventory");
         try {
           const storedItems = localStorage.getItem('estatecare_inventory');
           const ds = storedItems ? JSON.parse(storedItems) : [];
@@ -983,10 +975,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('Residence and at least one item with quantity > 0 are required.');
     }
 
-    const USE_D1 =
-      String(
-        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true';
+    const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
     if (USE_D1) {
       // Client-side guard: only Admin or Supervisor can post MRVs
       if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
@@ -1635,10 +1624,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const approveMRVRequest = async (requestId: string, approverId: string): Promise<string> => {
-    const USE_D1 =
-      String(
-        (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-      ).toLowerCase() === 'true';
+    const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
     if (USE_D1) {
       const res: any = await (await import('@/lib/d1-client')).approveMRVRequest(requestId, approverId);
       if (!res || !res.ok) throw new Error(res?.error || 'D1 approve failed');

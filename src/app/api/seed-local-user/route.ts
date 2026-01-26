@@ -6,14 +6,52 @@
 import { NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
 import { getCloudflareEnvRecord } from '@/lib/runtime-env';
+import fs from 'fs';
+import path from 'path';
 
-// In-memory user store for local development only
-const localUsers: Map<string, any> = new Map();
+const LOCAL_USERS_FILE = path.join(process.cwd(), '.local-users.json');
+
+// Helper to read local users from file
+function readLocalUsers(): Map<string, any> {
+  try {
+    if (fs.existsSync(LOCAL_USERS_FILE)) {
+      const data = fs.readFileSync(LOCAL_USERS_FILE, 'utf-8');
+      const users = JSON.parse(data);
+      return new Map(Object.entries(users));
+    }
+  } catch (e) {
+    console.warn('[readLocalUsers] Error reading file:', e);
+  }
+  return new Map();
+}
+
+// Helper to write local users to file
+function writeLocalUsers(users: Map<string, any>): void {
+  try {
+    const obj = Object.fromEntries(users.entries());
+    fs.writeFileSync(LOCAL_USERS_FILE, JSON.stringify(obj, null, 2));
+    console.log('[writeLocalUsers] Users saved to file:', LOCAL_USERS_FILE);
+  } catch (e) {
+    console.error('[writeLocalUsers] Error writing file:', e);
+  }
+}
+
+// Export function to get local users
+export function getLocalUsers(): Map<string, any> {
+  return readLocalUsers();
+}
+
+// Export function to write local users (for seeding)
+export function setLocalUsers(users: Map<string, any>): void {
+  writeLocalUsers(users);
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json() as any;
     const { email, password, name, role } = body;
+    console.log('[seed-local-user] POST request received:', { email, name, role });
+    
     if (!email || !password) {
       return NextResponse.json({ ok: false, error: 'Missing email or password' }, { status: 400 });
     }
@@ -33,7 +71,10 @@ export async function POST(req: Request) {
       disabled: false,
     };
 
+    const localUsers = readLocalUsers();
     localUsers.set(email.toLowerCase(), user);
+    writeLocalUsers(localUsers);
+    console.log('[seed-local-user] User added to file:', { email: email.toLowerCase(), mapSize: localUsers.size });
     
     // Also try to write to actual D1 if available.
     try {
@@ -65,8 +106,5 @@ export async function POST(req: Request) {
   }
 }
 
-// Export the in-memory store for auth handlers to use as fallback
-export { localUsers };
-
-
-export const runtime = 'edge';
+// Use Node.js runtime for filesystem access
+export const runtime = 'nodejs';

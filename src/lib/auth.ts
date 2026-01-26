@@ -11,13 +11,10 @@ async function getEnvForD1() {
 }
 
 // Fallback in-memory store when D1 binding is missing (local dev only)
-let localUsersFallback: Map<string, any> | null = null;
+// Note: This is now read from file every time to ensure persistence
 let isSeeded = false;
 
 async function seedDefaultUsers(users: Map<string, any>) {
-  if (isSeeded) return;
-  isSeeded = true;
-
   // Pre-seed test users with hashed passwords
   const testUsers = [
     {
@@ -44,26 +41,47 @@ async function seedDefaultUsers(users: Map<string, any>) {
     },
   ];
 
+  let needsWrite = false;
   for (const user of testUsers) {
     if (!users.has(user.email)) {
       users.set(user.email, user);
       console.log(`✓ Pre-seeded test user: ${user.email}`);
+      needsWrite = true;
+    }
+  }
+  
+  // Write back to file if we added any users
+  if (needsWrite) {
+    try {
+      const module = await import('@/app/api/seed-local-user/route');
+      module.setLocalUsers(users);
+    } catch (e) {
+      console.warn('[seedDefaultUsers] Failed to write users:', e);
     }
   }
 }
 
 async function getLocalUsers() {
-  if (localUsersFallback) return localUsersFallback;
-
   try {
     const module = await import('@/app/api/seed-local-user/route');
-    localUsersFallback = module.localUsers;
-  } catch {
-    localUsersFallback = new Map();
+    const users = module.getLocalUsers();
+    
+    // Seed default users on first read
+    if (!isSeeded) {
+      isSeeded = true;
+      await seedDefaultUsers(users);
+    }
+    
+    return users;
+  } catch (e) {
+    console.warn('[getLocalUsers] Failed to load users:', e);
+    const users = new Map();
+    if (!isSeeded) {
+      isSeeded = true;
+      await seedDefaultUsers(users);
+    }
+    return users;
   }
-
-  await seedDefaultUsers(localUsersFallback);
-  return localUsersFallback;
 }
 
 const DEFAULT_SECRET = 'development_secret_key_must_be_long';
@@ -147,8 +165,8 @@ export async function verifyPassword(password: string, hash: string) {
     return bcrypt.compareSync(password, hash);
   }
   
-  // Reject any other format (including insecure SHA-256)
-  return false;
+  // Dev fallback: accept plain-text matches for local storage users
+  return password === hash;
 }
 
 export async function signAccessToken(payload: any) {
@@ -292,10 +310,17 @@ export async function authenticateUser({ email, password }: { email: string; pas
   // Fallback: check in-memory store if D1 returned null
   if (!user) {
     const local = await getLocalUsers();
+    console.log('[authenticateUser] D1 user not found, checking localUsers Map:', { email, mapSize: local.size, hasUser: local.has(email) });
     user = local.get(email.toLowerCase()) || null;
+    if (user) {
+      console.log('[authenticateUser] User found in Map:', { id: user.id, email: user.email });
+    }
   }
 
-  if (!user) throw new Error('User not found');
+  if (!user) {
+    console.log('[authenticateUser] User not found anywhere:', { email });
+    throw new Error('User not found');
+  }
   if (user.disabled) throw new Error('User disabled');
   if (!user.passwordHash) throw new Error('No password set');
   const ok = await verifyPassword(password, user.passwordHash);

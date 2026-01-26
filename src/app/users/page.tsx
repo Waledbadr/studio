@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -46,6 +46,27 @@ export default function UsersPage() {
 
     const staffUsers = useMemo(() => users.filter(u => u.role !== 'Worker'), [users]);
     const workers = useMemo(() => users.filter(u => u.role === 'Worker'), [users]);
+
+    // Seed in-memory auth store for local dev (when D1 is not available)
+    const seedLocalUser = useCallback(async (email: string, name: string, role: string, password: string) => {
+        try {
+            // Only run when D1 is disabled (basic dev mode)
+            if (process.env.NEXT_PUBLIC_USE_D1 === 'true') return;
+            console.log('[seedLocalUser] Sending POST to /api/seed-local-user:', { email, name, role });
+            const response = await fetch('/api/seed-local-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, name, role })
+            });
+            const data = await response.json();
+            console.log('[seedLocalUser] Response:', data);
+            if (!response.ok) {
+                console.error('[seedLocalUser] Failed:', data);
+            }
+        } catch (e) {
+            console.error('[seedLocalUser] Error:', e);
+        }
+    }, []);
 
     useEffect(() => {
         if (!currentUser) return; // wait until signed-in
@@ -95,6 +116,8 @@ export default function UsersPage() {
         try {
             const res: any = await D1Client.setUserPassword(passwordUser.id, pwd);
             if (res && res.ok === false) throw new Error(res.error || 'Password update failed');
+            // Seed local auth fallback for dev mode
+            await seedLocalUser(passwordUser.email, passwordUser.name, passwordUser.role, pwd);
             toast({ title: isRTL ? 'نجح' : 'Success', description: isRTL ? 'تم تحديث كلمة المرور' : 'Password updated.' });
             setIsPasswordDialogOpen(false);
             setPasswordUser(null);
@@ -108,29 +131,42 @@ export default function UsersPage() {
     const handleSaveUser = async (userToSave: User, password?: string) => {
         setIsSaving(true);
         try {
+            // In local dev (D1 disabled), require a password for new users so login works
+            const isNew = !userToSave.id;
+            const usingD1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
+            if (isNew && !usingD1) {
+                const pwd = String(password || '').trim();
+                if (!pwd || pwd.length < 6) {
+                    toast({
+                        title: isRTL ? 'كلمة المرور مطلوبة' : 'Password required',
+                        description: isRTL ? 'أدخل كلمة مرور لا تقل عن 6 أحرف للمستخدم الجديد في الوضع المحلي.' : 'Please enter a password (min 6 chars) for new users in local dev.',
+                        variant: 'destructive'
+                    });
+                    setIsSaving(false);
+                    return;
+                }
+            }
+
             await saveUser(userToSave);
 
-            // Optional: set/reset the login password (D1 auth) after user save.
-            if (password) {
+            // Seed auth for new users or when password is provided
+            if (password && !usingD1) {
                 try {
-                    const emailKey = String(userToSave.email || '').trim().toLowerCase();
-                    let id = String(userToSave.id || '');
-                    if (!id) {
-                        const existing: any = await D1Client.getUserByEmail(emailKey).catch(() => null);
-                        id = String(existing?.id || '');
-                    }
-                    if (!id) throw new Error('Could not resolve user id');
-                    await D1Client.setUserPassword(id, password);
-                    toast({ title: "Success", description: "Password updated." });
+                    await seedLocalUser(userToSave.email, userToSave.name, userToSave.role, password);
+                    toast({ title: isRTL ? 'نجح' : "Success", description: isRTL ? 'تم حفظ المستخدم وكلمة المرور' : "User and password saved." });
                 } catch (e: any) {
-                    toast({ title: "Warning", description: e?.message || "Password could not be updated.", variant: "destructive" });
+                    console.warn('Seed local user error:', e?.message);
                 }
             }
 
             setIsUserDialogOpen(false);
             setSelectedUser(null);
         } catch (error) {
-            toast({ title: "Error", description: "Failed to save user.", variant: "destructive" });
+            toast({ 
+                title: isRTL ? 'خطأ' : "Error", 
+                description: isRTL ? 'فشل حفظ المستخدم' : "Failed to save user.", 
+                variant: "destructive" 
+            });
         } finally {
             setIsSaving(false);
         }

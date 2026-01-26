@@ -8,12 +8,8 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc,
 import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import * as D1Client from '@/lib/d1-client';
 
-// Prefer D1 automatically when Firestore isn't configured.
-// NEXT_PUBLIC_USE_D1 can still force D1 when a vendor backend exists.
-const USE_D1 =
-  String(
-    (typeof process !== 'undefined' && (process as any).env ? (process as any).env.NEXT_PUBLIC_USE_D1 : '') || ''
-  ).toLowerCase() === 'true' || !db;
+// Use D1 only when explicitly enabled via NEXT_PUBLIC_USE_D1
+const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -87,8 +83,36 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         setUsers([]);
         setCurrentUser(null);
         try { localStorage.removeItem('currentUser'); } catch {}
-      } else if (!isLoaded.current) {
-        loadUsers();
+      } else {
+        // Sync current auth user to localStorage if they have a role
+        if (u.role) {
+          try {
+            const currentAuthUser = {
+              id: u.uid,
+              name: u.displayName || 'User',
+              email: u.email || '',
+              role: u.role,
+              assignedResidences: [],
+              themeSettings: { colorTheme: 'blue', mode: 'system' }
+            };
+            let existingUsers: any[] = [];
+            try {
+              const stored = localStorage.getItem('estatecare_users');
+              existingUsers = stored ? JSON.parse(stored) : [];
+            } catch {}
+            
+            const userExists = existingUsers.some(usr => usr.id === u.uid);
+            if (!userExists) {
+              existingUsers = [currentAuthUser, ...existingUsers];
+              localStorage.setItem('estatecare_users', JSON.stringify(existingUsers));
+            }
+            localStorage.setItem('currentUser', u.uid);
+          } catch {}
+        }
+        
+        if (!isLoaded.current) {
+          loadUsers();
+        }
       }
     });
 
@@ -130,7 +154,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      console.log("Backend not configured (D1 unavailable), using local storage");
+      console.log("Using local storage for users");
       
       // Load from localStorage
       try {

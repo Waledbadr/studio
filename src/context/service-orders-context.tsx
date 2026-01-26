@@ -98,14 +98,7 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
   const isLoaded = useRef(false);
 
   const computeUseD1 = useCallback(() => {
-    return (
-      String(
-        (typeof process !== 'undefined' && (process as any).env
-          ? (process as any).env.NEXT_PUBLIC_USE_D1
-          : '') ||
-          ''
-      ).toLowerCase() === 'true' || !db
-    );
+    return process.env.NEXT_PUBLIC_USE_D1 === 'true';
   }, []);
 
   const load = useCallback(() => {
