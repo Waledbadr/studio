@@ -286,3 +286,10 @@ export function createServiceOrder(payload: any) { return rpc('createServiceOrde
 export function receiveServiceOrder(orderId: string, updates: any[], receivedById: string, forceComplete?: boolean) { return rpc('receiveServiceOrder', [orderId, updates, receivedById, forceComplete]); }
 export function transferStock(payload: any) { return rpc('transferStock', [payload]); }
 export function reconcileStock(payload: any) { return rpc('reconcileStock', [payload]); }
+export function createOrder(payload: any) { return rpc('createOrder', [payload]); }
+export function approveOrder(orderId: string, approverId: string, approverName?: string) { return rpc('approveOrder', [orderId, approverId, approverName]); }
+export function rejectOrder(orderId: string, approverId: string, reason?: string) { return rpc('rejectOrder', [orderId, approverId, reason]); }
+export function updateOrderStatus(orderId: string, status: string) { return rpc('updateOrderStatus', [orderId, status]); }
+export function getOrders() { return rpc('getOrders'); }
+export function getOrder(id: string) { return rpc('getOrder', [id]); }
+export function createMRVRequest(payload: any) { return rpc('createMRVRequest', [payload]); }

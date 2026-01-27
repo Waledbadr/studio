@@ -11,10 +11,10 @@ async function getEnvForD1() {
 }
 
 // Fallback in-memory store when D1 binding is missing (local dev only)
-// Note: This is now read from file every time to ensure persistence
+const localUsersCache = new Map<string, any>();
 let isSeeded = false;
 
-async function seedDefaultUsers(users: Map<string, any>) {
+async function seedDefaultUsers() {
   // Pre-seed test users with hashed passwords
   const testUsers = [
     {
@@ -41,47 +41,22 @@ async function seedDefaultUsers(users: Map<string, any>) {
     },
   ];
 
-  let needsWrite = false;
   for (const user of testUsers) {
-    if (!users.has(user.email)) {
-      users.set(user.email, user);
+    if (!localUsersCache.has(user.email)) {
+      localUsersCache.set(user.email, user);
       console.log(`✓ Pre-seeded test user: ${user.email}`);
-      needsWrite = true;
-    }
-  }
-  
-  // Write back to file if we added any users
-  if (needsWrite) {
-    try {
-      const module = await import('@/app/api/seed-local-user/route');
-      module.setLocalUsers(users);
-    } catch (e) {
-      console.warn('[seedDefaultUsers] Failed to write users:', e);
     }
   }
 }
 
 async function getLocalUsers() {
-  try {
-    const module = await import('@/app/api/seed-local-user/route');
-    const users = module.getLocalUsers();
-    
-    // Seed default users on first read
-    if (!isSeeded) {
-      isSeeded = true;
-      await seedDefaultUsers(users);
-    }
-    
-    return users;
-  } catch (e) {
-    console.warn('[getLocalUsers] Failed to load users:', e);
-    const users = new Map();
-    if (!isSeeded) {
-      isSeeded = true;
-      await seedDefaultUsers(users);
-    }
-    return users;
+  // Seed default users on first read
+  if (!isSeeded) {
+    isSeeded = true;
+    await seedDefaultUsers();
   }
+  
+  return localUsersCache;
 }
 
 const DEFAULT_SECRET = 'development_secret_key_must_be_long';

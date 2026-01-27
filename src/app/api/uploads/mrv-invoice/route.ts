@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 
 // Using local file storage via src/lib/storage.ts (no external blob provider required)
-
-
-export const runtime = 'edge';
+// export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {

@@ -1,5 +1,16 @@
 import type {NextConfig} from 'next';
 
+if (process.env.NODE_ENV === 'development') {
+  (async () => {
+    try {
+      const { setupDevPlatform } = await import('@cloudflare/next-on-pages/next-dev');
+      await setupDevPlatform();
+    } catch (e) {
+      console.warn('Failed to setup Cloudflare dev platform', e);
+    }
+  })();
+}
+
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();

@@ -36,7 +36,7 @@ export async function updateWorker(env: any, id: string, data: any) {
 import { getDb } from './db';
 import '@/lib/setimmediate-polyfill';
 import { workers, residences, occupants, accommodationHistory, companies, contracts, invoices, transferRequests, notifications, inventory, inventoryCategories, inventoryTransactions, mrvRequests, mrvs, orders, users, counters, serviceOrders, mivs, stockReconciliations, auditLogs, feedback } from '../db/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, desc } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 
 // Type for environment with D1 binding
@@ -252,13 +252,13 @@ export async function createServiceOrder(env: any, payload: any) {
         try {
             const curr = Number((existing[0] as any).last || 0);
             nextSeq = curr + 1;
-            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            await db.update(counters).set({ last: nextSeq, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
             // fallback - try insert
-            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
     }
 
     const codeShort = `SVC-${yy}${mmNoPad}${nextSeq}`;
@@ -545,12 +545,12 @@ export async function createMRV(envOrPayload: any, payload?: any) {
         if (existing.length > 0) {
             try {
                 nextSeq = Number((existing[0] as any).last || 0) + 1;
-                await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+                await db.update(counters).set({ last: nextSeq, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
             } catch {
-                await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+                await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
             }
         } else {
-            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
         }
         const seqPadded = String(nextSeq).padStart(3, '0');
         mrvId = `MRV-${yy}-${String(mm).padStart(2, '0')}-${seqPadded}`;
@@ -681,11 +681,68 @@ export async function approveMRVRequest(envOrRequestId: any, requestId?: string,
     return { ok: true, id: created.id };
 }
 
+export async function createMRVRequest(env: any, payload: any) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return { ok: false, error: 'D1 binding missing' };
+    const db = getDb(d1);
+    
+    // Generate unique ID
+    const id = `MRVREQ-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    
+    // Reserve MRV short code
+    const now = new Date();
+    const yy = now.getFullYear().toString().slice(-2);
+    const mm = (now.getMonth() + 1).toString().padStart(2, '0');
+    const mmNoPad = (now.getMonth() + 1).toString();
+    const counterId = `mrv-${yy}-${mm}`;
+    
+    let nextSeq = 0;
+    const counterRows = await db.select().from(counters).where(eq(counters.id, counterId));
+    if (counterRows.length > 0) {
+        const current = (counterRows[0] as any).last || 0;
+        nextSeq = current + 1;
+        await db.update(counters).set({ last: nextSeq, updatedAt: now.toISOString() }).where(eq(counters.id, counterId));
+    } else {
+        nextSeq = 1;
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: now.toISOString() });
+    }
+    
+    const mrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
+    
+    // Insert MRV request
+    await db.insert(mrvRequests).values({
+        id,
+        residenceId: payload.residenceId || null,
+        items: JSON.stringify(payload.items || []),
+        supplierName: payload.supplierName || null,
+        invoiceNo: payload.invoiceNo || null,
+        attachmentUrl: payload.attachmentUrl || null,
+        attachmentPath: payload.attachmentPath || null,
+        notes: payload.notes || null,
+        status: 'Pending',
+        requestedById: payload.requestedById || null,
+        requestedAt: now.toISOString(),
+        mrvShort
+    });
+    
+    return { ok: true, id, mrvShort };
+}
+
 export async function getOrders(env: any) {
     const d1 = getD1FromEnv(env);
     if (!d1) return [];
     const db = getDb(d1);
-    return await db.select().from(orders);
+    // Sort by date desc (most recent first)
+    // Note: 'date' is jsonText but stores ISO string, so we can sort by it directly if SQLite treats it as string
+    return await db.select().from(orders).orderBy(desc(orders.date));
+}
+
+export async function getOrder(env: any, id: string) {
+    const d1 = getD1FromEnv(env);
+    if (!d1) return null;
+    const db = getDb(d1);
+    const res = await db.select().from(orders).where(eq(orders.id, id));
+    return res[0] || null;
 }
 
 export async function getUser(env: any, id: string) {
@@ -888,12 +945,12 @@ export async function issueStock(env: any, payload: any) {
     if (existing.length > 0) {
         try {
             nextSeq = Number((existing[0] as any).last || 0) + 1;
-            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            await db.update(counters).set({ last: nextSeq, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
-            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
     }
 
     const codeShort = `MIV-${yy}${mmNoPad}${nextSeq}`;
@@ -1048,12 +1105,12 @@ export async function reconcileStock(env: any, payload: any) {
     if (existing.length > 0) {
         try {
             nextSeq = Number((existing[0] as any).last || 0) + 1;
-            await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            await db.update(counters).set({ last: nextSeq, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
         } catch {
-            await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+            await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
         }
     } else {
-        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm, updatedAt: new Date().toISOString() });
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
     }
 
     const reconId = `RECON-${yy}${mmNoPad}${nextSeq}`;
@@ -1255,9 +1312,9 @@ export async function createFeedback(env: any, data: any) {
     let nextSeq = 1;
     if (existing.length > 0) {
         nextSeq = Number((existing[0] as any).last || 0) + 1;
-        await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any).where(eq(counters.id, counterId));
+        await db.update(counters).set({ last: nextSeq, updatedAt: nowIso } as any).where(eq(counters.id, counterId));
     } else {
-        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any);
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: nowIso } as any);
     }
     const ticketId = (data.ticketId && String(data.ticketId).trim()) ? String(data.ticketId).trim().toUpperCase() : `FB-${yy}${mNoPad}${nextSeq}`;
 
@@ -1296,9 +1353,9 @@ export async function generateFeedbackTicketId(env: any, year: number, month1Bas
     let nextSeq = 1;
     if (existing.length > 0) {
         nextSeq = Number((existing[0] as any).last || 0) + 1;
-        await db.update(counters).set({ last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any).where(eq(counters.id, counterId));
+        await db.update(counters).set({ last: nextSeq, updatedAt: nowIso } as any).where(eq(counters.id, counterId));
     } else {
-        await db.insert(counters).values({ id: counterId, last: nextSeq, yy: Number(yy), mm: Number(mNoPad), updatedAt: nowIso } as any);
+        await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: nowIso } as any);
     }
     const ticketId = `FB-${yy}${mNoPad}${nextSeq}`;
     return { ok: true, ticketId };

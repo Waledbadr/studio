@@ -550,10 +550,12 @@ export default function StockReconciliationPage() {
                 </TableHeader>
                 <TableBody>
                   {recons.map((r) => {
-                    const d = r.date?.toDate?.() ? r.date.toDate() : new Date();
+                    // Safe date handling: avoid new Date() during SSR
+                    const d = r.date?.toDate?.() ? r.date.toDate() : null;
+                    const dateStr = d ? d.toLocaleString() : '—';
                     return (
                       <TableRow key={r.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => openDetails(r)}>
-                        <TableCell>{d.toLocaleString()}</TableCell>
+                        <TableCell>{dateStr}</TableCell>
                         <TableCell>{r.id}</TableCell>
                         <TableCell>{residenceNameById.get(String(r.residenceId)) || r.residenceId}</TableCell>
                         <TableCell>{r.itemCount}</TableCell>

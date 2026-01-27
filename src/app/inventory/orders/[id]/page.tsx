@@ -23,7 +23,7 @@ import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, 
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { updateOrderStatus, loading: ordersLoading } = useOrders();
+    const { updateOrderStatus, loading: ordersLoading, getOrderById } = useOrders();
     const { getStockForResidence, items: allItems } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const { residences } = useResidences();
@@ -105,48 +105,28 @@ export default function OrderDetailPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [db, order?.requestedById, order?.requestedByName, requestedBy?.name, (order as any)?.requestedByEmail]);
 
-    // Helper to normalize items when they were accidentally saved as an object with numeric keys
-    const normalizeItems = (items: any): any[] => {
-        if (Array.isArray(items)) return items;
-        if (items && typeof items === 'object') {
-            const keys = Object.keys(items);
-            const numericKeys = keys.filter(k => /^\d+$/.test(k)).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-            if (numericKeys.length > 0) return numericKeys.map(k => (items as any)[k]);
-            // Fallback: if values look like line items, return Object.values
-            const values = Object.values(items);
-            if (values.length > 0 && values.every(v => v && typeof v === 'object')) return values as any[];
-        }
-        return [];
-    };
-
-    // Real-time subscription to keep page in sync without hard refresh
+    // Load order data
     useEffect(() => {
-        if (!db || typeof id !== 'string') return;
-        setLoading(true);
-        const ref = doc(db, 'orders', id);
-        const unsub = onSnapshot(ref, (snap: any) => {
-            if (snap.exists()) {
-                const data = snap.data() as any;
-                // Ensure items is always an array
-                const itemsArray = normalizeItems(data.items);
-                const normalizedData = { ...data, items: itemsArray };
-                // Attempt a one-time self-repair if the document has items as a numeric-keyed map
-                try {
-                    if (!Array.isArray(data.items) && Array.isArray(itemsArray) && itemsArray.length > 0) {
-                        updateDoc(ref, { items: itemsArray } as any).catch(() => {});
-                    }
-                } catch {}
-                setOrder({ id: snap.id, ...normalizedData } as Order);
-            } else {
-                setOrder(null);
+        if (typeof id !== 'string') return;
+        let mounted = true;
+
+        const load = async () => {
+            setLoading(true);
+            try {
+                const o = await getOrderById(id);
+                if (mounted) {
+                    setOrder(o);
+                }
+            } catch (e) {
+                console.error("Failed to load order:", e);
+            } finally {
+                if (mounted) setLoading(false);
             }
-            setLoading(false);
-        }, (err: any) => {
-            console.error('Error listening to order doc:', err);
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [id]);
+        };
+        load();
+        
+        return () => { mounted = false; };
+    }, [id, getOrderById]);
 
     const handlePrint = () => {
         window.print();

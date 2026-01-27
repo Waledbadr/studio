@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { getBackendErrorMessage } from '@/lib/backend-error-messages';
+import * as d1Client from '@/lib/d1-client';
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from '@/lib/realtime-shim';
 import { onAuthStateChanged } from '@/lib/auth-shim';
@@ -118,36 +119,35 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const { users, currentUser } = useUsers();
 
 
-  const loadOrders = useCallback(() => {
-    if (unsubscribeRef.current) {
-        unsubscribeRef.current(); // Unsubscribe from previous listener
-    }
-    
-    if (!db) {
-      console.warn("Backend not configured, loading mock orders");
-      setOrders([]); // Empty orders for now
-      setLoading(false);
-      return;
-    }
-    // Defer subscription until signed-in user is available
-    if (auth && !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
-    
+  const loadOrders = useCallback(async () => {
     setLoading(true);
-
-    const ordersCollection = collection(db, "orders");
-    unsubscribeRef.current = onSnapshot(query(ordersCollection, orderBy("date", "desc")), (snapshot: any) => {
-      const ordersData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Order));
-      setOrders(ordersData);
-      setLoading(false);
-    }, (error: any) => {
+    try {
+      const result = await d1Client.getOrders();
+      if (result && Array.isArray(result)) {
+        const transformedOrders = result.map((order: any) => {
+          let items = (typeof order.items === 'string' ? JSON.parse(order.items) : order.items) || [];
+          if (!Array.isArray(items) && items && typeof items === 'object') {
+             items = Object.values(items);
+          }
+          return {
+            ...order,
+            items,
+            date: typeof order.date === 'string' ? {
+               toDate: () => new Date(order.date),
+               seconds: Math.floor(new Date(order.date).getTime() / 1000)
+            } : order.date
+          };
+        });
+        setOrders(transformedOrders as Order[]);
+      } else {
+        setOrders([]);
+      }
+    } catch (error) {
       console.error("Error fetching orders:", error);
-      toast({ title: "Firestore Error", description: "Could not fetch orders data.", variant: "destructive" });
+    } finally {
       setLoading(false);
-    });
-  }, [toast]);
+    }
+  }, []);
 
   // Ensure we auto-subscribe once the user signs in (in case pages call before auth)
   useEffect(() => {
@@ -191,64 +191,36 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const createOrder = async (orderData: NewOrderPayload): Promise<string | null> => {
-    if (!db || !orderData) {
-      toast({ title: "Error", description: !db ? backendErrorMessage : "Cannot create order with empty data.", variant: "destructive" });
-      return null;
-    }
-    
     setLoading(true);
     try {
-      // Guard: ensure the requester on the document matches the signed-in auth UID
-      // This avoids Firestore rule failures when users docs don't use auth.uid as ID.
-      const authUid = auth?.currentUser?.uid;
-      if (!authUid) {
-        toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
+      // Use D1 for order creation
+      const requesterName = currentUser?.name || '—';
+      const result = await d1Client.createOrder({
+        residence: orderData.residence,
+        residenceId: orderData.residenceId,
+        items: orderData.items,
+        requestedById: currentUser?.id || null,
+        requestedByName: requesterName,
+        notes: orderData.notes || null
+      });
+
+      if (!result || !result.ok) {
+        toast({ title: "Error", description: "Failed to create order.", variant: "destructive" });
         return null;
       }
-      const requesterEmail = auth?.currentUser?.email || undefined;
-      // Prefer UsersContext name, fallback to Auth displayName, then email
-      const requesterName = (currentUser?.id === authUid ? currentUser?.name : (users?.find(u => u.id === authUid)?.name))
-        || auth?.currentUser?.displayName
-        || requesterEmail
-        || '—';
-      const safeOrderData: NewOrderPayload = {
-        ...orderData,
-        // Force requestedById to the real auth uid to satisfy security rules
-        requestedById: authUid,
-      };
 
-      const newOrderId = await generateNewOrderId();
-      const newOrderRef = doc(db, "orders", newOrderId);
-
-  const newOrder: Omit<Order, 'id'> = {
-        ...safeOrderData,
-        requestedByName: requesterName,
-        requestedByEmail: requesterEmail,
-        date: Timestamp.now(),
-        status: 'Pending'
-      }
-      
-      await setDoc(newOrderRef, { ...newOrder, id: newOrderId });
-
-      // Notify all Admin users about the new order
+      // Notify admins
       try {
-        let adminUserIds = users?.filter(u => u.role === 'Admin').map(u => u.id) || [];
-        if (adminUserIds.length === 0) {
-          // Fallback to Firestore query if users context is not yet loaded
-          const adminsQ = query(collection(db, 'users'), where('role', '==', 'Admin'));
-          const adminsSnap = await getDocs(adminsQ);
-          adminUserIds = adminsSnap.docs.map((d: any) => d.id);
-        }
-
+        const adminUserIds = users?.filter(u => u.role === 'Admin').map(u => u.id) || [];
         await Promise.all(
           adminUserIds.map((adminId) =>
             addNotification?.({
               userId: adminId,
               title: 'New Material Request',
-              message: `Request #${newOrderId} • ${orderData.residence}`,
+              message: `Request #${result.id} • ${orderData.residence}`,
               type: 'new_order',
-              href: `/inventory/orders/${newOrderId}`,
-              referenceId: newOrderId,
+              href: `/inventory/orders/${result.id}`,
+              referenceId: result.id,
             })
           )
         );
@@ -256,7 +228,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         console.warn('Failed to send admin notifications for new order:', notifyErr);
       }
 
-      return newOrderId;
+      return result.id;
     } catch (error) {
       console.error("Error creating order:", error);
       toast({ title: "Error", description: "Failed to create order.", variant: "destructive" });
@@ -655,18 +627,28 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
 
   const getOrderById = async (id: string): Promise<Order | null> => {
-    if (!db) {
-      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+    try {
+      const order = await d1Client.getOrder(id);
+      if (!order) return null;
+      
+      let items = (typeof order.items === 'string' ? JSON.parse(order.items) : order.items) || [];
+      if (!Array.isArray(items) && items && typeof items === 'object') {
+          items = Object.values(items);
+      }
+
+      // Transform D1 data to match Order interface
+      return {
+        ...order,
+        items,
+        date: typeof order.date === 'string' ? {
+           toDate: () => new Date(order.date),
+           seconds: Math.floor(new Date(order.date).getTime() / 1000)
+        } : order.date
+      } as Order;
+    } catch (e) {
+      console.error("Error fetching order:", e);
       return null;
     }
-    const orderDocRef = doc(db, "orders", id);
-    const docSnap = await getDocFromServer(orderDocRef as any);
-  if (docSnap.exists()) {
-    const data = docSnap.data() as Record<string, any>;
-    return { id: docSnap.id, ...data } as Order;
-  } else {
-    return null;
-  }
   }
 
   const deleteOrder = async (id: string) => {

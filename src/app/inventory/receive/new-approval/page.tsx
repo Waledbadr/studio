@@ -13,8 +13,7 @@ import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, ChevronDown, Plus, Minus, Edit } from 'lucide-react';
 import { FileUploadArea } from '@/components/ui/file-upload-area';
-import { db } from '@/lib/platform';
-import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp, runTransaction } from '@/lib/realtime-shim';
+import * as d1Client from '@/lib/d1-client';
 import { useUsers } from '@/context/users-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddItemDialog } from '@/components/inventory/add-item-dialog';
@@ -226,10 +225,6 @@ export default function NewMRVApprovalPage() {
   }
 
   const validateBeforeAttachments = () => {
-    if (!db) {
-      toast({ title: 'Error', description: 'Firestore not configured.', variant: 'destructive' });
-      return false;
-    }
     if (!residenceId) {
       toast({ title: 'Error', description: 'Choose a residence.', variant: 'destructive' });
       return false;
@@ -280,40 +275,32 @@ export default function NewMRVApprovalPage() {
         const data: any = await res.json();
         attachments.push({ url: data.url, path: data.path, name: file.name });
       }
+      
       // Use first attachment for backward compatibility
       const attachmentUrl = attachments[0]?.url || null;
       const attachmentPath = attachments[0]?.path || null;
-      // Reserve a unified MRV short code now so Pending and Approved share the same number
-      const now = new Date();
-      const yy = now.getFullYear().toString().slice(-2);
-      const mm = (now.getMonth() + 1).toString().padStart(2, '0');
-      const mmNoPad = (now.getMonth() + 1).toString();
-      const counterId = `mrv-${yy}-${mm}`;
-      let nextSeq = 0;
-      await runTransaction(db, async (trx: any) => {
-        const counterRef = doc(db!, 'counters', counterId);
-        const snap = await trx.get(counterRef);
-        const current = (snap.exists() ? (snap.data() as any).seq : 0) || 0;
-        nextSeq = current + 1;
-        trx.set(counterRef, { last: nextSeq, yy, mm, updatedAt: Timestamp.now() }, { merge: true });
-      });
-      const reservedMrvShort = `MRV-${yy}${mmNoPad}${nextSeq}`;
-      const reqRef = doc(collection(db, 'mrvRequests'));
-      await setDoc(reqRef, {
-        id: reqRef.id,
+      
+      // Create MRV request using D1
+      const result = await d1Client.createMRVRequest({
         residenceId,
-        items: selectedLines.map(l => ({ id: l.id, nameEn: l.nameEn, nameAr: l.nameAr, quantity: l.quantity })),
+        items: selectedLines.map(l => ({ 
+          id: l.id, 
+          nameEn: l.nameEn, 
+          nameAr: l.nameAr, 
+          quantity: l.quantity 
+        })),
         supplierName,
         invoiceNo,
         attachmentUrl,
         attachmentPath,
-        attachments, // Store all attachments for multiple file support
+        attachments,
         notes: notes || null,
-        status: 'Pending',
-        requestedById: currentUser?.id || null,
-        requestedAt: Timestamp.now(),
-        mrvShort: reservedMrvShort,
+        requestedById: currentUser?.id || null
       });
+
+      if (!result || !result.ok) {
+        throw new Error('Failed to create MRV request');
+      }
 
       toast({ title: 'Submitted', description: 'MRV request submitted for admin approval.' });
       router.push('/inventory/receive');

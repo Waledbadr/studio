@@ -35,6 +35,7 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
   getUsers: D1Actions.getUsers,
   getServiceOrders: D1Actions.getServiceOrders,
   createMRV: D1Actions.createMRV,
+  createMRVRequest: D1Actions.createMRVRequest,
   approveMRVRequest: D1Actions.approveMRVRequest,
   createResidence: D1Actions.createResidence,
   updateResidence: D1Actions.updateResidence,
@@ -65,6 +66,7 @@ const allowed: Record<string, (...args: any[]) => Promise<any>> = {
 
   // Orders
   getOrders: D1Actions.getOrders,
+  getOrder: D1Actions.getOrder,
   createOrder: D1Actions.createOrder,
   approveOrder: D1Actions.approveOrder,
   rejectOrder: D1Actions.rejectOrder,
