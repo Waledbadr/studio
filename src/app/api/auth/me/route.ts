@@ -17,20 +17,16 @@ export async function GET(req: Request) {
     if (!token) {
       token = getCookieFromRequest(req, 'access_token') || '';
     }
-    console.log('[AUTH ME] token present:', Boolean(token), token ? token.slice(0, 12) + '...' : '');
     if (!token) return NextResponse.json({ ok: true, user: null });
     let payload: any;
     try {
       payload = await verifyAccessToken(token);
-      console.log('[AUTH ME] token verified, sub:', payload?.sub);
     } catch (verErr: any) {
-      console.warn('[AUTH ME] token verify failed:', verErr?.message || verErr);
       return NextResponse.json({ ok: true, user: null });
     }
     const env = await getCloudflareEnvRecord();
     // If D1 is not available (local dev mode), return user info from JWT payload
     if (!env || !env.DB) {
-      console.log('[AUTH ME] D1 not available, using JWT payload only');
       return NextResponse.json({ 
         ok: true, 
         user: { 
@@ -43,10 +39,8 @@ export async function GET(req: Request) {
     }
     const user = await getUser(env, payload.sub);
     if (!user) return NextResponse.json({ ok: true, user: null });
-    console.log('[AUTH ME] found user:', user?.id, user?.email);
     return NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (e: any) {
-    console.error('[AUTH ME] unexpected error', e);
     return NextResponse.json({ ok: true, user: null });
   }
 }

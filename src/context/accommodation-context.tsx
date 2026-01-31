@@ -2908,7 +2908,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Async History Fetching
   async function fetchWorkerHistory(workerId: string): Promise<AccommodationHistory[]> {
-    if (!db) return [];
+    if (USE_D1 || !db) {
+      try {
+        if (accommodationHistory.length > 0) {
+          return getWorkerHistory(workerId);
+        }
+        const h = await D1Client.getHistory();
+        return (h as AccommodationHistory[])
+          .filter((rec) => rec.workerId === workerId && rec.notes !== 'Auto-archived from occupants collection')
+          .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+      } catch (e) {
+        console.error("Failed to fetch worker history (D1)", e);
+        return getWorkerHistory(workerId);
+      }
+    }
     try {
       const q = query(collection(db, 'accommodationHistory'), where('workerId', '==', workerId));
       const snap = await getDocs(q);
@@ -2923,7 +2936,22 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }
 
   async function fetchRoomHistory(roomId: string): Promise<AccommodationHistory[]> {
-    if (!db) return [];
+    if (USE_D1 || !db) {
+      try {
+        if (accommodationHistory.length > 0) {
+          return accommodationHistory
+            .filter((h) => h.roomId === roomId || h.toRoomId === roomId || h.fromRoomId === roomId)
+            .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+        }
+        const h = await D1Client.getHistory();
+        return (h as AccommodationHistory[])
+          .filter((rec) => rec.roomId === roomId || rec.toRoomId === roomId || rec.fromRoomId === roomId)
+          .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+      } catch (e) {
+        console.error("Failed to fetch room history (D1)", e);
+        return [];
+      }
+    }
     try {
       // Fetch history where room is involved as main room, from room, or to room
       const q1 = query(collection(db, 'accommodationHistory'), where('roomId', '==', roomId));

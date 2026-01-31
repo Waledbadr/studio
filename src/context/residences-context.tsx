@@ -21,12 +21,8 @@ import {
 import { createPoller } from '@/lib/polling';
 import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
 import { safeOnSnapshot } from '@/lib/firestore-utils';
-import { getBackendErrorMessage } from '@/lib/backend-error-messages';
-
 // Use D1 only when explicitly enabled via NEXT_PUBLIC_USE_D1
 const USE_D1 = process.env.NEXT_PUBLIC_USE_D1 === 'true';
-
-const backendErrorMessage = getBackendErrorMessage();
 
 const RESIDENCES_LS_KEY = 'estatecare_residences';
 const saveToLocalStorage = (list: any[]) => {
@@ -1467,7 +1463,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: "Operation failed", variant: "destructive" });
       return;
     }
     try {
@@ -1553,7 +1549,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: "Operation failed", variant: "destructive" });
       return;
     }
     try {
@@ -1684,7 +1680,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (!db) {
-      toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+      toast({ title: "Error", description: "Operation failed", variant: "destructive" });
       return;
     }
     try {

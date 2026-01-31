@@ -9,6 +9,7 @@ let fetchMeInFlight = false;
 let refreshInFlight = false;
 let lastRefreshAttemptAt = 0;
 let hadSession = false;
+let fetchedOnce = false;
 
 let eventHandlersAttached = false;
 
@@ -27,21 +28,11 @@ function ensureAuthEventHandlers() {
   if (typeof window === 'undefined') return;
   eventHandlersAttached = true;
 
-  const refreshIfVisible = () => {
-    try {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-    } catch {
-      // ignore
-    }
-    void fetchMe({ allowRefresh: true });
-  };
-
-  window.addEventListener('focus', refreshIfVisible);
-  window.addEventListener('online', refreshIfVisible);
-  document.addEventListener('visibilitychange', refreshIfVisible);
+  // Disabled auto-refresh on focus/visibility/online to prevent excessive API calls
+  // Only respond to explicit auth changes via storage events
   window.addEventListener('storage', (e) => {
     if (e.key === 'ec_auth_changed_at') {
-      refreshIfVisible();
+      void fetchMe({ allowRefresh: true });
     }
   });
 }
@@ -94,6 +85,7 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
   // Prevent concurrent fetches
   if (fetchMeInFlight) return currentUser;
   fetchMeInFlight = true;
+  let didNotify = false;
   try {
     const res = await fetch('/api/auth/me');
     if (!res.ok) {
@@ -122,6 +114,7 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
     if (changed) {
       currentUser = user;
       listeners.forEach(l => { try { l(currentUser); } catch {} });
+      didNotify = true;
     }
     return user;
   } catch (e) {
@@ -129,11 +122,26 @@ async function fetchMe(opts?: { allowRefresh?: boolean }) {
     return null;
   } finally {
     fetchMeInFlight = false;
+    if (!didNotify && !fetchedOnce) {
+      fetchedOnce = true;
+      listeners.forEach(l => { try { l(currentUser); } catch {} });
+    } else {
+      fetchedOnce = true;
+    }
   }
 }
 
 export function getCurrentUser() {
   return currentUser;
+}
+
+export function hasFetchedAuthOnce() {
+  return fetchedOnce;
+}
+
+export function hasSessionHint() {
+  initHadSessionFromStorage();
+  return hadSession;
 }
 
 export async function refreshMe() {

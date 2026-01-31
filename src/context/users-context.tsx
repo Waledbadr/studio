@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, updateDoc, getDocs, getDoc } from '@/lib/realtime-shim';
 import { onAuthStateChanged, getCurrentUser } from '@/lib/auth-shim';
@@ -45,8 +44,6 @@ interface UsersContextType {
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
-
-const backendErrorMessage = getBackendErrorMessage();
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
@@ -275,7 +272,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
           return;
         } catch (error) {
           console.error('Error saving user (D1):', error);
-          const msg = (error as Error)?.message || backendErrorMessage;
+          const msg = (error as Error)?.message || "Operation failed";
           toast({ title: 'Error', description: msg, variant: 'destructive' });
           return;
         }
@@ -436,7 +433,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
             return;
           } catch (error) {
             console.error('Error disabling user (D1):', error);
-            const msg = (error as Error)?.message || backendErrorMessage;
+            const msg = (error as Error)?.message || "Operation failed";
             toast({ title: 'Error', description: msg, variant: 'destructive' });
             return;
           }

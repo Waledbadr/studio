@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from '@/lib/auth-shim';
+import { onAuthStateChanged, User, hasFetchedAuthOnce, hasSessionHint } from '@/lib/auth-shim';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
@@ -10,6 +10,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,18 +19,26 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(null, (u) => {
       if (!isMounted) return;
       setUser(u);
-      // Mark ready after we receive the first auth state
-      setReady(true);
+      const fetched = hasFetchedAuthOnce();
+      const sessionHint = hasSessionHint();
+      // Mark ready only after we've fetched auth once, or if there's no session hint
+      if (!hasCheckedInitial) {
+        setHasCheckedInitial(true);
+      }
+      if (fetched || !sessionHint || u) {
+        setReady(true);
+      }
     });
 
     return () => {
       isMounted = false;
       unsub();
     };
-  }, []);
+  }, [hasCheckedInitial]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !hasCheckedInitial) return;
+    // Only redirect after initial check is complete and we're sure there's no user
     if (!user && pathname !== "/login") {
       const qs = (() => {
         try {
@@ -43,7 +52,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
       router.replace(`/login?next=${encodeURIComponent(next)}`);
       return;
     }
-  }, [ready, user, pathname, router, searchParams]);
+  }, [ready, user, pathname, router, searchParams, hasCheckedInitial]);
 
   // While determining auth state, render nothing to avoid layout shift
   if (!ready) return null;

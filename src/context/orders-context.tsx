@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { getBackendErrorMessage } from '@/lib/backend-error-messages';
 import * as d1Client from '@/lib/d1-client';
 import { db, auth } from '@/lib/platform';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from '@/lib/realtime-shim';
@@ -106,8 +105,6 @@ interface OrdersContextType {
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
-
-const backendErrorMessage = getBackendErrorMessage();
 
 export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -240,7 +237,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
   
   const updateOrder = async (id: string, orderData: UpdateOrderPayload) => {
     if (!db) {
-        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
         return;
     }
     setLoading(true);
@@ -285,7 +282,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     } | null
   ) => {
     if (!db) {
-        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
         return;
     }
     try {
@@ -344,7 +341,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
 const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: string, quantityReceived: number, nameAr?: string, nameEn?: string}[], forceComplete: boolean): Promise<{ mrvId: string | null }> => {
   if (!db) {
-    toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+    toast({ title: "Error", description: "Operation failed", variant: "destructive" });
     return { mrvId: null };
   }
   // Client-side guard to avoid Firestore permission errors; allow Admin or Supervisor
@@ -653,7 +650,7 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
 
   const deleteOrder = async (id: string) => {
     if (!db) {
-        toast({ title: "Error", description: backendErrorMessage, variant: "destructive" });
+        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
         return;
     }
     try {
