@@ -1,0 +1,135 @@
+[
+  {
+    "nameAr": "مكيف شباك",
+    "nameEn": "Window AC",
+    "category": "أجهزة كهربائية",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "مكيف شباك",
+      "مكيف شباك قديم",
+      "مكيف شباك صغير",
+      "مكيف شباك كبير",
+      "مكيف شباك قوي"
+    ],
+    "keywordsEn": [
+      "Window AC",
+      "Window Air Conditioner",
+      "Window Unit"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "كرسي",
+    "nameEn": "Chair",
+    "category": "أثاث",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "مقعد",
+      "كرسي جلوس",
+      "كرسي بلاستيك"
+    ],
+    "keywordsEn": [
+      "Seat",
+      "Plastic Chair",
+      "Office Chair",
+      "Chair"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "لمبة",
+    "nameEn": "Bulb",
+    "category": "Electrical",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "لمبة",
+      "لمبه",
+      "اضاءة",
+      "انارة",
+      "ضوء"
+    ],
+    "keywordsEn": [
+      "Bulb",
+      "Lamp",
+      "Light"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "مكنسة",
+    "nameEn": "Broom",
+    "category": "Cleaning",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "مكنسة",
+      "مكنسه",
+      "فرشة ارض"
+    ],
+    "keywordsEn": [
+      "Broom",
+      "Brush",
+      "Sweeper"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "قفاز",
+    "nameEn": "Glove",
+    "category": "Assets",
+    "unit": "زوج",
+    "keywordsAr": [
+      "قفاز",
+      "قفازات",
+      "جوانتي"
+    ],
+    "keywordsEn": [
+      "Glove",
+      "Gloves"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "دلو",
+    "nameEn": "Bucket",
+    "category": "Cleaning",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "دلو",
+      "سطل",
+      "جردل"
+    ],
+    "keywordsEn": [
+      "Bucket",
+      "Pail"
+    ],
+    "variants": {}
+  },
+  {
+    "nameAr": "طاولة",
+    "nameEn": "Desk",
+    "category": "Office",
+    "unit": "قطعة",
+    "keywordsAr": [
+      "طاولة",
+      "طاوله",
+      "مكتب",
+      "منضدة"
+    ],
+    "keywordsEn": [
+      "Desk",
+      "Table",
+      "Workstation"
+    ],
+    "variants": {
+      "المقاس": [
+        "120 سم",
+        "160 سم",
+        "200 سم"
+      ],
+      "النوع": [
+        "مكتب",
+        "طعام"
+      ]
+    }
+  }
+]

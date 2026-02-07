@@ -1,0 +1,37 @@
+[
+  {
+    "id": "it_import_1770019829080_0",
+    "nameAr": "مكيف شباك",
+    "nameEn": "Window AC",
+    "descriptionAr": null,
+    "descriptionEn": null,
+    "category": "أجهزة كهربائية",
+    "subcategory": "مكيفات",
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "مكيف شباك",
+      "مكيف شباك قديم",
+      "مكيف شباك صغير",
+      "مكيف شباك كبير",
+      "مكيف شباك قوي"
+    ],
+    "keywordsEn": [
+      "Window AC",
+      "Window Air Conditioner",
+      "Window Unit"
+    ],
+    "variants": {
+      "السعة": [
+        "12 وحدة",
+        "21 وحدة",
+        "24 وحدة"
+      ]
+    },
+    "lifespanDays": 2920,
+    "createdAt": "2026-02-02T08:10:29.080Z",
+    "updatedAt": "2026-02-02T08:10:29.081Z"
+  }
+]

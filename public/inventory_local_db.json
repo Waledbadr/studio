@@ -1,0 +1,260 @@
+[
+  {
+    "id": "it_import_1770019873166_0",
+    "nameAr": "مكيف شباك",
+    "nameEn": "Window AC",
+    "descriptionAr": null,
+    "descriptionEn": null,
+    "category": "أجهزة كهربائية",
+    "subcategory": "مكيفات",
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "مكيف شباك",
+      "مكيف شباك قديم",
+      "مكيف شباك صغير",
+      "مكيف شباك كبير",
+      "مكيف شباك قوي"
+    ],
+    "keywordsEn": [
+      "Window AC",
+      "Window Air Conditioner",
+      "Window Unit"
+    ],
+    "variants": {
+      "السعة": [
+        "12 وحدة",
+        "21 وحدة",
+        "24 وحدة"
+      ]
+    },
+    "lifespanDays": 2920,
+    "createdAt": "2026-02-02T08:11:13.166Z",
+    "updatedAt": "2026-02-02T08:11:13.167Z"
+  },
+  {
+    "id": "it_import_1770019873167_1",
+    "nameAr": "كرسي",
+    "nameEn": "Chair",
+    "descriptionAr": "كرسي بلاستيك أبيض كبير",
+    "descriptionEn": null,
+    "category": "أثاث",
+    "subcategory": "كراسي",
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "مقعد",
+      "كرسي جلوس",
+      "كرسي بلاستيك",
+      "كرسي",
+      "كرسيّ"
+    ],
+    "keywordsEn": [
+      "Seat",
+      "Plastic Chair",
+      "Office Chair",
+      "Chair"
+    ],
+    "variants": {
+      "المادة": [
+        "بلاستيك"
+      ],
+      "اللون": [
+        "أبيض"
+      ],
+      "الحجم": [
+        "كبير"
+      ]
+    },
+    "lifespanDays": 1095,
+    "createdAt": "2026-02-02T08:11:13.167Z",
+    "updatedAt": "2026-02-02T08:11:13.167Z"
+  },
+  {
+    "id": "it_import_1770019873167_2",
+    "nameAr": "لمبة",
+    "nameEn": "Bulb",
+    "descriptionAr": "لمبة إضاءة",
+    "descriptionEn": null,
+    "category": "Electrical",
+    "subcategory": null,
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "لمبة",
+      "لمبه",
+      "اضاءة",
+      "انارة",
+      "ضوء"
+    ],
+    "keywordsEn": [
+      "Bulb",
+      "Lamp",
+      "Light"
+    ],
+    "variants": {
+      "النوع": [
+        "ليد",
+        "فلورسنت",
+        "هالوجين"
+      ],
+      "القوة": [
+        "9 وات",
+        "18 وات",
+        "36 وات"
+      ]
+    },
+    "lifespanDays": 730,
+    "createdAt": "2026-02-02T08:11:13.167Z",
+    "updatedAt": "2026-02-02T08:11:13.167Z"
+  },
+  {
+    "id": "it_import_1770019873168_3",
+    "nameAr": "مكنسة",
+    "nameEn": "Broom",
+    "descriptionAr": "مكنسة يدوية",
+    "descriptionEn": null,
+    "category": "Cleaning",
+    "subcategory": null,
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "مكنسة",
+      "مكنسه",
+      "فرشة ارض"
+    ],
+    "keywordsEn": [
+      "Broom",
+      "Brush",
+      "Sweeper"
+    ],
+    "variants": {
+      "النوع": [
+        "يدوية",
+        "كهربائية"
+      ],
+      "المقاس": [
+        "صغير",
+        "وسط",
+        "كبير"
+      ]
+    },
+    "lifespanDays": 1095,
+    "createdAt": "2026-02-02T08:11:13.168Z",
+    "updatedAt": "2026-02-02T08:11:13.168Z"
+  },
+  {
+    "id": "it_import_1770019873168_4",
+    "nameAr": "قفاز",
+    "nameEn": "Glove",
+    "descriptionAr": "قفاز طبي",
+    "descriptionEn": null,
+    "category": "Assets",
+    "subcategory": null,
+    "unit": "زوج",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "قفاز",
+      "قفازات",
+      "جوانتي"
+    ],
+    "keywordsEn": [
+      "Glove",
+      "Gloves"
+    ],
+    "variants": {
+      "المقاس": [
+        "صغير",
+        "وسط",
+        "كبير"
+      ],
+      "النوع": [
+        "طبي",
+        "منزلي"
+      ]
+    },
+    "lifespanDays": null,
+    "createdAt": "2026-02-02T08:11:13.168Z",
+    "updatedAt": "2026-02-02T08:11:13.168Z"
+  },
+  {
+    "id": "it_import_1770019873168_5",
+    "nameAr": "دلو",
+    "nameEn": "Bucket",
+    "descriptionAr": "دلو ماء",
+    "descriptionEn": null,
+    "category": "Cleaning",
+    "subcategory": null,
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "دلو",
+      "سطل",
+      "جردل"
+    ],
+    "keywordsEn": [
+      "Bucket",
+      "Pail"
+    ],
+    "variants": {
+      "السعة": [
+        "5 لتر",
+        "10 لتر",
+        "20 لتر"
+      ]
+    },
+    "lifespanDays": 1460,
+    "createdAt": "2026-02-02T08:11:13.168Z",
+    "updatedAt": "2026-02-02T08:11:13.168Z"
+  },
+  {
+    "id": "it_import_1770019873168_6",
+    "nameAr": "طاولة",
+    "nameEn": "Desk",
+    "descriptionAr": "طاولة مكتب",
+    "descriptionEn": null,
+    "category": "Office",
+    "subcategory": null,
+    "unit": "قطعة",
+    "stock": 0,
+    "stockByResidence": {},
+    "minStock": 0,
+    "keywordsAr": [
+      "طاولة",
+      "طاوله",
+      "مكتب",
+      "منضدة"
+    ],
+    "keywordsEn": [
+      "Desk",
+      "Table",
+      "Workstation"
+    ],
+    "variants": {
+      "المقاس": [
+        "120 سم",
+        "160 سم",
+        "200 سم"
+      ],
+      "النوع": [
+        "مكتب",
+        "طعام"
+      ]
+    },
+    "lifespanDays": 2555,
+    "createdAt": "2026-02-02T08:11:13.168Z",
+    "updatedAt": "2026-02-02T08:11:13.168Z"
+  }
+]

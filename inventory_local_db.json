@@ -1,0 +1,66 @@
+[ 
+  {
+    "nameAr": "لمبة",
+    "nameEn": "Bulb",
+    "category": "Electrical",
+    "unit": "قطعة",
+    "lifespanDays": 730,
+    "keywordsAr": ["لمبة", "لمبه", "اضاءة", "انارة", "ضوء"],
+    "keywordsEn": ["Bulb", "Lamp", "Light"],
+    "variants": {
+      "النوع": ["ليد", "فلورسنت", "هالوجين"],
+      "القوة": ["9 وات", "18 وات", "36 وات"]
+    }
+  },
+  {
+    "nameAr": "مكنسة",
+    "nameEn": "Broom",
+    "category": "Cleaning",
+    "unit": "قطعة",
+    "lifespanDays": 1095,
+    "keywordsAr": ["مكنسة", "مكنسه", "فرشة ارض"],
+    "keywordsEn": ["Broom", "Brush", "Sweeper"],
+    "variants": {
+      "النوع": ["يدوية", "كهربائية"],
+      "المقاس": ["صغير", "وسط", "كبير"]
+    }
+  },
+  {
+    "nameAr": "قفاز",
+    "nameEn": "Glove",
+    "category": "Assets",
+    "unit": "زوج",
+    "lifespanDays": 365,
+    "keywordsAr": ["قفاز", "قفازات", "جوانتي"],
+    "keywordsEn": ["Glove", "Gloves"],
+    "variants": {
+      "المقاس": ["صغير", "وسط", "كبير"],
+      "النوع": ["طبي", "منزلي"]
+    }
+  },
+  {
+    "nameAr": "دلو",
+    "nameEn": "Bucket",
+    "category": "Cleaning",
+    "unit": "قطعة",
+    "lifespanDays": 1460,
+    "keywordsAr": ["دلو", "سطل", "جردل"],
+    "keywordsEn": ["Bucket", "Pail"],
+    "variants": {
+      "السعة": ["5 لتر", "10 لتر", "20 لتر"]
+    }
+  },
+  {
+    "nameAr": "طاولة",
+    "nameEn": "Desk",
+    "category": "Office",
+    "unit": "قطعة",
+    "lifespanDays": 2555,
+    "keywordsAr": ["طاولة", "طاوله", "مكتب", "منضدة"],
+    "keywordsEn": ["Desk", "Table", "Workstation"],
+    "variants": {
+      "المقاس": ["120 سم", "160 سم", "200 سم"],
+      "النوع": ["مكتب", "طعام"]
+    }
+  }
+]

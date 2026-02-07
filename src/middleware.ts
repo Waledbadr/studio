@@ -10,7 +10,9 @@ const DEFAULT_SECRET = 'development_secret_key_must_be_long';
 
 // Public paths should include auth routes and pages needed to bootstrap the first user.
 // NOTE: `/api/d1` must return JSON errors for RPC callers; auth is enforced inside the route.
-const PUBLIC_PATHS = ['/login', '/register', '/api/auth', '/api/d1', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt'];
+const PUBLIC_PATHS = ['/login', '/register', '/api/auth', '/api/d1', '/api/seed-local-user', '/_next', '/static', '/favicon.ico', '/robots.txt']
+  // Allow import route in development for ad-hoc data seeding
+  .concat(process.env.NODE_ENV !== 'production' ? ['/api/import-inventory'] : []);
 
 async function verifyToken(token: string) {
   const TEAM = await getRuntimeEnv('CLOUDFLARE_ACCESS_TEAM_DOMAIN', '');

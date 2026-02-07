@@ -1,0 +1,101 @@
+[
+  {
+    "originalName": "مكيف شباك",
+    "itemName": "مكيف شباك",
+    "unit": "قطعة",
+    "itemNameEn": "Window AC",
+    "synonyms": ["مكيف شباك", "مكيف شباك قديم", "مكيف شباك صغير", "مكيف شباك كبير", "مكيف شباك قوي"],
+    "synonymsEn": ["Window AC", "Window Air Conditioner", "Window Unit"],
+    "category": "أجهزة كهربائية",
+    "subcategory": "مكيفات",
+    "variables": {
+      "السعة": ["12 وحدة", "21 وحدة", "24 وحدة"]
+    },
+    "lifespan": "8 سنوات"
+  },
+  {
+    "originalName": "كرسي بلاستيك أبيض كبير",
+    "itemName": "كرسي",
+    "unit": "قطعة",
+    "itemNameEn": "Chair",
+    "synonyms": ["مقعد", "كرسي جلوس", "كرسي بلاستيك", "كرسي", "كرسيّ"],
+    "synonymsEn": ["Seat", "Plastic Chair", "Office Chair", "Chair"],
+    "category": "أثاث",
+    "subcategory": "كراسي",
+    "variables": {
+      "المادة": "بلاستيك",
+      "اللون": "أبيض",
+      "الحجم": "كبير"
+    },
+    "lifespan": "3 سنوات"
+  },
+  {
+    "originalName": "لمبة إضاءة",
+    "itemName": "لمبة",
+    "unit": "قطعة",
+    "itemNameEn": "Bulb",
+    "synonyms": ["لمبة", "لمبه", "اضاءة", "انارة", "ضوء"],
+    "synonymsEn": ["Bulb", "Lamp", "Light"],
+    "category": "Electrical",
+    "variables": {
+      "النوع": ["ليد", "فلورسنت", "هالوجين"],
+      "القوة": ["9 وات", "18 وات", "36 وات"]
+    },
+    "lifespan": "2 سنوات"
+  },
+  {
+    "originalName": "مكنسة يدوية",
+    "itemName": "مكنسة",
+    "unit": "قطعة",
+    "itemNameEn": "Broom",
+    "synonyms": ["مكنسة", "مكنسه", "فرشة ارض"],
+    "synonymsEn": ["Broom", "Brush", "Sweeper"],
+    "category": "Cleaning",
+    "variables": {
+      "النوع": ["يدوية", "كهربائية"],
+      "المقاس": ["صغير", "وسط", "كبير"]
+    },
+    "lifespan": "3 سنوات"
+  },
+  {
+    "originalName": "قفاز طبي",
+    "itemName": "قفاز",
+    "unit": "زوج",
+    "itemNameEn": "Glove",
+    "synonyms": ["قفاز", "قفازات", "جوانتي"],
+    "synonymsEn": ["Glove", "Gloves"],
+    "category": "Assets",
+    "variables": {
+      "المقاس": ["صغير", "وسط", "كبير"],
+      "النوع": ["طبي", "منزلي"]
+    },
+    "lifespan": "سنة"
+  },
+  {
+    "originalName": "دلو ماء",
+    "itemName": "دلو",
+    "unit": "قطعة",
+    "itemNameEn": "Bucket",
+    "synonyms": ["دلو", "سطل", "جردل"],
+    "synonymsEn": ["Bucket", "Pail"],
+    "category": "Cleaning",
+    "variables": {
+      "السعة": ["5 لتر", "10 لتر", "20 لتر"]
+    },
+    "lifespan": "4 سنوات"
+  },
+  {
+    "originalName": "طاولة مكتب",
+    "itemName": "طاولة",
+    "unit": "قطعة",
+    "itemNameEn": "Desk",
+    "synonyms": ["طاولة", "طاوله", "مكتب", "منضدة"],
+    "synonymsEn": ["Desk", "Table", "Workstation"],
+    "category": "Office",
+    "variables": {
+      "المقاس": ["120 سم", "160 سم", "200 سم"],
+      "النوع": ["مكتب", "طعام"]
+    },
+    "lifespan": "7 سنوات"
+  }
+]

@@ -254,6 +254,58 @@ export default function InventoryPage() {
     XLSX.writeFile(workbook, 'inventory.xlsx');
   };
 
+  // استيراد الأصناف من ملف عبر API
+  const handleImportInventory = async () => {
+    try {
+      const res = await fetch('/api/import-inventory', { method: 'POST' });
+      if (res.status === 503) {
+        // D1 not available - do local fallback
+        const fallback = await fetch('/api/import-inventory/local');
+        if (!fallback.ok) {
+          toast({ title: 'خطأ', description: 'ملف الاستيراد المحلي غير موجود.', variant: 'destructive' });
+          return;
+        }
+        const payload = await fallback.json();
+        const items = (payload.items || []) as any[];
+        // Transform to storage shape
+        const transformed = (items || []).map((it: any, idx: number) => {
+          const id = `it_local_${Date.now()}_${idx}`;
+          const variantsArray = it.variants && typeof it.variants === 'object'
+            ? Object.values(it.variants).flat()
+            : Array.isArray(it.variants) ? it.variants : [];
+          return { id, name: it.nameEn || it.nameAr || id, nameAr: it.nameAr || '', nameEn: it.nameEn || '', category: it.category || '', unit: it.unit || '', lifespanDays: it.lifespanDays || 0, variants: variantsArray, keywordsAr: it.keywordsAr || [], keywordsEn: it.keywordsEn || [], stock: 0, stockByResidence: {} } as any;
+        });
+        // Save to localStorage so InventoryContext fallback picks it up
+        try {
+          localStorage.setItem('estatecare_inventory', JSON.stringify(transformed));
+          const cats = Array.from(new Set(transformed.map((t:any) => (t.category||'').trim()).filter(Boolean)));
+          localStorage.setItem('estatecare_inventory_categories', JSON.stringify(cats));
+          toast({ title: 'تم الاستيراد محليًا', description: `تم إضافة ${transformed.length} صنف إلى المتصفح المحلي.` });
+          loadInventory();
+        } catch (e) {
+          toast({ title: 'خطأ', description: 'لم يتم حفظ الأصناف محليًا.', variant: 'destructive' });
+        }
+        return;
+      }
+
+      const data = await res.json() as any;
+      if (data?.results) {
+        const successCount = data.results.filter((r:any) => r.ok).length;
+        const errorCount = data.results.filter((r:any) => r.error).length;
+        toast({
+          title: 'تم الاستيراد',
+          description: `تم استيراد ${successCount} صنف${successCount !== 1 ? ' بنجاح' : ''}${errorCount ? '، وحدثت أخطاء في ' + errorCount + ' صنف' : ''}`,
+          variant: errorCount ? 'destructive' : undefined,
+        });
+        loadInventory();
+      } else {
+        toast({ title: 'خطأ في الاستيراد', description: 'لم يتم العثور على نتائج الاستيراد.', variant: 'destructive' });
+      }
+    } catch (err) {
+      toast({ title: 'خطأ في الاتصال', description: String(err), variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex items-center justify-between mb-4">
@@ -269,123 +321,20 @@ export default function InventoryPage() {
             <Move className="mr-2 h-4 w-4" /> {dict.stockTransfer || 'Stock Transfer'}
           </Button>
           {isAdmin && (
-            <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> {dict.addCategory || 'Add Category'}</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <form onSubmit={handleAddCategory}>
-                  <DialogHeader>
-                    <DialogTitle>{dict.addCategoryTitle || 'Add New Category'}</DialogTitle>
-                    <DialogDescription>{dict.addCategoryDescription || 'Enter the name for the new inventory category.'}</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <Label htmlFor="category-name">{dict.categoryNameLabel || 'Category Name'}</Label>
-                    <Input id="category-name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={dict.exampleCategoryPlaceholder || 'e.g., Landscaping'}/>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit">{dict.saveCategory || 'Save Category'}</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={handleImportInventory}>
+              <ListOrdered className="mr-2 h-4 w-4" />
+                {(dict as any).importInventory || 'استيراد الأصناف من ملف'}
+            </Button>
           )}
-
-          <AddItemDialog 
-            isOpen={isAddItemDialogOpen} 
-            onOpenChange={setIsAddItemDialogOpen} 
-            onItemAdded={handleItemAdded}
-            triggerButton={
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" /> {dict.addItem || 'Add Item'}
-              </Button>
-            }
-          />
         </div>
       </div>
 
-  {/* Negative stock auto-fix banner removed */}
-      
-      <Card>
-        <CardContent className="p-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="border-b p-4 flex justify-between items-center gap-4 flex-wrap">
-        <TabsList>
-          <TabsTrigger value="all">{dict.allItems || 'All Items'}</TabsTrigger>
-                    {userResidences.map((res) => (
-                      <TabsTrigger key={res.id} value={res.id}>
-                        {res.name}
-                      </TabsTrigger>
-                    ))}
-                </TabsList>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <div className="w-full sm:w-64">
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder={dict.searchPlaceholder || 'Search / بحث'}
-                      aria-label="Search items"
-                    />
-                  </div>
-                  <div className="w-48">
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={dict.categoryPlaceholder || 'Category'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{dict.allCategories || 'All Categories'}</SelectItem>
-                        {categories.map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-            </div>
-            <TabsContent value="all" className="p-6 pt-4">
-                {renderItemsTable('all')}
-            </TabsContent>
-             {userResidences.map((res) => (
-                <TabsContent key={res.id} value={res.id} className="p-6 pt-4">
-                    {renderItemsTable(res.id)}
-                </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
-      
-      <EditItemDialog
-          isOpen={isEditItemDialogOpen}
-          onOpenChange={setIsEditItemDialogOpen}
-          onItemUpdated={handleItemUpdated}
-          item={itemToEdit}
-      />
-
-      {/* Edit Category Dialog */}
-      <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
-          <DialogContent>
-              <form onSubmit={handleUpdateCategory}>
-                  <DialogHeader>
-                      <DialogTitle>Edit Category Name</DialogTitle>
-                      <DialogDescription>
-                          Renaming a category will update it for all associated items.
-                      </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                      <Label htmlFor="edit-category-name">New Category Name</Label>
-                      <Input 
-                        id="edit-category-name" 
-                        value={editingCategory?.newName || ''} 
-                        onChange={(e) => setEditingCategory(prev => prev ? ({...prev, newName: e.target.value}) : prev)}
-                        placeholder="e.g., General Maintenance"
-                      />
-                  </div>
-                  <DialogFooter>
-                      <Button type="submit" disabled={!editingCategory || editingCategory?.oldName === editingCategory?.newName}>Save Changes</Button>
-                  </DialogFooter>
-              </form>
-          </DialogContent>
-      </Dialog>
+      <div className="p-4">
+        <p className="text-sm text-muted-foreground mb-2">Temporary import tool UI for dev: press the button to import adapted items into the local database.</p>
+        {isAdmin && (
+          <Button onClick={handleImportInventory}>{(dict as any).importInventory || 'استيراد الأصناف من ملف'}</Button>
+        )}
+      </div>
     </div>
   );
 }

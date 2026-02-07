@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Import inventory into localStorage</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:2rem;background:#f8fafc;color:#0f172a}</style>
+  </head>
+  <body>
+    <h1>استعراض الأصناف قبل الاستيراد</h1>
+    <div id="status">جاري التحميل...</div>
+    <div id="table-container"></div>
+    <button id="import-btn" style="margin-top:2rem;font-size:1.1em;padding:0.5em 2em;display:none">استيراد الأصناف إلى النظام</button>
+    <script>
+      let items = [];
+      async function fetchItems() {
+        const s = document.getElementById('status');
+        try {
+          s.textContent = 'جاري جلب الأصناف...';
+          const r = await fetch('/api/import-inventory/local');
+          if (!r.ok) throw new Error('فشل في جلب البيانات: ' + r.status);
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || 'لا توجد أصناف');
+          items = j.items || [];
+          if (!Array.isArray(items) || !items.length) throw new Error('لا توجد أصناف للعرض');
+          renderTable(items);
+          document.getElementById('import-btn').style.display = '';
+          s.textContent = `تم جلب ${items.length} صنف. يمكنك المراجعة ثم الضغط على زر الاستيراد.`;
+        } catch (e) {
+          s.textContent = 'خطأ: ' + (e && e.message ? e.message : String(e));
+        }
+      }
+      function renderTable(data) {
+        const container = document.getElementById('table-container');
+        let html = '<table border="1" cellpadding="6" style="border-collapse:collapse;background:#fff"><thead><tr>' +
+          '<th>#</th><th>الاسم (عربي)</th><th>الاسم (إنجليزي)</th><th>التصنيف</th><th>الوحدة</th><th>العمر الافتراضي</th><th>المتغيرات</th><th>الكلمات المفتاحية (عربي)</th><th>الكلمات المفتاحية (إنجليزي)</th></tr></thead><tbody>';
+        data.forEach((it, i) => {
+          html += `<tr><td>${i+1}</td><td>${it.nameAr||''}</td><td>${it.nameEn||''}</td><td>${it.category||''}</td><td>${it.unit||''}</td><td>${it.lifespanDays||''}</td>`;
+          // المتغيرات
+          html += `<td>${it.variants ? Object.entries(it.variants).map(([k,v])=>k+': '+(Array.isArray(v)?v.join(', '):v)).join('<br>') : ''}</td>`;
+          // الكلمات المفتاحية العربية
+          html += `<td>${(it.keywordsAr||[]).join(', ')}</td>`;
+          // الكلمات المفتاحية الانجليزية
+          html += `<td>${(it.keywordsEn||[]).join(', ')}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }
+      document.getElementById('import-btn').onclick = function() {
+        const s = document.getElementById('status');
+        // نفس التحويل السابق
+        const transformed = items.map((it, idx) => {
+          const id = `it_local_${Date.now()}_${idx}`;
+          const variantsArray = it.variants && typeof it.variants === 'object' ? Object.values(it.variants).flat() : Array.isArray(it.variants) ? it.variants : [];
+          return { id, name: it.nameEn || it.nameAr || id, nameAr: it.nameAr || '', nameEn: it.nameEn || '', category: it.category || '', unit: it.unit || '', lifespanDays: it.lifespanDays || 0, variants: variantsArray, keywordsAr: it.keywordsAr || [], keywordsEn: it.keywordsEn || [], stock: 0, stockByResidence: {} };
+        });
+        localStorage.setItem('estatecare_inventory', JSON.stringify(transformed));
+        const cats = Array.from(new Set(transformed.map(t => (t.category||'').trim()).filter(Boolean)));
+        localStorage.setItem('estatecare_inventory_categories', JSON.stringify(cats));
+        s.textContent = `تم استيراد ${transformed.length} صنف بنجاح!`;
+        setTimeout(() => { window.location.href = '/inventory'; }, 1000);
+      };
+      fetchItems();
+    </script>
+  </body>
+</html>

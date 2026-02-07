@@ -1191,13 +1191,50 @@ export async function assignMaintenance(env: any, requestId: string, assigneeId:
 
 // --- Orders workflow ---
 export async function createOrder(env: any, payload: any) {
-    const d1 = getD1FromEnv(env);
-    if (!d1) return { ok: false, error: 'D1 binding missing' };
-    const db = getDb(d1);
-    const nowIso = new Date().toISOString();
-    const id = `ORD-${Date.now()}`;
-    await db.insert(orders).values({ id, residence: payload.residence || '', residenceId: payload.residenceId || null, items: JSON.stringify(payload.items || []), requestedById: payload.requestedById || null, requestedByName: payload.requestedByName || null, notes: payload.notes || null, date: nowIso, status: 'Pending' });
-    return { ok: true, id };
+    try {
+        const d1 = getD1FromEnv(env);
+        if (!d1) return { ok: false, error: 'D1 binding missing' };
+        const db = getDb(d1);
+        
+        const now = new Date();
+        const yy = now.getFullYear().toString().slice(-2);
+        const mm = now.getMonth() + 1;
+        const counterId = `mr-${yy}-${String(mm).padStart(2, '0')}`;
+
+        // Read and increment counter
+        let nextSeq = 1;
+        try {
+            const existing = await db.select().from(counters).where(eq(counters.id, counterId));
+            if (existing.length > 0) {
+                const curr = Number((existing[0] as any).last || 0);
+                nextSeq = curr + 1;
+                await db.update(counters).set({ last: nextSeq, updatedAt: new Date().toISOString() }).where(eq(counters.id, counterId));
+            } else {
+                await db.insert(counters).values({ id: counterId, last: nextSeq, updatedAt: new Date().toISOString() });
+            }
+        } catch (err: any) {
+            console.error('[createOrder] Counter error:', err);
+             // Try one more time to just insert if select failed (maybe table empty?)
+             // Fallback to simpler insert without extra fields, or just force insert
+             try {
+                await db.insert(counters).values({ id: counterId, last: 1, updatedAt: new Date().toISOString() });
+             } catch (retryErr: any) {
+                console.error('[createOrder] Retry failed:', retryErr);
+                // If it fails again, fallback to timestamp to avoid blocking the user
+                nextSeq = Date.now();
+                // return { ok: false, error: 'Database counter error. Please run migrations.' };
+             }
+        }
+
+        const id = `MR-${yy}${mm}${nextSeq}`;
+        const nowIso = now.toISOString();
+
+        await db.insert(orders).values({ id, residence: payload.residence || '', residenceId: payload.residenceId || null, items: JSON.stringify(payload.items || []), requestedById: payload.requestedById || null, requestedByName: payload.requestedByName || null, notes: payload.notes || null, date: nowIso, status: 'Pending' });
+        return { ok: true, id };
+    } catch (e: any) {
+        console.error('[createOrder] Failed:', e);
+        return { ok: false, error: e?.message || 'Create order failed' };
+    }
 }
 
 export async function approveOrder(env: any, orderId: string, approverId: string, approverName?: string) {
