@@ -279,7 +279,8 @@ export function BatchOperationsDialog({
               </>
             )}
 
-            {/*  className="space-y-2">
+            {/* Date */}
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="date">
                   {operationType === 'CHECK_IN' && 'تاريخ التسكين'}
@@ -331,8 +332,7 @@ export function BatchOperationsDialog({
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>{dateWarning}</AlertDescription>
                 </Alert>
-              )}className="mt-1"
-              />
+              )}
             </div>
 
             {/* Reason (for CHECK_OUT and TRANSFER) */}
@@ -359,21 +359,17 @@ export function BatchOperationsDialog({
                 placeholder={getLocalizedMessage({ ar: 'أدخل أي ملاحظات إضافية', en: 'Enter any additional notes' })}
                 className="mt-1"
                 rows={3}
-              /> dir="rtl">
-                        {result.error === 'worker-not-found' && 'العامل غير موجود'}
-                        {result.error === 'worker-already-assigned' && 'العامل مسكّن بالفعل'}
-                        {result.error === 'worker-not-assigned' && 'العامل غير مسكّن'}
-                        {result.error === 'occupant-not-found' && 'سجل الإقامة غير موجود'}
-                        {result.error === 'room-not-found' && 'الغرفة غير موجودة'}
-                        {result.error === 'room-full' && 'الغرفة ممتلئة'}
-                        {result.error === 'nationality-mismatch' && 'تعارض في الجنسية'}
-                        {result.error === 'CHECKOUT_IN_FUTURE' && 'تاريخ الخروج في المستقبل'}
-                        {result.error === 'MONTH_ALREADY_INVOICED' && 'تم إصدار فاتورة لهذا الشهر'}
-                        {result.error === 'CHECKIN_BEFORE_LAST_CHECKOUT' && 'تاريخ الدخول قبل آخر خروج'}
-                        {result.error === 'WORKER_STILL_CHECKED_IN' && 'العامل لديه سجل إقامة نشط'}
-                        {result.error.includes('تعارض') && result.error}
-                        {result.error.includes(':') && result.error.split(':')[1]}
-                        {!['worker-not-found', 'worker-already-assigned', 'worker-not-assigned', 'occupant-not-found', 'room-not-found', 'room-full', 'nationality-mismatch', 'CHECKOUT_IN_FUTURE', 'MONTH_ALREADY_INVOICED', 'CHECKIN_BEFORE_LAST_CHECKOUT', 'WORKER_STILL_CHECKED_IN'].includes(result.error) && !result.error.includes('تعارض') && !result.error.includes(':'
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className={`p-4 rounded-lg flex items-center gap-3 ${
+              Object.values(results).every(r => r.success)
+                ? 'bg-green-100 text-green-800'
+                : 'bg-yellow-100 text-yellow-800'
+            }`} dir="rtl">
+              {Object.values(results).every(r => r.success) ? (
                 <>
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span>تمت العملية بنجاح</span>
@@ -387,8 +383,7 @@ export function BatchOperationsDialog({
             </div>
 
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {Obj!!dateWarning ||
-                  ect.entries(results).map(([workerId, result]) => {
+              {Object.entries(results).map(([workerId, result]) => {
                 const worker = workers.find(w => w.id === workerId);
                 return (
                   <div

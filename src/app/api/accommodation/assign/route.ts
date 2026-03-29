@@ -50,7 +50,7 @@ export async function POST(request: Request) {
         async () => {
           console.log('📡 [Assign] Fetching all workers from Firestore (cache miss)');
           const snap = await adminDb.collection('workers').get();
-          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
         },
         10 * 60 * 1000 // 10 min cache
       );
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         async () => {
           console.log('📡 [Assign] Fetching all occupants from Firestore (cache miss)');
           const snap = await adminDb.collection('occupants').get();
-          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
         },
         2 * 60 * 1000 // 2 min cache (occupants change frequently)
       );

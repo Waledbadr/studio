@@ -32,7 +32,7 @@ interface CreateTransferDialogProps {
 }
 
 export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers = [] }: CreateTransferDialogProps) {
-  const { workers, occupants, createTransferRequest, getWorkerHistory, accommodationHistory } = useAccommodation();
+  const { workers, occupants, createTransferRequest, fetchWorkerHistory } = useAccommodation();
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { toast } = useToast();
@@ -102,10 +102,10 @@ export function CreateTransferDialog({ isOpen, onOpenChange, preSelectedWorkers 
   };
 
   // Check date conflicts for a worker
-  const checkDateConflictsForWorker = (workerId: string) => {
+  const checkDateConflictsForWorker = async (workerId: string) => {
     if (!transferDate) return;
     
-    const workerHistory = getWorkerHistory(workerId);
+    const workerHistory = await fetchWorkerHistory(workerId);
     const historyRecords: WorkerHistoryRecord[] = workerHistory
       .filter(h => h.actionType === 'CHECK_IN' || h.actionType === 'CHECK_OUT' || h.actionType === 'TRANSFER')
       .map(h => ({

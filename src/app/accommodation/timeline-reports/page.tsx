@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react';
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -38,14 +39,13 @@ import {
 } from 'lucide-react';
 
 export default function TimelineReportsPage() {
-  const { 
-    accommodationHistory, 
-    getHistoryByDateRange,
+  const {
+    fetchHistoryByDateRange,
     workers,
     residences,
   } = useAccommodation();
   const { currentUser } = useUsers();
-  
+
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
     if (!currentUser) return residences;
@@ -58,32 +58,47 @@ export default function TimelineReportsPage() {
     date.setMonth(date.getMonth() - 1);
     return date.toISOString().split('T')[0];
   });
-  
+
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [actionTypeFilter, setActionTypeFilter] = useState<string>('ALL');
   const [residenceFilter, setResidenceFilter] = useState<string>('ALL');
 
-  // Get filtered history
-  const filteredHistory = useMemo(() => {
-    let history = getHistoryByDateRange(
-      startDate + 'T00:00:00.000Z',
-      endDate + 'T23:59:59.999Z'
-    );
+  const [filteredHistory, setFilteredHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-    if (actionTypeFilter !== 'ALL') {
-      history = history.filter(h => h.actionType === actionTypeFilter);
-    }
+  // Fetch filtered history
+  useEffect(() => {
+    let isMounted = true;
+    const fetchHistory = async () => {
+      setIsLoadingHistory(true);
+      try {
+        let history = await fetchHistoryByDateRange(
+          startDate + 'T00:00:00.000Z',
+          endDate + 'T23:59:59.999Z'
+        );
 
-    if (residenceFilter !== 'ALL') {
-      history = history.filter(h => 
-        h.residenceId === residenceFilter ||
-        h.fromResidenceId === residenceFilter ||
-        h.toResidenceId === residenceFilter
-      );
-    }
+        if (actionTypeFilter !== 'ALL') {
+          history = history.filter(h => h.actionType === actionTypeFilter);
+        }
 
-    return history;
-  }, [startDate, endDate, actionTypeFilter, residenceFilter, accommodationHistory]);
+        if (residenceFilter !== 'ALL') {
+          history = history.filter(h => 
+            h.residenceId === residenceFilter ||
+            h.fromResidenceId === residenceFilter ||
+            h.toResidenceId === residenceFilter
+          );
+        }
+
+        if (isMounted) setFilteredHistory(history);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setIsLoadingHistory(false);
+      }
+    };
+    fetchHistory();
+    return () => { isMounted = false; };
+  }, [startDate, endDate, actionTypeFilter, residenceFilter, fetchHistoryByDateRange]);
 
   // Calculate statistics
   const stats = useMemo(() => {

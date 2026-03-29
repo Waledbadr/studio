@@ -70,18 +70,14 @@ export default function InvoicePrintPage() {
   }, [contracts, invoice]);
 
   // Get detailed worker breakdown with room information
-  const [workerDetails, setWorkerDetails] = useState<WorkerInvoiceDetail[]>([]);
-
-  useEffect(() => {
-    let active = true;
-    const fetchDetails = async () => {
+  const workerDetails = useMemo((): WorkerInvoiceDetail[] => {
     if (!invoice || !company) return [];
 
     const startDate = new Date(invoice.startDate);
     const endDate = new Date(invoice.endDate);
 
     // Get all history for the period
-    const periodHistory = await fetchHistoryByDateRange(invoice.startDate, invoice.endDate);
+    const periodHistory = getHistoryByDateRange(invoice.startDate, invoice.endDate);
 
     // Find workers for this company
     const companyWorkers = workers.filter(w => 
@@ -329,13 +325,8 @@ export default function InvoicePrintPage() {
       }
     }
 
-      if (active) {
-        setWorkerDetails(details.sort((a, b) => a.name.localeCompare(b.name, 'ar')));
-      }
-    };
-    fetchDetails();
-    return () => { active = false; };
-  }, [invoice, company, workers, occupants, residences, contract, fetchHistoryByDateRange]);
+    return details.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }, [invoice, company, workers, occupants, accommodationHistory, residences, contract, getHistoryByDateRange]);
 
   // Try to parse breakdown from notes if context data is not available
   const fallbackBreakdown = useMemo(() => {

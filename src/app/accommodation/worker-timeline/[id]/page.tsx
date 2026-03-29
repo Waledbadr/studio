@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react';
 "use client";
 
 import React, { useMemo } from 'react';
@@ -26,8 +27,8 @@ export default function WorkerTimelinePage() {
   
   const { 
     workers, 
-    accommodationHistory, 
-    getWorkerHistory,
+     
+    fetchWorkerHistory,
     occupants,
     residences 
   } = useAccommodation();
@@ -37,10 +38,14 @@ export default function WorkerTimelinePage() {
     [workers, workerId]
   );
 
-  const history = useMemo(() => 
-    getWorkerHistory(workerId), 
-    [workerId, accommodationHistory]
-  );
+  const [history, setHistory] = useState<any[]>([]);
+  useEffect(() => {
+    let active = true;
+    fetchWorkerHistory(workerId).then(data => {
+      if (active) setHistory(data || []);
+    });
+    return () => { active = false; };
+  }, [workerId, fetchWorkerHistory]);
 
   const currentOccupancy = useMemo(() => 
     occupants.find(o => o.workerId === workerId && !o.until),
@@ -48,9 +53,9 @@ export default function WorkerTimelinePage() {
   );
 
   const stats = useMemo(() => {
-    const checkIns = history.filter(h => h.actionType === 'CHECK_IN').length;
-    const checkOuts = history.filter(h => h.actionType === 'CHECK_OUT').length;
-    const transfers = history.filter(h => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
+    const checkIns = history.filter((h: any) => h.actionType === 'CHECK_IN').length;
+    const checkOuts = history.filter((h: any) => h.actionType === 'CHECK_OUT').length;
+    const transfers = history.filter((h: any) => h.actionType === 'TRANSFER' || h.actionType === 'SWAP').length;
     
     // Calculate total days stayed dynamically from dates
     let totalDays = 0;
@@ -90,7 +95,8 @@ export default function WorkerTimelinePage() {
       totalDays += diffDays + 1;
     }
 
-    return { checkIns, checkOuts, transfers, totalDays };
+    return { checkIns, checkOuts, transfers,
+      swaps: 0, totalDays };
   }, [history, currentOccupancy]);
 
   const getActionIcon = (type: string) => {
@@ -255,7 +261,7 @@ export default function WorkerTimelinePage() {
               
               {/* Timeline items */}
               <div className="space-y-6">
-                {history.map((item, index) => (
+                {history.map((item: any, index: number) => (
                   <div key={item.id} className="relative flex gap-4 pr-14">
                     {/* Timeline dot */}
                     <div className="absolute right-[18px] top-2 w-4 h-4 rounded-full bg-background border-4 border-primary z-10" />

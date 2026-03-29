@@ -248,6 +248,7 @@ type AccommodationContextValue = {
   // Async History Fetching
   fetchWorkerHistory: (workerId: string) => Promise<AccommodationHistory[]>;
   fetchRoomHistory: (roomId: string) => Promise<AccommodationHistory[]>;
+    fetchHistoryByDateRange: (startDate: string, endDate: string) => Promise<AccommodationHistory[]>;
 
   // History Management
   deleteHistoryRecord: (historyId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -866,9 +867,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           (err) => console.error('Invoices snapshot error:', err)
         );
 
-        // Occupants listener
+        // Occupants listener - OPTIMIZED: ONLY ACTIVE OCCUPANTS
         occupantsUnsub = onSnapshot(
-          collection(db!, 'occupants'),
+          query(collection(db!, 'occupants'), where('until', '==', null)),
           (snap) => {
             const list: Occupant[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
             setOccupants(list);
@@ -876,15 +877,15 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           (err) => console.error('Occupants snapshot error:', err)
         );
 
-        // Accommodation History listener
-        historyUnsub = onSnapshot(
-          collection(db!, 'accommodationHistory'),
-          (snap) => {
-            const list: AccommodationHistory[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory));
-            setAccommodationHistory(list);
-          },
-          (err) => console.error('History snapshot error:', err)
-        );
+        // DISABLED: Accommodation History listener (HUGE QUOTA DRAIN)
+        // historyUnsub = onSnapshot(
+        //   collection(db!, 'accommodationHistory'),
+        //   (snap) => {
+        //     const list: AccommodationHistory[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as AccommodationHistory));
+        //     setAccommodationHistory(list);
+        //   },
+        //   (err) => console.error('History snapshot error:', err)
+        // );
 
         // Transfer Requests listener
         transfersUnsub = onSnapshot(
@@ -902,7 +903,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         if (contractsUnsub) contractsUnsub();
         if (invoicesUnsub) invoicesUnsub();
         if (occupantsUnsub) occupantsUnsub();
-        if (historyUnsub) historyUnsub();
+        if (historyUnsub) (historyUnsub as any)();
         if (transfersUnsub) transfersUnsub();
 
         setCompanies([]);
@@ -920,7 +921,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (contractsUnsub) contractsUnsub();
       if (invoicesUnsub) invoicesUnsub();
       if (occupantsUnsub) occupantsUnsub();
-      if (historyUnsub) historyUnsub();
+      if (historyUnsub) (historyUnsub as any)();
       if (transfersUnsub) transfersUnsub();
     };
   }, [db, auth]);
@@ -2520,6 +2521,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
     } catch (e) {
       console.error("Failed to fetch room history", e);
+      return [];
+    }
+  }
+
+  async function fetchHistoryByDateRange(startDate: string, endDate: string): Promise<AccommodationHistory[]> {
+    if (!db) return [];
+    try {
+      const start = new Date(startDate).toISOString();
+      const end = new Date(endDate).toISOString();
+      
+      // Ensure range gets exactly the actionDate inside range
+      const q = query(
+        collection(db, 'accommodationHistory'),
+        where('actionDate', '>=', start),
+        where('actionDate', '<=', end)
+      );
+      const snap = await getDocs(q);
+      return snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as AccommodationHistory))
+        .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime());
+    } catch (e) {
+      console.error("Failed to fetch history by date range", e);
       return [];
     }
   }
@@ -4304,6 +4327,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     dashboardStats, // NEW
     refreshDashboardStats, // NEW
     autoArchiveOccupants, // NEW
+    fetchHistoryByDateRange,
     accommodationHistory, // NEW
     transferRequests,
     notifications,
@@ -4386,3 +4410,4 @@ export function useAccommodation() {
   if (!ctx) throw new Error("useAccommodation must be used within AccommodationProvider");
   return ctx;
 }
+    fetchHistoryByDateRange: (startDate: string, endDate: string) => Promise<AccommodationHistory[]>;

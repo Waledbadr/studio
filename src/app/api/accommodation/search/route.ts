@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       const workersSnapshot = await adminDb.collection('workers').get();
       console.log('📦 Firestore returned', workersSnapshot.docs.length, 'documents');
       
-      const workers = workersSnapshot.docs.map(doc => ({ 
+      const workers = workersSnapshot.docs.map((doc: any) => ({ 
         id: doc.id, 
         ...doc.data() 
       })) as any[];
