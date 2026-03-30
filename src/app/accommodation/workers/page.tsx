@@ -4,8 +4,19 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useToast } from '@/hooks/use-toast';
+import { ArrowRightLeft, Plus, Edit2, Trash2 } from 'lucide-react';
 import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
-import { ArrowRightLeft } from 'lucide-react';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function WorkersPage() {
   const ctx = useAccommodation();
@@ -26,6 +37,14 @@ export default function WorkersPage() {
   function startEdit(w: any) { setEditing(w.id); setForm({ id: w.id, name: w.name, employeeId: w.employeeId || '', idNumber: w.idNumber || '', nationaliy: w.nationaliy, company: w.company || '', role: w.role || 'Worker' }); }
 
   async function submit() {
+    if (!form.employeeId?.trim() && !form.idNumber?.trim()) {
+      toast({ title: 'خطأ / Error', description: 'يجب إدخال رقم الموظف أو رقم الهوية (Employee ID or Iqama No is required).', variant: 'destructive' });
+      return;
+    }
+    if (!form.name?.trim()) {
+      toast({ title: 'خطأ / Error', description: 'يجب إدخال اسم العامل (Name is required).', variant: 'destructive' });
+      return;
+    }
     if (!saveWorker) {
       toast({ title: 'Not configured', description: 'Firebase not configured and context helper missing.', variant: 'destructive' });
       return;
@@ -91,20 +110,23 @@ export default function WorkersPage() {
             </svg>
             استيراد من Excel
           </Link>
-          <button onClick={startAdd} className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent">إضافة عامل</button>
-          <button 
+          <Button onClick={startAdd} variant="outline" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            إضافة عامل
+          </Button>
+          <Button 
             onClick={() => handleCreateTransfer([])} 
-            className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent flex items-center gap-2"
+            variant="outline" className="flex items-center gap-2"
           >
             <ArrowRightLeft className="h-4 w-4" />
             طلب نقل
-          </button>
-          <Link href="/accommodation/assign" className="rounded-md bg-primary text-primary-foreground px-3 py-1 hover:bg-primary/90">التسكين</Link>
-          <button onClick={async ()=>{
+          </Button>
+          <Link href="/accommodation/assign" className="rounded-md bg-primary text-primary-foreground px-3 py-1 hover:bg-primary/90 flex items-center h-10">التسكين</Link>
+          <Button onClick={async ()=>{
             if (!migrate) { toast({ title: 'Not configured', description: 'Migration requires Firestore configured.', variant: 'destructive' }); return; }
             const res = await migrate({ removeLocal: false });
             toast({ title: 'Migration completed', description: `${res.migrated} migrated, ${res.skipped} skipped, ${res.errors} errors.` });
-          }} className="rounded-md border border-border bg-background px-3 py-1 hover:bg-accent">Migrate local → Firestore</button>
+          }} variant="outline">Migrate local → Firestore</Button>
         </div>
       </div>
       
@@ -114,55 +136,75 @@ export default function WorkersPage() {
         preSelectedWorkers={selectedWorkersForTransfer}
       />
 
-      <div className="rounded-md border border-border p-4 bg-card">
-        {editing === null ? (
-          <div>
-            <div className="text-sm text-muted-foreground mb-2">Click Add to create a new worker, or Edit on an existing one.</div>
-          </div>
-        ) : null}
+      <Dialog open={editing !== null} onOpenChange={(open: boolean) => { if (!open) setEditing(null); }}>
+        <DialogContent className="sm:max-w-[650px]">
+          <DialogHeader>
+            <DialogTitle>{editing === 'new' ? 'إضافة عامل جديد (Add New Worker)' : 'تعديل بيانات العامل (Edit Worker)'}</DialogTitle>
+            <DialogDescription>
+              يرجى إدخال بيانات العامل. إما رقم الموظف أو رقم الهوية مطلوب.
+              <br />
+              Please enter the worker details. Either Employee ID or Iqama No is required.
+            </DialogDescription>
+          </DialogHeader>
 
-        {editing !== null && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">System ID</label>
-              <input value={form.id} onChange={(e)=>setForm({...form, id:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="w12345" disabled />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>System ID <span className="text-muted-foreground text-xs">(مُنشأ تلقائياً)</span></Label>
+              <Input value={form.id} onChange={(e)=>setForm({...form, id:e.target.value})} placeholder="w12345" disabled className="bg-muted" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">رقم الموظف (Employee ID)</label>
-              <input value={form.employeeId} onChange={(e)=>setForm({...form, employeeId:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="37433" />
+            
+            <div className="space-y-2">
+              <Label>اسم العامل (Name) <span className="text-red-500">*</span></Label>
+              <Input value={form.name} onChange={(e)=>setForm({...form, name:e.target.value})} placeholder="Akram Naimu Deen" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">اسم العامل (Name)</label>
-              <input value={form.name} onChange={(e)=>setForm({...form, name:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="Akram Naimu Deen" />
+
+            <div className="space-y-2">
+              <Label>رقم الموظف (Employee ID) <span className="text-red-500 font-normal text-xs">* أو رقم الهوية</span></Label>
+              <Input value={form.employeeId} onChange={(e)=>setForm({...form, employeeId:e.target.value})} placeholder="37433" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">رقم الهوية (Iqama No)</label>
-              <input value={form.idNumber} onChange={(e)=>setForm({...form, idNumber:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="2326188378" />
+            
+            <div className="space-y-2">
+              <Label>رقم الهوية (Iqama No) <span className="text-red-500 font-normal text-xs">* أو رقم الموظف</span></Label>
+              <Input value={form.idNumber} onChange={(e)=>setForm({...form, idNumber:e.target.value})} placeholder="2326188378" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الجنسية (Nationality)</label>
-              <input value={form.nationaliy} onChange={(e)=>setForm({...form, nationaliy:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="Indian" />
+
+            <div className="space-y-2">
+              <Label>الجنسية (Nationality)</Label>
+              <Input value={form.nationaliy} onChange={(e)=>setForm({...form, nationaliy:e.target.value})} placeholder="Indian" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الشركة (Company)</label>
-              <input value={form.company} onChange={(e)=>setForm({...form, company:e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full" placeholder="SACODECO" />
+
+            <div className="space-y-2">
+              <Label>الشركة (Company)</Label>
+              <Input value={form.company} onChange={(e)=>setForm({...form, company:e.target.value})} placeholder="SACODECO" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الدور (Role)</label>
-              <select value={form.role} onChange={(e)=>setForm({...form, role: e.target.value})} className="border border-border bg-background text-foreground rounded px-3 py-2 w-full">
-                <option>Worker</option>
-                <option>Supervisor</option>
-                <option>Engineer</option>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>الدور (Role)</Label>
+              <select 
+                value={form.role} 
+                onChange={(e)=>setForm({...form, role: e.target.value})} 
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input leading-tight placeholder-muted-foreground bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="Worker">عامل - Worker</option>
+                <option value="Supervisor">مشرف - Supervisor</option>
+                <option value="Engineer">مهندس - Engineer</option>
               </select>
             </div>
-            <div className="flex gap-2 items-end">
-              <button onClick={submit} className="rounded-md bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90 flex-1">حفظ (Save)</button>
-              <button onClick={()=>setEditing(null)} className="rounded-md border border-border bg-background px-4 py-2 hover:bg-accent flex-1">إلغاء (Cancel)</button>
-            </div>
           </div>
-        )}
+          
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" onClick={()=>setEditing(null)} className="flex-1 sm:flex-none">
+              إلغاء (Cancel)
+            </Button>
+            <Button onClick={submit} className="flex-1 sm:flex-none">
+              حفظ (Save)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <div className="mt-6 overflow-x-auto">
+      <div className="rounded-md border border-border bg-card shadow-sm">
+        <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -190,8 +232,12 @@ export default function WorkersPage() {
                   <td className="p-3 text-sm text-muted-foreground">{w.role || 'Worker'}</td>
                   <td className="p-3 text-sm">
                     <div className="flex justify-center gap-2">
-                      <button onClick={()=>startEdit(w)} className="text-sm underline text-primary hover:text-primary/80 px-2 py-1">تعديل</button>
-                      <button onClick={()=>remove(w.id)} className="text-sm text-destructive hover:text-destructive/80 px-2 py-1">حذف</button>
+                      <Button variant="ghost" size="icon" onClick={()=>startEdit(w)} title="تعديل / Edit">
+                        <Edit2 className="h-4 w-4 text-emerald-500" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={()=>remove(w.id)} title="حذف / Delete">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </td>
                 </tr>

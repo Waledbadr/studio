@@ -560,6 +560,8 @@ const receiveOrderItems = async (orderId: string, newlyReceivedItems: {id: strin
       attachmentRef: null,
           codeShort: reservedMrvShort,
           orderId: orderId,
+          receivedBy: currentUser?.id || null,
+          receivedByName: currentUser?.name || null,
         } as any);
       }
 

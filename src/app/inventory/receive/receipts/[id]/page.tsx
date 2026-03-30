@@ -9,7 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useResidences } from '@/context/residences-context';
 import { useUsers } from '@/context/users-context';
-import { Printer, Edit, Loader2, Upload } from 'lucide-react';
+import { Printer, Edit, Loader2, Upload, Paperclip } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
@@ -104,6 +104,10 @@ export default function MRVDetailsPage() {
     );
   }, [data?.items, inventoryItems]);
 
+  // Helper for names with fallback, as in MR page
+  const receivedByName = data?.receivedByName || receivedByNameLocal || '...';
+  const checkedByName = data?.checkedByName || '...';
+
   // Helper to get uploaded files from data
   const uploadedFiles: UploadedFile[] = useMemo(() => {
     const result: UploadedFile[] = [];
@@ -191,18 +195,22 @@ export default function MRVDetailsPage() {
 
       {/* Attachments Section - Show Button and Uploaded Files */}
       <Card className="print:hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">المرفقات • Attachments</CardTitle>
-          <CardDescription>يمكنك رفع فواتير ومستندات متعددة</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button onClick={() => setAttachmentDialogOpen(true)} variant="outline" className="w-full">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0 border-b mb-4">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Paperclip className="h-5 w-5 text-muted-foreground" />
+              المرفقات • Attachments
+            </CardTitle>
+            <CardDescription>عرض وإدارة المستندات والفواتير المرفقة</CardDescription>
+          </div>
+          <Button onClick={() => setAttachmentDialogOpen(true)} variant="outline" size="sm" className="hidden sm:flex">
             <Upload className="mr-2 h-4 w-4" />
-            رفع مرفقات جديدة
+            إضافة مرفق
           </Button>
-          {uploadedFiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">الملفات المرفوعة:</p>
+        </CardHeader>
+        <CardContent>
+          {uploadedFiles.length > 0 ? (
+            <div className="space-y-4">
               <FileUploadArea
                 files={[]}
                 onFilesChange={() => {}}
@@ -212,6 +220,22 @@ export default function MRVDetailsPage() {
                 compact
                 viewOnly
               />
+              <Button onClick={() => setAttachmentDialogOpen(true)} variant="outline" className="w-full sm:hidden">
+                <Upload className="mr-2 h-4 w-4" />
+                إضافة مرفق
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl bg-muted/10">
+              <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                <Paperclip className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground mb-1">لا توجد مرفقات</p>
+              <p className="text-xs text-muted-foreground mb-4">قم برفع الفواتير والمستندات المتعلقة بعملية الاستلام</p>
+              <Button onClick={() => setAttachmentDialogOpen(true)} variant="secondary" size="sm">
+                <Upload className="mr-2 h-4 w-4" />
+                رفع مرفق جديد
+              </Button>
             </div>
           )}
         </CardContent>
@@ -347,13 +371,12 @@ export default function MRVDetailsPage() {
           <div className="grid grid-cols-2 gap-8 w-full">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground label">Received By:</p>
-              {receivedByNameLocal && (
-                <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{receivedByNameLocal}</p>
-              )}
+              <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{receivedByName}</p>
               <div className="mt-2 border-t-2 w-48 line slot"></div>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground label">Checked By:</p>
+              <p className="font-semibold print-subtle" style={{ fontWeight: 700 }}>{checkedByName}</p>
               <div className="mt-2 border-t-2 w-48 line slot"></div>
             </div>
           </div>
