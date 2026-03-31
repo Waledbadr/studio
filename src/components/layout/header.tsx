@@ -117,7 +117,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <Link
           href="/timesheet"
           className={cn(
-            "inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap hidden sm:inline-flex",
+            "hidden sm:inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
             pathname?.startsWith('/timesheet') && "bg-muted"
           )}
         >
@@ -126,7 +126,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         <Link
           href="/income-expenses"
           className={cn(
-            "inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap hidden md:inline-flex",
+            "hidden md:inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
             pathname?.startsWith('/income-expenses') && "bg-muted"
           )}
         >

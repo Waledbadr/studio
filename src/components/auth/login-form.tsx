@@ -34,10 +34,10 @@ export default function LoginForm() {
   const search = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   // Which app to open after login
-  const [appChoice, setAppChoice] = useState<"accommodation" | "materials">(() => {
+  const [appChoice, setAppChoice] = useState<"accommodation" | "materials" | "timesheet" | "finance">(() => {
     if (typeof window === 'undefined') return 'accommodation';
-    const saved = window.localStorage.getItem('preferred-app');
-    return (saved === 'materials' || saved === 'accommodation') ? saved : 'accommodation';
+    const saved = window.localStorage.getItem('preferred-app') as any;
+    return (saved === 'materials' || saved === 'accommodation' || saved === 'timesheet' || saved === 'finance') ? saved : 'accommodation';
   });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -77,7 +77,7 @@ export default function LoginForm() {
     try { window.localStorage.setItem('preferred-app', appChoice); } catch {}
   }, [appChoice]);
 
-  const redirectAfterLogin = (fallbackChoice?: "accommodation" | "materials") => {
+  const redirectAfterLogin = (fallbackChoice?: "accommodation" | "materials" | "timesheet" | "finance") => {
     const next = search?.get('next');
     if (next) {
       router.replace(next);
@@ -104,10 +104,10 @@ export default function LoginForm() {
         if (res && res.user) {
           await ensureUserProfile(res.user.uid, { name: res.user.displayName || undefined, email: res.user.email || undefined });
           // Use persisted choice because UI state may be reset after redirect
-          let persisted: "accommodation" | "materials" | null = null;
+          let persisted: "accommodation" | "materials" | "timesheet" | "finance" | null = null;
           try {
             const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
-            if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+            if (saved === 'materials' || saved === 'accommodation' || saved === 'timesheet' || saved === 'finance') persisted = saved as any;
           } catch {}
           redirectAfterLogin(persisted || undefined);
         }
@@ -125,10 +125,10 @@ export default function LoginForm() {
         signInWithEmailLink(auth, savedEmail, window.location.href)
           .then(() => {
             window.localStorage.removeItem('pendingEmailForLink');
-            let persisted: "accommodation" | "materials" | null = null;
+            let persisted: "accommodation" | "materials" | "timesheet" | "finance" | null = null;
             try {
               const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
-              if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+              if (saved === 'materials' || saved === 'accommodation' || saved === 'timesheet' || saved === 'finance') persisted = saved as any;
             } catch {}
             redirectAfterLogin(persisted || undefined);
           })
@@ -361,10 +361,10 @@ export default function LoginForm() {
       if (verified.verified) {
         setInfo('Passkey verified.');
         toast({ title: 'Passkey', description: 'Passkey verified.' });
-        let persisted: "accommodation" | "materials" | null = null;
+        let persisted: "accommodation" | "materials" | "timesheet" | "finance" | null = null;
         try {
           const saved = typeof window !== 'undefined' ? window.localStorage.getItem('preferred-app') : null;
-          if (saved === 'materials' || saved === 'accommodation') persisted = saved;
+          if (saved === 'materials' || saved === 'accommodation' || saved === 'timesheet' || saved === 'finance') persisted = saved as any;
         } catch {}
         redirectAfterLogin(persisted || undefined);
       } else {
