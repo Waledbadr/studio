@@ -1,7 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
-
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAccommodation } from '@/context/accommodation-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

@@ -1,7 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
