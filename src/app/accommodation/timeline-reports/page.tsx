@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
 "use client";
+import { useState, useEffect, useMemo } from 'react';
 
 import React, { useState, useMemo } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
