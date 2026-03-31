@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText, Clock, Wallet } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -45,6 +45,115 @@ export function AppSidebar() {
 
   // When inside the accommodation app, render accommodation sidebar
   const isAccommodation = pathname?.startsWith('/accommodation');
+  const isTimesheet = pathname?.startsWith('/timesheet');
+  const isIncomeExpenses = pathname?.startsWith('/income-expenses');
+
+  if (isTimesheet) {
+    return (
+      <>
+        <SidebarHeader>
+          <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-8 w-8 text-blue-600" />
+              <span className="text-xl font-semibold text-blue-600 group-data-[collapsible=icon]:hidden">Timesheet</span>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Main
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet'} tooltip="Dashboard">
+                  <Link href="/timesheet" onClick={handleNavigate}>
+                    <Home />
+                    <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </div>
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="p-2">
+            <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
+              <div className="flex items-center gap-2">
+                <Avatar className="size-8">
+                  {currentUser ? (
+                    <>
+                      <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
+                    </>
+                  ) : (
+                    <AvatarFallback />
+                  )}
+                </Avatar>
+                <div className="group-data-[collapsible=icon]:hidden text-left">
+                  <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                  <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SidebarFooter>
+      </>
+    );
+  }
+
+  if (isIncomeExpenses) {
+    return (
+      <>
+        <SidebarHeader>
+          <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-8 w-8 text-green-600" />
+              <span className="text-xl font-semibold text-green-600 group-data-[collapsible=icon]:hidden">Income & Exp</span>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                Main
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/income-expenses'} tooltip="Dashboard">
+                  <Link href="/income-expenses" onClick={handleNavigate}>
+                    <Home />
+                    <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </div>
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="p-2">
+            <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
+              <div className="flex items-center gap-2">
+                <Avatar className="size-8">
+                  {currentUser ? (
+                    <>
+                      <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
+                    </>
+                  ) : (
+                    <AvatarFallback />
+                  )}
+                </Avatar>
+                <div className="group-data-[collapsible=icon]:hidden text-left">
+                  <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                  <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SidebarFooter>
+      </>
+    );
+  }
+
   if (isAccommodation) {
     return (
       <>
@@ -275,12 +384,20 @@ export function AppSidebar() {
         { href: '/inventory/reports/reconciliations', label: dict.sidebar?.reconciliations || 'Reconciliations', icon: FileCheck },
       ]
     },
+    // Other Apps / Modules Section
+    {
+      title: dict.sidebar?.apps || 'Apps & Modules',
+      items: [
+        { href: '/accommodation', label: 'Accommodation', icon: Building },
+        { href: '#timesheet', label: 'Timesheet (قريباً)', icon: Clock },
+        { href: '#income-expenses', label: 'Income & Expenses (قريباً)', icon: Wallet },
+      ]
+    },
     // Settings Section
     {
       title: dict.sidebar?.settings || 'Settings',
       items: [
   { href: '/residences', label: dict.sidebar?.residences || 'Residences', icon: Building },
-        { href: '/accommodation', label: 'Accommodation', icon: Home },
         ...(currentUser?.role === 'Admin' ? [
           { href: '/users', label: dict.sidebar?.users || 'Users', icon: Users },
           { href: '/setup', label: dict.sidebar?.setup || 'Setup', icon: Settings },

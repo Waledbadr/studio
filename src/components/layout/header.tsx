@@ -103,13 +103,36 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   return (
     <header className={headerClass} {...props}>
       <SidebarTrigger className="md:hidden" />
-      <button
-        onClick={toggleApp}
-        className="ml-3 inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted"
-        title={atAccommodation ? `الرجوع لتطبيق ${dict.ui.materialsApp}` : `فتح ${dict.ui.accommodationApp}`}
-      >
-        {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
-      </button>
+      <div className="ml-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <Link
+          href={atAccommodation ? '/' : '/accommodation'}
+          className={cn(
+            "inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
+            atAccommodation && "bg-muted"
+          )}
+          title={atAccommodation ? `تطبيق ${dict.ui.materialsApp}` : `تطبيق ${dict.ui.accommodationApp}`}
+        >
+          {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
+        </Link>
+        <Link
+          href="/timesheet"
+          className={cn(
+            "inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap hidden sm:inline-flex",
+            pathname?.startsWith('/timesheet') && "bg-muted"
+          )}
+        >
+          Timesheet <span className="ml-1 text-xs opacity-75">(قريباً)</span>
+        </Link>
+        <Link
+          href="/income-expenses"
+          className={cn(
+            "inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap hidden md:inline-flex",
+            pathname?.startsWith('/income-expenses') && "bg-muted"
+          )}
+        >
+          Income & Expenses <span className="ml-1 text-xs opacity-75">(قريباً)</span>
+        </Link>
+      </div>
 
       <div className="flex-1" />
 

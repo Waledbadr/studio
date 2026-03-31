@@ -84,7 +84,7 @@ export default function LoginForm() {
       return;
     }
     const choice = fallbackChoice || appChoice;
-    const target = choice === 'materials' ? '/inventory' : '/accommodation';
+    const target = choice === 'materials' ? '/inventory' : choice === 'timesheet' ? '/timesheet' : choice === 'finance' ? '/income-expenses' : '/accommodation';
     router.replace(target);
   };
 
@@ -443,7 +443,7 @@ export default function LoginForm() {
           {/* Choose system after login */}
           <div className="grid gap-2">
             <Label className="text-xs text-muted-foreground">Open after login</Label>
-            <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-1 rounded-lg bg-muted p-1 text-xs">
               <Button
                 type="button"
                 size="sm"
@@ -461,6 +461,26 @@ export default function LoginForm() {
                 onClick={() => setAppChoice('materials')}
               >
                 Materials
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'timesheet' as any ? 'default' : 'ghost'}
+                className="rounded-md"
+                onClick={() => setAppChoice('timesheet' as any)}
+                title="قريباً"
+              >
+                Timesheet
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'finance' as any ? 'default' : 'ghost'}
+                className="rounded-md"
+                onClick={() => setAppChoice('finance' as any)}
+                title="قريباً"
+              >
+                Income & Exp
               </Button>
             </div>
           </div>
