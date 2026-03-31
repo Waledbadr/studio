@@ -9,6 +9,8 @@ import { AlertCircle, Users, Building2, FileText, TrendingUp, AlertTriangle, Che
 import Link from 'next/link';
 import { ManualSyncButton } from '@/components/accommodation/manual-sync-button';
 import { Button } from '@/components/ui/button';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
 export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
@@ -127,6 +129,18 @@ export default function AccommodationOverviewPage() {
     const totalOccupied = Object.values(occupancyByResidence).reduce((sum, r) => sum + r.occupied, 0);
     const occupancyRate = totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
 
+    const occupancyChartData = filteredResidences.map(res => {
+      const data = occupancyByResidence[res.id] || { occupied: 0, capacity: 0, rooms: 0 };
+      const rate = data.capacity > 0 ? Math.round((data.occupied / data.capacity) * 100) : 0;
+      return {
+        residenceId: res.id,
+        name: res.name,
+        occupancyRate: rate,
+        occupied: data.occupied,
+        capacity: data.capacity,
+      };
+    });
+
     // Capacity warnings - rooms over 90% full
     const capacityWarnings: Array<{ residenceId: string; residenceName: string; occupied: number; capacity: number; rate: number }> = [];
     for (const [resId, data] of Object.entries(occupancyByResidence)) {
@@ -220,11 +234,19 @@ export default function AccommodationOverviewPage() {
         unpaidInvoices: unpaidInvoicesCount,
         overdueInvoices: overdueInvoicesCount,
         occupancyByResidence,
+        occupancyChartData,
         capacityWarnings,
         nationalityConflicts,
         hasFullData
     };
   }, [workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, filteredResidences]);
+
+  const occupancyChartConfig: ChartConfig = {
+    occupancyRate: {
+      label: 'Occupancy %',
+      color: 'hsl(var(--chart-1))',
+    },
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -421,7 +443,48 @@ export default function AccommodationOverviewPage() {
         </Card>
       </div>
 
-      {/* Occupancy by Residence */}
+      {/* Occupancy by Residence - Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Occupancy by Residence (Chart)</CardTitle>
+          <CardDescription>Visual bar chart of current occupancy rate per residence</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {metrics.occupancyChartData.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No residences configured</p>
+          ) : (
+            <ChartContainer config={occupancyChartConfig} className="w-full h-[320px]">
+              <BarChart data={metrics.occupancyChartData} margin={{ left: 8, right: 8, top: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11 }}
+                  height={40}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                  unit="%"
+                />
+                <ChartTooltip
+                  cursor={{ fill: 'hsl(var(--muted))' }}
+                  content={<ChartTooltipContent hideLabel />}
+                />
+                <Bar
+                  dataKey="occupancyRate"
+                  fill="var(--color-occupancyRate)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Occupancy by Residence - Progress Bars */}
       <Card>
         <CardHeader>
           <CardTitle>Occupancy by Residence</CardTitle>

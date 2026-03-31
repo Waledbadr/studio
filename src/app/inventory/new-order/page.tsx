@@ -593,15 +593,15 @@ function AddItemButton({
     const hasDraft = !!draftKey && (orderItems.length > 0 || !!generalNotes || !!selectedResidence);
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
+        <div className="space-y-6 pb-24 lg:pb-0 relative">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="w-full md:w-auto">
                     <h1 className="text-2xl font-bold">{dict.ui?.editMaterialRequest || 'Create New Material Request'}</h1>
                     {userResidences.length > 1 ? (
-                        <div className="flex items-center gap-4 mt-2">
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                              <Label htmlFor="residence-select" className="text-muted-foreground">{dict.requestForResidence || 'Request for residence:'}</Label>
                              <Select onValueChange={handleResidenceChange} value={selectedResidence?.id || ''}>
-                                <SelectTrigger id="residence-select" className="w-[250px]">
+                                <SelectTrigger id="residence-select" className="w-full sm:w-[250px]">
                                     <SelectValue placeholder="Select a residence" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -615,7 +615,7 @@ function AddItemButton({
                          <p className="text-muted-foreground">Request for residence: <span className="font-semibold">{selectedResidence?.name || '...'}</span></p>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="hidden lg:flex flex-wrap items-center gap-2 justify-start md:justify-end">
                     {/* Last autosave indicator */}
                     {lastDraftSavedAt && (
                         <span className="text-xs text-muted-foreground mr-2">Saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</span>
@@ -635,24 +635,25 @@ function AddItemButton({
                 </div>
             </div>
             
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <Card>
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start relative">
+             {/* Available inventory */}
+             <Card className="order-1">
                     <CardHeader>
                         <CardTitle>{dict.ui?.availableInventory || 'Available Inventory'}</CardTitle>
                         <CardDescription>{dict.ui?.addGeneralNotesPlaceholder || `Click the '+' to add an item to your request.`}</CardDescription>
-                         <div className="flex gap-2">
+                         <div className="flex flex-col sm:flex-row gap-3">
                             <div className="relative flex-grow">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                 <Input 
                                     type="search"
                                     placeholder={dict.searchItemsPlaceholder || 'Search items...'}
-                                    className="pl-8 w-full"
+                                    className="pl-9 h-10 w-full rounded-full bg-muted/50 focus-visible:bg-background"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
                             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                <SelectTrigger className="w-[180px]">
+                                <SelectTrigger className="w-full sm:w-[180px] h-10 rounded-full bg-muted/50">
                                     <SelectValue placeholder="Filter by category" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -665,7 +666,7 @@ function AddItemButton({
                         </div>
                     </CardHeader>
                     <CardContent>
-                         <ScrollArea className="h-[450px]">
+                        <ScrollArea className="md:h-[450px]">
                             {loading ? (
                                 <div className="space-y-4">
                                     <Skeleton className="h-12 w-full" />
@@ -685,23 +686,25 @@ function AddItemButton({
                                             </div>
                                             <div className="space-y-2">
                                                 {recentItems.map(item => (
-                                                    <div key={`recent-${item.id}`} className="flex items-center justify-between p-2 rounded-md border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
-                                                        <div>
-                                                            <p className="font-medium text-blue-900 dark:text-blue-100">{item.nameAr} / {item.nameEn}</p>
+                                                    <div key={`recent-${item.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 rounded-lg border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 shadow-sm transition-all hover:border-blue-300">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-base text-blue-900 dark:text-blue-100 line-clamp-2">{item.nameAr} / {item.nameEn}</p>
                                                             {(() => {
                                                                 const stock = handleGetStockForResidence(item);
                                                                 return (
-                                                                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                                                                        {item.category} - {" "}
-                                                                        <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-700 dark:text-emerald-400 font-semibold" : undefined}>
-                                                                            Stock: {stock}
-                                                                        </span>{" "}
-                                                                        {item.unit}
-                                                                    </p>
+                                                                    <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-blue-700 dark:text-blue-300">
+                                                                        <span className="bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded text-xs">{item.category}</span>
+                                                                        <span className="flex items-center gap-1">
+                                                                            <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-700 dark:text-emerald-400 font-semibold" : stock <= 0 ? "text-red-500 font-semibold" : "text-amber-500 font-semibold"}>
+                                                                                {stock} {item.unit}
+                                                                            </span>
+                                                                            <span>in stock</span>
+                                                                        </span>
+                                                                    </div>
                                                                 );
                                                             })()}
                                                         </div>
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex items-center justify-end gap-2 shrink-0 border-t border-blue-100 dark:border-blue-800 sm:border-t-0 pt-2 sm:pt-0">
                                                             <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
                                                                 <Edit className="h-4 w-4" />
                                                             </Button>
@@ -716,23 +719,25 @@ function AddItemButton({
                                     {/* All Items Section */}
                                     <div className="space-y-2">
                                         {filteredItems.length > 0 ? filteredItems.map(item => (
-                                            <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-muted/20">
-                                                <div>
-                                                    <p className="font-medium">{item.nameAr} / {item.nameEn}</p>
+                                            <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 rounded-lg border bg-card shadow-sm transition-all hover:border-primary/50">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-base line-clamp-2">{item.nameAr} / {item.nameEn}</p>
                                                     {(() => {
                                                         const stock = handleGetStockForResidence(item);
                                                         return (
-                                                            <p className="text-sm text-muted-foreground">
-                                                                {item.category} - {" "}
-                                                                <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : undefined}>
-                                                                    Stock: {stock}
-                                                                </span>{" "}
-                                                                {item.unit}
-                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                                                <span className="bg-secondary/50 px-2 py-0.5 rounded text-xs">{item.category}</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <span className={stock > STOCK_ATTENTION_THRESHOLD ? "text-emerald-600 dark:text-emerald-400 font-semibold" : stock <= 0 ? "text-red-500 font-semibold" : "text-amber-500 font-semibold"}>
+                                                                        {stock} {item.unit}
+                                                                    </span>
+                                                                    <span>in stock</span>
+                                                                </span>
+                                                            </div>
                                                         );
                                                     })()}
                                                 </div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center justify-end gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                                                     <Button variant="ghost" size="icon" onClick={() => openEditForItem(item)}>
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
@@ -757,14 +762,14 @@ function AddItemButton({
                         </ScrollArea>
                     </CardContent>
                 </Card>
-
-                 <Card>
+                 {/* Current request: sticky on desktop, below inventory on mobile */}
+                 <Card className="order-2 lg:sticky lg:top-6">
                     <CardHeader>
                         <CardTitle>Current Request</CardTitle>
                         <CardDescription>Review and adjust the items in your request.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                                <ScrollArea className="h-[450px]">
+								<ScrollArea className="md:h-[450px]">
                             {orderItems.length === 0 ? (
                                 <div className="h-60 flex items-center justify-center text-muted-foreground">{dict.ui?.currentRequestEmpty || 'Your request is empty.'}</div>
                             ) : (
@@ -855,6 +860,29 @@ function AddItemButton({
                 onItemUpdated={handleItemUpdated}
                 item={itemToEdit}
             />
+
+            {/* Mobile sticky action bar */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-background border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="font-semibold text-sm">
+                        {orderItems.length} {dict.items || 'items'} ({totalOrderQuantity} total)
+                    </span>
+                    {orderItems.length > 0 && (
+                        <span className="text-xs text-muted-foreground">Ready to request</span>
+                    )}
+                </div>
+                <Button 
+                    onClick={handleSubmitOrder} 
+                    disabled={orderItems.length === 0 || isSubmitting || !selectedResidence}
+                    className="shadow-sm"
+                >
+                    {isSubmitting ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {dict.ui?.loading || 'Submitting...'}</>
+                    ) : (
+                        dict.submitRequest || 'Submit Request'
+                    )}
+                </Button>
+            </div>
         </div>
     )
 

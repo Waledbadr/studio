@@ -18,6 +18,10 @@ const en = {
     settings: 'Settings',
     logout: 'Logout',
 
+    // Analytics
+    accommodationAnalytics: 'Accommodation Analytics',
+    ordersAnalytics: 'Material Requests Analytics',
+
     // Sidebar
     sidebar: {
         // Main Section
@@ -459,6 +463,10 @@ const ar = {
     profile: 'الملف الشخصي',
     settings: 'الإعدادات',
     logout: 'تسجيل الخروج',
+
+    // Analytics
+    accommodationAnalytics: 'تحليلات التسكين',
+    ordersAnalytics: 'تحليلات طلبات المواد',
 
     // Sidebar
     sidebar: {

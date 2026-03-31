@@ -215,30 +215,32 @@ export default function DashboardPage() {
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                 : recentMaterialRequests.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaterialRequestsFound || 'No material requests found.'}</div>
                 : (
-                    <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {recentMaterialRequests.map((order, i) => (
-                                <TableRow key={`${order.id}-${i}`} onClick={() => router.push(`/inventory/orders/${order.id}`)} className="cursor-pointer hover:bg-accent/30">
-                                    <TableCell>
-                                        <div className="font-medium text-primary underline-offset-2 hover:underline">{formatOrderId(order.id)}</div>
-                                        <div className="text-sm text-muted-foreground">{order.residence}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                         <Badge variant={
-                                            order.status === 'Delivered' ? 'default' 
-                                            : order.status === 'Approved' ? 'secondary'
-                                            : order.status === 'Partially Delivered' ? 'secondary'
-                                            : order.status === 'Cancelled' ? 'destructive'
-                                            : 'outline'
-                                        }>
-                                            {order.status}
-                                        </Badge>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                             <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {recentMaterialRequests.map((order, i) => (
+                                    <TableRow key={`${order.id}-${i}`} onClick={() => router.push(`/inventory/orders/${order.id}`)} className="cursor-pointer hover:bg-accent/30">
+                                        <TableCell>
+                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{formatOrderId(order.id)}</div>
+                                            <div className="text-sm text-muted-foreground">{order.residence}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                             <Badge variant={
+                                                order.status === 'Delivered' ? 'default' 
+                                                : order.status === 'Approved' ? 'secondary'
+                                                : order.status === 'Partially Delivered' ? 'secondary'
+                                                : order.status === 'Cancelled' ? 'destructive'
+                                                : 'outline'
+                                            }>
+                                                {order.status}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
         </Card>
@@ -256,10 +258,11 @@ export default function DashboardPage() {
                 {loading || mrvsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                 : recentReceipts.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentReceiptsFound || 'No recent receipts found.'}</div>
                 : (
-                    <Table>
-                         <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {recentReceipts.map((rec: any, i: number) => {
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                             <TableHeader><TableRow><TableHead>{dict.orderId || 'Order ID'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {recentReceipts.map((rec: any, i: number) => {
                                                                 const href = rec.type === 'MRV'
                                                                     ? `/inventory/receive/receipts/${rec.id}`
                                                                     : (rec.status === 'Partially Delivered' ? `/inventory/receive/${rec.id}` : `/inventory/orders/${rec.id}`);
@@ -276,7 +279,8 @@ export default function DashboardPage() {
                                 );
                             })}
                         </TableBody>
-                    </Table>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
         </Card>
@@ -290,25 +294,27 @@ export default function DashboardPage() {
                                         <Link href="/inventory/issue-history">{dict.viewAll}<ArrowUpRight className="h-4 w-4" /></Link>
                 </Button>
             </CardHeader>
-            <CardContent>
-                                 {mivsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-                                : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentIssuesFound || 'No recent issues found.'}</div>
-                                : (
-                                        <Table>
-                                                 <TableHeader><TableRow><TableHead>{dict.mivId || 'MIV ID'}</TableHead><TableHead>{dict.date || 'Date'}</TableHead></TableRow></TableHeader>
-                                                <TableBody>
-                                                        {recentIssues.map((miv, i) => (
-                                                                <TableRow key={`${miv.id}-${i}`} onClick={() => router.push(`/inventory/issue-history/${miv.id}`)} className="cursor-pointer hover:bg-accent/30">
-                                                                        <TableCell>
-                                                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{formatMivId(miv.id)}</div>
-                                                                            <div className="text-sm text-muted-foreground">{residences.find(r => String(r.id) === String(miv.residenceId))?.name || miv.residenceId}</div>
-                                                                        </TableCell>
-                                                                        <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
-                                                                </TableRow>
-                                                        ))}
-                                                </TableBody>
-                                        </Table>
-                                )}
+                <CardContent>
+                         {mivsLoading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                        : recentIssues.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noRecentIssuesFound || 'No recent issues found.'}</div>
+                        : (
+                            <div className="w-full overflow-x-auto">
+                                <Table>
+                                     <TableHeader><TableRow><TableHead>{dict.mivId || 'MIV ID'}</TableHead><TableHead>{dict.date || 'Date'}</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {recentIssues.map((miv, i) => (
+                                            <TableRow key={`${miv.id}-${i}`} onClick={() => router.push(`/inventory/issue-history/${miv.id}`)} className="cursor-pointer hover:bg-accent/30">
+                                                <TableCell>
+                                                <div className="font-medium text-primary underline-offset-2 hover:underline">{formatMivId(miv.id)}</div>
+                                                <div className="text-sm text-muted-foreground">{residences.find(r => String(r.id) === String(miv.residenceId))?.name || miv.residenceId}</div>
+                                                </TableCell>
+                                                <TableCell>{format(miv.date.toDate(), 'PPP')}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
             </CardContent>
         </Card>
       </div>
@@ -330,31 +336,33 @@ export default function DashboardPage() {
                                 ) : recentServiceOrders.length === 0 ? (
                                     <div className="text-center text-muted-foreground p-10">{(dict.dashboard as any)?.noServiceOrdersFound || 'No service orders found.'}</div>
                                 ) : (
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                <TableHead>{dict.location || 'Location'}</TableHead>
-                                                <TableHead>{dict.status || 'Status'}</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {recentServiceOrders.map((o: ServiceOrder) => (
-                                                <TableRow key={o.id} onClick={() => router.push(`/inventory/service-orders/${o.codeShort}`)} className="cursor-pointer hover:bg-accent/30">
-                                                    <TableCell>
-                                                        <div className="font-medium text-primary underline-offset-2 hover:underline">{o.codeShort}</div>
-                                                        <div className="text-sm text-muted-foreground">{o.destination?.name}</div>
-                                                    </TableCell>
-                                                    <TableCell>{o.residenceName}</TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={o.status === 'COMPLETED' ? 'default' : o.status === 'PARTIAL_RETURN' ? 'secondary' : o.status === 'CANCELLED' ? 'destructive' : 'outline'}>
-                                                            {o.status}
-                                                        </Badge>
-                                                    </TableCell>
+                                    <div className="w-full overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>{dict.idLabel || 'ID'}</TableHead>
+                                                    <TableHead>{dict.location || 'Location'}</TableHead>
+                                                    <TableHead>{dict.status || 'Status'}</TableHead>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {recentServiceOrders.map((o: ServiceOrder) => (
+                                                    <TableRow key={o.id} onClick={() => router.push(`/inventory/service-orders/${o.codeShort}`)} className="cursor-pointer hover:bg-accent/30">
+                                                        <TableCell>
+                                                            <div className="font-medium text-primary underline-offset-2 hover:underline">{o.codeShort}</div>
+                                                            <div className="text-sm text-muted-foreground">{o.destination?.name}</div>
+                                                        </TableCell>
+                                                        <TableCell>{o.residenceName}</TableCell>
+                                                        <TableCell>
+                                                            <Badge variant={o.status === 'COMPLETED' ? 'default' : o.status === 'PARTIAL_RETURN' ? 'secondary' : o.status === 'CANCELLED' ? 'destructive' : 'outline'}>
+                                                                {o.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                 )}
             </CardContent>
         </Card>
@@ -372,23 +380,25 @@ export default function DashboardPage() {
                 {loading ? <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
                 : recentMaintenance.length === 0 ? <div className="text-center text-muted-foreground p-10">{dict.dashboard?.noMaintenanceRequestsFound || 'No maintenance requests found.'}</div>
                 : (
-                    <Table>
-                        <TableHeader><TableRow><TableHead>{dict.idLabel || 'ID'}</TableHead><TableHead>{dict.location || 'Location'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {recentMaintenance.map((req, i) => (
-                                <TableRow key={`${req.id}-${i}`}>
-                                    <TableCell><div className="font-mono">{req.id}</div></TableCell>
-                                    <TableCell>
-                                        <div className="font-medium">{req.issueTitle}</div>
-                                        <div className="text-sm text-muted-foreground">{req.complexName}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                            <TableHeader><TableRow><TableHead>{dict.idLabel || 'ID'}</TableHead><TableHead>{dict.location || 'Location'}</TableHead><TableHead>{dict.status || 'Status'}</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {recentMaintenance.map((req, i) => (
+                                    <TableRow key={`${req.id}-${i}`}>
+                                        <TableCell><div className="font-mono">{req.id}</div></TableCell>
+                                        <TableCell>
+                                            <div className="font-medium">{req.issueTitle}</div>
+                                            <div className="text-sm text-muted-foreground">{req.complexName}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={req.status === 'Completed' ? 'default' : req.status === 'In Progress' ? 'secondary' : 'outline'}>{req.status}</Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
         </Card>
@@ -412,26 +422,28 @@ export default function DashboardPage() {
                                     ) : pendingRecons.length === 0 ? (
                                         <div className="text-center text-muted-foreground p-6">No pending reconciliation requests.</div>
                                     ) : (
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                    <TableHead>{dict.location || 'Location'}</TableHead>
-                                                    <TableHead>{dict.status || 'Status'}</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {pendingRecons.slice(0,5).map(r => (
-                                                    <TableRow key={r.id} onClick={() => router.push('/inventory/inventory-audit')} className="cursor-pointer hover:bg-accent/30">
-                                                        <TableCell><div className="font-mono">{r.reservedId || r.id}</div></TableCell>
-                                                        <TableCell>{residences.find(x => String(x.id) === String(r.residenceId))?.name || r.residenceId}</TableCell>
-                                                        <TableCell>
-                                                            <Badge variant="secondary">Pending</Badge>
-                                                        </TableCell>
+                                        <div className="w-full overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>{dict.idLabel || 'ID'}</TableHead>
+                                                        <TableHead>{dict.location || 'Location'}</TableHead>
+                                                        <TableHead>{dict.status || 'Status'}</TableHead>
                                                     </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {pendingRecons.slice(0,5).map(r => (
+                                                        <TableRow key={r.id} onClick={() => router.push('/inventory/inventory-audit')} className="cursor-pointer hover:bg-accent/30">
+                                                            <TableCell><div className="font-mono">{r.reservedId || r.id}</div></TableCell>
+                                                            <TableCell>{residences.find(x => String(x.id) === String(r.residenceId))?.name || r.residenceId}</TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="secondary">Pending</Badge>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -443,24 +455,26 @@ export default function DashboardPage() {
                                 ) : recentReconciliations.length === 0 ? (
                                     <div className="text-center text-muted-foreground p-6">{dict.noReconciliationsFound || 'No reconciliations found.'}</div>
                                 ) : (
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>{dict.idLabel || 'ID'}</TableHead>
-                                                <TableHead>{dict.location || 'Location'}</TableHead>
-                                                <TableHead>{dict.status || 'Status'}</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {recentReconciliations.map((rec: any) => (
-                                                <TableRow key={rec.id} onClick={() => router.push('/inventory/reports/reconciliations')} className="cursor-pointer hover:bg-accent/30">
-                                                    <TableCell><div className="font-mono">{rec.id}</div></TableCell>
-                                                    <TableCell>{residences.find(x => String(x.id) === String(rec.residenceId))?.name || rec.residenceId}</TableCell>
-                                                    <TableCell><Badge variant="default">Completed</Badge></TableCell>
+                                    <div className="w-full overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>{dict.idLabel || 'ID'}</TableHead>
+                                                    <TableHead>{dict.location || 'Location'}</TableHead>
+                                                    <TableHead>{dict.status || 'Status'}</TableHead>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {recentReconciliations.map((rec: any) => (
+                                                    <TableRow key={rec.id} onClick={() => router.push('/inventory/reports/reconciliations')} className="cursor-pointer hover:bg-accent/30">
+                                                        <TableCell><div className="font-mono">{rec.id}</div></TableCell>
+                                                        <TableCell>{residences.find(x => String(x.id) === String(rec.residenceId))?.name || rec.residenceId}</TableCell>
+                                                        <TableCell><Badge variant="default">Completed</Badge></TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                 )}
                             </div>
                         </CardContent>
@@ -478,33 +492,35 @@ export default function DashboardPage() {
                         ) : recentDepreciation.length === 0 ? (
                             <div className="text-center text-muted-foreground p-10">No recent depreciation.</div>
                         ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>{dict.itemLabel || 'Item'}</TableHead>
-                                        <TableHead>{dict.location || 'Location'}</TableHead>
-                                        <TableHead>{dict.quantity || 'Quantity'}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {recentDepreciation.map((tx) => (
-                                        <TableRow key={tx.id} className="hover:bg-accent/30">
-                                            <TableCell>
-                                                <div className="font-medium">{tx.itemNameEn || tx.itemNameAr}</div>
-                                                <div className="text-sm text-muted-foreground">{tx.referenceDocId}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {tx.locationName ? (
-                                                    <LocationBreadcrumb path={tx.locationName} />
-                                                ) : (
-                                                    residences.find(r => r.id === tx.residenceId)?.name || tx.residenceId
-                                                )}
-                                            </TableCell>
-                                            <TableCell>{tx.quantity}</TableCell>
+                            <div className="w-full overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>{dict.itemLabel || 'Item'}</TableHead>
+                                            <TableHead>{dict.location || 'Location'}</TableHead>
+                                            <TableHead>{dict.quantity || 'Quantity'}</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {recentDepreciation.map((tx) => (
+                                            <TableRow key={tx.id} className="hover:bg-accent/30">
+                                                <TableCell>
+                                                    <div className="font-medium">{tx.itemNameEn || tx.itemNameAr}</div>
+                                                    <div className="text-sm text-muted-foreground">{tx.referenceDocId}</div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {tx.locationName ? (
+                                                        <LocationBreadcrumb path={tx.locationName} />
+                                                    ) : (
+                                                        residences.find(r => r.id === tx.residenceId)?.name || tx.residenceId
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{tx.quantity}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -525,30 +541,32 @@ export default function DashboardPage() {
                         ) : recentTransfers.length === 0 ? (
                             <div className="text-center text-muted-foreground p-10">No stock transfers.</div>
                         ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Code</TableHead>
-                                        <TableHead>{dict.location || 'Location'}</TableHead>
-                                        <TableHead>{dict.status || 'Status'}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {recentTransfers.map((t: StockTransfer) => (
-                                        <TableRow key={t.id} onClick={() => router.push('/inventory/transfer')} className="cursor-pointer hover:bg-accent/30">
-                                            <TableCell><div className="font-medium text-primary underline-offset-2 hover:underline">{t.codeShort || t.id}</div></TableCell>
-                                            <TableCell>
-                                                <div className="font-medium">{t.fromResidenceName} → {t.toResidenceName}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={t.status === 'Completed' ? 'default' : t.status === 'Pending' ? 'secondary' : t.status === 'Rejected' ? 'destructive' : 'outline'}>
-                                                    {t.status}
-                                                </Badge>
-                                            </TableCell>
+                            <div className="w-full overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Code</TableHead>
+                                            <TableHead>{dict.location || 'Location'}</TableHead>
+                                            <TableHead>{dict.status || 'Status'}</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {recentTransfers.map((t: StockTransfer) => (
+                                            <TableRow key={t.id} onClick={() => router.push('/inventory/transfer')} className="cursor-pointer hover:bg-accent/30">
+                                                <TableCell><div className="font-medium text-primary underline-offset-2 hover:underline">{t.codeShort || t.id}</div></TableCell>
+                                                <TableCell>
+                                                    <div className="font-medium">{t.fromResidenceName} → {t.toResidenceName}</div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={t.status === 'Completed' ? 'default' : t.status === 'Pending' ? 'secondary' : t.status === 'Rejected' ? 'destructive' : 'outline'}>
+                                                        {t.status}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>

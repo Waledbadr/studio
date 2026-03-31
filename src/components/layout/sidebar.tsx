@@ -168,6 +168,14 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/accommodation/analytics'} tooltip={dict.accommodationAnalytics || 'Accommodation Analytics'}>
+                  <Link href="/accommodation/analytics" onClick={handleNavigate}>
+                    <TrendingUp />
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.accommodationAnalytics || 'Accommodation Analytics'}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/worker-certificate'} tooltip="Worker Certificate">
                   <Link href="/accommodation/worker-certificate" onClick={handleNavigate}>
                     <FileText />
@@ -259,6 +267,7 @@ export function AppSidebar() {
       title: dict.sidebar?.reports || 'Reports',
       items: [
         { href: '/reports', label: dict.sidebar?.reports || 'Reports', icon: AreaChart },
+        { href: '/inventory/orders/analytics', label: dict.ordersAnalytics || 'Material Requests Analytics', icon: TrendingUp },
       ],
       subItems: [
         { href: '/inventory/reports/stock-movement', label: dict.sidebar?.stockMovementReport || 'Stock Movement Report', icon: TrendingUp },
