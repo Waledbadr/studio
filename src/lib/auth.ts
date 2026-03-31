@@ -64,7 +64,13 @@ const DEFAULT_ISSUER = 'estatecare.local';
 const DEFAULT_AUD = 'estatecare-client';
 
 async function getSecretKeyBytes() {
-  const secret = await getRuntimeEnv('JWT_PRIVATE_KEY', DEFAULT_SECRET);
+  const secret = await getRuntimeEnv('JWT_PRIVATE_KEY');
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_PRIVATE_KEY is not configured. Set it as a Secret in Cloudflare Pages > Settings > Environment Variables.');
+    }
+    return new TextEncoder().encode(DEFAULT_SECRET);
+  }
   return new TextEncoder().encode(secret);
 }
 

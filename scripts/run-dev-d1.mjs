@@ -40,6 +40,13 @@ if (!isWindows) {
   process.exit(code);
 }
 
+const wslCheck = await run("wsl.exe", ["--status"], { stdio: "ignore" });
+if (wslCheck !== 0) {
+  console.error("WSL is required for npm run dev:d1 on Windows.");
+  console.error("Install WSL, then run: wsl --install");
+  process.exit(1);
+}
+
 // Windows: @cloudflare/next-on-pages uses bash and is unreliable natively.
 // Run inside WSL, but pre-clean generated dirs on Windows first to avoid EACCES issues on /mnt/*.
 safeRm(".next");
@@ -50,7 +57,7 @@ const cwdWsl = toWslPath(cwdWin);
 
 // Run inside WSL so @cloudflare/next-on-pages (bash-based) can cd successfully.
 // Note: assumes Node/npm are available in WSL.
-const bashCommand = `cd ${cwdWsl} && npm run dev:d1:linux`;
+const bashCommand = `cd '${cwdWsl}' && npm run dev:d1:linux`;
 
 const code = await run("wsl.exe", ["bash", "-lc", bashCommand]);
 process.exit(code);

@@ -27,7 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield, User } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield, User, Gem, Building2, Sparkles } from "lucide-react";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -498,163 +498,208 @@ export default function LoginForm() {
   };
 
   return (
-    <Card className="shadow-2xl border border-border/60 backdrop-blur supports-[backdrop-filter]:bg-background/80 overflow-hidden lg:grid lg:grid-cols-2">
-      {/* Left info panel (shown on large screens) */}
-      <div className="relative hidden lg:block">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/25 via-fuchsia-600/20 to-cyan-600/20" />
-        <div className="absolute -top-10 -left-10 h-56 w-56 rounded-full bg-indigo-500/25 blur-3xl" />
-        <div className="absolute -bottom-10 -right-10 h-56 w-56 rounded-full bg-fuchsia-500/20 blur-3xl" />
-        <div className="relative z-10 h-full p-8 flex flex-col justify-between">
+    <Card className="overflow-hidden border border-white/25 bg-white/10 text-white shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl lg:grid lg:grid-cols-[1.02fr_1fr]">
+      <div className="relative hidden min-h-[660px] lg:block">
+        <div className="absolute inset-0 bg-[linear-gradient(152deg,rgba(245,192,111,0.3)_0%,rgba(140,198,255,0.2)_36%,rgba(12,27,44,0.82)_100%)]" />
+        <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(255,255,255,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.22)_1px,transparent_1px)] [background-size:34px_34px]" />
+        <div className="absolute -left-20 top-16 h-72 w-72 rounded-full bg-amber-200/35 blur-3xl" />
+        <div className="absolute bottom-10 right-8 h-80 w-80 rounded-full bg-cyan-200/30 blur-3xl" />
+
+        <div className="relative z-10 flex h-full flex-col justify-between p-9 text-slate-50">
           <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white grid place-items-center font-semibold shadow">
-                EC
-              </div>
-              <span className="font-semibold">EstateCare</span>
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/20 px-3 py-1 text-xs font-medium tracking-[0.12em]">
+              <Sparkles className="h-3.5 w-3.5" />
+              LUXURY OPERATIONS PLATFORM
             </div>
-            <h2 className="text-2xl font-semibold leading-tight mb-2">All-in-one operations</h2>
-            <p className="text-sm text-muted-foreground/90 max-w-sm">
-              Streamline inventory, maintenance, and accommodation workflows in one secure workspace.
+
+            <h2 className="max-w-md text-4xl font-semibold leading-[1.12] text-white">
+              إدارة ذكية بتجربة
+              <span className="block text-amber-100">فخمة وحديثة</span>
+            </h2>
+
+            <p className="mt-5 max-w-md text-sm leading-7 text-slate-100/90">
+              لوحة موحدة لإدارة السكن، المواد، والصيانة بسرعة عالية، أمان أقوى، وتجربة استخدام تليق بمنظومتك.
             </p>
           </div>
-          <ul className="text-sm text-muted-foreground/90 grid gap-2 mt-8 marker:text-indigo-500 list-disc pl-4">
-            <li>Secure sign-in with Passkeys and Magic Link</li>
-            <li>Single sign-on with Google & Microsoft</li>
-            <li>Fast, reliable performance</li>
-          </ul>
+
+          <div className="grid gap-3 text-sm">
+            <div className="rounded-xl border border-white/35 bg-white/10 p-3 backdrop-blur">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-white">
+                <Gem className="h-4 w-4" />
+                Premium Access
+              </div>
+              <p className="text-slate-100/85">Passkey, Magic Link, and enterprise-grade session security.</p>
+            </div>
+            <div className="rounded-xl border border-white/35 bg-white/10 p-3 backdrop-blur">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-white">
+                <Building2 className="h-4 w-4" />
+                Built for Scale
+              </div>
+              <p className="text-slate-100/85">One sign-in gateway to Accommodation and Materials workflows.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Right form panel */}
-      <div className="p-6">
-        <CardHeader className="pb-3 p-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <div className="text-sm text-muted-foreground">EstateCare</div>
+      <div className="p-5 sm:p-7 lg:p-9">
+        <CardHeader className="space-y-3 p-0 pb-5">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-2xl font-semibold text-white sm:text-[1.9rem]">Welcome to EstateCare</CardTitle>
+            <span className="rounded-full border border-white/30 px-2.5 py-1 text-[0.65rem] font-semibold tracking-[0.16em] text-amber-100">
+              SECURE
+            </span>
           </div>
-          <CardDescription>
-            {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
+          <CardDescription className="text-slate-200/85">
+            {mode === "signin" ? "Sign in to continue your operational workflow." : "Create your account and enter your workspace."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0 pt-4">
-          <div className="grid gap-5">
-            {/* Segmented control */}
-            <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
-              <Button
-                size="sm"
-                variant={mode === "signin" ? "default" : "ghost"}
-                className="rounded-md"
-                onClick={() => setMode("signin")}
-              >
-                Sign in
-              </Button>
-              <Button
-                size="sm"
-                variant={mode === "signup" ? "default" : "ghost"}
-                className="rounded-md"
-                onClick={() => setMode("signup")}
-              >
-                Create account
-              </Button>
-            </div>
 
-            {/* Choose system after login */}
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">Open after login</Label>
-              <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={appChoice === 'accommodation' ? 'default' : 'ghost'}
-                  className="rounded-md"
-                  onClick={() => setAppChoice('accommodation')}
-                >
-                  Accommodation
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={appChoice === 'materials' ? 'default' : 'ghost'}
-                  className="rounded-md"
-                  onClick={() => setAppChoice('materials')}
-                >
-                  Materials
-                </Button>
-              </div>
-            </div>
-
-            <form onSubmit={handleEmailPassword} className="grid gap-4">
-              {mode === "signup" && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="name">Full name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" className="pl-9" />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="email" type="email" dir="ltr" inputMode="email" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="you@example.com" autoComplete="email" className="pl-9" />
-                </div>
-                {/* Inline non-ASCII tip removed in favor of red toast popup */}
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="password" type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => onPasswordChange(e.target.value)} placeholder="••••••••" autoComplete={mode === "signin" ? "current-password" : "new-password"} className="pl-9 pr-10" />
-                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {/* Inline non-ASCII tip removed in favor of red toast popup */}
-              </div>
-
-              {/* Errors and infos are surfaced via toast popups for a compact, consistent UX */}
-
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
-              </Button>
-
-              <div className="flex items-center gap-2">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">Or continue with</span>
-                <Separator className="flex-1" />
-              </div>
-
-              <div className="grid gap-2">
-                <Button variant="outline" onClick={() => oauthHandler("google")} disabled={loading}>
-                  <img alt="" src="https://www.google.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Google
-                </Button>
-                <Button variant="outline" onClick={() => oauthHandler("microsoft")} disabled={loading}>
-                  <img alt="" src="https://learn.microsoft.com/favicon.ico" className="h-4 w-4 mr-2" /> Continue with Microsoft
-                </Button>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="secondary" onClick={handleMagicLink} disabled={loading}>
-                    <Link2 className="h-4 w-4 mr-2" /> Magic Link
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handlePasskeyLogin}>
-                    <KeyRound className="h-4 w-4 mr-2" /> Passkey
-                  </Button>
-                </div>
-                <Button type="button" variant="ghost" onClick={handlePasskeyRegister} className="justify-start text-xs text-muted-foreground hover:text-foreground">
-                  <Shield className="h-3.5 w-3.5 mr-2" /> Register a Passkey (after your first sign-in)
-                </Button>
-              </div>
-
-              {mode === "signin" && (
-                <button type="button" className={cn("text-sm text-muted-foreground hover:underline text-left")}
-                  onClick={handleReset}>
-                  Forgot your password?
-                </button>
-              )}
-            </form>
+        <CardContent className="space-y-5 p-0">
+          <div className="grid grid-cols-2 rounded-xl border border-white/20 bg-white/10 p-1 text-sm">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "signin" ? "default" : "ghost"}
+              className={cn("rounded-lg", mode === "signin" && "bg-white text-slate-900 hover:bg-white/95")}
+              onClick={() => setMode("signin")}
+            >
+              Sign in
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "signup" ? "default" : "ghost"}
+              className={cn("rounded-lg", mode === "signup" && "bg-white text-slate-900 hover:bg-white/95")}
+              onClick={() => setMode("signup")}
+            >
+              Create account
+            </Button>
           </div>
+
+          <div className="grid gap-2">
+            <Label className="text-xs font-medium uppercase tracking-[0.12em] text-slate-200/80">Open after login</Label>
+            <div className="grid grid-cols-2 rounded-xl border border-white/20 bg-white/10 p-1 text-sm">
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'accommodation' ? 'default' : 'ghost'}
+                className={cn("rounded-lg", appChoice === 'accommodation' && "bg-amber-100 text-slate-900 hover:bg-amber-100/95")}
+                onClick={() => setAppChoice('accommodation')}
+              >
+                Accommodation
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={appChoice === 'materials' ? 'default' : 'ghost'}
+                className={cn("rounded-lg", appChoice === 'materials' && "bg-amber-100 text-slate-900 hover:bg-amber-100/95")}
+                onClick={() => setAppChoice('materials')}
+              >
+                Materials
+              </Button>
+            </div>
+          </div>
+
+          <form onSubmit={handleEmailPassword} className="grid gap-4">
+            {mode === "signup" && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="name" className="text-slate-200">Full name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    className="h-11 border-white/25 bg-white/10 pl-9 text-white placeholder:text-slate-300/70"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="email" className="text-slate-200">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                <Input
+                  id="email"
+                  type="email"
+                  dir="ltr"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => onEmailChange(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className="h-11 border-white/25 bg-white/10 pl-9 text-white placeholder:text-slate-300/70"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="password" className="text-slate-200">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  dir="ltr"
+                  value={password}
+                  onChange={(e) => onPasswordChange(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  className="h-11 border-white/25 bg-white/10 pl-9 pr-10 text-white placeholder:text-slate-300/70"
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 transition hover:text-white">
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="h-11 w-full bg-gradient-to-r from-amber-200 to-orange-300 text-slate-900 shadow-[0_10px_25px_rgba(240,180,90,0.35)] transition hover:from-amber-100 hover:to-orange-200"
+            >
+              {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Separator className="flex-1 bg-white/25" />
+              <span className="text-xs text-slate-200/80">Or continue with</span>
+              <Separator className="flex-1 bg-white/25" />
+            </div>
+
+            <div className="grid gap-2">
+              <Button variant="outline" className="h-11 border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => oauthHandler("google")} disabled={loading}>
+                <img alt="" src="https://www.google.com/favicon.ico" className="mr-2 h-4 w-4" /> Continue with Google
+              </Button>
+              <Button variant="outline" className="h-11 border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => oauthHandler("microsoft")} disabled={loading}>
+                <img alt="" src="https://learn.microsoft.com/favicon.ico" className="mr-2 h-4 w-4" /> Continue with Microsoft
+              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="secondary" className="h-10 bg-white/90 text-slate-900 hover:bg-white" onClick={handleMagicLink} disabled={loading}>
+                  <Link2 className="mr-2 h-4 w-4" /> Magic Link
+                </Button>
+                <Button type="button" variant="outline" className="h-10 border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={handlePasskeyLogin}>
+                  <KeyRound className="mr-2 h-4 w-4" /> Passkey
+                </Button>
+              </div>
+              <Button type="button" variant="ghost" onClick={handlePasskeyRegister} className="justify-start text-xs text-slate-200/85 hover:bg-white/10 hover:text-white">
+                <Shield className="mr-2 h-3.5 w-3.5" /> Register a Passkey (after your first sign-in)
+              </Button>
+            </div>
+
+            {mode === "signin" && (
+              <button
+                type="button"
+                className={cn("text-left text-sm text-slate-200/85 transition hover:text-white hover:underline")}
+                onClick={handleReset}
+              >
+                Forgot your password?
+              </button>
+            )}
+          </form>
         </CardContent>
       </div>
     </Card>

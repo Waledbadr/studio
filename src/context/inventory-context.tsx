@@ -382,6 +382,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const d1PollWarnedRef = useRef(false);
   const backendFallbackWarnedRef = useRef(false);
 
+  // --- localStorage persistence helpers (used in local/fallback mode) ---
+  const persistItemsToLocalStorage = useCallback((updatedItems: InventoryItem[]) => {
+    try { localStorage.setItem('estatecare_inventory', JSON.stringify(updatedItems)); } catch {}
+  }, []);
+  const persistCategoriesToLocalStorage = useCallback((updatedCats: string[]) => {
+    try { localStorage.setItem('estatecare_inventory_categories', JSON.stringify(updatedCats)); } catch {}
+  }, []);
+
 
   const loadInventory = useCallback(async () => {
      if (isLoaded.current) return;
@@ -590,17 +598,27 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const updatedCategories = [...categories, newCategory.trim()];
-      if (USE_D1) {
-        const res: any = await (await import('@/lib/d1-client')).upsertInventoryCategories(updatedCategories);
-        if (!res || res.ok === false) throw new Error(res?.error || 'D1 upsertInventoryCategories failed');
-        setCategories(updatedCategories);
-      } else {
-        if (!db) {
-          toast({ title: "Error", description: "Operation failed", variant: "destructive" });
+      // Try D1 first (explicitly enabled or no Firestore)
+      const shouldTryD1 = USE_D1 || !db;
+      if (shouldTryD1) {
+        try {
+          const res: any = await (await import('@/lib/d1-client')).upsertInventoryCategories(updatedCategories);
+          if (!res || res.ok === false) throw new Error(res?.error || 'D1 upsertInventoryCategories failed');
+          setCategories(updatedCategories);
+          toast({ title: "Success", description: "Category added." });
           return;
+        } catch (d1Err) {
+          if (USE_D1) throw d1Err; // If D1 is explicitly required, don't fallback
+          // Fall through to localStorage
         }
+      }
+      if (db) {
         const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
         await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
+      } else {
+        // localStorage fallback
+        setCategories(updatedCategories);
+        persistCategoriesToLocalStorage(updatedCategories);
       }
       toast({ title: "Success", description: "Category added." });
     } catch(error) {
@@ -616,32 +634,42 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     try {
-      if (USE_D1) {
-        const res: any = await (await import('@/lib/d1-client')).renameInventoryCategory(oldName, trimmedNewName);
-        if (!res || res.ok === false) throw new Error(res?.error || 'D1 renameInventoryCategory failed');
-        setCategories(categories.map(c => c === oldName ? trimmedNewName : c));
-        setItems(prev => prev.map(it => it.category === oldName ? ({ ...it, category: trimmedNewName }) : it));
-      } else {
-        if (!db) {
-          toast({ title: "Error", description: "Operation failed", variant: "destructive" });
+      const shouldTryD1 = USE_D1 || !db;
+      if (shouldTryD1) {
+        try {
+          const res: any = await (await import('@/lib/d1-client')).renameInventoryCategory(oldName, trimmedNewName);
+          if (!res || res.ok === false) throw new Error(res?.error || 'D1 renameInventoryCategory failed');
+          const updatedCats = categories.map(c => c === oldName ? trimmedNewName : c);
+          setCategories(updatedCats);
+          const updatedItems = items.map(it => it.category === oldName ? ({ ...it, category: trimmedNewName }) : it);
+          setItems(updatedItems);
+          toast({ title: "Success", description: "Category updated successfully." });
           return;
+        } catch (d1Err) {
+          if (USE_D1) throw d1Err;
+          // Fall through to localStorage
         }
+      }
+      if (db) {
         const batch = writeBatch(db);
-
-        // 1. Update categories document
         const updatedCategories = categories.map(c => c === oldName ? trimmedNewName : c);
         const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
         batch.set(categoriesDocRef, { names: updatedCategories });
-        
-        // 2. Update all items with the old category name
         const itemsToUpdateQuery = query(collection(db!, "inventory"), where("category", "==", oldName));
         const itemsToUpdateSnapshot = await getDocs(itemsToUpdateQuery);
         itemsToUpdateSnapshot.forEach((itemDoc: any) => {
           const itemRef = doc(db!, "inventory", itemDoc.id);
           batch.update(itemRef, { category: trimmedNewName });
         });
-
         await batch.commit();
+      } else {
+        // localStorage fallback
+        const updatedCats = categories.map(c => c === oldName ? trimmedNewName : c);
+        setCategories(updatedCats);
+        persistCategoriesToLocalStorage(updatedCats);
+        const updatedItems = items.map(it => it.category === oldName ? ({ ...it, category: trimmedNewName }) : it);
+        setItems(updatedItems);
+        persistItemsToLocalStorage(updatedItems);
       }
       toast({ title: "Success", description: "Category updated successfully." });
     } catch (error) {
@@ -659,43 +687,54 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const shouldTryD1 = USE_D1 || !db;
       if (shouldTryD1) {
-        const payload: any = {
-          ...newItem,
-          // D1 schema requires `name` (not null)
-          name: (newItem as any).name || (newItem as any).nameEn || (newItem as any).nameAr || 'Item',
-          stock: 0,
-          stockByResidence: {},
-          lifespanDays: (newItem as any).lifespanDays || 0,
-          variants: (newItem as any).variants || [],
-        };
-        const res: any = await (await import('@/lib/d1-client')).createInventoryItem(payload);
-        if (!res || res.ok === false) throw new Error(res?.error || 'D1 createInventoryItem failed');
-        const id = res.id || payload.id;
-        const itemWithId = { ...payload, id, stock: 0, stockByResidence: {} } as InventoryItem;
-        setItems(prev => [itemWithId, ...prev]);
-        const newCategory = String((newItem as any).category || '').trim();
-        if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
-          // keep local list in sync; D1 table gets updated too
-          await addCategory(newCategory);
+        try {
+          const payload: any = {
+            ...newItem,
+            name: (newItem as any).name || (newItem as any).nameEn || (newItem as any).nameAr || 'Item',
+            stock: 0,
+            stockByResidence: {},
+            lifespanDays: (newItem as any).lifespanDays || 0,
+            variants: (newItem as any).variants || [],
+          };
+          const res: any = await (await import('@/lib/d1-client')).createInventoryItem(payload);
+          if (!res || res.ok === false) throw new Error(res?.error || 'D1 createInventoryItem failed');
+          const id = res.id || payload.id;
+          const itemWithId = { ...payload, id, stock: 0, stockByResidence: {} } as InventoryItem;
+          setItems(prev => [itemWithId, ...prev]);
+          const newCategory = String((newItem as any).category || '').trim();
+          if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
+            await addCategory(newCategory);
+          }
+          toast({ title: "Success", description: "New item added to inventory (D1)." });
+          return itemWithId;
+        } catch (d1Err) {
+          if (USE_D1) throw d1Err;
+          // Fall through to Firestore or localStorage
         }
-        toast({ title: "Success", description: "New item added to inventory (D1)." });
+      }
+
+      if (db) {
+        const docRef = doc(collection(db, "inventory"));
+        const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: (newItem as any).lifespanDays || 0, variants: (newItem as any).variants || [] };
+        await setDoc(docRef, itemWithId);
+        const newCategory = String((newItem as any).category || '').toLowerCase();
+        if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory)) {
+          addCategory((newItem as any).category);
+        }
+        toast({ title: "Success", description: "New item added to inventory." });
         return itemWithId;
       }
 
-      if (!db) {
-        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
-        return;
+      // localStorage fallback
+      const id = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const itemWithId = { ...newItem, id, stock: 0, stockByResidence: {}, lifespanDays: (newItem as any).lifespanDays || 0, variants: (newItem as any).variants || [] } as InventoryItem;
+      const updatedItems = [itemWithId, ...items];
+      setItems(updatedItems);
+      persistItemsToLocalStorage(updatedItems);
+      const newCategory = String((newItem as any).category || '').trim();
+      if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
+        await addCategory(newCategory);
       }
-
-      const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: (newItem as any).lifespanDays || 0, variants: (newItem as any).variants || [] };
-      await setDoc(docRef, itemWithId);
-      
-      const newCategory = String((newItem as any).category || '').toLowerCase();
-      if (newCategory && !categories.map(c => c.toLowerCase()).includes(newCategory)) {
-        addCategory((newItem as any).category);
-      }
-
       toast({ title: "Success", description: "New item added to inventory." });
       return itemWithId;
     } catch (error) {
@@ -708,22 +747,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const shouldTryD1 = USE_D1 || !db;
       if (shouldTryD1) {
-        const { id, stock, ...itemData } = itemToUpdate as any;
-        const res: any = await (await import('@/lib/d1-client')).updateInventoryItem(id, itemData);
-        if (!res || res.ok === false) throw new Error(res?.error || 'D1 updateInventoryItem failed');
-        setItems(prev => prev.map(it => it.id === itemToUpdate.id ? itemToUpdate : it));
-        toast({ title: "Success", description: "Item updated (D1)." });
+        try {
+          const { id, stock, ...itemData } = itemToUpdate as any;
+          const res: any = await (await import('@/lib/d1-client')).updateInventoryItem(id, itemData);
+          if (!res || res.ok === false) throw new Error(res?.error || 'D1 updateInventoryItem failed');
+          setItems(prev => prev.map(it => it.id === itemToUpdate.id ? itemToUpdate : it));
+          toast({ title: "Success", description: "Item updated (D1)." });
+          return;
+        } catch (d1Err) {
+          if (USE_D1) throw d1Err;
+          // Fall through
+        }
+      }
+
+      if (db) {
+        const itemDocRef = doc(db!, "inventory", itemToUpdate.id);
+        const { stock, ...itemData } = itemToUpdate;
+        await updateDoc(itemDocRef, { ...itemData });
+        toast({ title: "Success", description: "Item updated." });
         return;
       }
 
-      if (!db) {
-        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
-        return;
-      }
-
-      const itemDocRef = doc(db!, "inventory", itemToUpdate.id);
-      const { stock, ...itemData } = itemToUpdate; // Exclude total stock from being written to DB
-      await updateDoc(itemDocRef, { ...itemData });
+      // localStorage fallback
+      const updatedItems = items.map(it => it.id === itemToUpdate.id ? itemToUpdate : it);
+      setItems(updatedItems);
+      persistItemsToLocalStorage(updatedItems);
       toast({ title: "Success", description: "Item updated." });
     } catch (error) {
       console.error("Error updating item:", error);
@@ -740,19 +788,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     try {
       const shouldTryD1 = USE_D1 || !db;
       if (shouldTryD1) {
-        const res: any = await (await import('@/lib/d1-client')).deleteInventoryItem(id);
-        if (!res || res.ok === false) throw new Error(res?.error || 'D1 deleteInventoryItem failed');
-        setItems(prev => prev.filter(it => it.id !== id));
-        toast({ title: "Success", description: "Item has been deleted (D1)." });
+        try {
+          const res: any = await (await import('@/lib/d1-client')).deleteInventoryItem(id);
+          if (!res || res.ok === false) throw new Error(res?.error || 'D1 deleteInventoryItem failed');
+          setItems(prev => prev.filter(it => it.id !== id));
+          toast({ title: "Success", description: "Item has been deleted (D1)." });
+          return;
+        } catch (d1Err) {
+          if (USE_D1) throw d1Err;
+          // Fall through
+        }
+      }
+
+      if (db) {
+        await deleteDoc(doc(db!, "inventory", id));
+        toast({ title: "Success", description: "Item has been deleted." });
         return;
       }
 
-      if (!db) {
-        toast({ title: "Error", description: "Operation failed", variant: "destructive" });
-        return;
-      }
-
-      await deleteDoc(doc(db!, "inventory", id));
+      // localStorage fallback
+      const updatedItems = items.filter(it => it.id !== id);
+      setItems(updatedItems);
+      persistItemsToLocalStorage(updatedItems);
       toast({ title: "Success", description: "Item has been deleted." });
     } catch (error) {
        toast({ title: "Error", description: "Failed to delete item.", variant: "destructive" });

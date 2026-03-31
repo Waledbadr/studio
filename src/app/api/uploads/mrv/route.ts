@@ -5,7 +5,7 @@ import { getCloudflareEnvRecord } from '@/lib/runtime-env';
 // Using local file storage via src/lib/storage.ts (no external blob provider required)
 
 
-// export const runtime = 'edge';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {

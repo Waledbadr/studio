@@ -3,6 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 // Protect app routes by redirecting unauthenticated users to /login on the edge when possible.
 // Note: Client auth session is client-side; for full SSR/edge protection use cookies-based auth.
 export function proxy(req: NextRequest) {
+  const devApiProxyOrigin = process.env.DEV_API_PROXY_ORIGIN;
+  if (
+    process.env.NODE_ENV === 'development' &&
+    devApiProxyOrigin &&
+    req.nextUrl.pathname.startsWith('/api/')
+  ) {
+    const target = new URL(req.nextUrl.pathname + req.nextUrl.search, devApiProxyOrigin);
+    return NextResponse.rewrite(target);
+  }
+
   // Skip all RSC/Flight and prefetch requests to avoid interfering with Next's client navigation
   const isRSC = req.headers.get('rsc') !== null
     || req.headers.get('next-router-prefetch') === '1'

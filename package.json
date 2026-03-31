@@ -4,10 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:d1": "node scripts/run-dev-d1.mjs",
+    "dev:d1:fast": "node scripts/run-dev-d1-fast.mjs",
+    "dev:d1:linux": "npm run pages:build && node scripts/ensure-next-on-pages-shims.mjs && npx wrangler@4.78.0 pages dev .vercel/output/static",
+    "dev:cf": "npm run dev:d1",
     "build": "next build",
     "start": "next start",
     "pages:build": "npx @cloudflare/next-on-pages",
-    "pages:deploy": "npm run pages:build && npx wrangler pages deploy .vercel/output/static --project-name estatecare-studio",
+    "deploy": "node scripts/run-pages-deploy.mjs",
+    "deploy:linux": "npm run pages:build && npx wrangler pages deploy .vercel/output/static --project-name estatecare-studio",
+    "pages:deploy": "npm run deploy:linux",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "npx wrangler d1 migrations apply estatecare --local",
     "db:migrate:prod": "npx wrangler d1 migrations apply estatecare --remote",
@@ -86,6 +92,9 @@
     "tailwindcss-animate": "^1.0.7",
     "xlsx": "^0.18.5",
     "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
+    "@cloudflare/workerd-windows-64": "^1.20260329.1"
   },
   "devDependencies": {
     "@types/node": "^20",

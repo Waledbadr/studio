@@ -1,6 +1,6 @@
 import type {NextConfig} from 'next';
 
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === 'development' && process.env.SKIP_CLOUDFLARE_SETUP !== 'true') {
   (async () => {
     try {
       const { setupDevPlatform } = await import('@cloudflare/next-on-pages/next-dev');
@@ -14,6 +14,17 @@ if (process.env.NODE_ENV === 'development') {
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();
+
+// NEXT_PUBLIC_* vars are baked into the bundle at build time.
+// If NEXT_PUBLIC_USE_D1 is missing, D1 mode will be silently disabled in production.
+if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_USE_D1) {
+  console.warn(
+    '\n⚠️  WARNING: NEXT_PUBLIC_USE_D1 is not set.\n' +
+    '   D1 backend will be disabled in this build.\n' +
+    '   Add NEXT_PUBLIC_USE_D1=true as a Build Variable in\n' +
+    '   Cloudflare Pages > Settings > Environment Variables.\n'
+  );
+}
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -34,6 +45,18 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  async rewrites() {
+    const proxyOrigin = process.env.DEV_API_PROXY_ORIGIN;
+    if (process.env.NODE_ENV === 'development' && proxyOrigin) {
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${proxyOrigin}/api/:path*`,
+        },
+      ];
+    }
+    return [];
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';

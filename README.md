@@ -164,13 +164,33 @@ npx next dev --turbopack -p 9010
 
 ## 🔧 أوامر التطوير
 
+### المسار السهل (موصى به)
+
+```powershell
+# تطوير سريع للواجهة والمنطق المحلي
+npm run dev
+
+# تطوير مرتبط بـ D1 (على ويندوز يستخدم WSL تلقائياً)
+npm run dev:d1
+
+# نشر Cloudflare Pages (على ويندوز يستخدم WSL تلقائياً)
+npm run deploy
+```
+
+ملاحظات:
+- `npm run dev` مناسب لتطوير الواجهة بسرعة ويعمل بدون D1 binding.
+- `npm run dev:d1` هو المسار الموصى به لاختبار قاعدة البيانات D1 فعلياً.
+- في ويندوز، أوامر `dev:d1` و`deploy` تتطلب WSL مع Node/npm داخل WSL.
+
 ### تطوير التطبيق
 ```powershell
 npm run dev              # تشغيل خادم التطوير مع Turbopack
+npm run dev:d1           # تشغيل Cloudflare Pages dev مع D1
 npm run build           # بناء التطبيق للإنتاج
 npm start              # تشغيل التطبيق المبني
 npm run lint           # فحص الكود
 npm run typecheck      # فحص TypeScript
+npm run deploy          # نشر مباشر إلى Cloudflare Pages
 ```
 
 ### تطوير الذكاء الاصطناعي

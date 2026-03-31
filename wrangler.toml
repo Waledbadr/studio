@@ -16,6 +16,8 @@ migrations_dir = "drizzle/migrations"
 [vars]
 # STORAGE_PATH can be set here or via your deploy platform secrets
 STORAGE_PATH = "/var/estatecare/storage"
+# Baked into the client bundle at build time — enables D1 backend mode
+NEXT_PUBLIC_USE_D1 = "true"
 
 [[r2_buckets]]
 binding = "STORAGE_BUCKET"

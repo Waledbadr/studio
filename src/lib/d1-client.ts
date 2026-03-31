@@ -66,14 +66,81 @@ function getCacheTTL(action: string): number {
   return CACHE_TIMES.default;
 }
 
+// Detect whether an RPC action is a write (mutation) operation
+const WRITE_VERBS = /^(?:create|update|delete|upsert|rename|issue|transfer|reconcile|approve|reject|checkIn|checkOut|receive|mark|assign|set|dispatch)/i;
+function isWriteAction(action: string): boolean {
+  return WRITE_VERBS.test(action);
+}
+
+// After a write, invalidate cached reads whose key starts with a related getter.
+// e.g. createInventoryItem → invalidate all "getInventory*" cached entries.
+function invalidateRelatedCache(action: string): void {
+  // Derive the entity from the action name: e.g. "createInventoryItem" → "Inventory"
+  const match = action.match(/^(?:create|update|delete|upsert|rename|issue|transfer|reconcile|approve|reject|checkIn|checkOut|receive|mark|assign|set|dispatch)(.+)/i);
+  const entity = match ? match[1] : null;
+
+  // Build a list of prefixes whose cache entries should be purged.
+  const prefixes: string[] = [];
+  if (entity) {
+    // getInventoryCategories, getInventory, getInventoryTransactions, ...
+    prefixes.push(`get${entity}`);
+    // Broader match: getInventory covers getInventoryCategories
+    const root = entity.replace(/(Item|Categor|Transaction|Request|Order|Stock|Log|Notification).*$/i, '');
+    if (root && root !== entity) prefixes.push(`get${root}`);
+  }
+  // Also add common related prefixes
+  if (/inventory|stock|mrv|miv|reconcil|serviceOrder/i.test(action)) {
+    prefixes.push('getInventory', 'getServiceOrder');
+  }
+  if (/worker|occupant|checkIn|checkOut|transfer/i.test(action)) {
+    prefixes.push('getWorker', 'getOccupant', 'getHistory', 'getTransfer');
+  }
+  if (/compan/i.test(action)) prefixes.push('getCompan');
+  if (/user|password/i.test(action)) prefixes.push('getUser');
+  if (/order/i.test(action)) prefixes.push('getOrder');
+  if (/notification/i.test(action)) prefixes.push('getNotification');
+  if (/residence/i.test(action)) prefixes.push('getResidence');
+  if (/contract/i.test(action)) prefixes.push('getContract');
+  if (/invoice/i.test(action)) prefixes.push('getInvoice');
+  if (/feedback/i.test(action)) prefixes.push('getFeedback');
+  if (/audit/i.test(action)) prefixes.push('getAudit');
+  if (/maintenance/i.test(action)) prefixes.push('getMaintenance');
+
+  if (prefixes.length === 0) {
+    // Safety net: clear entire cache if we can't determine related entries
+    cache.clear();
+    flushCacheToLocalStorage();
+    return;
+  }
+
+  for (const key of Array.from(cache.keys())) {
+    if (prefixes.some(p => key.startsWith(p))) {
+      cache.delete(key);
+    }
+  }
+  flushCacheToLocalStorage();
+}
+
+// Immediately persist current cache state to localStorage
+function flushCacheToLocalStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const obj: any = {};
+    cache.forEach((value, key) => { obj[key] = value; });
+    localStorage.setItem('d1_cache', JSON.stringify(obj));
+  } catch {
+    cache.clear();
+    localStorage.removeItem('d1_cache');
+  }
+}
+
 async function rpc(action: string, args?: any, _retry?: boolean): Promise<any> {
+  const isWrite = isWriteAction(action);
   // Generate cache key
   const cacheKey = `${action}:${JSON.stringify(args || {})}`;
   
   // Check cache first (skip for write operations)
-  if (!action.toLowerCase().includes('create') && 
-      !action.toLowerCase().includes('update') && 
-      !action.toLowerCase().includes('delete')) {
+  if (!isWrite) {
     const cached = cache.get(cacheKey);
     if (cached && cached.expires > Date.now()) {
       console.log(`[D1 Cache] Hit for ${action}`);
@@ -137,9 +204,7 @@ async function rpc(action: string, args?: any, _retry?: boolean): Promise<any> {
   if (!json.ok) throw new Error(json.error || 'D1 RPC failed');
   
   // Cache the result (except for write operations)
-  if (!action.toLowerCase().includes('create') && 
-      !action.toLowerCase().includes('update') && 
-      !action.toLowerCase().includes('delete')) {
+  if (!isWrite) {
     const ttl = getCacheTTL(action);
     cache.set(cacheKey, {
       data: json.result,
@@ -153,15 +218,16 @@ async function rpc(action: string, args?: any, _retry?: boolean): Promise<any> {
         if (value.expires < now) cache.delete(key);
       }
     }
+  } else {
+    // Write succeeded — invalidate related cached reads
+    invalidateRelatedCache(action);
   }
   
   return json.result;
   })();
   
-  // Store pending request
-  if (!action.toLowerCase().includes('create') && 
-      !action.toLowerCase().includes('update') && 
-      !action.toLowerCase().includes('delete')) {
+  // Store pending request (reads only)
+  if (!isWrite) {
     pendingRequests.set(cacheKey, fetchPromise);
   }
   

@@ -29,8 +29,11 @@ async function verifyToken(token: string) {
     }
   }
 
-  const secret = await getRuntimeEnv('JWT_PRIVATE_KEY', DEFAULT_SECRET);
-  const SECRET_KEY = new TextEncoder().encode(secret);
+  const rawSecret = await getRuntimeEnv('JWT_PRIVATE_KEY');
+  if (!rawSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_PRIVATE_KEY is not configured. Set it as a Secret in Cloudflare Pages > Settings > Environment Variables.');
+  }
+  const SECRET_KEY = new TextEncoder().encode(rawSecret || DEFAULT_SECRET);
   const ISSUER = await getRuntimeEnv('JWT_ISSUER', 'estatecare.local');
   const APP_AUD = await getRuntimeEnv('JWT_AUD', 'estatecare-client');
 
@@ -59,6 +62,19 @@ function hasAppJwtConfigInProcessEnv(): boolean {
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
+
+  // Fast local UI iteration mode: keep API on Cloudflare backend (remote D1) while
+  // serving frontend via Next dev with HMR.
+  const devApiProxyOrigin = process.env.DEV_API_PROXY_ORIGIN;
+  if (
+    process.env.NODE_ENV === 'development' &&
+    devApiProxyOrigin &&
+    pathname.startsWith('/api/')
+  ) {
+    const target = new URL(pathname + req.nextUrl.search, devApiProxyOrigin);
+    return NextResponse.rewrite(target);
+  }
+
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next();
 
   // NOTE: We avoid redirecting page routes from middleware because cookie access can be flaky

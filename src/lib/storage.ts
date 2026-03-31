@@ -46,21 +46,11 @@ export async function saveBuffer(opts: { buffer: Buffer; dir?: string; filename?
         httpMetadata: { contentType: mimeType }
       });
     } else {
-       // Fallback to local filesystem if R2 is not available
-       // This generally applies to local development (npm run dev)
-       try {
-         const fs = await import('fs');
-         const path = await import('path');
-         const localPath = path.join(process.cwd(), '.local-storage', r2Key);
-         await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
-         await fs.promises.writeFile(localPath, opts.buffer);
-         console.log(`[Storage] Saved locally to ${localPath}`);
-       } catch (err: any) {
-         if (err.code === 'MODULE_NOT_FOUND' || err.message?.includes('fs')) {
-            throw new Error('R2 Bucket binding STORAGE_BUCKET not found, and local filesystem is not accessible in this runtime.');
-         }
-         throw new Error('Storage failed: ' + err.message);
-       }
+      throw new Error(
+        'R2 binding STORAGE_BUCKET not found. ' +
+        'In production: verify the R2 binding in Cloudflare Pages settings. ' +
+        'In local dev: run `npm run dev` (setupDevPlatform provides the R2 stub via wrangler.toml).'
+      );
     }
 
     const url = `/api/files/${encodeURIComponent(r2Key)}`;
