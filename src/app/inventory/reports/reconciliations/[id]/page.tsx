@@ -8,12 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/context/language-context';
+import { useUsers } from '@/context/users-context';
 
 export default function ReconciliationDetailsPage() {
   const params = useParams();
   const id = params?.id as string;
   const { getReconciliationById, getReconciliationItems } = useInventory();
   const { dict } = useLanguage();
+  const { users } = useUsers();
 
   const [header, setHeader] = useState<any | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -58,7 +60,7 @@ export default function ReconciliationDetailsPage() {
               <div><div className="text-xs text-muted-foreground">{dict.itemsLabel}</div><div className="font-medium">{header.itemCount}</div></div>
               <div><div className="text-xs text-muted-foreground">{dict.increaseLabel}</div><div className="font-medium text-green-700">{header.totalIncrease}</div></div>
               <div><div className="text-xs text-muted-foreground">{dict.decreaseLabel}</div><div className="font-medium text-red-700">{header.totalDecrease}</div></div>
-              <div><div className="text-xs text-muted-foreground">{dict.performedByLabel}</div><div className="font-medium">{header.performedById || '—'}</div></div>
+              <div><div className="text-xs text-muted-foreground">{dict.performedByLabel}</div><div className="font-medium">{users.find(u => u.id === header.performedById)?.name || header.performedById || '—'}</div></div>
             </div>
           )}
         </CardContent>

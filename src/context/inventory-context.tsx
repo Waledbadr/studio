@@ -2239,7 +2239,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             if (!itemSnap.exists()) continue;
 
             const itemData = itemSnap.data() as InventoryItem;
-            const currentResidenceStock = Math.max(0, Number(itemData.stockByResidence?.[adj.itemId] || 0));
+            const currentResidenceStock = Math.max(0, Number(itemData.stockByResidence?.[residenceId] || 0));
             const newResidenceStock = Math.max(0, Number(adj.newStock));
             const diff = newResidenceStock - currentResidenceStock;
             if (diff === 0) continue;
@@ -2250,7 +2250,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
             // Prepare item update
             const newStockByResidence = { ...(itemData.stockByResidence || {}) } as Record<string, number>;
-            newStockByResidence[adj.itemId] = newResidenceStock;
+            newStockByResidence[residenceId] = newResidenceStock;
             const newTotal = Object.values(newStockByResidence).reduce((sum: number, v: any) => {
               const n = Number(v);
               return sum + (isNaN(n) ? 0 : Math.max(0, n));

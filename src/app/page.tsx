@@ -200,8 +200,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Pair: Recent Service Orders + Recent Maintenance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* All Recent Items */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <Card className="border-t-4 border-blue-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
@@ -317,10 +317,8 @@ export default function DashboardPage() {
                         )}
             </CardContent>
         </Card>
-      </div>
       
       {/* Pair: Recent Service Orders + Recent Maintenance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <Card className="border-t-4 border-fuchsia-500">
             <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
@@ -402,8 +400,6 @@ export default function DashboardPage() {
                 )}
             </CardContent>
         </Card>
-    </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <Card className="border-t-4 border-purple-500">
                         <CardHeader className="flex flex-row items-center">
                             <div className="grid gap-2">

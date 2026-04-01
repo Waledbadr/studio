@@ -231,7 +231,7 @@ export default function OrdersAnalyticsPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
         <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium">

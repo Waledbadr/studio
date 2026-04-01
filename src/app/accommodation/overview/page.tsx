@@ -274,7 +274,7 @@ export default function AccommodationOverviewPage() {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Workers</CardTitle>
@@ -329,7 +329,7 @@ export default function AccommodationOverviewPage() {
       </div>
 
       {/* Alerts and Warnings */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Capacity Warnings */}
         <Card>
           <CardHeader>
