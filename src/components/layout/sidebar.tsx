@@ -55,7 +55,9 @@ export function AppSidebar() {
           <div className="flex flex-col gap-1 p-2">
             <div className="flex items-center gap-2">
               <Clock className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-semibold text-blue-600 group-data-[collapsible=icon]:hidden">Timesheet</span>
+              <span className="text-xl font-semibold text-blue-600 group-data-[collapsible=icon]:hidden">
+                {dict.sidebar?.timesheet || 'Timesheet'}
+              </span>
             </div>
           </div>
         </SidebarHeader>
@@ -63,13 +65,29 @@ export function AppSidebar() {
           <SidebarMenu>
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                Main
+                {dict.sidebar?.main || 'Main'}
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet'} tooltip="Dashboard">
                   <Link href="/timesheet" onClick={handleNavigate}>
-                    <Home />
-                    <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
+                    <ClipboardList />
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar?.records || 'Records'}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+            
+            {/* Timesheet Settings / Management */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                {dict.sidebar?.management || 'Management'}
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/settings'} tooltip="Settings">
+                  <Link href="/timesheet/settings" onClick={handleNavigate}>
+                    <Settings />
+                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar?.settings || 'Settings'}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -389,7 +407,7 @@ export function AppSidebar() {
       title: dict.sidebar?.apps || 'Apps & Modules',
       items: [
         { href: '/accommodation', label: 'Accommodation', icon: Building },
-        { href: '#timesheet', label: 'Timesheet (قريباً)', icon: Clock },
+        { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock },
         { href: '#income-expenses', label: 'Income & Expenses (قريباً)', icon: Wallet },
       ]
     },

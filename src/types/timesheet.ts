@@ -1,0 +1,26 @@
+export interface RawPunch {
+  employeeId: string;
+  firstName: string;
+  department: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  deviceName: string;
+}
+
+export interface DailyAttendance {
+  id: string; // e.g., EMPID_YYYY-MM-DD
+  employeeId: string;
+  firstName: string;
+  department: string;
+  projectName: string; // Add mapped project name
+  checkInDevice: string; // Add check-in device name
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  totalHours: number; // calculated differences in decimal hours
+  regularHours: number; // Max 8 hours
+  overtimeHours: number; // totalHours > 8
+  punches: string[]; // array of all punch times sorted
+  status: 'Present' | 'Absent' | 'Incomplete';
+  isSyncedToFirestore: boolean;
+}

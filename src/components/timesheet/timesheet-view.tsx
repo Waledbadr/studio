@@ -1,0 +1,311 @@
+"use client";
+
+import React, { useState, useMemo } from "react";
+import { Download, RefreshCw, Save, Database, Clock, Users, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useTimesheet } from "@/context/timesheet-context";
+import { EditAttendanceDialog } from "./edit-attendance-dialog";
+import { DailyAttendance } from "@/types/timesheet";
+import { useLanguage } from "@/context/language-context";
+import { useUsers } from "@/context/users-context";
+import { useResidences } from "@/context/residences-context";
+
+export function TimesheetView() {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const currentDay = today.toISOString().split('T')[0];
+
+  const [startDate, setStartDate] = useState(firstDay);
+  const [endDate, setEndDate] = useState(currentDay);
+  const [editingRecord, setEditingRecord] = useState<DailyAttendance | null>(null);
+
+  const { locale } = useLanguage();
+  const { currentUser } = useUsers();
+  
+  const isAr = locale === "ar";
+  
+  const {
+    rawPunches,
+    processedAttendance,
+    projectToResidenceMap, // The mapping table
+    isFetching,
+    isProcessing,
+    fetchAndProcessAttendance,
+    syncProcessedDataToFirestore
+  } = useTimesheet();
+
+  const handleFetch = () => {
+    if (!startDate || !endDate) return;
+    fetchAndProcessAttendance(startDate, endDate);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Present':
+        return <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-600">{isAr ? "مكتمل" : "Complete"}</Badge>;
+      case 'Incomplete':
+        return <Badge variant="secondary" className="bg-yellow-500 text-white hover:bg-yellow-600">{isAr ? "ناقص" : "Incomplete"}</Badge>;
+      case 'Absent':
+        return <Badge variant="destructive">{isAr ? "غائب" : "Absent"}</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  // Filter records to only those that belong to the user's assigned residences
+  const displayAttendance = useMemo(() => {
+    // If admin or super user, they might see everything or we just skip filtering
+    if (currentUser?.role === 'Admin') return processedAttendance;
+
+    const assignedResidenceIds = currentUser?.assignedResidences || [];
+    
+    if (assignedResidenceIds.length === 0) return []; // User with no access
+
+    return processedAttendance.filter(record => {
+      // Find the App Residence ID linked to this specific biometric project
+      const mappedResidenceId = projectToResidenceMap[record.projectName];
+      
+      // If we found a mapped residence id, check if the user has access to it
+      if (mappedResidenceId) {
+        return assignedResidenceIds.includes(mappedResidenceId);
+      }
+
+      // Fallback matching logic (by simple string match) if not explicitly mapped
+      return assignedResidenceIds.some(assigned => 
+        record.projectName.toLowerCase().includes(assigned.toLowerCase()) ||
+        assigned.toLowerCase().includes(record.projectName.toLowerCase())
+      );
+    });
+  }, [processedAttendance, currentUser, projectToResidenceMap]);
+
+  return (
+    <div className="space-y-6" dir={isAr ? "rtl" : "ltr"}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{isAr ? "سجل الدوام" : "Timesheet"}</h1>
+          <p className="text-muted-foreground mt-1">
+            {isAr ? "إدارة البصمات، الحضور والانصراف، والمزامنة" : "Manage punches, attendance records, and synchronization"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {displayAttendance.length > 0 && (
+            <Button
+              onClick={syncProcessedDataToFirestore}
+              variant="outline"
+              className="gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              disabled={isProcessing}
+            >
+              <Database className="w-4 h-4" />
+              {isAr ? "حفظ السجلات" : "Save Records"}
+            </Button>
+          )}
+          <Button variant="outline" className="gap-2" disabled>
+            <Download className="w-4 h-4" />
+            {isAr ? "تصدير Excel" : "Export Excel"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Control Panel */}
+      <Card>
+        <CardHeader className="pb-3 border-b">
+          <CardTitle className="text-lg">{isAr ? "استيراد البيانات من أجهزة البصمة" : "Import Biometric Data"}</CardTitle>
+          <CardDescription>
+            {isAr ? "اختر نطاق التاريخ لاستيراد البصمات مباشرة من قاعدة البيانات الرئيسية" : "Select date range to import punches directly from the main database"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4 flex flex-col md:flex-row gap-4 items-end">
+          <div className="grid w-full max-w-sm items-center gap-1.5">
+            <label htmlFor="start-date" className="text-sm font-medium">{isAr ? "من تاريخ" : "Start Date"}</label>
+            <Input
+              id="start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="grid w-full max-w-sm items-center gap-1.5">
+            <label htmlFor="end-date" className="text-sm font-medium">{isAr ? "إلى تاريخ" : "End Date"}</label>
+            <Input
+              id="end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          <Button 
+            onClick={handleFetch} 
+            disabled={isFetching || !startDate || !endDate}
+            className="w-full md:w-auto"
+          >
+            {isFetching ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {isAr ? "جاري التحديث..." : "Updating..."}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {isAr ? "جلب ومعالجة البيانات" : "Fetch & Process Data"}
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isAr ? "إجمالي السجلات اليومية" : "Total Daily Records"}</CardTitle>
+            <Users className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{displayAttendance.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">{isAr ? "يوم عمل لموظف" : "employee working days"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isAr ? "إجمالي البصمات الخام" : "Total Raw Punches"}</CardTitle>
+            <Database className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{rawPunches.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">{isAr ? "حركة دخول/خروج" : "in/out movements"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isAr ? "بصمات ناقصة (للمراجعة)" : "Incomplete (To Review)"}</CardTitle>
+            <Clock className="w-4 h-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {displayAttendance.filter(r => r.status === 'Incomplete').length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 text-yellow-600 dark:text-yellow-500">
+              {isAr ? "حالات تتطلب تعديل" : "cases require edit"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Data Table */}
+      <Card>
+        <CardHeader className="pb-0">
+          <CardTitle>{isAr ? "معاينة السجلات" : "Records Preview"}</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {isFetching || isProcessing ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
+              <p>{isAr ? "جاري سحب البيانات ومعالجة سجلات الدخول والخروج..." : "Pulling data and processing records..."}</p>
+            </div>
+          ) : displayAttendance.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-md bg-muted/20">
+              <Database className="w-10 h-10 text-muted-foreground mb-4 opacity-50" />
+              <p className="text-muted-foreground font-medium">{isAr ? "لا توجد بيانات للعرض" : "No data to display"}</p>
+              <p className="text-sm text-muted-foreground mt-1">{isAr ? "يرجى تحديد النطاق الزمني والضغط على جلب البيانات" : "Please select date range and click fetch"}</p>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <div className="overflow-x-auto w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{isAr ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
+                    <TableHead>{isAr ? "الاسم" : "Name"}</TableHead>
+                    <TableHead>{isAr ? "المشروع / الموقع" : "Project / Location"}</TableHead>
+                    <TableHead>{isAr ? "التاريخ" : "Date"}</TableHead>
+                    <TableHead>{isAr ? "دخول" : "Check In"}</TableHead>
+                    <TableHead>{isAr ? "خروج" : "Check Out"}</TableHead>
+                    <TableHead>{isAr ? "الإجمالي" : "Total"}</TableHead>
+                    <TableHead>{isAr ? "الأساسي (RH)" : "Base (RH)"}</TableHead>
+                    <TableHead>{isAr ? "الإضافي (OT)" : "Overtime (OT)"}</TableHead>
+                    <TableHead>{isAr ? "الحالة" : "Status"}</TableHead>
+                    <TableHead>{isAr ? "الإجراء" : "Action"}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayAttendance.slice(0, 100).map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{record.employeeId}</TableCell>
+                      <TableCell>{record.firstName}</TableCell>
+                      <TableCell className="text-muted-foreground w-[200px] truncate max-w-[200px]" title={isAr ? `بصمة الدخول من: ${record.checkInDevice}` : `Check In from: ${record.checkInDevice}`}>
+                        {record.projectName}
+                      </TableCell>
+                      <TableCell>{record.date}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono bg-blue-50/50">
+                          {record.checkIn || '-'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {record.checkOut ? (
+                          <Badge variant="outline" className="font-mono bg-emerald-50/50">
+                            {record.checkOut}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {record.totalHours > 0 ? record.totalHours.toFixed(2) : '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-emerald-600 dark:text-emerald-400">
+                        {record.regularHours > 0 ? record.regularHours.toFixed(2) : '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-amber-600 dark:text-amber-400">
+                        {record.overtimeHours > 0 ? record.overtimeHours.toFixed(2) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(record.status)}
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditingRecord(record)}
+                        >
+                          {isAr ? "تعديل" : "Edit"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              </div>
+              {displayAttendance.length > 100 && (
+                <div className="p-4 text-center text-sm text-muted-foreground border-t">
+                  {isAr ? `يتم عرض أول 100 سجل فقط من أصل ${displayAttendance.length}` : `Showing first 100 records out of ${displayAttendance.length}`}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Editing Dialog */}
+      {editingRecord && (
+        <EditAttendanceDialog
+          record={editingRecord}
+          open={!!editingRecord}
+          onOpenChange={(open) => !open && setEditingRecord(null)}
+        />
+      )}
+    </div>
+  );
+}

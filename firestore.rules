@@ -31,6 +31,12 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'stockByResidence']);
     }
 
+    // Global Settings
+    match /settings/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // Feedback documents
     match /feedback/{feedbackId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
