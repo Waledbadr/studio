@@ -24,3 +24,21 @@ export interface DailyAttendance {
   status: 'Present' | 'Absent' | 'Incomplete';
   isSyncedToFirestore: boolean;
 }
+
+export type TimesheetEventType = 'holiday' | 'reduced_hours';
+
+export interface TimesheetEvent {
+  id: string;
+  name: string;
+  type: TimesheetEventType;
+  startDate: string;
+  endDate: string;
+  requiredHours?: number;
+}
+
+export interface EmployeeSchedule {
+  employeeId: string;
+  name: string;
+  dailyHours: number;
+  thursdayHours: number;
+}

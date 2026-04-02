@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Save, Fingerprint, MapPin, Search, Users, UserPlus, Link2 } from "lucide-react";
+import { Plus, Trash2, Save, Fingerprint, MapPin, Search, Users, UserPlus, Link2, Calendar, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,11 @@ export function TimesheetSettings() {
     deviceToProjectMap,
     updateDeviceMapping,
     updateBulkDeviceMappings,
-    removeDeviceMapping
+    removeDeviceMapping,
+    timesheetEvents,
+    updateEvents,
+    employeeSchedules,
+    updateSchedules
   } = useTimesheet();
   const isAr = locale === "ar";
 
@@ -517,6 +521,7 @@ export function TimesheetSettings() {
           </div>
         </CardContent>
       </Card>
+
     </div>
   );
 }

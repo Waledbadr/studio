@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { RawPunch, DailyAttendance } from "@/types/timesheet";
+import { RawPunch, DailyAttendance, TimesheetEvent, EmployeeSchedule } from "@/types/timesheet";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { doc, writeBatch, getDoc, setDoc } from "firebase/firestore";
@@ -13,6 +13,8 @@ interface TimesheetContextType {
   processedAttendance: DailyAttendance[];
   deviceToProjectMap: Record<string, string>;
   projectToResidenceMap: Record<string, string>;
+  timesheetEvents: TimesheetEvent[];
+  employeeSchedules: EmployeeSchedule[];
   isFetching: boolean;
   isProcessing: boolean;
   fetchAndProcessAttendance: (startDate: string, endDate: string) => Promise<void>;
@@ -23,6 +25,8 @@ interface TimesheetContextType {
   removeDeviceMapping: (deviceName: string) => Promise<void>;
   updateProjectMapping: (biometricProject: string, residenceId: string) => Promise<void>;
   removeProjectMapping: (biometricProject: string) => Promise<void>;
+  updateEvents: (events: TimesheetEvent[]) => Promise<void>;
+  updateSchedules: (schedules: EmployeeSchedule[]) => Promise<void>;
 }
 
 const TimesheetContext = createContext<TimesheetContextType | undefined>(undefined);
@@ -32,6 +36,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const [processedAttendance, setProcessedAttendance] = useState<DailyAttendance[]>([]);
   const [deviceToProjectMap, setDeviceToProjectMap] = useState<Record<string, string>>({});
   const [projectToResidenceMap, setProjectToResidenceMap] = useState<Record<string, string>>({});
+  const [timesheetEvents, setTimesheetEvents] = useState<TimesheetEvent[]>([]);
+  const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedule[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
@@ -48,6 +54,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
           const data = snap.data();
           setDeviceToProjectMap(data.deviceToProjectMap || {});
           setProjectToResidenceMap(data.projectToResidenceMap || {});
+          setTimesheetEvents(data.timesheetEvents || []);
+          setEmployeeSchedules(data.employeeSchedules || []);
         }
       } catch (e) {
         console.error("Failed to load timesheet settings", e);
@@ -93,6 +101,18 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     await setDoc(doc(db, "residences", "timesheetSettings"), { projectToResidenceMap: newMap }, { merge: true });
   };
 
+  const updateEvents = async (events: TimesheetEvent[]) => {
+    if (!db) return;
+    setTimesheetEvents(events);
+    await setDoc(doc(db, "residences", "timesheetSettings"), { timesheetEvents: events }, { merge: true });
+  };
+
+  const updateSchedules = async (schedules: EmployeeSchedule[]) => {
+    if (!db) return;
+    setEmployeeSchedules(schedules);
+    await setDoc(doc(db, "residences", "timesheetSettings"), { employeeSchedules: schedules }, { merge: true });
+  };
+
   const fetchAndProcessAttendance = async (startDate: string, endDate: string) => {
     setIsFetching(true);
     setRawPunches([]);
@@ -113,7 +133,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
       
       setIsProcessing(true);
       // Process data grouping by emp_id and date
-      const processed = processPunches(json.data || [], deviceToProjectMap);
+      const processed = processPunches(json.data || [], deviceToProjectMap, timesheetEvents, employeeSchedules);
       setProcessedAttendance(processed);
       
       toast({
@@ -198,6 +218,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         rawPunches,
         processedAttendance,
         projectToResidenceMap,
+        timesheetEvents,
+        employeeSchedules,
         isFetching,
         isProcessing,
         fetchAndProcessAttendance,
@@ -208,7 +230,9 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         deviceToProjectMap,
         updateDeviceMapping,
         updateBulkDeviceMappings,
-        removeDeviceMapping,      }}
+        removeDeviceMapping,
+        updateEvents,
+        updateSchedules,      }}
     >
       {children}
     </TimesheetContext.Provider>

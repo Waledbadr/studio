@@ -1,4 +1,5 @@
 import { RawPunch, DailyAttendance } from "../types/timesheet";
+import { TimesheetEvent, EmployeeSchedule } from "../types/timesheet";
 import { getProjectFromDevice } from "../constants/timesheet-devices";
 
 const timeToMinutes = (time: string): number => {
@@ -8,7 +9,11 @@ const timeToMinutes = (time: string): number => {
 
 export const calculateAttendanceStats = (
   checkIn: string | null,
-  checkOut: string | null
+  checkOut: string | null,
+  date: string,
+  employeeId: string,
+  events: TimesheetEvent[] = [],
+  schedules: EmployeeSchedule[] = []
 ): { totalHours: number; regularHours: number; overtimeHours: number; status: 'Present' | 'Incomplete' | 'Absent' } => {
   let totalHoursNum = 0;
   if (checkIn && checkOut && checkIn !== checkOut) {
@@ -38,7 +43,7 @@ export const calculateAttendanceStats = (
   };
 };
 
-export const processPunches = (punches: RawPunch[], deviceToProjectMap: Record<string, string> = {}): DailyAttendance[] => {
+export const processPunches = (punches: RawPunch[], deviceToProjectMap: Record<string, string> = {}, events: TimesheetEvent[] = [], schedules: EmployeeSchedule[] = []): DailyAttendance[] => {
   const map = new Map<string, RawPunch[]>();
 
   punches.forEach((punch) => {
@@ -82,7 +87,7 @@ export const processPunches = (punches: RawPunch[], deviceToProjectMap: Record<s
     let checkIn = uniqueTimes[0];
     let checkOut = uniqueTimes.length > 1 ? uniqueTimes[uniqueTimes.length - 1] : null;
 
-    const stats = calculateAttendanceStats(checkIn, checkOut);
+    const stats = calculateAttendanceStats(checkIn, checkOut, empPunches[0].date, empPunches[0].employeeId, events, schedules);
 
     const checkInDevice = checkInDeviceRecord.deviceName || "Unknown";
     // Check dynamic map first, then static map, then default to Unknown

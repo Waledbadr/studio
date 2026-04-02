@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText, Clock, Wallet } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText, Clock, Wallet, Calendar } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -56,9 +56,19 @@ export function AppSidebar() {
             <div className="flex items-center gap-2">
               <Clock className="h-8 w-8 text-blue-600" />
               <span className="text-xl font-semibold text-blue-600 group-data-[collapsible=icon]:hidden">
-                {dict.sidebar?.timesheet || 'Timesheet'}
+                  {'Timesheet'}
               </span>
             </div>
+          </div>
+          <div className="px-2 pb-2">
+            <SidebarMenuButton asChild tooltip={'العودة للرئيسية'} className="bg-muted/50 border border-border mt-2 w-full justify-start">
+              <Link href="/" onClick={handleNavigate}>
+                <Home className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden text-sm ml-2 mr-2">
+                  {'العودة للرئيسية'}
+                </span>
+              </Link>
+            </SidebarMenuButton>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -71,26 +81,78 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet'} tooltip="Dashboard">
                   <Link href="/timesheet" onClick={handleNavigate}>
                     <ClipboardList />
-                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar?.records || 'Records'}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Records'}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <div className="h-2"></div>
             </div>
-            
-            {/* Timesheet Settings / Management */}
+            {/* Timesheet Management */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                {dict.sidebar?.management || 'Management'}
+                {'Management'}
               </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/employees'} tooltip="Employees">
+                  <Link href="/timesheet/employees" onClick={handleNavigate}>
+                    <Users />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Employees'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/history'} tooltip="Monthly Archive">
+                  <Link href="/timesheet/history" onClick={handleNavigate}>
+                    <History />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Monthly Archive'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/requests'} tooltip="Requests">
+                  <Link href="/timesheet/requests" onClick={handleNavigate}>
+                    <ClipboardList />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Requests'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/settings'} tooltip="Settings">
                   <Link href="/timesheet/settings" onClick={handleNavigate}>
                     <Settings />
-                    <span className="group-data-[collapsible=icon]:hidden">{dict.sidebar?.settings || 'Settings'}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Settings'}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Timesheet Events & Exceptions */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                {'Leaves & Events'}
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/events'} tooltip="Leaves & Events">
+                  <Link href="/timesheet/events" onClick={handleNavigate}>
+                    <Calendar />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Leaves & Events'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
             </div>
           </SidebarMenu>
         </SidebarContent>
@@ -181,6 +243,16 @@ export function AppSidebar() {
               <Building className="h-8 w-8 text-amber-600" />
               <span className="text-xl font-semibold text-amber-600 group-data-[collapsible=icon]:hidden">Accommodation</span>
             </div>
+          </div>
+          <div className="px-2 pb-2">
+            <SidebarMenuButton asChild tooltip={true ? 'العودة للرئيسية' : 'Back to Main'} className="bg-muted/50 border border-border mt-2 w-full justify-start">
+              <Link href="/" onClick={handleNavigate}>
+                <Home className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden text-sm ml-2 mr-2">
+                  {true ? 'العودة للرئيسية' : 'Back to Main'}
+                </span>
+              </Link>
+            </SidebarMenuButton>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -404,7 +476,7 @@ export function AppSidebar() {
     },
     // Other Apps / Modules Section
     {
-      title: dict.sidebar?.apps || 'Apps & Modules',
+      title: 'Apps & Modules',
       items: [
         { href: '/accommodation', label: 'Accommodation', icon: Building },
         { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock },
