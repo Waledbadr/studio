@@ -140,14 +140,24 @@ export function AppSidebar() {
             {/* Timesheet Events & Exceptions */}
             <div>
               <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                {'Leaves & Events'}
+                {'Leaves Management'}
               </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/timesheet/leaves'} tooltip="Leaves Management">
+                  <Link href="/timesheet/leaves" onClick={handleNavigate}>
+                    <Calendar />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Leaves Management'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/events'} tooltip="Leaves & Events">
                   <Link href="/timesheet/events" onClick={handleNavigate}>
-                    <Calendar />
+                    <AlertTriangle />
                     <span className="group-data-[collapsible=icon]:hidden">
-                      {'Leaves & Events'}
+                      {'Exceptions (Events)'}
                     </span>
                   </Link>
                 </SidebarMenuButton>

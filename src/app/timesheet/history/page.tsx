@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,12 +12,13 @@ import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { TimesheetProvider, useTimesheet } from '@/context/timesheet-context';
+import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
 
 function TimesheetHistoryContent() {
   const { dict } = useLanguage();
   const { currentUser } = useUsers();
   const { residences, loadResidences } = useResidences();
-  const { projectToResidenceMap } = useTimesheet();
+  const { projectToResidenceMap, timesheetEvents, employeeSchedules } = useTimesheet();
   const [records, setRecords] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, any>>({});
@@ -41,88 +42,103 @@ function TimesheetHistoryContent() {
   const defaultMonth = getFiscalMonthForDate(today);
   const [filterMonth, setFilterMonth] = useState<string>(defaultMonth);
 
-  useEffect(() => {
-    setLoading(true);
-    loadResidences();
-    
-    // Fetch Employees mapping to keep names/professions up-to-date
-    const empsUnsub = onSnapshot(collection(db, 'housingEmployees'), (snap) => {
-      const emps: Record<string, any> = {};
-      snap.forEach(d => {
-        emps[d.data().employeeId] = { id: d.id, ...d.data() };
-      });
-      setEmployeesMap(emps);
-    });
-
-    // Fetch a large enough batch to cover recent months
-    const q = query(collection(db, 'attendanceRecords'), orderBy('date', 'desc'), limit(3000));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRecords(fetchedRecords);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching records:', error);
-      setLoading(false);
-    });
-
-    const lq = query(collection(db, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
-    const leavesUnsub = onSnapshot(lq, (snap) => setLeaves(snap.docs.map(d => d.data())));
-
-    return () => {
-      unsubscribe();
-      empsUnsub();
-      leavesUnsub();
-    };
-  }, []);
-
-  // Helper to parse 'YYYY-MM-DD' and return 'YYYY-MM' fiscal month string
-  const getFiscalMonthString = (dateStr: string) => {
-    if (!dateStr) return null;
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (d >= 20) {
-      if (m === 12) return `${y + 1}-01`;
-      return `${y}-${String(m + 1).padStart(2, '0')}`;
-    }
-    return `${y}-${String(m).padStart(2, '0')}`;
-  };
-
-  // Get list of available fiscal months in data
-  const availableMonths = useMemo(() => {
-    const months = new Set(records.map(r => getFiscalMonthString(r.date)));
-    if (!months.has(defaultMonth)) months.add(defaultMonth);
-    return Array.from(months).filter(Boolean).sort().reverse();
-  }, [records, defaultMonth]);
-
-  // Calculate days in selected fiscal month
+  // Calculate days in selected fiscal month using company standard
   const { startDate, endDate, daysArray } = useMemo(() => {
     if (!filterMonth) return { startDate: new Date(), endDate: new Date(), daysArray: [] };
-    const [year, month] = filterMonth.split('-').map(Number);
-    
-    // Fiscal month starts on the 20th of the previous calendar month
-    // Example: Fiscal '2026-05' starts '2026-04-20' and ends '2026-05-20' (exclusive)
-    let startY = year;
-    let startM = month - 2; // JavaScript months are 0-indexed, so -1 to go back a month, another -1 for 0-index
-    if (startM < 0) {
-      startM += 12;
-      startY--;
-    }
-    
-    const start = new Date(startY, startM, 20);
-    const end = new Date(year, month - 1, 20); // Exclusive end
-    
+
+    const period = getFiscalMonthPeriod(filterMonth);
+    const start = period.startDate;
+    const end = period.endDate;
+
     const days = [];
     const current = new Date(start);
-    while (current < end) {
+    while (current <= end) {
       const yyyy = current.getFullYear();
       const mm = String(current.getMonth() + 1).padStart(2, '0');
       const dd = String(current.getDate()).padStart(2, '0');
       days.push(`${yyyy}-${mm}-${dd}`);
       current.setDate(current.getDate() + 1);
     }
-    
+
     return { startDate: start, endDate: end, daysArray: days };
   }, [filterMonth]);
+
+  // Generate list of available fiscal months statically (last 24 months)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    let currentVar = new Date();
+    currentVar.setDate(15);
+    for (let i = 0; i < 24; i++) {
+        const yy = currentVar.getFullYear();
+        const mm = currentVar.getMonth() + 1;
+        months.push(`${yy}-${String(mm).padStart(2, '0')}`);
+        currentVar.setMonth(currentVar.getMonth() - 1);
+    }
+    if (!months.includes(defaultMonth)) months.unshift(defaultMonth);
+    return Array.from(new Set(months)).sort().reverse();
+  }, [defaultMonth]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    loadResidences();
+
+    if (!db) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchData = async () => {
+      try {
+        // Fetch housing employees
+        const empsSnap = await getDocs(collection(db as any, 'housingEmployees'));
+        const emps: Record<string, any> = {};
+        empsSnap.forEach(d => {
+          emps[d.data().employeeId] = { id: d.id, ...d.data() };
+        });
+        if (active) setEmployeesMap(emps);
+
+        // Fetch leaves
+        const lq = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
+        const leavesSnap = await getDocs(lq);
+        if (active) setLeaves(leavesSnap.docs.map(d => d.data()));
+
+        // Fetch attendance records
+        if (daysArray.length > 0) {
+          const dateStartStr = daysArray[0];
+          const dateEndStr = daysArray[daysArray.length - 1];
+
+          // Fetch only the records in the selected month interval to prevent limit truncations
+          const q = query(
+            collection(db as any, 'attendanceRecords'),
+            where('date', '>=', dateStartStr),
+            where('date', '<=', dateEndStr),
+            orderBy('date', 'desc'),
+            limit(15000)
+          );
+
+          const recordsSnap = await getDocs(q);
+          const fetchedRecords = recordsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          if (active) {
+            setRecords(fetchedRecords);
+            setLoading(false);
+          }
+        } else {
+          if (active) setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error fetching history data:', error);
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      active = false;
+    };
+  }, [daysArray]);
 
   // Group data by Residence (projectName) -> Employee
   const groupedData = useMemo(() => {
@@ -156,9 +172,8 @@ function TimesheetHistoryContent() {
     records.forEach(record => {
       if (!record.date) return;
       
-      // Only include records for the selected fiscal month
-      const recordFiscalMonth = getFiscalMonthString(record.date);
-      if (recordFiscalMonth !== filterMonth) return;
+      // Only include records that fall within the selected fiscal days array
+      if (!daysArray.includes(record.date)) return;
 
       // Search filter
       if (searchTerm) {
@@ -316,6 +331,67 @@ function TimesheetHistoryContent() {
           }
         });
 
+        // 1.5 Process Events & Holidays (Added logic)
+        daysArray.forEach((dateStr) => {
+            const dateObj = new Date(dateStr);
+            const isThursday = dateObj.getDay() === 4;
+            const activeEvent = (timesheetEvents || []).find(e => dateStr >= e.startDate && dateStr <= e.endDate);
+            const employeeSchedule = (employeeSchedules || []).find(s => s.employeeId === empKey);
+
+            let requiredHours = 8.0;
+
+            if (activeEvent && activeEvent.type === 'reduced_hours') {
+                requiredHours = activeEvent.requiredHours || 6.0;
+            } else if (employeeSchedule) {
+                requiredHours = isThursday 
+                    ? (employeeSchedule.thursdayHours || 5.5) 
+                    : (employeeSchedule.dailyHours || 8.5);
+            }
+
+            if (activeEvent && activeEvent.type === 'holiday') {
+                let holidayRecord = empData.daily[dateStr];
+                // Holidays grant 8 hrs allowance 
+                if (!holidayRecord) {
+                    empData.daily[dateStr] = {
+                        status: 'Holiday',
+                        isHoliday: true,
+                        regularHours: 8,
+                        overtimeHours: 0,
+                        totalHours: 8,
+                        date: dateStr
+                    };
+                } else if (holidayRecord.status !== 'Leave' && holidayRecord.status !== 'Weekend' && !holidayRecord.isVirtualWeekend) {
+                    // They worked on Holiday 
+                    const originalRH = holidayRecord.regularHours !== undefined ? holidayRecord.regularHours : (holidayRecord.totalHours || 0);
+                    const originalOT = holidayRecord.overtimeHours || 0;
+                    const totalWorked = originalRH + originalOT;
+
+                    // Automatically mark hours beyond 0 as OT, and grant 8 base hours
+                    holidayRecord.regularHours = 8;
+                    holidayRecord.overtimeHours = totalWorked; 
+                    holidayRecord.totalHours = 8 + totalWorked;
+                    holidayRecord.isHoliday = true;
+                    holidayRecord.status = 'Holiday';
+                }
+            } 
+
+            // Adjust records based on required hours (Scale to 8 representation if requiredHours != 8.0)
+            const record = empData.daily[dateStr];
+            if (record && !record.isVirtualWeekend && !record.isHoliday && record.status !== 'Leave') {
+                const isAbsent = record.status === 'Absent' || (record.totalHours === 0 && !record.punches);
+                if (!isAbsent && requiredHours !== 8.0 && record.totalHours > 0) {
+                     // We recalculate their exact hour ratio
+                     const totalWorked = (record.regularHours !== undefined ? record.regularHours : (record.totalHours || 0)) + (record.overtimeHours || 0);
+                     
+                     const ratio = totalWorked / requiredHours;
+                     const scaledTotal = ratio * 8.0;
+                     record.regularHours = Math.min(scaledTotal, 8.0);
+                     record.overtimeHours = scaledTotal > 8.0 ? Number((scaledTotal - 8.0).toFixed(2)) : 0;
+                     record.totalHours = scaledTotal;
+                }
+            }
+        });
+
         // 2. Accumulate Totals across all processed days
         Object.values(empData.daily).forEach((record: any) => {
           empData.totalRH += (record.regularHours !== undefined ? record.regularHours : (record.totalHours || 0));
@@ -329,7 +405,7 @@ function TimesheetHistoryContent() {
     });
 
     return grouped;
-  }, [records, leaves, filterMonth, searchTerm, currentUser, residences, employeesMap, projectToResidenceMap, daysArray]);
+  }, [records, leaves, filterMonth, searchTerm, currentUser, residences, employeesMap, projectToResidenceMap, daysArray, timesheetEvents, employeeSchedules]);
 
   const renderCell = (record: any) => {
     if (!record) return <div className="text-gray-200 dark:text-gray-700">-</div>;
@@ -368,6 +444,14 @@ function TimesheetHistoryContent() {
     } else if (isAbsent) {
       content = 'A';
       tooltip = `Status: Absent`;
+    } else if (record.isHoliday && (!hasHours || record.overtimeHours === 0)) {
+      // Holiday without actual worked hours
+      content = (
+        <div className="flex flex-col items-center justify-center leading-none">
+          <span className="text-purple-600 dark:text-purple-400">8</span>
+        </div>
+      );
+      tooltip = `Official Holiday Allowance (8 hours)`;
     } else if (record.isVirtualWeekend && (!hasHours || record.overtimeHours === 0)) {
       // Friday Rest day without any actual worked hours
       content = (
@@ -387,8 +471,10 @@ function TimesheetHistoryContent() {
           {ot > 0 && <span className="text-[8px] md:text-[9px] font-bold text-orange-600 dark:text-orange-400">+{formatNumber(ot)}</span>}
         </div>
       );
-      tooltip = record.isVirtualWeekend 
-        ? `Weekly Rest Allowance (8 hours) + Worked Overtime\nIn: ${checkIn || '-'} | Out: ${checkOut || '-'}` 
+      tooltip = record.isHoliday
+        ? `Holiday Allowance (8 hours) + Worked Overtime\nIn: ${checkIn || '-'} | Out: ${checkOut || '-'}`
+        : record.isVirtualWeekend
+        ? `Weekly Rest Allowance (8 hours) + Worked Overtime\nIn: ${checkIn || '-'} | Out: ${checkOut || '-'}`
         : `In: ${checkIn || '-'} | Out: ${checkOut || '-'}`;
     } else if (isMissingPunch) {
       content = '?'; // Missing Punch Indicator
@@ -402,11 +488,12 @@ function TimesheetHistoryContent() {
       <div 
         title={tooltip}
         className={`w-6 h-6 md:w-8 md:h-8 flex flex-col items-center justify-center rounded text-[10px] md:text-sm font-bold mx-auto cursor-help
-        ${(isPresent && !isMissingPunch && !record.isVirtualWeekend) || (hasHours && !record.isVirtualWeekend) ? 'bg-green-100/50 text-green-800 dark:bg-green-900/30 dark:text-green-300' : ''}
-        ${record.isVirtualWeekend ? 'bg-sky-100/60 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300' : ''}
-        ${isAbsent ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ''}
+        ${(isPresent && !isMissingPunch && !record.isVirtualWeekend && !record.isHoliday) || (hasHours && !record.isVirtualWeekend && !record.isHoliday) ? 'bg-green-100/50 text-green-800 dark:bg-green-900/30 dark:text-green-300' : ''}
+        ${record.isHoliday ? 'bg-purple-100/60 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : ''}
+        ${record.isVirtualWeekend && !record.isHoliday ? 'bg-sky-100/60 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300' : ''}
+        ${isAbsent && !record.isHoliday ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ''}
         ${isLeave ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : ''}
-        ${isMissingPunch && !isLeave ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : ''}
+        ${isMissingPunch && !isLeave && !record.isHoliday ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : ''}
       `}>
         {content}
       </div>

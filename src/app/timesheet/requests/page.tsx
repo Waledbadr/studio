@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,8 +12,8 @@ import { Plane, ArrowRightLeft, Calendar } from 'lucide-react';
 import { useLanguage } from '@/context/language-context';
 
 export default function TimesheetRequestsPage() {
-  const { dict, language } = useLanguage();
-  const isAr = language === 'ar';
+  const { dict, locale } = useLanguage();
+  const isAr = locale === 'ar';
   
   const [leaves, setLeaves] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -21,30 +21,24 @@ export default function TimesheetRequestsPage() {
 
   useEffect(() => {
     setLoading(true);
-    let lUnsub: any = null;
-    let tUnsub: any = null;
 
-    try {
-      const qL = query(collection(db, 'timesheetLeaves'), orderBy('createdAt', 'desc'));
-      lUnsub = onSnapshot(qL, (snap) => {
-        setLeaves(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
-      });
+    const fetchData = async () => {
+      try {
+        const qL = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
+        const snapL = await getDocs(qL);
+        setLeaves(snapL.docs.map(d => ({ docId: d.id, ...d.data() })));
 
-      const qT = query(collection(db, 'timesheetTransfers'), orderBy('createdAt', 'desc'));
-      tUnsub = onSnapshot(qT, (snap) => {
-        setTransfers(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      // Need a bit of delay to hide skeleton
-      setTimeout(() => setLoading(false), 500);
-    }
-
-    return () => {
-      if (lUnsub) lUnsub();
-      if (tUnsub) tUnsub();
+        const qT = query(collection(db as any, 'timesheetTransfers'), orderBy('createdAt', 'desc'), limit(1000));
+        const snapT = await getDocs(qT);
+        setTransfers(snapT.docs.map(d => ({ docId: d.id, ...d.data() })));       
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    fetchData();
   }, []);
 
   return (

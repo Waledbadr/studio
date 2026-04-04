@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,9 @@ function TimesheetEmployeesContent() {
   const handleSyncFromRecords = async () => {
     try {
       setSyncing(true);
-      const snapshot = await getDocs(collection(db, 'attendanceRecords'));
+      // Fetch only the most recent attendance records to significantly reduce read costs
+      const q = query(collection(db as any, 'attendanceRecords'), orderBy('date', 'desc'), limit(1000));
+      const snapshot = await getDocs(q);
       const uniqueMap = new Map<string, any>();
       snapshot.forEach(d => {
         const data = d.data();
@@ -55,7 +57,7 @@ function TimesheetEmployeesContent() {
       for (const [empId, empData] of uniqueMap.entries()) {
         const existing = employees.find(e => e.employeeId === empId);
         if (!existing) {
-          const docRef = doc(collection(db, 'housingEmployees'));
+          const docRef = doc(collection(db as any, 'housingEmployees'));
           await setDoc(docRef, {
             id: docRef.id,
             ...empData,
@@ -83,10 +85,10 @@ function TimesheetEmployeesContent() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            {dict.timesheet?.employees || 'Employees Management'}
+            {(dict as any).timesheet?.employees || 'Employees Management'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {dict.timesheet?.employeesDesc || 'Manage employee profiles, salaries, shifts, and leaves'}
+            {(dict as any).timesheet?.employeesDesc || 'Manage employee profiles, salaries, shifts, and leaves'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -96,7 +98,7 @@ function TimesheetEmployeesContent() {
           </Button>
           <Button onClick={() => setAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            {dict.timesheet?.addEmployee || 'Add Employee'}
+            {(dict as any).timesheet?.addEmployee || 'Add Employee'}
           </Button>
         </div>
       </div>
@@ -104,13 +106,13 @@ function TimesheetEmployeesContent() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-lg font-medium">
-            {dict.timesheet?.employeesList || 'Employees Directory'}
+            {(dict as any).timesheet?.employeesList || 'Employees Directory'}
           </CardTitle>
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
             <Input
               type="search"
-              placeholder={dict.common?.search || 'Search employees...'}
+              placeholder={(dict as any).common?.search || 'Search employees...'}        
               className="pl-8"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

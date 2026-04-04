@@ -21,7 +21,7 @@ export interface DailyAttendance {
   regularHours: number; // Max 8 hours
   overtimeHours: number; // totalHours > 8
   punches: string[]; // array of all punch times sorted
-  status: 'Present' | 'Absent' | 'Incomplete';
+  status: 'Present' | 'Absent' | 'Incomplete' | 'On Leave' | 'Permission' | 'Sick Leave' | 'Holiday' | 'Reduced Hours' | 'Weekend';
   isSyncedToFirestore: boolean;
 }
 

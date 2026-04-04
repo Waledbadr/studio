@@ -58,6 +58,18 @@ export function TimesheetView() {
         return <Badge variant="secondary" className="bg-yellow-500 text-white hover:bg-yellow-600">{isAr ? "ناقص" : "Incomplete"}</Badge>;
       case 'Absent':
         return <Badge variant="destructive">{isAr ? "غائب" : "Absent"}</Badge>;
+      case 'On Leave':
+        return <Badge variant="secondary" className="bg-indigo-500 text-white hover:bg-indigo-600">{isAr ? "إجازة معتمدة" : "On Leave"}</Badge>;
+      case 'Sick Leave':
+        return <Badge variant="secondary" className="bg-red-400 text-white hover:bg-red-500">{isAr ? "إجازة مرضية" : "Sick Leave"}</Badge>;
+      case 'Permission':
+        return <Badge variant="secondary" className="bg-amber-400 text-white hover:bg-amber-500">{isAr ? "استئذان" : "Permission"}</Badge>;
+      case 'Weekend':
+        return <Badge variant="secondary" className="bg-sky-500 text-white hover:bg-sky-600">{isAr ? 'عطلة أسبوعية' : 'Weekend'}</Badge>;
+      case 'Holiday':
+        return <Badge variant="secondary" className="bg-purple-500 text-white hover:bg-purple-600">{isAr ? "عطلة رسمية" : "Holiday"}</Badge>;
+      case 'Reduced Hours':
+        return <Badge variant="secondary" className="bg-sky-500 text-white hover:bg-sky-600">{isAr ? "دوام مخفض" : "Reduced Hours"}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

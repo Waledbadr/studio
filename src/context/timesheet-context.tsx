@@ -119,7 +119,27 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     setProcessedAttendance([]);
 
     try {
-      const res = await fetch(`/api/timesheet/fetch-attendance?start_date=${startDate}&end_date=${endDate}`);
+      // Also fetch leaves in parallel
+      const resPromise = fetch(`/api/timesheet/fetch-attendance?start_date=${startDate}&end_date=${endDate}`);
+      let leavesData: any[] = [];
+        let employeesData: any[] = [];
+      
+      try {
+        if (db) {
+          const { collection, getDocs, query } = await import('firebase/firestore');
+          const [lSnap, eSnap] = await Promise.all([getDocs(query(collection(db, 'timesheetLeaves'))), getDocs(query(collection(db, 'housingEmployees')))]);
+          // Normally filter leaves
+          leavesData = lSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          employeesData = eSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+          // Normally you'd filter by date here, but for now we pull all for processing
+          leavesData = lSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+      } catch (e) {
+        console.warn("Failed to fetch leaves for processing", e);
+      }
+
+      const res = await resPromise;
       if (!res.ok) {
         throw new Error(`Failed to fetch attendance data: ${res.statusText}`);
       }
@@ -133,7 +153,13 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
       
       setIsProcessing(true);
       // Process data grouping by emp_id and date
-      const processed = processPunches(json.data || [], deviceToProjectMap, timesheetEvents, employeeSchedules);
+      const processed = processPunches(
+        json.data || [], 
+        deviceToProjectMap, 
+        timesheetEvents, 
+        employeeSchedules, 
+        leavesData
+      );
       setProcessedAttendance(processed);
       
       toast({

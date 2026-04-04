@@ -1,12 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  doc, 
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  doc,
   setDoc,
   updateDoc, 
   addDoc,
@@ -50,28 +50,31 @@ export function HousingEmployeesProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     if (!currentUser) return; // Wait for authentication
 
-    const employeesRef = collection(db, 'housingEmployees');
-    const q = query(employeesRef, orderBy('createdAt', 'desc'));
+    const fetchEmployees = async () => {
+      try {
+        const employeesRef = collection(db as any, 'housingEmployees');
+        const q = query(employeesRef, orderBy('createdAt', 'desc'));
+        
+        const snapshot = await getDocs(q);
+        const emps: HousingEmployee[] = [];
+        snapshot.forEach((doc) => {
+          emps.push({ id: doc.id, ...doc.data() } as HousingEmployee);
+        });
+        setEmployees(emps);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching housing employees:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load employees data.',
+          variant: 'destructive',
+        });
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const emps: HousingEmployee[] = [];
-      snapshot.forEach((doc) => {
-        emps.push({ id: doc.id, ...doc.data() } as HousingEmployee);
-      });
-      setEmployees(emps);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching housing employees:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load employees data.',
-        variant: 'destructive',
-      });
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
+    fetchEmployees();
+  }, [currentUser, toast]);
 
   const addEmployee = async (data: Omit<HousingEmployee, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
