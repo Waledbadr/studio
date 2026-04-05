@@ -14,14 +14,40 @@ export const calculateAttendanceStats = (
   employeeId: string,
   events: TimesheetEvent[] = [],
   schedules: EmployeeSchedule[] = [],
-  leaves: any[] = [] // include leaves
+  leaves: any[] = [],
+  transfers: any[] = [] // include transfers
 ): { totalHours: number; regularHours: number; overtimeHours: number; status: DailyAttendance['status'] } => {
+  // 0. Check for transfers (Move In / Move Out)
+  if (transfers && transfers.length > 0) {
+    const sortedTransfers = [...transfers].sort((a, b) => b.date.localeCompare(a.date));
+    
+    // Find last move-in and last move-out
+    const lastMoveIn = sortedTransfers.find(t => t.type === 'Move In');
+    const lastMoveOut = sortedTransfers.find(t => t.type === 'Move Out');
+
+    if (lastMoveIn && date < lastMoveIn.date) {
+      return { totalHours: 0, regularHours: 0, overtimeHours: 0, status: 'Transferred' };
+    }
+    if (lastMoveOut && date > lastMoveOut.date) {
+      return { totalHours: 0, regularHours: 0, overtimeHours: 0, status: 'Transferred' };
+    }
+  }
+
   // 1. Check if the employee is on an approved leave
-  const activeLeave = leaves.find(l =>
+  let activeLeave = leaves.find(l =>
     (l.employeeId === employeeId || l.badgeId === employeeId) &&
     l.status !== 'Rejected' &&
-    l.startDate <= date && (!l.endDate || l.endDate >= date)
+    l.startDate <= date && (!l.endDate || l.endDate >= date) &&
+    (!l.cutOffDate || date < l.cutOffDate)
   );
+
+  // Cut off standard leaves if there is an attendance record (fingerprint)
+  if (activeLeave && (checkIn || checkOut)) {
+    const isPermission = activeLeave.type === 'Permission' || activeLeave.type === 'استئذان';
+    if (!isPermission) {
+      activeLeave = undefined;
+    }
+  }
 
   let totalHoursNum = 0;
   if (checkIn && checkOut && checkIn !== checkOut) {
@@ -56,8 +82,14 @@ export const calculateAttendanceStats = (
   let overtimeHours = 0;
   let status: DailyAttendance['status'] = checkOut ? 'Present' : 'Incomplete';
 
+  const todayStr = new Date().toISOString().split('T')[0];
   if (!checkIn && !checkOut) {
-      status = 'Absent';
+      status = date > todayStr ? 'Future' : 'Absent';
+  }
+
+  // Incomplete punch (only one punch) → grant 1 RH as placeholder
+  if (status === 'Incomplete') {
+      regularHours = 1;
   }
 
   // 2. Adjust stats if there's an active leave
@@ -89,15 +121,18 @@ export const calculateAttendanceStats = (
     // 3. Process standard scaling and events
     if (isFriday) {
        // Friday Rest Day (Weekly Holiday)
+       // RH = 8 (rest allowance), OT = actual raw hours worked (not re-added)
        if (totalHoursNum === 0) {
            regularHours = 8;
            totalHoursNum = 8;
            status = 'Weekend';
        } else {
+           // totalHoursNum here is the RAW calculated worked hours (from checkIn/checkOut)
+           // It has NOT been scaled yet, so it IS the actual time worked
            regularHours = 8;
-           overtimeHours = totalHoursNum;
-           totalHoursNum = 8 + totalHoursNum;
-           status = 'Weekend'; 
+           overtimeHours = totalHoursNum; // raw worked hours become OT
+           totalHoursNum = 8 + overtimeHours;
+           status = 'Weekend';
        }
     } else if (activeEvent && activeEvent.type === 'holiday') {
         // Automatically grant 8 hours for holiday
@@ -113,22 +148,21 @@ export const calculateAttendanceStats = (
            status = 'Holiday'; 
         }
     } else {
-        // Normal Working Day or Reduced Hours. Scale them to equivalent of 8 hours!
+        // Normal Working Day, Reduced Hours (Ramadan), or Custom Schedule (Thursday etc.)
+        // Unified ratio formula: ratio = workedHours / requiredHours, scaled to 8-hour base
+        // - Worked exactly required  → 8 RH, 0 OT
+        // - Worked more than required → 8 RH + proportional OT
+        // - Worked less than required → proportional RH (< 8), 0 OT
         if (totalHoursNum > 0) {
-             if (totalHoursNum >= requiredHours) {
-                // Fulfilled the required hours completely
-                regularHours = 8.0;
-                overtimeHours = totalHoursNum - requiredHours;
-             } else {
-                // Shortfall -> Calculate by ratio
-                const ratio = totalHoursNum / requiredHours;
-                regularHours = ratio * 8.0;
-                overtimeHours = 0;
-             }
-             totalHoursNum = regularHours + overtimeHours;
-             if (activeEvent && activeEvent.type === 'reduced_hours') {
+            const ratio = totalHoursNum / requiredHours;
+            const scaledTotal = ratio * 8.0;
+            regularHours = Math.min(scaledTotal, 8.0);
+            overtimeHours = scaledTotal > 8.0 ? scaledTotal - 8.0 : 0;
+            totalHoursNum = regularHours + overtimeHours;
+
+            if (activeEvent && activeEvent.type === 'reduced_hours') {
                 status = 'Reduced Hours';
-             }
+            }
         }
     }
   }
@@ -154,8 +188,28 @@ export const processPunches = (
   leaves: any[] = [],
   startDateStr?: string,
   endDateStr?: string,
-  allEmployees: any[] = [] // Used to generate missing records
+  allEmployees: any[] = [], // Used to generate missing records
+  transfers: any[] = []
 ): DailyAttendance[] => {
+  // Pre-process leaves: cut off leaves from the day the employee has a fingerprint
+  const effectiveLeaves = leaves.map(leave => ({...leave}));
+  const sortedRawPunches = [...punches].sort((a, b) => a.date.localeCompare(b.date));
+
+  effectiveLeaves.forEach(leave => {
+    const isPermission = leave.type === 'Permission' || leave.type === 'استئذان';
+    if (!isPermission) {
+      const empId = leave.employeeId || leave.badgeId;
+      const firstPunch = sortedRawPunches.find(p => 
+        (p.employeeId === empId) && 
+        (p.date >= leave.startDate) && 
+        (!leave.endDate || p.date <= leave.endDate)
+      );
+      if (firstPunch) {
+        leave.cutOffDate = firstPunch.date;
+      }
+    }
+  });
+
   const map = new Map<string, RawPunch[]>();
 
   punches.forEach((punch) => {
@@ -197,7 +251,8 @@ export const processPunches = (
     }
 
     const { employeeId, date } = sorted[0];
-    const stats = calculateAttendanceStats(checkIn, checkOut, date, employeeId, events, schedules, leaves);
+    const empTransfers = transfers.filter(t => t.employeeId === employeeId || t.badgeId === employeeId);
+    const stats = calculateAttendanceStats(checkIn, checkOut, date, employeeId, events, schedules, effectiveLeaves, empTransfers);
 
     const checkInDevice = checkInDeviceRecord.deviceName || "Unknown";
     const mappedProjectName = deviceToProjectMap[checkInDevice] || getProjectFromDevice(checkInDevice);
@@ -226,51 +281,61 @@ export const processPunches = (
       // Build Date Range
       const start = new Date(startDateStr);
       const end = new Date(endDateStr);
-      const datesArray = [];
+      const datesArray: string[] = [];
       const current = new Date(start);
       while (current <= end) {
          datesArray.push(current.toISOString().split('T')[0]);
          current.setDate(current.getDate() + 1);
       }
 
-      allEmployees.forEach((emp) => {
-         const empId = emp.employeeId || emp.badgeId || emp.id;
-         if (!empId) return;
+          allEmployees.forEach((emp) => {
+             const empId = emp.employeeId || emp.badgeId || emp.id;
+             if (!empId) return;
+             
+             // Transfer Filtering Logic: Skip if fully moved out before this month AND no punches
+             const empTransfers = transfers.filter(t => t.employeeId === emp.id || t.badgeId === emp.employeeId);
+             const lastMoveOut = [...empTransfers].filter(t => t.type === 'Move Out').sort((a, b) => b.date.localeCompare(a.date))[0];
+             const lastMoveIn = [...empTransfers].filter(t => t.type === 'Move In').sort((a, b) => b.date.localeCompare(a.date))[0];
 
-         datesArray.forEach((dateStr) => {
-             const key = `${empId}_${dateStr}`;
-             if (!parsed.find(p => p.id === key)) {
-                 // No punch logic -> completely empty day!
-                 const stats = calculateAttendanceStats(null, null, dateStr, empId, events, schedules, leaves);
-                 
-                 // If it's a completely normal day (Absent) and they didn't work, we insert it.
-                 // This fulfills the "generate full dummy records" requirement explicitly.
-                 
-                 // Create a dummy record
-                 // Attempt to get employee name safely
-                 const empName = emp.name || emp.nameAr || emp.firstName || emp.nameEn || empId;
-                 const empProject = emp.project || emp.residenceId || 'Unknown Residence';
-
-                 parsed.push({
-                     id: key,
-                     employeeId: empId,
-                     firstName: empName,
-                     department: emp.department || emp.profession || 'Worker',
-                     projectName: empProject,
-                     checkInDevice: 'System Generated',
-                     date: dateStr,
-                     checkIn: null,
-                     checkOut: null,
-                     totalHours: stats.totalHours,
-                     regularHours: stats.regularHours,
-                     overtimeHours: stats.overtimeHours,
-                     punches: [],
-                     status: stats.status,
-                     isSyncedToFirestore: false
-                 });
+             if (lastMoveOut && lastMoveOut.date < startDateStr! && (!lastMoveIn || lastMoveIn.date < lastMoveOut.date)) {
+                // If they moved out before this range started, and haven't moved back in since, skip
+                return;
              }
-         });
-      });
+
+             datesArray.forEach((dateStr) => {
+                 const key = `${empId}_${dateStr}`;
+                 if (!parsed.find(p => p.id === key)) {
+                     // No punch logic -> completely empty day!
+                     const stats = calculateAttendanceStats(null, null, dateStr, empId, events, schedules, effectiveLeaves, empTransfers);
+                     
+                     // If it's a completely normal day (Absent) and they didn't work, we insert it.
+                     // This fulfills the "generate full dummy records" requirement explicitly.
+                     
+                     // Create a dummy record
+                     // Attempt to get employee name safely
+                     const empName = emp.name || emp.nameAr || emp.firstName || emp.nameEn || empId;
+                     const empProject = emp.projectName || emp.project || emp.residenceId || 'Unknown Residence';
+
+                     parsed.push({
+                         id: key,
+                         employeeId: empId,
+                         firstName: empName,
+                         department: emp.department || emp.profession || 'Worker',
+                         projectName: empProject,
+                         checkInDevice: 'System Generated',
+                         date: dateStr,
+                         checkIn: null,
+                         checkOut: null,
+                         totalHours: stats.totalHours,
+                         regularHours: stats.regularHours,
+                         overtimeHours: stats.overtimeHours,
+                         punches: [],
+                         status: stats.status,
+                         isSyncedToFirestore: false
+                     });
+                 }
+             });
+          });
   }
 
   return parsed.sort((a, b) => a.date.localeCompare(b.date) || a.firstName.localeCompare(b.firstName));

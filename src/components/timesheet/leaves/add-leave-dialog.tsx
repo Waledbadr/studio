@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,11 +24,12 @@ interface AddLeaveDialogProps {
   defaultType?: 'Annual' | 'Sick' | 'Permission' | 'Resumption';
   initialData?: any;
   mode?: 'add' | 'edit';
+  onSuccess?: () => void;
 }
 
-export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', initialData, mode = 'add' }: AddLeaveDialogProps) {
-  const { dict, language } = useLanguage();
-  const isAr = language === 'ar';
+export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', initialData, mode = 'add', onSuccess }: AddLeaveDialogProps) {
+  const { locale } = useLanguage();
+  const isAr = locale === 'ar';
   const { toast } = useToast();
   const { employees, loading } = useHousingEmployees();
 
@@ -80,8 +81,40 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
 
     setSubmitting(true);
     try {
+      // --- Overlap Validation ---
+      const q = query(collection(db as any, 'timesheetLeaves'), where('employeeDocId', '==', formData.employeeId));
+      const snap = await getDocs(q);
+      const existingRecords = snap.docs
+        .map(d => ({ docId: d.id, ...d.data() as any }))
+        .filter(item => item.docId !== initialData?.docId); 
+
+      // Ranges A=[s1, e1], B=[s2, e2] overlap if: s1 <= e2 AND s2 <= e1
+      const targetS = new Date(formData.startDate).getTime();
+      const targetE = formData.endDate ? new Date(formData.endDate).getTime() : targetS;
+
+      const conflict = existingRecords.find(item => {
+        const exS = new Date(item.startDate).getTime();
+        const exE = item.endDate ? new Date(item.endDate).getTime() : exS;
+        
+        // Skip some overlap checks if it's just a resumption note? 
+        // Actually, user wants "no overlaps" generally.
+        return (targetS <= exE && exS <= targetE);
+      });
+
+      if (conflict) {
+        toast({
+          title: isAr ? 'تعارض في المواعيد' : 'Schedule Conflict',
+          description: isAr 
+            ? `الموظف لديه طلب (${conflict.type}) مسجل بالفعل (من ${conflict.startDate} إلى ${conflict.endDate || conflict.startDate})`
+            : `Employee already has a ${conflict.type} recorded (from ${conflict.startDate} to ${conflict.endDate || conflict.startDate})`,
+          variant: 'destructive',
+        });
+        setSubmitting(false);
+        return;
+      }
+      // --- End Validation ---
       if (mode === 'edit' && initialData?.docId) {
-        const docRef = doc(db, 'timesheetLeaves', initialData.docId);
+        const docRef = doc(db as any, 'timesheetLeaves', initialData.docId);
         await updateDoc(docRef, {
           employeeDocId: employee.id, // reference to housingEmployee doc
           employeeId: employee.employeeId || '', // badge/emp ID
@@ -100,7 +133,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
           description: isAr ? 'تم تحديث الطلب بنجاح' : 'Request updated successfully',
         });
       } else {
-        const colRef = collection(db, 'timesheetLeaves');
+        const colRef = collection(db as any, 'timesheetLeaves');
         const docRef = doc(colRef);
         
         const payload = {
@@ -126,6 +159,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
         });
       }
       
+      if (onSuccess) onSuccess();
       onOpenChange(false);
       setFormData({
         employeeId: '',
@@ -183,7 +217,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
                             (emp) => emp.id === formData.employeeId
                           );
                           return selectedEmp
-                            ? `${isAr ? selectedEmp.nameAr || selectedEmp.name : selectedEmp.name} - ${selectedEmp.employeeId || selectedEmp.department}`
+                            ? `${isAr ? selectedEmp.nameAr || selectedEmp.name : selectedEmp.name} - ${selectedEmp.employeeId || selectedEmp.profession}`
                             : isAr ? 'اختر الموظف' : 'Select Employee';
                         })()
                       : isAr ? 'اختر الموظف...' : 'Select Employee...'}
@@ -198,7 +232,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
                           {employees.map((emp) => (
                             <CommandItem
                               key={emp.id}
-                              value={`${emp.employeeId || ''} ${emp.name || ''} ${emp.nameAr || ''} ${emp.department || ''} ${emp.badgeId || ''}`}
+                              value={`${emp.employeeId || ''} ${emp.name || ''} ${emp.nameAr || ''} ${emp.profession || ''}`}
                               onSelect={() => {
                                 setFormData({ ...formData, employeeId: emp.id });
                                 setOpenEmployeeList(false);
@@ -206,7 +240,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
                               className="flex justify-between items-center cursor-pointer text-right w-full"
                             >
                               <span className="flex-1 text-right">
-                                {isAr ? emp.nameAr || emp.name : emp.name} - {emp.employeeId || emp.department}
+                                {isAr ? emp.nameAr || emp.name : emp.name} - {emp.employeeId || emp.profession}
                               </span>
                               <Check
                                 className={cn(

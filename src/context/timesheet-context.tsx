@@ -4,9 +4,10 @@ import React, { createContext, useContext, useState, ReactNode } from "react";
 import { RawPunch, DailyAttendance, TimesheetEvent, EmployeeSchedule } from "@/types/timesheet";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { doc, writeBatch, getDoc, setDoc } from "firebase/firestore";
+import { doc, writeBatch, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 import { processPunches } from "@/utils/timesheet-utils";
 import { useLanguage } from "@/context/language-context";
+import { getDateChunks } from "@/lib/fiscal-month-utils";
 
 interface TimesheetContextType {
   rawPunches: RawPunch[];
@@ -19,6 +20,7 @@ interface TimesheetContextType {
   isProcessing: boolean;
   fetchAndProcessAttendance: (startDate: string, endDate: string) => Promise<void>;
   syncProcessedDataToFirestore: () => Promise<void>;
+  deleteAllAttendanceRecords: () => Promise<void>;
   updateAttendanceRecord: (id: string, updates: Partial<DailyAttendance>) => void;
   updateDeviceMapping: (deviceName: string, projectName: string) => Promise<void>;
   updateBulkDeviceMappings: (mappings: Record<string, string>) => Promise<void>;
@@ -119,62 +121,79 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     setProcessedAttendance([]);
 
     try {
-      // Also fetch leaves in parallel
-      const resPromise = fetch(`/api/timesheet/fetch-attendance?start_date=${startDate}&end_date=${endDate}`);
-      let leavesData: any[] = [];
-        let employeesData: any[] = [];
+      // 1. Split into chunks to avoid Biometric Server timeouts (7 days per request)
+      const chunks = getDateChunks(startDate, endDate, 7);
+      let allPunches: RawPunch[] = [];
       
+      // 2. Fetch ancillary data (leaves, transfers, all employees) once for the entire period
+      let leavesData: any[] = [];
+      let transfersData: any[] = [];
+      let employeesData: any[] = [];
       try {
         if (db) {
-          const { collection, getDocs, query } = await import('firebase/firestore');
-          const [lSnap, eSnap] = await Promise.all([getDocs(query(collection(db, 'timesheetLeaves'))), getDocs(query(collection(db, 'housingEmployees')))]);
-          // Normally filter leaves
+          const [lSnap, tSnap, eSnap] = await Promise.all([
+            getDocs(collection(db as any, 'timesheetLeaves')),
+            getDocs(collection(db as any, 'timesheetTransfers')),
+            getDocs(collection(db as any, 'housingEmployees'))
+          ]);
           leavesData = lSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          transfersData = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           employeesData = eSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-          // Normally you'd filter by date here, but for now we pull all for processing
-          leavesData = lSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         }
       } catch (e) {
-        console.warn("Failed to fetch leaves for processing", e);
+        console.warn("Failed to fetch leaves/transfers/employees for processing", e);
       }
 
-      const res = await resPromise;
-      if (!res.ok) {
-        throw new Error(`Failed to fetch attendance data: ${res.statusText}`);
-      }
-      const json = await res.json();
-      
-      if (json.error) {
-        throw new Error(json.error);
+      // 3. Serial fetching of chunks to keep biometric server load manageable
+      for (const chunk of chunks) {
+        const res = await fetch(`/api/timesheet/fetch-attendance?start_date=${chunk.start}&end_date=${chunk.end}`);
+        if (!res.ok) {
+          let errorMsg = res.statusText;
+          try {
+            const errBody = await res.json();
+            errorMsg = errBody.error || errBody.message || errorMsg;
+          } catch {}
+          throw new Error(errorMsg);
+        }
+        
+        const json = await res.json();
+        if (json.data) {
+          allPunches = [...allPunches, ...json.data];
+        }
       }
 
-      setRawPunches(json.data || []);
+      setRawPunches(allPunches);
+      setIsFetching(false);
       
       setIsProcessing(true);
       // Process data grouping by emp_id and date
       const processed = processPunches(
-        json.data || [], 
+        allPunches, 
         deviceToProjectMap, 
         timesheetEvents, 
         employeeSchedules, 
-        leavesData
+        leavesData,
+        startDate,
+        endDate,
+        employeesData,
+        transfersData // Pass transfers
       );
       setProcessedAttendance(processed);
+      setIsProcessing(false);
       
       toast({
         title: isAr ? "تم الاستيراد بنجاح" : "Import Successful",
         description: isAr 
-          ? `تم إحضار ${json.data.length} بصمة، ومعالجتها إلى ${processed.length} سجل يومي.`
-          : `Fetched ${json.data.length} punches, processed into ${processed.length} daily records.`,
+          ? `تم إحضار ${allPunches.length} بصمة، ومعالجتها إلى ${processed.length} سجل يومي.`
+          : `Fetched ${allPunches.length} punches, processed into ${processed.length} daily records.`,
         variant: "default",
       });
 
     } catch (error: any) {
-      console.error("Error fetching attendance:", error);
+      console.error("Attendance fetch error:", error);
       toast({
-        title: isAr ? "خطأ في الاستيراد" : "Import Error",
-        description: error.message || (isAr ? "فشل في إحضار البيانات من الخوادم، تأكد من الاتصال." : "Failed to fetch data, please check your connection."),
+        title: isAr ? "فشل جلب البيانات" : "Fetch Failed",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -238,6 +257,44 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteAllAttendanceRecords = async () => {
+    if (!db) return;
+    try {
+      const snap = await getDocs(collection(db, 'attendanceRecords'));
+      if (snap.empty) {
+        toast({ title: isAr ? 'لا توجد سجلات' : 'No records found', variant: 'default' });
+        return;
+      }
+      const maxBatchSize = 500;
+      let currentBatch = writeBatch(db);
+      let count = 0;
+      for (const docSnap of snap.docs) {
+        currentBatch.delete(docSnap.ref);
+        count++;
+        if (count === maxBatchSize) {
+          await currentBatch.commit();
+          currentBatch = writeBatch(db);
+          count = 0;
+        }
+      }
+      if (count > 0) await currentBatch.commit();
+      toast({
+        title: isAr ? 'تم الحذف' : 'Records Deleted',
+        description: isAr
+          ? `تم حذف ${snap.size} سجل بنجاح. يمكنك إعادة الاستيراد الآن.`
+          : `Deleted ${snap.size} records. You can re-import now.`,
+        variant: 'default',
+      });
+    } catch (error: any) {
+      console.error('Error deleting attendance records:', error);
+      toast({
+        title: isAr ? 'خطأ في الحذف' : 'Delete Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <TimesheetContext.Provider
       value={{
@@ -250,6 +307,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         isProcessing,
         fetchAndProcessAttendance,
         syncProcessedDataToFirestore,
+        deleteAllAttendanceRecords,
         updateAttendanceRecord,
         updateProjectMapping,
         removeProjectMapping,
@@ -258,7 +316,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         updateBulkDeviceMappings,
         removeDeviceMapping,
         updateEvents,
-        updateSchedules,      }}
+        updateSchedules,
+      }}
     >
       {children}
     </TimesheetContext.Provider>

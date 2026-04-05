@@ -843,7 +843,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
         }
 
         // Otherwise, search within the complex and only keep children that match (or contain matches)
-        const filteredBuildings = complex.buildings
+        const filteredBuildings = (complex.buildings || [])
           .map(b => {
             const buildingMatch = includeText(b.name);
             if (buildingMatch) {
@@ -851,7 +851,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
               return b;
             }
 
-            const filteredFloors = b.floors
+            const filteredFloors = (b.floors || [])
               .map(f => {
                 const floorMatch = includeText(f.name);
                 if (floorMatch) {
@@ -859,7 +859,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                   return f;
                 }
 
-                const filteredRooms = f.rooms.filter(r => includeText(r.name));
+                const filteredRooms = (f.rooms || []).filter(r => includeText(r.name));
                 const filteredFacilities = asArray<Facility>(f.facilities).filter(
                   fc => includeText(fc.name) || includeText(fc.type)
                 );
@@ -889,12 +889,15 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
   const stats = useMemo(() => {
     return filteredResidences.reduce((acc, complex) => {
       acc.complexes += 1;
-      acc.buildings += complex.buildings.length;
-      complex.buildings.forEach(building => {
-        acc.floors += building.floors.length;
+      const buildings = complex.buildings || [];
+      acc.buildings += buildings.length;
+      buildings.forEach(building => {
+        const floors = building.floors || [];
+        acc.floors += floors.length;
         acc.facilities += showFacilities ? asArray<Facility>(building.facilities).length : 0;
-        building.floors.forEach(floor => {
-          acc.rooms += floor.rooms.length;
+        floors.forEach(floor => {
+          const rooms = floor.rooms || [];
+          acc.rooms += rooms.length;
           acc.facilities += showFacilities ? asArray<Facility>(floor.facilities).length : 0;
         });
       });
@@ -1283,7 +1286,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                 {(openComplexIds[complex.id] ?? true) && (
                 <CardContent>
                   <Accordion type="multiple" className="w-full" value={openByComplex[complex.id] || []} onValueChange={(val) => setOpenForComplex(complex.id, val as string[])}>
-                    {complex.buildings.map((building: BuildingType) => {
+                    {(complex.buildings || []).map((building: BuildingType) => {
                       const itemValue = `building-${building.id}`;
                       const isOpen = (openByComplex[complex.id] || []).includes(itemValue);
                       return (
@@ -1383,7 +1386,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                       />
                                     )}
                                   </div>
-                                  {building.floors.map((floor: Floor) => (
+                                  {(building.floors || []).map((floor: Floor) => (
                                       <div
                                         key={floor.id}
                                         className={`p-3 rounded-md bg-muted/50 ${dragging ? 'ring-1 ring-primary/20' : ''}`}
@@ -1459,7 +1462,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
                                           >
                                               <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
-                                                  {floor.rooms.map((room: Room) => (
+                                                  {(floor.rooms || []).map((room: Room) => (
                                                   <RoomItem
                                                       key={room.id}
                                                       room={room}
@@ -1601,11 +1604,11 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                   </div>
                   {complexOpen && (
                     <div className="pl-8 pr-3 pb-3 space-y-4">
-                      {complex.buildings.map((building) => {
+                      {(complex.buildings || []).map((building) => {
                         const bKey = `building-${building.id}`;
                         const bOpen = (openByComplex[complex.id] || []).includes(bKey);
-                        const floorsCount = building.floors.length;
-                        const roomsCount = building.floors.reduce((acc, f) => acc + f.rooms.length, 0);
+                        const floorsCount = (building.floors || []).length;
+                        const roomsCount = (building.floors || []).reduce((acc, f) => acc + (f.rooms || []).length, 0);
                         return (
                           <div key={building.id} className="border rounded-md">
             <div className="flex items-center justify-between p-2">
@@ -1645,7 +1648,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                             </div>
                             {bOpen && (
                               <div className="pl-8 pr-3 pb-3 space-y-4">
-                                {building.floors.map((floor) => {
+                                {(building.floors || []).map((floor) => {
                                   const fKey = `${building.id}:${floor.id}`;
                                   const fOpen = openFloorKeys[fKey] ?? true;
                                   return (
@@ -1694,7 +1697,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
                                           >
                                             <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
-                                              {floor.rooms.map((room: Room) => (
+                                              {(floor.rooms || []).map((room: Room) => (
                                                 <RoomItem
                                                   key={room.id}
                                                   room={room}
@@ -1865,9 +1868,9 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
               {(openComplexIds[complex.id] ?? true) && (
               <div className="overflow-x-auto pb-2">
                 <div className="flex gap-4 min-w-max">
-                  {complex.buildings.map((building) => {
-                    const floorsCount = building.floors.length;
-                    const roomsCount = building.floors.reduce((acc, f) => acc + f.rooms.length, 0);
+                  {(complex.buildings || []).map((building) => {
+                    const floorsCount = (building.floors || []).length;
+                    const roomsCount = (building.floors || []).reduce((acc, f) => acc + (f.rooms || []).length, 0);
                     return (
                       <div key={building.id} className="w-80 shrink-0 rounded-lg border bg-background">
                         <div className="p-3 border-b flex items-center justify-between">
@@ -1898,7 +1901,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                           <div className="text-xs text-muted-foreground">{floorsCount}F • {roomsCount}R</div>
                         </div>
                         <div className="p-3 space-y-4">
-                          {building.floors.map((floor) => (
+                          {(building.floors || []).map((floor) => (
                             <div key={floor.id} className="rounded-md bg-muted/30 border">
                               <div className="px-3 py-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2 font-semibold">
@@ -1938,7 +1941,7 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
                                 onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDropToFloor({ complexId: complex.id, buildingId: building.id, floorId: floor.id }); }}
                               >
                                 <div className={`grid grid-cols-2 gap-2 ${dragging ? 'ring-1 ring-primary/30 rounded-md p-1' : ''}`}>
-                                  {floor.rooms.map((room: Room) => (
+                                  {(floor.rooms || []).map((room: Room) => (
                                     <RoomItem
                                       key={room.id}
                                       room={room}

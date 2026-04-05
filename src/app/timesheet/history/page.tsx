@@ -6,38 +6,44 @@ import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Download, MapPin, CalendarDays, User, Briefcase } from 'lucide-react';
+import { Search, Download, MapPin, CalendarDays, User, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { TimesheetProvider, useTimesheet } from '@/context/timesheet-context';
-import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
+import { getFiscalMonthPeriod, getFiscalMonthForDate } from '@/lib/fiscal-month-utils';
 
 function TimesheetHistoryContent() {
-  const { dict } = useLanguage();
+  const { locale } = useLanguage();
+  const isAr = locale === 'ar';
   const { currentUser } = useUsers();
   const { residences, loadResidences } = useResidences();
   const { projectToResidenceMap, timesheetEvents, employeeSchedules } = useTimesheet();
   const [records, setRecords] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, any>>({});
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const today = new Date();
-  const getFiscalMonthForDate = (d: Date) => {
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const day = d.getDate();
-    // If before the 20th, it belongs to current month's fiscal period
-    // If on or after the 20th, it belongs to NEXT month's fiscal period
-    if (day >= 20) {
-      if (month === 12) return `${year + 1}-01`;
-      return `${year}-${String(month + 1).padStart(2, '0')}`;
+  const goToNextMonth = () => {
+    const currentIndex = availableMonths.indexOf(filterMonth);
+    // availableMonths are desc (newest first), so index-1 is newer
+    if (currentIndex > 0) {
+      setFilterMonth(availableMonths[currentIndex - 1]);
     }
-    return `${year}-${String(month).padStart(2, '0')}`;
   };
+
+  const goToPrevMonth = () => {
+    const currentIndex = availableMonths.indexOf(filterMonth);
+    // availableMonths are desc (newest first), so index+1 is older
+    if (currentIndex !== -1 && currentIndex < availableMonths.length - 1) {
+      setFilterMonth(availableMonths[currentIndex + 1]);
+    }
+  };
+
+  const today = new Date();
 
   const defaultMonth = getFiscalMonthForDate(today);
   const [filterMonth, setFilterMonth] = useState<string>(defaultMonth);
@@ -63,20 +69,7 @@ function TimesheetHistoryContent() {
     return { startDate: start, endDate: end, daysArray: days };
   }, [filterMonth]);
 
-  // Generate list of available fiscal months statically (last 24 months)
-  const availableMonths = useMemo(() => {
-    const months = [];
-    let currentVar = new Date();
-    currentVar.setDate(15);
-    for (let i = 0; i < 24; i++) {
-        const yy = currentVar.getFullYear();
-        const mm = currentVar.getMonth() + 1;
-        months.push(`${yy}-${String(mm).padStart(2, '0')}`);
-        currentVar.setMonth(currentVar.getMonth() - 1);
-    }
-    if (!months.includes(defaultMonth)) months.unshift(defaultMonth);
-    return Array.from(new Set(months)).sort().reverse();
-  }, [defaultMonth]);
+  // availableMonths is populated dynamically from DB records (see fetchData below)
 
   useEffect(() => {
     let active = true;
@@ -103,7 +96,34 @@ function TimesheetHistoryContent() {
         const leavesSnap = await getDocs(lq);
         if (active) setLeaves(leavesSnap.docs.map(d => d.data()));
 
-        // Fetch attendance records
+        // --- Build dynamic available months from stored records ---
+        // Fetch just the dates of all records to determine which months have data
+        const allDatesSnap = await getDocs(query(
+          collection(db as any, 'attendanceRecords'),
+          orderBy('date', 'desc'),
+          limit(10000)
+        ));
+        const monthsSet = new Set<string>();
+        allDatesSnap.forEach(d => {
+          const date: string = d.data().date;
+          if (date) {
+            // Convert raw date to fiscal month label
+            const [y, m, dd] = date.split('-').map(Number);
+            const dayNum = dd;
+            // Fiscal month: if day >= 20, belongs to NEXT calendar month
+            let fiscalYear = y, fiscalMonth = m;
+            if (dayNum >= 20) {
+              fiscalMonth += 1;
+              if (fiscalMonth > 12) { fiscalMonth = 1; fiscalYear += 1; }
+            }
+            monthsSet.add(`${fiscalYear}-${String(fiscalMonth).padStart(2, '0')}`);
+          }
+        });
+        const dynamicMonths = Array.from(monthsSet).sort().reverse();
+        if (!dynamicMonths.includes(defaultMonth)) dynamicMonths.unshift(defaultMonth);
+        if (active) setAvailableMonths(dynamicMonths);
+
+        // Fetch attendance records for selected month
         if (daysArray.length > 0) {
           const dateStartStr = daysArray[0];
           const dateEndStr = daysArray[daysArray.length - 1];
@@ -114,7 +134,7 @@ function TimesheetHistoryContent() {
             where('date', '>=', dateStartStr),
             where('date', '<=', dateEndStr),
             orderBy('date', 'desc'),
-            limit(15000)
+            limit(10000)
           );
 
           const recordsSnap = await getDocs(q);
@@ -142,7 +162,12 @@ function TimesheetHistoryContent() {
 
   // Group data by Residence (projectName) -> Employee
   const groupedData = useMemo(() => {
-    const grouped: Record<string, Record<string, any>> = {};
+    // Stage 1: Collect everything by Employee ID
+    const empRawGroup: Record<string, {
+      allRecords: any[];
+      primaryRes: string;
+      residenceCounts: Record<string, number>;
+    }> = {};
 
     // Get the allowed project names for the current user
     const userResidences = currentUser?.assignedResidences || [];
@@ -160,22 +185,10 @@ function TimesheetHistoryContent() {
       allowedProjectNames = Array.from(new Set(allowedNames)); // unique names
     }
 
-    // Fast lookup for the latest project name associated with an employee
-    const latestProjectMap: Record<string, string> = {};
-    records.forEach(r => {
-      // records are fetched desc (newest first). The first time we see an employeeId, it's their latest project.
-      if (r.employeeId && r.projectName && !latestProjectMap[r.employeeId]) {
-        latestProjectMap[r.employeeId] = r.projectName;
-      }
-    });
-
     records.forEach(record => {
       if (!record.date) return;
-      
-      // Only include records that fall within the selected fiscal days array
       if (!daysArray.includes(record.date)) return;
 
-      // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         const matchesSearch =
@@ -184,31 +197,53 @@ function TimesheetHistoryContent() {
         if (!matchesSearch) return;
       }
 
-      const proj = record.projectName || 'Unassigned / Outside';
+      const empKey = record.employeeId || 'Unknown ID';
+      if (!empRawGroup[empKey]) {
+        empRawGroup[empKey] = { allRecords: [], primaryRes: '', residenceCounts: {} };
+      }
       
-      // Filter out residences that currentUser doesn't have access to
-      if (currentUser?.role !== 'Admin') {
-        const projLower = proj.toLowerCase();
-        const mappedResidenceId = projectToResidenceMap[proj];
-        // 1. Is this project directly mapped to a residence the user has?
-        const isMappedAndAssigned = mappedResidenceId && userResidences.includes(mappedResidenceId);
-        // 2. Is this project string matching any of the user's residence names?
-        const isNameMatched = allowedProjectNames.some(n => projLower.includes(n) || n.includes(projLower));
-        
-        if (!isMappedAndAssigned && !isNameMatched) {
-          return; // Skip this record if it belongs to an unassigned project
+      empRawGroup[empKey].allRecords.push(record);
+      
+      const proj = record.projectName || 'Unassigned / Outside';
+      empRawGroup[empKey].residenceCounts[proj] = (empRawGroup[empKey].residenceCounts[proj] || 0) + 1;
+    });
+
+    // Determine primary residence for each employee
+    Object.keys(empRawGroup).forEach(empId => {
+      const counts = empRawGroup[empId].residenceCounts;
+      let topProj = '';
+      let maxCount = -1;
+      
+      Object.entries(counts).forEach(([proj, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          topProj = proj;
         }
+      });
+      
+      // Fallback to official project name from employee profile if available and it has some punches
+      const officialProj = employeesMap[empId]?.projectName || employeesMap[empId]?.project;
+      if (officialProj && counts[officialProj]) {
+          topProj = officialProj;
       }
 
-      const empKey = record.employeeId || 'Unknown ID';
+      empRawGroup[empId].primaryRes = topProj || 'Unassigned / Outside';
+    });
+
+    // Stage 2: Create the final grouped structure
+    const grouped: Record<string, Record<string, any>> = {};
+    const employeeDailyProjects: Record<string, Record<string, string[]>> = {};
+
+    Object.entries(empRawGroup).forEach(([empKey, data]) => {
+      const proj = data.primaryRes;
       const currentUserData = employeesMap[empKey] || {};
 
       if (!grouped[proj]) grouped[proj] = {};
       if (!grouped[proj][empKey]) {
         grouped[proj][empKey] = {
-          name: currentUserData.name || currentUserData.nameAr || record.firstName,
-          profession: currentUserData.professionAr || currentUserData.profession || record.department || '-',
-          department: currentUserData.department || record.department || '-',
+          name: currentUserData.name || currentUserData.nameAr || data.allRecords[0]?.firstName || empKey,
+          profession: currentUserData.professionAr || currentUserData.profession || data.allRecords[0]?.department || '-',
+          department: currentUserData.department || data.allRecords[0]?.department || '-',
           daily: {},
           totalRH: 0,
           totalOT: 0,
@@ -216,47 +251,54 @@ function TimesheetHistoryContent() {
         };
       }
 
-      // Clone the record to avoid mutating the original state object later
-      grouped[proj][empKey].daily[record.date] = { ...record };
+      data.allRecords.forEach(record => {
+        const dateStr = record.date;
+        const prevRecord = grouped[proj][empKey].daily[dateStr];
+        
+        // If there's multiple records for one day in different residence
+        if (prevRecord) {
+           // Heuristic: If one has hours and the other doesn't, pick the one with hours
+           if ((record.totalHours || 0) > (prevRecord.totalHours || 0)) {
+               grouped[proj][empKey].daily[dateStr] = { ...record };
+           }
+        } else {
+           grouped[proj][empKey].daily[dateStr] = { ...record };
+        }
+
+        // Track project participation for indicators
+        if (!employeeDailyProjects[empKey]) employeeDailyProjects[empKey] = {};
+        if (!employeeDailyProjects[empKey][dateStr]) employeeDailyProjects[empKey][dateStr] = [];
+        const recProj = record.projectName || 'Unassigned / Outside';
+        if (!employeeDailyProjects[empKey][dateStr].includes(recProj)) {
+           employeeDailyProjects[empKey][dateStr].push(recProj);
+        }
+      });
     });
 
-    // Populate Leaves
+    // Populate Leaves with Deduplication
     leaves.forEach(l => {
       if (!l.badgeId || !l.startDate || !l.endDate) return;
-
       const badge = l.badgeId;
-      // Filter by search term
+
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
-        const matchesSearch =
-          (l.name?.toLowerCase().includes(searchLower) || l.nameAr?.toLowerCase().includes(searchLower)) ||
-          badge.toLowerCase().includes(searchLower);
-        if (!matchesSearch) return;
+        if (!(l.name?.toLowerCase().includes(searchLower) || l.nameAr?.toLowerCase().includes(searchLower) || badge.toLowerCase().includes(searchLower))) return;
       }
 
-      // Assign the employee to their latest known project, else fallback
-      const proj = latestProjectMap[badge] || 'Unassigned / Outside';
+      // Determine where this leave should be shown: official residence or the one they appear in
+      const primaryRes = empRawGroup[badge]?.primaryRes || employeesMap[badge]?.projectName || employeesMap[badge]?.project || 'Unassigned / Outside';
       
-      // Authorization Check
       if (currentUser?.role !== 'Admin') {
-        const projLower = proj.toLowerCase();
-        const mappedResidenceId = projectToResidenceMap[proj];
-        const isMappedAndAssigned = mappedResidenceId && userResidences.includes(mappedResidenceId);
-        const isNameMatched = allowedProjectNames.some(n => projLower.includes(n) || n.includes(projLower));
-        
-        if (!isMappedAndAssigned && !isNameMatched) return;
+        const resId = projectToResidenceMap[primaryRes];
+        if (resId && !userResidences.includes(resId)) return;
       }
 
-      const empKey = badge;
-      const currentUserData = employeesMap[empKey] || {};
-
-      // Need to find if any of their leave days overlap with daysArray (the selected month range)
       daysArray.forEach(dateStr => {
         if (dateStr >= l.startDate && dateStr <= l.endDate) {
-          // They are on leave today
-          if (!grouped[proj]) grouped[proj] = {};
-          if (!grouped[proj][empKey]) {
-            grouped[proj][empKey] = {
+          if (!grouped[primaryRes]) grouped[primaryRes] = {};
+          if (!grouped[primaryRes][badge]) {
+            const currentUserData = employeesMap[badge] || {};
+            grouped[primaryRes][badge] = {
               name: currentUserData.name || currentUserData.nameAr || l.name || l.nameAr || badge,
               profession: currentUserData.professionAr || currentUserData.profession || '-',
               department: currentUserData.department || '-',
@@ -267,16 +309,10 @@ function TimesheetHistoryContent() {
             };
           }
 
-          // In case they have no actual punch/attendance record on this leave day
-          if (!grouped[proj][empKey].daily[dateStr]) {
-            grouped[proj][empKey].daily[dateStr] = {
-              status: 'Leave',
-              leaveType: l.type || 'Leave',
-              reason: l.reason || ''
-            };
+          if (!grouped[primaryRes][badge].daily[dateStr]) {
+            grouped[primaryRes][badge].daily[dateStr] = { status: 'Leave', leaveType: l.type || 'Leave', reason: l.reason || '' };
           } else {
-             // Override existing to reflect Leave, but maybe preserve hours if any (usually none on Leave)
-             grouped[proj][empKey].daily[dateStr].status = 'Leave';
+             grouped[primaryRes][badge].daily[dateStr].status = 'Leave';
           }
         }
       });
@@ -286,6 +322,25 @@ function TimesheetHistoryContent() {
     Object.keys(grouped).forEach(proj => {
       Object.keys(grouped[proj]).forEach(empKey => {
         const empData = grouped[proj][empKey];
+
+        // Helper to find the 'Winner' project for the 8-hour allowance on a specific day
+        const getAllowanceWinner = (date: string) => {
+            const allProjs = employeeDailyProjects[empKey]?.[date] || [];
+            if (allProjs.length <= 1) return allProjs[0] || proj;
+            
+            // Try to find projects where they actually worked (has hours or 'Present')
+            const workedProjs = allProjs.filter((p: string) => {
+                const r = grouped[p]?.[empKey]?.daily[date];
+                return r && (r.totalHours > 0 || r.regularHours > 0 || r.status === 'Present' || (r.punches && r.punches.length > 0));
+            });
+
+            if (workedProjs.length > 0) {
+                // Return the last one they worked in (most likely where they finished their day)
+                return workedProjs[workedProjs.length - 1];
+            }
+            // If no work anywhere, fallback to first in list
+            return allProjs[0] || proj;
+        };
 
         // 1. Process Fridays based on Thursday presence
         daysArray.forEach((dateStr, idx) => {
@@ -302,6 +357,9 @@ function TimesheetHistoryContent() {
             }
 
             if (workedThursday) {
+              const allowanceWinner = getAllowanceWinner(dateStr);
+              if (proj !== allowanceWinner) return; // Only the winner gets the Friday rest allowance
+
               let fridayRecord = empData.daily[dateStr];
               
               if (!fridayRecord) {
@@ -315,16 +373,24 @@ function TimesheetHistoryContent() {
                   date: dateStr
                 };
               } else if (fridayRecord.status !== 'Leave') {
-                // They worked Friday AND get the 8 hrs rest
-                // All actually worked hours shift to Overtime
-                const originalRH = fridayRecord.regularHours !== undefined ? fridayRecord.regularHours : (fridayRecord.totalHours || 0);
-                const originalOT = fridayRecord.overtimeHours || 0;
-                const totalWorked = originalRH + originalOT;
-                
-                // Even if they only checked in/out with 0 hours, they get the 8 hours rest
+                // They worked on Friday AND get the 8 hrs rest
+                // OT = actual hours worked (from checkIn/checkOut to avoid double-counting)
+                let actualWorked = 0;
+                const ci = fridayRecord.checkIn;
+                const co = fridayRecord.checkOut;
+                if (ci && co && ci !== co) {
+                  const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+                  let inMins = toMins(ci);
+                  let outMins = toMins(co);
+                  if (outMins < inMins) outMins += 24 * 60;
+                  actualWorked = Number((Math.round((outMins - inMins) / 15) * 15 / 60).toFixed(2));
+                } else if (fridayRecord.status === 'Weekend' && (fridayRecord.totalHours || 0) > 8) {
+                  // Already-processed: OT ≈ totalHours - 8
+                  actualWorked = Number(((fridayRecord.totalHours || 0) - 8).toFixed(2));
+                }
                 fridayRecord.regularHours = 8;
-                fridayRecord.overtimeHours = totalWorked; // All previously calculated worked hours become OT
-                fridayRecord.totalHours = 8 + totalWorked;
+                fridayRecord.overtimeHours = actualWorked;
+                fridayRecord.totalHours = Number((8 + actualWorked).toFixed(2));
                 fridayRecord.isVirtualWeekend = true;
               }
             }
@@ -349,51 +415,122 @@ function TimesheetHistoryContent() {
             }
 
             if (activeEvent && activeEvent.type === 'holiday') {
+                const allowanceWinner = getAllowanceWinner(dateStr);
                 let holidayRecord = empData.daily[dateStr];
-                // Holidays grant 8 hrs allowance 
-                if (!holidayRecord) {
-                    empData.daily[dateStr] = {
-                        status: 'Holiday',
-                        isHoliday: true,
-                        regularHours: 8,
-                        overtimeHours: 0,
-                        totalHours: 8,
-                        date: dateStr
-                    };
-                } else if (holidayRecord.status !== 'Leave' && holidayRecord.status !== 'Weekend' && !holidayRecord.isVirtualWeekend) {
-                    // They worked on Holiday 
-                    const originalRH = holidayRecord.regularHours !== undefined ? holidayRecord.regularHours : (holidayRecord.totalHours || 0);
-                    const originalOT = holidayRecord.overtimeHours || 0;
-                    const totalWorked = originalRH + originalOT;
 
-                    // Automatically mark hours beyond 0 as OT, and grant 8 base hours
-                    holidayRecord.regularHours = 8;
-                    holidayRecord.overtimeHours = totalWorked; 
-                    holidayRecord.totalHours = 8 + totalWorked;
-                    holidayRecord.isHoliday = true;
-                    holidayRecord.status = 'Holiday';
+                // Holidays grant 8 hrs allowance ONLY to the priority project
+                if (proj === allowanceWinner) {
+                    if (!holidayRecord) {
+                        // No punch on this holiday → pure 8h allowance
+                        empData.daily[dateStr] = {
+                            status: 'Holiday',
+                            isHoliday: true,
+                            regularHours: 8,
+                            overtimeHours: 0,
+                            totalHours: 8,
+                            date: dateStr
+                        };
+                    } else if (holidayRecord.status !== 'Leave' && holidayRecord.status !== 'Weekend' && !holidayRecord.isVirtualWeekend) {
+                        // They worked on Holiday → RH = 8 allowance, OT = actual worked hours
+                        let actualWorked = 0;
+                        const ci = holidayRecord.checkIn;
+                        const co = holidayRecord.checkOut;
+                        if (ci && co && ci !== co) {
+                            const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+                            let inMins = toMins(ci);
+                            let outMins = toMins(co);
+                            if (outMins < inMins) outMins += 24 * 60;
+                            actualWorked = Number((Math.round((outMins - inMins) / 15) * 15 / 60).toFixed(2));
+                        } else if (holidayRecord.status === 'Holiday' && (holidayRecord.totalHours || 0) > 8) {
+                            actualWorked = Number(((holidayRecord.totalHours || 0) - 8).toFixed(2));
+                        }
+
+                        holidayRecord.regularHours = 8;
+                        holidayRecord.overtimeHours = actualWorked;
+                        holidayRecord.totalHours = Number((8 + actualWorked).toFixed(2));
+                        holidayRecord.isHoliday = true;
+                        holidayRecord.status = 'Holiday';
+                    }
+                } else if (holidayRecord) {
+                    // This is NOT the winner project, but they have a record here.
+                    // If they worked, it's 100% OT (since allowance is in another project)
+                    let actualWorked = holidayRecord.totalHours || 0;
+                    if (actualWorked > 0) {
+                        holidayRecord.regularHours = 0;
+                        holidayRecord.overtimeHours = actualWorked;
+                        holidayRecord.totalHours = actualWorked;
+                        holidayRecord.status = 'Holiday';
+                        holidayRecord.isHoliday = true;
+                    }
                 }
             } 
 
-            // Adjust records based on required hours (Scale to 8 representation if requiredHours != 8.0)
-            const record = empData.daily[dateStr];
-            if (record && !record.isVirtualWeekend && !record.isHoliday && record.status !== 'Leave') {
-                const isAbsent = record.status === 'Absent' || (record.totalHours === 0 && !record.punches);
-                if (!isAbsent && requiredHours !== 8.0 && record.totalHours > 0) {
-                     // We recalculate their exact hour ratio
-                     const totalWorked = (record.regularHours !== undefined ? record.regularHours : (record.totalHours || 0)) + (record.overtimeHours || 0);
-                     
-                     const ratio = totalWorked / requiredHours;
-                     const scaledTotal = ratio * 8.0;
-                     record.regularHours = Math.min(scaledTotal, 8.0);
-                     record.overtimeHours = scaledTotal > 8.0 ? Number((scaledTotal - 8.0).toFixed(2)) : 0;
-                     record.totalHours = scaledTotal;
+            // Add cross-residence indicator logic
+            const allDayProjs = employeeDailyProjects[empKey]?.[dateStr] || [];
+            if (allDayProjs.length > 0) {
+                let record = empData.daily[dateStr];
+                
+                // If they have no record here BUT have records in other residences -> create a "ghost" record
+                const hasWorkElsewhere = allDayProjs.some((p: string) => p !== proj);
+                
+                if (!record && hasWorkElsewhere) {
+                    empData.daily[dateStr] = {
+                        status: 'Elsewhere',
+                        hasOtherResidence: true,
+                        otherProjectNames: allDayProjs, // List all residences they were seen in
+                        date: dateStr,
+                        totalHours: 0,
+                        regularHours: 0,
+                        overtimeHours: 0
+                    };
+                } else if (record && allDayProjs.length > 1) {
+                    // Multiple residences including this one
+                    record.hasOtherResidence = true;
+                    record.otherProjectNames = allDayProjs.filter((p: string) => p !== proj);
                 }
             }
+            // NOTE: No re-calculation needed here. Records are pre-calculated at import time
+            // (via timesheet-utils.ts processPunches → calculateAttendanceStats) and stored correctly.
         });
+
+        // 3. Transfer marker 'T': mark days before/after employee's transfer date
+        // Transfer data is stored on the employee record in employeesMap
+        const empRecord = employeesMap[empKey];
+        const transferDate: string | undefined = empRecord?.transferDate; // e.g. '2026-04-02'
+        if (transferDate && empRecord?.status === 'Transferred') {
+          const [ty, tm] = transferDate.split('-').map(Number);
+          daysArray.forEach((dateStr) => {
+            const [dy, dm] = dateStr.split('-').map(Number);
+            const sameMonth = dy === ty && dm === tm; // only within the transfer month
+
+            if (sameMonth) {
+              // Days BEFORE transfer date in same month → mark T (employee was elsewhere)
+              if (dateStr < transferDate) {
+                if (!empData.daily[dateStr] || empData.daily[dateStr].status === 'Absent') {
+                  empData.daily[dateStr] = { status: 'Transferred', date: dateStr, isTransfer: true };
+                }
+              }
+              // Days AFTER (or equal to) transfer date, if no punch → mark T
+              if (dateStr >= transferDate) {
+                if (!empData.daily[dateStr] || empData.daily[dateStr].status === 'Absent') {
+                  empData.daily[dateStr] = { status: 'Transferred', date: dateStr, isTransfer: true };
+                }
+              }
+            } else if (dateStr > transferDate) {
+              // Future months after transfer: mark all days T
+              if (!empData.daily[dateStr] || empData.daily[dateStr].status === 'Absent') {
+                empData.daily[dateStr] = { status: 'Transferred', date: dateStr, isTransfer: true };
+              }
+            }
+          });
+          // Mark employee-level as transferred so we can filter later
+          empData.isTransferred = true;
+          empData.transferDate = transferDate;
+        }
 
         // 2. Accumulate Totals across all processed days
         Object.values(empData.daily).forEach((record: any) => {
+          if (record.isTransfer) return; // Don't count transferred days
           empData.totalRH += (record.regularHours !== undefined ? record.regularHours : (record.totalHours || 0));
           empData.totalOT += (record.overtimeHours || 0);
           
@@ -401,6 +538,21 @@ function TimesheetHistoryContent() {
             empData.absences += 1;
           }
         });
+      });
+    });
+
+    // Remove employees with Transferred status who have NO punches at all in this month
+    // (they shouldn't appear in months where they have zero presence)
+    Object.keys(grouped).forEach(proj => {
+      Object.keys(grouped[proj]).forEach(empId => {
+        const emp = grouped[proj][empId];
+        if (!emp.isTransferred) return;
+        const hasPunch = Object.values(emp.daily).some(
+          (r: any) => !r.isTransfer && r.status !== 'Absent' && (r.totalHours > 0 || r.regularHours > 0 || r.status === 'Present' || r.status === 'Weekend' || r.status === 'Holiday' || r.status === 'Leave')
+        );
+        if (!hasPunch) {
+          delete grouped[proj][empId];
+        }
       });
     });
 
@@ -425,10 +577,13 @@ function TimesheetHistoryContent() {
     const isAbsent = record.status === 'Absent';
     const isPresent = record.status === 'Present';
     const isLeave = record.status === 'Leave';
+    const isElsewhere = record.status === 'Elsewhere';
+    const isFuture = record.status === 'Future';
+    const isTransferred = record.status === 'Transferred' || record.isTransfer;
     const hasHours = (record.regularHours || 0) > 0 || (record.overtimeHours || 0) > 0 || (record.totalHours || 0) > 0;
     
     // Determine missing punches (only one punch logged)
-    const isMissingPunch = (!checkIn || !checkOut) && !isAbsent && !isLeave && !record.isVirtualWeekend;
+    const isMissingPunch = (!checkIn || !checkOut) && !isAbsent && !isLeave && !record.isVirtualWeekend && !isTransferred && !isElsewhere && !isFuture;
     
     const formatNumber = (num: number) => {
       if (!num) return '0';
@@ -438,7 +593,16 @@ function TimesheetHistoryContent() {
     let content: React.ReactNode = '-';
     let tooltip = '';
 
-    if (isLeave) {
+    if (isFuture) {
+      content = <span className="opacity-30 text-gray-400">-</span>;
+      tooltip = `Upcoming Date`;
+    } else if (isElsewhere) {
+      content = <span className="opacity-30">-</span>;
+      tooltip = `Work recorded in: ${record.otherProjectNames.join(', ')}`;
+    } else if (isTransferred) {
+      content = 'T';
+      tooltip = `Transferred`;
+    } else if (isLeave) {
       content = 'L'; // Indicates Leave
       tooltip = `Leave: ${record.leaveType || 'Approved'} \nNotes: ${record.reason || '-'}`;
     } else if (isAbsent) {
@@ -477,8 +641,8 @@ function TimesheetHistoryContent() {
         ? `Weekly Rest Allowance (8 hours) + Worked Overtime\nIn: ${checkIn || '-'} | Out: ${checkOut || '-'}`
         : `In: ${checkIn || '-'} | Out: ${checkOut || '-'}`;
     } else if (isMissingPunch) {
-      content = '?'; // Missing Punch Indicator
-      tooltip = `In: ${checkIn || 'Missed'} | Out: ${checkOut || 'Missed'}`;
+      content = '1'; // Missing Punch → show RH=1 per rule
+      tooltip = `Missing Punch\nIn: ${checkIn || 'Missed'} | Out: ${checkOut || 'Missed'}`;
     } else if (isPresent) {
       content = 'P'; // Present but no hours recorded yet (e.g. 0 hours shift but checked out)
       tooltip = `In: ${checkIn || '-'} | Out: ${checkOut || '-'}`;
@@ -486,8 +650,9 @@ function TimesheetHistoryContent() {
 
     return (
       <div 
-        title={tooltip}
-        className={`w-6 h-6 md:w-8 md:h-8 flex flex-col items-center justify-center rounded text-[10px] md:text-sm font-bold mx-auto cursor-help
+        title={tooltip + (record.hasOtherResidence ? `\n• Also seen in: ${record.otherProjectNames.join(', ')}` : '')}
+        className={`w-6 h-6 md:w-8 md:h-8 flex flex-col items-center justify-center rounded text-[10px] md:text-sm font-bold mx-auto cursor-help relative
+        ${isTransferred ? 'bg-gray-100 text-gray-500 dark:bg-gray-800/50 dark:text-gray-500 opacity-60' : ''}
         ${(isPresent && !isMissingPunch && !record.isVirtualWeekend && !record.isHoliday) || (hasHours && !record.isVirtualWeekend && !record.isHoliday) ? 'bg-green-100/50 text-green-800 dark:bg-green-900/30 dark:text-green-300' : ''}
         ${record.isHoliday ? 'bg-purple-100/60 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : ''}
         ${record.isVirtualWeekend && !record.isHoliday ? 'bg-sky-100/60 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300' : ''}
@@ -495,6 +660,9 @@ function TimesheetHistoryContent() {
         ${isLeave ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : ''}
         ${isMissingPunch && !isLeave && !record.isHoliday ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : ''}
       `}>
+        {record.hasOtherResidence && (
+          <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-gray-900 z-20" title={`Work also recorded in: ${record.otherProjectNames.join(', ')}`} />
+        )}
         {content}
       </div>
     );
@@ -530,19 +698,41 @@ function TimesheetHistoryContent() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <Select value={filterMonth} onValueChange={setFilterMonth}>
-          <SelectTrigger className="w-full sm:w-[200px]">
-            <CalendarDays className="w-4 h-4 mr-2 text-gray-500" />
-            <SelectValue placeholder="Select Month" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableMonths.map(month => (
-              <SelectItem key={month as string} value={month as string}>
-                {new Date((month as string) + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={goToPrevMonth}
+            disabled={availableMonths.indexOf(filterMonth) >= availableMonths.length - 1}
+            title={isAr ? "الشهر السابق" : "Previous Month"}
+          >
+            {isAr ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+          
+          <Select value={filterMonth} onValueChange={setFilterMonth}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <CalendarDays className="w-4 h-4 mr-2 text-gray-500" />
+              <SelectValue placeholder="Select Month" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMonths.map(month => (
+                <SelectItem key={month as string} value={month as string}>
+                  {new Date((month as string) + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={goToNextMonth}
+            disabled={availableMonths.indexOf(filterMonth) <= 0}
+            title={isAr ? "الشهر التالي" : "Next Month"}
+          >
+            {isAr ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       {loading ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Download, RefreshCw, Save, Database, Clock, Users, Loader2 } from "lucide-react";
+import { Download, RefreshCw, Save, Database, Clock, Users, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,12 +14,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useTimesheet } from "@/context/timesheet-context";
 import { EditAttendanceDialog } from "./edit-attendance-dialog";
 import { DailyAttendance } from "@/types/timesheet";
 import { useLanguage } from "@/context/language-context";
 import { useUsers } from "@/context/users-context";
 import { useResidences } from "@/context/residences-context";
+import { getFiscalMonthForDate, getFiscalMonthPeriod, getPreviousFiscalMonth } from "@/lib/fiscal-month-utils";
 
 export function TimesheetView() {
   const today = new Date();
@@ -38,16 +50,79 @@ export function TimesheetView() {
   const {
     rawPunches,
     processedAttendance,
-    projectToResidenceMap, // The mapping table
+    projectToResidenceMap,
     isFetching,
     isProcessing,
     fetchAndProcessAttendance,
-    syncProcessedDataToFirestore
+    syncProcessedDataToFirestore,
+    deleteAllAttendanceRecords,
   } = useTimesheet();
 
   const handleFetch = () => {
     if (!startDate || !endDate) return;
     fetchAndProcessAttendance(startDate, endDate);
+  };
+
+  const setRangeToday = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setStartDate(todayStr);
+    setEndDate(todayStr);
+  };
+
+  const setRangeYesterday = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().split('T')[0];
+    setStartDate(yStr);
+    setEndDate(yStr);
+  };
+
+  const setRangeThisMonth = () => {
+    const now = new Date();
+    const currentFiscalMonth = getFiscalMonthForDate(now);
+    const period = getFiscalMonthPeriod(currentFiscalMonth);
+    
+    // Format to YYYY-MM-DD for the input type="date"
+    const formatDate = (date: Date) => {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    setStartDate(formatDate(period.startDate));
+    setEndDate(formatDate(period.endDate));
+  };
+
+  const setRangeByMonth = (monthStr: string) => {
+    const period = getFiscalMonthPeriod(monthStr);
+    
+    const formatDate = (date: Date) => {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    setStartDate(formatDate(period.startDate));
+    setEndDate(formatDate(period.endDate));
+  };
+
+  const setRangeLastMonth = () => {
+    const now = new Date();
+    const currentFiscalMonth = getFiscalMonthForDate(now);
+    const prevMonthStr = getPreviousFiscalMonth(currentFiscalMonth);
+    const period = getFiscalMonthPeriod(prevMonthStr);
+
+    const formatDate = (date: Date) => {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    setStartDate(formatDate(period.startDate));
+    setEndDate(formatDate(period.endDate));
   };
 
   const getStatusBadge = (status: string) => {
@@ -70,6 +145,8 @@ export function TimesheetView() {
         return <Badge variant="secondary" className="bg-purple-500 text-white hover:bg-purple-600">{isAr ? "عطلة رسمية" : "Holiday"}</Badge>;
       case 'Reduced Hours':
         return <Badge variant="secondary" className="bg-sky-500 text-white hover:bg-sky-600">{isAr ? "دوام مخفض" : "Reduced Hours"}</Badge>;
+      case 'Transferred':
+        return <Badge variant="outline" className="text-muted-foreground border-dashed bg-muted/20">{isAr ? 'متحول (T)' : 'Transferred (T)'}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -122,6 +199,36 @@ export function TimesheetView() {
               {isAr ? "حفظ السجلات" : "Save Records"}
             </Button>
           )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="gap-2 border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isAr ? "حذف جميع السجلات" : "Delete All Records"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{isAr ? "هل أنت متأكد؟" : "Are you sure?"}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {isAr
+                    ? "سيتم حذف جميع سجلات الحضور المحفوظة في قاعدة البيانات نهائياً. يمكنك إعادة استيرادها بعد الحذف."
+                    : "This will permanently delete ALL attendance records from the database. You can re-import them afterwards."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{isAr ? "إلغاء" : "Cancel"}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700"
+                  onClick={deleteAllAttendanceRecords}
+                >
+                  {isAr ? "نعم، احذف الكل" : "Yes, Delete All"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" className="gap-2" disabled>
             <Download className="w-4 h-4" />
             {isAr ? "تصدير Excel" : "Export Excel"}
@@ -137,42 +244,73 @@ export function TimesheetView() {
             {isAr ? "اختر نطاق التاريخ لاستيراد البصمات مباشرة من قاعدة البيانات الرئيسية" : "Select date range to import punches directly from the main database"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-4 flex flex-col md:flex-row gap-4 items-end">
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <label htmlFor="start-date" className="text-sm font-medium">{isAr ? "من تاريخ" : "Start Date"}</label>
-            <Input
-              id="start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+        <CardContent className="pt-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground mr-1">{isAr ? "اختيارات سريعة:" : "Quick Select:"}</span>
+            <Button variant="outline" size="sm" className="h-7 text-xs rounded-full" onClick={setRangeToday}>{isAr ? "اليوم" : "Today"}</Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs rounded-full" onClick={setRangeYesterday}>{isAr ? "أمس" : "Yesterday"}</Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs rounded-full bg-blue-50 dark:bg-blue-950/30" onClick={setRangeThisMonth}>{isAr ? "هذا الشهر" : "This Month"}</Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs rounded-full" onClick={setRangeLastMonth}>{isAr ? "الشهر السابق" : "Last Month"}</Button>
           </div>
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <label htmlFor="end-date" className="text-sm font-medium">{isAr ? "إلى تاريخ" : "End Date"}</label>
-            <Input
-              id="end-date"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+          
+          <div className="flex flex-wrap items-center gap-2 pb-2">
+            <span className="text-xs font-medium text-muted-foreground mr-1">{isAr ? "الشهور المالية 2026:" : "2026 Fiscal Months:"}</span>
+            {[
+              { name: isAr ? "يناير" : "Jan", value: "2026-01" },
+              { name: isAr ? "فبراير" : "Feb", value: "2026-02" },
+              { name: isAr ? "مارس" : "Mar", value: "2026-03" },
+              { name: isAr ? "أبريل" : "Apr", value: "2026-04" },
+              { name: isAr ? "مايو" : "May", value: "2026-05" },
+            ].map(m => (
+              <Button 
+                key={m.value}
+                variant="ghost" 
+                size="sm" 
+                className="h-7 text-xs px-3 border border-dashed hover:border-solid rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                onClick={() => setRangeByMonth(m.value)}
+              >
+                {m.name}
+              </Button>
+            ))}
           </div>
-          <Button 
-            onClick={handleFetch} 
-            disabled={isFetching || !startDate || !endDate}
-            className="w-full md:w-auto"
-          >
-            {isFetching ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {isAr ? "جاري التحديث..." : "Updating..."}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {isAr ? "جلب ومعالجة البيانات" : "Fetch & Process Data"}
-              </>
-            )}
-          </Button>
+
+          <div className="flex flex-col md:flex-row gap-4 items-end pt-2 border-t border-dashed">
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <label htmlFor="start-date" className="text-sm font-medium">{isAr ? "من تاريخ" : "Start Date"}</label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <label htmlFor="end-date" className="text-sm font-medium">{isAr ? "إلى تاريخ" : "End Date"}</label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <Button 
+              onClick={handleFetch} 
+              disabled={isFetching || !startDate || !endDate}
+              className="w-full md:w-auto"
+            >
+              {isFetching ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {isAr ? "جاري التحديث..." : "Updating..."}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  {isAr ? "جلب ومعالجة البيانات" : "Fetch & Process Data"}
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

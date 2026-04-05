@@ -26,20 +26,22 @@ function LeavesManagementContent() {
   const [activeTab, setActiveTab] = useState('annual');
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
 
-  useEffect(() => {
+  const fetchData = async () => {
     setLoading(true);
-
     try {
       // By using getDocs with a limit, we save significantly on Database reads
       const qL = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
-      getDocs(qL).then((snap) => {
-        setAllData(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
-      });
+      const snap = await getDocs(qL);
+      setAllData(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   // Filter based on type
@@ -51,7 +53,8 @@ function LeavesManagementContent() {
   const handleDelete = async (id: string) => {
     if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا السجل؟' : 'Are you sure you want to delete this record?')) return;
     try {
-      await deleteDoc(doc(db, 'timesheetLeaves', id));
+      await deleteDoc(doc(db as any, 'timesheetLeaves', id));
+      setAllData(prev => prev.filter(item => item.docId !== id));
       toast({
         title: isAr ? 'تم الحذف' : 'Deleted',
         description: isAr ? 'تم حذف السجل بنجاح' : 'Record deleted successfully',
@@ -370,6 +373,7 @@ function LeavesManagementContent() {
           } 
           mode={selectedLeave ? 'edit' : 'add'}
           initialData={selectedLeave}
+          onSuccess={fetchData}
         />
       )}
     </div>

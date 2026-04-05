@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60; // Increase serverless timeout for biometric connection
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -24,16 +26,37 @@ export async function GET(req: NextRequest) {
     // The API uses Basic Auth
     const authHeader = `Basic ${Buffer.from("Housing:A1111111").toString("base64")}`;
 
-    const response = await fetch(apiUrl.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: authHeader,
-      },
-      cache: 'no-store'
-    });
+    // 60-second timeout to handle large date ranges from the biometric server
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    let response: Response;
+    try {
+      response = await fetch(apiUrl.toString(), {
+        method: "GET",
+        headers: { Authorization: authHeader },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      const isTimeout = fetchError.name === 'AbortError';
+      const isNetworkError = fetchError.cause?.code === 'ECONNREFUSED' || fetchError.cause?.code === 'ECONNRESET';
+      const msg = isTimeout
+        ? 'انتهت مهلة الاتصال بخادم البصمة (60 ثانية). تحقق من الشبكة.'
+        : isNetworkError
+        ? `فشل الاتصال بخادم البصمة (${fetchError.cause?.code}). تأكد أن الخادم 213.210.196.115:8585 يعمل ومتاح.`
+        : `خطأ في الشبكة: ${fetchError.message}`;
+      return NextResponse.json({ error: msg, code: fetchError.cause?.code || fetchError.name }, { status: 503 });
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return NextResponse.json({ error: `API responded with status ${response.status}`, details: await response.text() }, { status: response.status });
+      const details = await response.text().catch(() => '');
+      return NextResponse.json(
+        { error: `خادم البصمة أعاد خطأ ${response.status}`, details },
+        { status: response.status }
+      );
     }
 
     const textData = await response.text();
@@ -45,7 +68,6 @@ export async function GET(req: NextRequest) {
     }
 
     const parsedData = [];
-    const headers = lines[0].split(",");
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -66,6 +88,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: parsedData });
   } catch (error: any) {
+    console.error('[fetch-attendance] Unexpected error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
