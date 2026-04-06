@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useUsers } from '@/context/users-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,12 @@ export default function AccommodationOverviewPage() {
   const ctx = useAccommodation();
   const { workers, occupants, residences, contracts, invoices, transferRequests, companies, dashboardStats, refreshDashboardStats, autoArchiveOccupants } = ctx;
   const { currentUser } = useUsers();
+  const [quotaRetryUntil, setQuotaRetryUntil] = useState<number | null>(null);
   
   useEffect(() => {
     const init = async () => {
-        // Refresh if no stats, or stale (older than 30s), OR if we have stats but residence occupancy is empty while we have residences
-        const isStale = !dashboardStats || (Date.now() - dashboardStats.lastUpdated > 30000);
+        // Refresh if no stats, or stale (older than 30 minutes), OR if we have stats but residence occupancy is empty while we have residences
+        const isStale = !dashboardStats || (Date.now() - dashboardStats.lastUpdated > 1800000);
         const missingResidenceData = dashboardStats && residences.length > 0 && Object.keys(dashboardStats.residenceOccupancy).length === 0;
         
         if (isStale || missingResidenceData) {
@@ -34,6 +35,26 @@ export default function AccommodationOverviewPage() {
     };
     init();
   }, [refreshDashboardStats, dashboardStats, residences.length, autoArchiveOccupants, currentUser]);
+
+  // Detect Firestore quota backoff window set by refreshDashboardStats
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('ac_dashboard_retry_after');
+      if (!raw) {
+        setQuotaRetryUntil(null);
+        return;
+      }
+      const meta = JSON.parse(raw) as { retryAfter?: number };
+      if (!meta.retryAfter) {
+        setQuotaRetryUntil(null);
+        return;
+      }
+      setQuotaRetryUntil(meta.retryAfter);
+    } catch {
+      setQuotaRetryUntil(null);
+    }
+  }, [dashboardStats?.lastUpdated]);
   
   // Filter residences based on user role
   const filteredResidences = useMemo(() => {
@@ -257,9 +278,14 @@ export default function AccommodationOverviewPage() {
         </div>
         <div className="flex items-center gap-3">
           {!metrics.hasFullData && (
-             <Button variant="outline" size="sm" onClick={() => refreshDashboardStats()} className="gap-2">
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={() => refreshDashboardStats(true)}
+               className="gap-2"
+             >
                <RefreshCw className="h-4 w-4" />
-               تحديث القراءات
+               تحديث
              </Button>
           )}
           {/* 🚨 EMERGENCY MODE: Manual sync button (replaces real-time listeners) */}
@@ -272,6 +298,16 @@ export default function AccommodationOverviewPage() {
           <ManualSyncButton />
         </div>
       </div>
+
+      {quotaRetryUntil && quotaRetryUntil > Date.now() && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-sm">تم الوصول إلى حد الاستعلامات</AlertTitle>
+          <AlertDescription className="text-xs">
+            تم إيقاف تحديث لوحة التحكم مؤقتًا بسبب حد قراءات قاعدة البيانات. يمكن استخدام البيانات الحالية، ويُرجى المحاولة مرة أخرى بعد بضع دقائق.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">

@@ -229,7 +229,7 @@ type AccommodationContextValue = {
   workers: Worker[];
   occupants: Occupant[];
   dashboardStats: DashboardStats | null; // NEW: Lightweight stats
-  refreshDashboardStats: () => Promise<DashboardStats>; // NEW: Fetch stats efficiently
+  refreshDashboardStats: (forceRefresh?: boolean) => Promise<DashboardStats>; // NEW: Fetch stats efficiently (with optional cache bypass)
   autoArchiveOccupants: () => Promise<void>; // NEW: Auto cleanup
   accommodationHistory: AccommodationHistory[]; // NEW: Complete history of all movements
   transferRequests: TransferRequest[];
@@ -451,6 +451,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const invoicesUnsubRef = useRef<Unsubscribe | null>(null);
   const lastMutationTimeRef = useRef<number>(0); // Track last mutation time to prevent stale fetches
   const workersRef = useRef<Worker[]>([]);
+  const isRefreshingRef = useRef(false); // Prevent concurrent dashboard refreshes
 
   // Keep workersRef in sync
   useEffect(() => {
@@ -4125,27 +4126,101 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return { ok: true, results };
   }
 
-  // 🆕 Efficient Dashboard Stats Fetching
-  const refreshDashboardStats = useCallback(async () => {
-    if (!db) {
-      console.warn('⚠️ [Dashboard] DB not available');
-      return {
-        totalWorkers: 0,
-        assignedWorkers: 0,
-        unassignedWorkers: 0,
-        occupancyRate: 0,
-        activeContracts: 0,
-        totalCompanies: 0,
-        pendingTransfers: 0,
-        unpaidInvoices: 0,
-        overdueInvoices: 0, // NEW
-        residenceOccupancy: {},
-        lastUpdated: Date.now()
-      };
+  // 🆕 Efficient Dashboard Stats Fetching (with localStorage cache, concurrency guard, and backoff)
+  const refreshDashboardStats = useCallback(async (forceRefresh: boolean = false) => {
+    const CACHE_KEY = 'ac_dashboard_stats';
+    const CACHE_META_KEY = 'ac_dashboard_stats_meta';
+    const RETRY_META_KEY = 'ac_dashboard_retry_after';
+    const TTL_MS = 30 * 60 * 1000; // 30 minutes
+    const RETRY_BLOCK_MS = 10 * 60 * 1000; // 10 minutes block after quota error
+
+    const DEFAULT_STATS: DashboardStats = {
+      totalWorkers: 0,
+      assignedWorkers: 0,
+      unassignedWorkers: 0,
+      occupancyRate: 0,
+      activeContracts: 0,
+      totalCompanies: 0,
+      pendingTransfers: 0,
+      unpaidInvoices: 0,
+      overdueInvoices: 0,
+      residenceOccupancy: {},
+      lastUpdated: Date.now()
+    };
+
+    // 0. Concurrency guard: if a refresh is already in-flight, just
+    // return the latest in-memory stats (or cached/default) without
+    // firing another round of Firestore requests.
+    if (isRefreshingRef.current) {
+      console.log('📊 [Dashboard] Refresh already in progress, returning cached stats');
+      if (dashboardStats) return dashboardStats;
+
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedRaw = window.localStorage.getItem(CACHE_KEY);
+          if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw) as DashboardStats;
+            return cached;
+          }
+        } catch {
+          // ignore cache read errors
+        }
+      }
+
+      return DEFAULT_STATS;
     }
 
-    try {
-      console.log('📊 [Dashboard] Refreshing stats...');
+    // 1. Check if we are currently in a retry-after window due to
+    // previous quota (429 / resource-exhausted) errors.
+    if (typeof window !== 'undefined') {
+      try {
+        const retryRaw = window.localStorage.getItem(RETRY_META_KEY);
+        if (retryRaw) {
+          const meta = JSON.parse(retryRaw) as { retryAfter?: number };
+          if (meta.retryAfter && Date.now() < meta.retryAfter) {
+            console.warn('⏳ [Dashboard] Quota retry-after active, skipping Firestore refresh');
+            if (dashboardStats) return dashboardStats;
+
+            const cachedRaw = window.localStorage.getItem(CACHE_KEY);
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw) as DashboardStats;
+              return cached;
+            }
+            return DEFAULT_STATS;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ [Dashboard] Failed to read retry-after meta', e);
+      }
+    }
+
+    // 2. Try localStorage cache first (browser only) unless forced refresh
+    if (typeof window !== 'undefined' && !forceRefresh) {
+      try {
+        const metaRaw = window.localStorage.getItem(CACHE_META_KEY);
+        const dataRaw = window.localStorage.getItem(CACHE_KEY);
+        if (metaRaw && dataRaw) {
+          const meta = JSON.parse(metaRaw) as { timestamp?: number };
+          const cached = JSON.parse(dataRaw) as DashboardStats;
+          if (meta.timestamp && Date.now() - meta.timestamp < TTL_MS) {
+            console.log('📊 [Dashboard] Using cached dashboard stats');
+            setDashboardStats(cached);
+            return cached;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ [Dashboard] Failed to read cache, falling back to Firestore', e);
+      }
+    }
+
+    if (!db) {
+      console.warn('⚠️ [Dashboard] DB not available');
+      return DEFAULT_STATS;
+    }
+
+    // Helper to perform a single Firestore fetch of dashboard stats
+    const fetchOnce = async (): Promise<DashboardStats> => {
+      console.log('📊 [Dashboard] Refreshing stats from Firestore...');
 
       // 1. Global counts
       const workersCount = (await getCountFromServer(collection(db, 'workers'))).data().count;
@@ -4178,14 +4253,20 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       // 6. Occupancy by Residence
       const residenceOccupancy: Record<string, number> = {};
       const targetResidences = residences.length > 0 ? residences : [];
+      const targetResidenceIds = new Set(targetResidences.map(r => r.id));
 
-      await Promise.all(targetResidences.map(async (res) => {
-        if (!db) return;
-        const count = (await getCountFromServer(
-          query(collection(db, 'occupants'), where('residenceId', '==', res.id), where('until', '==', null))
-        )).data().count;
-        residenceOccupancy[res.id] = count;
-      }));
+      // Instead of N aggregation queries (one per residence), fetch all active
+      // occupants once and aggregate counts by residenceId in memory.
+      const activeOccSnapshot = await getDocs(
+        query(collection(db, 'occupants'), where('until', '==', null))
+      );
+
+      activeOccSnapshot.forEach(docSnap => {
+        const data = docSnap.data() as { residenceId?: string };
+        const resId = data.residenceId;
+        if (!resId || !targetResidenceIds.has(resId)) return;
+        residenceOccupancy[resId] = (residenceOccupancy[resId] || 0) + 1;
+      });
 
       // Calculate total capacity for occupancy rate
       let totalCapacity = 0;
@@ -4226,27 +4307,79 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         lastUpdated: Date.now()
       };
 
-      setDashboardStats(stats);
       return stats;
+    };
 
-    } catch (error) {
-      console.error('❌ [Dashboard] Failed to refresh stats:', error);
-      // Do not return null to match return type Promise<DashboardStats>
-      return {
-        totalWorkers: 0,
-        assignedWorkers: 0,
-        unassignedWorkers: 0,
-        occupancyRate: 0,
-        activeContracts: 0,
-        totalCompanies: 0,
-        pendingTransfers: 0,
-        unpaidInvoices: 0,
-        overdueInvoices: 0,
-        residenceOccupancy: {},
-        lastUpdated: Date.now()
-      };
+    isRefreshingRef.current = true;
+    try {
+      const MAX_ATTEMPTS = 3;
+      let attempt = 0;
+      let lastError: any = null;
+
+      while (attempt < MAX_ATTEMPTS) {
+        try {
+          const stats = await fetchOnce();
+
+          setDashboardStats(stats);
+          // Persist to localStorage cache for faster subsequent loads
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(CACHE_KEY, JSON.stringify(stats));
+              window.localStorage.setItem(CACHE_META_KEY, JSON.stringify({ timestamp: Date.now() }));
+              // Clear any previous retry-after block on success
+              window.localStorage.removeItem(RETRY_META_KEY);
+            } catch (e) {
+              console.warn('⚠️ [Dashboard] Failed to write cache', e);
+            }
+          }
+
+          return stats;
+        } catch (error: any) {
+          lastError = error;
+          const code = error?.code ?? error?.status;
+
+          // Quota / rate limit: resource-exhausted or explicit 429 status
+          if (code === 'resource-exhausted' || code === 429 || code === 'quota-exceeded' || code === 'too-many-requests') {
+            console.error('⛔ [Dashboard] Quota exceeded, setting retry-after and returning cached stats');
+            if (typeof window !== 'undefined') {
+              try {
+                window.localStorage.setItem(RETRY_META_KEY, JSON.stringify({ retryAfter: Date.now() + RETRY_BLOCK_MS }));
+              } catch (e) {
+                console.warn('⚠️ [Dashboard] Failed to write retry-after meta', e);
+              }
+            }
+
+            if (dashboardStats) return dashboardStats;
+            if (typeof window !== 'undefined') {
+              try {
+                const cachedRaw = window.localStorage.getItem(CACHE_KEY);
+                if (cachedRaw) {
+                  return JSON.parse(cachedRaw) as DashboardStats;
+                }
+              } catch {
+                // ignore
+              }
+            }
+            return DEFAULT_STATS;
+          }
+
+          attempt += 1;
+          if (attempt >= MAX_ATTEMPTS) {
+            break;
+          }
+
+          const delayMs = 500 * Math.pow(2, attempt - 1);
+          console.warn(`⚠️ [Dashboard] Attempt ${attempt} failed, retrying in ${delayMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+
+      console.error('❌ [Dashboard] Failed after retries:', lastError);
+      return DEFAULT_STATS;
+    } finally {
+      isRefreshingRef.current = false;
     }
-  }, [db, residences]);
+  }, [db, residences, dashboardStats]);
 
   // 🆕 Automatic Archiving of Checked-out Occupants
   const autoArchiveOccupants = useCallback(async () => {
