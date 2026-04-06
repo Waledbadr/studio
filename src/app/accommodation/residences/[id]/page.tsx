@@ -158,13 +158,17 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
               <option key={r.id} value={r.id} disabled={r.occupied}>{r.name} {r.occupied ? '(Occupied)' : ''}</option>
             ))}
             {/* If buildings/floors exist, show their rooms grouped */}
-            {(!(residence?.rooms && residence.rooms.length) && (residence as any)?.buildings) && ((residence as any).buildings as any[]).map((b: any) => (
-              <optgroup key={b.id} label={b.name || 'Building'}>
-                {((b.floors as any[]) || []).flatMap((f: any) => (f.rooms || [])).map((r: any) => (
-                  <option key={r.id} value={r.id} disabled={r.occupied}>{`${b.name || ''} / ${r.name} ${r.occupied ? '(Occupied)' : ''}`}</option>
-                ))}
-              </optgroup>
-            ))}
+            {(!(residence?.rooms && residence.rooms.length) && (residence as any)?.buildings) && ((residence as any).buildings as any[])
+              .filter(Boolean)
+              .map((b: any) => (
+                <optgroup key={b.id} label={b.name || 'Building'}>
+                  {(((b?.floors as any[]) || [])
+                    .filter(Boolean)
+                    .flatMap((f: any) => (f?.rooms || []))).map((r: any) => (
+                      <option key={r.id} value={r.id} disabled={r.occupied}>{`${b.name || ''} / ${r.name} ${r.occupied ? '(Occupied)' : ''}`}</option>
+                    ))}
+                </optgroup>
+              ))}
           </select>
             <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder={dict.tenantNamePlaceholder || 'Tenant name'} className="border rounded px-3 py-2 flex-1" />
           <button onClick={handleAssign} disabled={submitting} className="rounded-md bg-amber-600 text-white px-4 py-2">{submitting ? (dict.working || 'Working...') : (dict.assign || 'Assign')}</button>
@@ -203,7 +207,12 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
                     </li>
                   ))
                 ) : (
-                  residence.buildings!.flatMap(b => b.floors || []).flatMap(f => f.rooms || []).map(r => (
+                  (residence.buildings || [])
+                    .filter(Boolean)
+                    .flatMap(b => (b.floors || []))
+                    .filter(Boolean)
+                    .flatMap(f => (f.rooms || []))
+                    .map(r => (
                     <li key={r.id} className="flex flex-col gap-2 border rounded px-3 py-2 bg-white">
                       <div className="flex items-center justify-between">
                         <div>

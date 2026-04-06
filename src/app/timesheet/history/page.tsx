@@ -13,6 +13,32 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { TimesheetProvider, useTimesheet } from '@/context/timesheet-context';
 import { getFiscalMonthPeriod, getFiscalMonthForDate } from '@/lib/fiscal-month-utils';
+import { HousingEmployee, HousingEmployeesProvider } from '@/context/housing-employees-context';
+import { EmployeeProfileSheet } from '@/components/timesheet/employees/employee-profile-sheet';
+
+// Custom profession ordering for Monthly Archive (Arabic labels)
+const PROFESSION_ORDER: Record<string, number> = {
+  'إداري': 1,
+  'مسؤول سكن': 2,
+  'مدخل بيانات': 3,
+  'مشرف سكن': 4,
+  'تسكين عمالة': 5,
+  'فني صيانة': 6,
+  'فني تكييف': 7,
+  'سائق': 8,
+  'سباك': 9,
+  'بناء': 10,
+  'حداد': 11,
+  'كهربائي': 12,
+  'عامل': 13,
+  'عامل نظافة': 14,
+};
+
+const getProfessionRank = (profession?: string) => {
+  if (!profession) return 999;
+  const key = profession.trim();
+  return PROFESSION_ORDER[key] ?? 999;
+};
 
 function TimesheetHistoryContent() {
   const { locale } = useLanguage();
@@ -26,6 +52,11 @@ function TimesheetHistoryContent() {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Employee profile sheet state (for quick Add Leave / Permission)
+  const [selectedEmployee, setSelectedEmployee] = useState<HousingEmployee | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileDefaultDate, setProfileDefaultDate] = useState<string | null>(null);
 
   const goToNextMonth = () => {
     const currentIndex = availableMonths.indexOf(filterMonth);
@@ -318,6 +349,9 @@ function TimesheetHistoryContent() {
       });
     });
 
+    // Get today formatted as YYYY-MM-DD in local time to prevent processing future Fridays
+    const todayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
     // Post-Process: Friday Weekly Rest (بدل الراحة الاسبوعية) and Totals
     Object.keys(grouped).forEach(proj => {
       Object.keys(grouped[proj]).forEach(empKey => {
@@ -344,6 +378,7 @@ function TimesheetHistoryContent() {
 
         // 1. Process Fridays based on Thursday presence
         daysArray.forEach((dateStr, idx) => {
+          if (dateStr > todayStr) return; // Do not process future Fridays
           const dateObj = new Date(dateStr);
           if (dateObj.getDay() === 5) { // Friday
             const prevDateStr = daysArray[idx - 1]; // Thursday
@@ -399,6 +434,8 @@ function TimesheetHistoryContent() {
 
         // 1.5 Process Events & Holidays (Added logic)
         daysArray.forEach((dateStr) => {
+            if (dateStr > todayStr) return; // Do not process future Events/Holidays
+
             const dateObj = new Date(dateStr);
             const isThursday = dateObj.getDay() === 4;
             const activeEvent = (timesheetEvents || []).find(e => dateStr >= e.startDate && dateStr <= e.endDate);
@@ -559,7 +596,15 @@ function TimesheetHistoryContent() {
     return grouped;
   }, [records, leaves, filterMonth, searchTerm, currentUser, residences, employeesMap, projectToResidenceMap, daysArray, timesheetEvents, employeeSchedules]);
 
-  const renderCell = (record: any) => {
+  const handleCellDoubleClick = (empId: string, dateStr: string) => {
+    const emp = employeesMap[empId];
+    if (!emp) return;
+    setSelectedEmployee(emp as HousingEmployee);
+    setProfileDefaultDate(dateStr);
+    setProfileOpen(true);
+  };
+
+  const renderCell = (record: any, empId: string, dateStr: string) => {
     if (!record) return <div className="text-gray-200 dark:text-gray-700">-</div>;
     
     let checkIn = record.checkIn;
@@ -659,7 +704,9 @@ function TimesheetHistoryContent() {
         ${isAbsent && !record.isHoliday ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ''}
         ${isLeave ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : ''}
         ${isMissingPunch && !isLeave && !record.isHoliday ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : ''}
-      `}>
+      `}
+        onDoubleClick={() => handleCellDoubleClick(empId, dateStr)}
+      >
         {record.hasOtherResidence && (
           <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-gray-900 z-20" title={`Work also recorded in: ${record.otherProjectNames.join(', ')}`} />
         )}
@@ -782,7 +829,12 @@ function TimesheetHistoryContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                  {Object.entries(employees).sort(([,a], [,b]) => a.name.localeCompare(b.name)).map(([empId, empData]) => (
+                  {Object.entries(employees).sort(([,a], [,b]) => {
+                    const rankA = getProfessionRank(a.profession);
+                    const rankB = getProfessionRank(b.profession);
+                    if (rankA !== rankB) return rankA - rankB;
+                    return a.name.localeCompare(b.name);
+                  }).map(([empId, empData]) => (
                     <tr key={empId} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 bg-white dark:bg-gray-950">
                       <td className="px-4 py-2 border-r sticky left-0 bg-white dark:bg-gray-950 z-10 shadow-[1px_0_0_0_rgba(0,0,0,0.05)] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)]">
                         <div className="flex items-center gap-2">
@@ -803,7 +855,7 @@ function TimesheetHistoryContent() {
                         const isWeekend = new Date(dateStr).getDay() === 5; // Friday
                         return (
                         <td key={dateStr} className={`px-0.5 py-1 border-r text-center align-middle ${isWeekend ? 'bg-gray-50/50 dark:bg-gray-800/20' : ''}`}>
-                          {renderCell(empData.daily[dateStr])}
+                          {renderCell(empData.daily[dateStr], empId, dateStr)}
                         </td>
                         );
                       })}
@@ -824,14 +876,28 @@ function TimesheetHistoryContent() {
           </Card>
         ))
       )}
+      <EmployeeProfileSheet 
+        open={profileOpen && !!selectedEmployee}
+        onOpenChange={(open) => {
+          setProfileOpen(open);
+          if (!open) {
+            setSelectedEmployee(null);
+            setProfileDefaultDate(null);
+          }
+        }}
+        employee={selectedEmployee}
+        defaultDate={profileDefaultDate}
+      />
     </div>
   );
 }
 
 export default function TimesheetHistoryPage() {
   return (
-    <TimesheetProvider>
-      <TimesheetHistoryContent />
-    </TimesheetProvider>
+    <HousingEmployeesProvider>
+      <TimesheetProvider>
+        <TimesheetHistoryContent />
+      </TimesheetProvider>
+    </HousingEmployeesProvider>
   );
 }

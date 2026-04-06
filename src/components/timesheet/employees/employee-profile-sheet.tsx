@@ -17,9 +17,11 @@ interface EmployeeProfileSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employee: HousingEmployee | null;
+  /** Optional default date coming from Monthly Archive when opening via shortcut */
+  defaultDate?: string | null;
 }
 
-export function EmployeeProfileSheet({ open, onOpenChange, employee }: EmployeeProfileSheetProps) {
+export function EmployeeProfileSheet({ open, onOpenChange, employee, defaultDate }: EmployeeProfileSheetProps) {
   const { updateEmployee } = useHousingEmployees();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -46,10 +48,25 @@ export function EmployeeProfileSheet({ open, onOpenChange, employee }: EmployeeP
     reason: ''
   });
 
-  // Reset local state when employee changes
+  // Reset local state when employee or defaultDate changes
   useEffect(() => {
     if (employee) {
       setGeneralData(employee);
+      setShowLeaveForm(false);
+      setShowTransferForm(false);
+
+      // If opened from Monthly Archive with a specific date, pre-fill leave form for that day
+      if (defaultDate) {
+        setTab('leaves');
+        setShowLeaveForm(true);
+        setLeaveData(prev => ({
+          ...prev,
+          startDate: defaultDate,
+          endDate: defaultDate
+        }));
+      } else {
+        setLeaveData({ type: 'Annual', startDate: '', endDate: '', reason: '' });
+      }
       
       // Fetch Leaves
       const qLeaves = query(
@@ -76,7 +93,7 @@ export function EmployeeProfileSheet({ open, onOpenChange, employee }: EmployeeP
         unsubTransfers();
       };
     }
-  }, [employee]);
+  }, [employee, defaultDate]);
 
   const handleGeneralChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
