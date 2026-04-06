@@ -267,6 +267,25 @@ function TimesheetHistoryContent() {
 
     Object.entries(empRawGroup).forEach(([empKey, data]) => {
       const proj = data.primaryRes;
+
+      // For non-admin users, only include employees whose primary residence
+      // is mapped to one of the user's assigned residences. Prefer the
+      // explicit projectToResidenceMap; fall back to name comparison only
+      // if no mapping exists.
+      if (currentUser?.role !== 'Admin') {
+        const mappedResidenceId = projectToResidenceMap[proj];
+        if (mappedResidenceId) {
+          if (!userResidences.includes(mappedResidenceId)) {
+            return;
+          }
+        } else {
+          const projLower = (proj || '').toLowerCase();
+          if (!projLower || !allowedProjectNames.includes(projLower)) {
+            return;
+          }
+        }
+      }
+
       const currentUserData = employeesMap[empKey] || {};
 
       if (!grouped[proj]) grouped[proj] = {};
