@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 declare const require: any;
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function getProjectIdFallback(): string | undefined {

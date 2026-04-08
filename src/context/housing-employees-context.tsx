@@ -1,18 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  doc,
-  setDoc,
-  updateDoc, 
-  addDoc,
-  serverTimestamp 
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { listDocuments, updateDocument } from '@/lib/db-api';
 import { useUsers } from '@/context/users-context';
 import { useToast } from '@/hooks/use-toast';
 
@@ -52,13 +41,8 @@ export function HousingEmployeesProvider({ children }: { children: ReactNode }) 
 
     const fetchEmployees = async () => {
       try {
-        const employeesRef = collection(db as any, 'housingEmployees');
-        const q = query(employeesRef, orderBy('createdAt', 'desc'));
-        
-        const snapshot = await getDocs(q);
-        const emps: HousingEmployee[] = [];
-        snapshot.forEach((doc) => {
-          emps.push({ id: doc.id, ...doc.data() } as HousingEmployee);
+        const emps = await listDocuments<HousingEmployee>('housingEmployees', {
+          orderBy: { field: 'createdAt', direction: 'DESC' },
         });
         setEmployees(emps);
         setLoading(false);
@@ -78,12 +62,21 @@ export function HousingEmployeesProvider({ children }: { children: ReactNode }) 
 
   const addEmployee = async (data: Omit<HousingEmployee, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const employeesRef = collection(db, 'housingEmployees');
-      await addDoc(employeesRef, {
+      const now = new Date().toISOString();
+      const id =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+      const payload: HousingEmployee = {
         ...data,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+        id,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await updateDocument('housingEmployees', id, payload as any);
+      setEmployees((prev) => [payload, ...prev]);
       toast({
         title: 'Success',
         description: 'Employee added successfully.',
@@ -101,11 +94,16 @@ export function HousingEmployeesProvider({ children }: { children: ReactNode }) 
 
   const updateEmployee = async (id: string, data: Partial<HousingEmployee>) => {
     try {
-      const empRef = doc(db, 'housingEmployees', id);
-      await updateDoc(empRef, {
+      const now = new Date().toISOString();
+
+      await updateDocument('housingEmployees', id, {
         ...data,
-        updatedAt: serverTimestamp(),
-      });
+        updatedAt: now,
+      } as any);
+
+      setEmployees((prev) =>
+        prev.map((emp) => (emp.id === id ? { ...emp, ...data, updatedAt: now } : emp)),
+      );
       toast({
         title: 'Success',
         description: 'Employee updated successfully.',

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getD1Db } from '@/lib/firebase-admin';
 import { DEVICE_PROJECT_MAP } from '@/constants/timesheet-devices';
 
 export async function GET() {
   try {
-    const adminDb = getAdminDb();
+    const adminDb = getD1Db();
     if (!adminDb) {
-      return NextResponse.json({ error: 'Admin DB not initialized' }, { status: 500 });
+      return NextResponse.json({ error: 'D1 database not initialized' }, { status: 500 });
     }
 
     const ref = adminDb.collection('residences').doc('timesheetSettings');

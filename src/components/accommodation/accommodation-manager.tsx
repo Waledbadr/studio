@@ -44,8 +44,7 @@ import { AddWorkerDialog } from "./add-worker-dialog";
 import { WorkerHistoryDialog } from "./worker-history-dialog";
 import { RoomHistoryDialog } from "./room-history-dialog";
 
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { getUserLanguage, getLocalizedMessage, ERROR_MESSAGES, UI_TEXT } from '@/lib/i18n-helpers';
 

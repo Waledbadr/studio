@@ -2,9 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDoc, getDocs, query, where, writeBatch, increment, runTransaction, orderBy, limit, getDocFromServer } from "firebase/firestore";
-import { onAuthStateChanged } from 'firebase/auth';
 import type { InventoryItem, InventoryTransaction } from './inventory-context';
 import { useResidences } from './residences-context';
 import { useUsers } from './users-context';
@@ -128,12 +127,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-    // Defer subscription until signed-in user is available
-    if (auth && !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
-    
     setLoading(true);
 
     const ordersCollection = collection(db, "orders");
@@ -148,23 +141,14 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [toast]);
 
-  // Ensure we auto-subscribe once the user signs in (in case pages call before auth)
   useEffect(() => {
-    if (!auth) return; // local mode; page will call explicitly
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) {
-        loadOrders();
-      } else {
-        // Signed out: stop listener and reset state
-        if (unsubscribeRef.current) {
-          try { unsubscribeRef.current(); } catch {}
-          unsubscribeRef.current = null;
-        }
-        setOrders([]);
-        setLoading(false);
+    loadOrders();
+    return () => {
+      if (unsubscribeRef.current) {
+        try { unsubscribeRef.current(); } catch {}
+        unsubscribeRef.current = null;
       }
-    });
-    return () => unsub();
+    };
   }, [loadOrders]);
   
   const generateNewOrderId = async (): Promise<string> => {
@@ -197,22 +181,16 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     
     setLoading(true);
     try {
-      // Guard: ensure the requester on the document matches the signed-in Firebase Auth UID
-      // This avoids Firestore rule failures when users docs don't use auth.uid as ID.
-      const authUid = auth?.currentUser?.uid;
+      // Guard: ensure the requester on the document matches the signed-in session user ID.
+      const authUid = currentUser?.id;
       if (!authUid) {
         toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
         return null;
       }
-      const requesterEmail = auth?.currentUser?.email || undefined;
-      // Prefer UsersContext name, fallback to Auth displayName, then email
-      const requesterName = (currentUser?.id === authUid ? currentUser?.name : (users?.find(u => u.id === authUid)?.name))
-        || auth?.currentUser?.displayName
-        || requesterEmail
-        || '—';
+      const requesterEmail = currentUser?.email || undefined;
+      const requesterName = currentUser?.name || users?.find(u => u.id === authUid)?.name || requesterEmail || '—';
       const safeOrderData: NewOrderPayload = {
         ...orderData,
-        // Force requestedById to the real auth uid to satisfy security rules
         requestedById: authUid,
       };
 
@@ -336,7 +314,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
             }
       updatePayload.approvedById = approverId;
       const approver = (users?.find(u => u.id === approverId)) || (currentUser?.id === approverId ? currentUser : null);
-      updatePayload.approvedByName = approver?.name || auth?.currentUser?.displayName || undefined;
+      updatePayload.approvedByName = approver?.name || undefined;
       
       // Add attachment data if provided
       if (attachmentData) {

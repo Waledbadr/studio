@@ -1,15 +1,12 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { 
+import {
   initializeFirestore,
   type Firestore,
   connectFirestoreEmulator,
   setLogLevel,
-  persistentLocalCache,
-  persistentMultipleTabManager,
   memoryLocalCache,
 } from "firebase/firestore";
-import { getAuth, type Auth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
@@ -25,7 +22,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
-let auth: Auth | null = null;
+const auth = null;
 let storage: FirebaseStorage | null = null;
 
 // Check if Firebase config is properly set (require only essential keys)
@@ -35,10 +32,14 @@ const isFirebaseConfigured = requiredKeys.every((k) => {
   return v && typeof v === 'string' && v.trim().length > 0 && !v.includes('your_') && v !== 'your_api_key_here';
 });
 
+// In the cloudflare branch we never want to talk to Firebase
+// even if Firebase env vars are present for other branches.
+const disableFirebase = true;
+
 // A promise that resolves when auth state is ready (client-only)
 let authReady: Promise<void> = Promise.resolve();
 
-if (isFirebaseConfigured) {
+if (isFirebaseConfigured && !disableFirebase) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
@@ -73,24 +74,11 @@ if (isFirebaseConfigured) {
     const useMemoryCache = (process.env.NEXT_PUBLIC_FIRESTORE_CACHE || '').toLowerCase() === 'memory'
       || process.env.NODE_ENV !== 'production';
 
-    // Initialize Firestore with robust local cache and network settings
-    try {
-      db = initializeFirestore(app, {
-        localCache: useMemoryCache
-          ? memoryLocalCache()
-          : persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-        ignoreUndefinedProperties: true,
-        experimentalForceLongPolling: useMemoryCache, // avoid primary lease contention in dev
-        experimentalAutoDetectLongPolling: !useMemoryCache,
-      } as any);
-    } catch (e) {
-      // Fallback (e.g., Safari Private Mode)
-      db = initializeFirestore(app, {
-        localCache: memoryLocalCache(),
-        ignoreUndefinedProperties: true,
-        experimentalForceLongPolling: true,
-      } as any);
-    }
+    // Initialize Firestore with memory cache only because Workers and edge runtimes do not support IndexedDB.
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      ignoreUndefinedProperties: true,
+    } as any);
 
     // If an emulator host is provided via env, connect the client to it so
     // local development doesn't try to reach production Firestore.
@@ -126,23 +114,7 @@ if (isFirebaseConfigured) {
 
     storage = getStorage(app);
 
-    // Initialize Auth and ensure auth state is hydrated on the client
-    auth = getAuth(app);
-
-    if (typeof window !== 'undefined') {
-      // Persist auth locally so tabs share state
-      setPersistence(auth, browserLocalPersistence).catch(() => {});
-
-      // Prefer device language for OAuth & email templates
-      try { auth.useDeviceLanguage(); } catch {}
-
-      authReady = new Promise<void>((resolve) => {
-        const unsub = onAuthStateChanged(auth!, () => {
-          unsub();
-          resolve();
-        });
-      });
-    }
+    // Firebase Auth is not used in the Cloudflare/D1 branch; session auth is handled by server-side JWT cookies.
 
     if (process.env.NODE_ENV !== 'production') {
       const key = String(firebaseConfig.apiKey || '');
@@ -155,7 +127,11 @@ if (isFirebaseConfigured) {
     console.error("Firebase initialization error. Make sure you have set up your .env file correctly.", e);
   }
 } else {
-  console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
+  if (disableFirebase) {
+    console.warn("Firebase explicitly disabled via NEXT_PUBLIC_DISABLE_FIREBASE. Cloudflare/D1 branch will not use Firestore.");
+  } else {
+    console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
+  }
 }
 
 export { app, db, auth, storage, authReady };

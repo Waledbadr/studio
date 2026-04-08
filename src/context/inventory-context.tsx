@@ -2,11 +2,10 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Unsubscribe, getDocs, writeBatch, query, where, getDoc, updateDoc, runTransaction, increment, Timestamp, orderBy, addDoc, DocumentReference, DocumentData, DocumentSnapshot, collectionGroup, limit } from "firebase/firestore";
 import type { Firestore } from 'firebase/firestore';
 import { useUsers } from './users-context';
-import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from './users-context';
 import { useResidences } from './residences-context';
 import { useNotifications } from './notifications-context';
@@ -382,23 +381,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { users, currentUser } = useUsers();
 
 
-  const loadInventory = useCallback(() => {
-     if (isLoaded.current) return;
-     if (!db) {
-        console.error(firebaseErrorMessage);
-        toast({ title: "Configuration Error", description: firebaseErrorMessage, variant: "destructive" });
+    const loadInventory = useCallback(() => {
+      if (isLoaded.current) return;
+      if (!db) {
+        // In the cloudflare/D1 branch Firebase is intentionally disabled.
+        // Treat missing db as "inventory not available" instead of a hard error.
+        console.warn("InventoryContext: Firebase db is null; skipping Firestore inventory listeners in this environment.");
         setLoading(false);
         return;
-    }
-    
-    // Defer subscribing until signed in
-    if (auth && !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
+     }
 
-    isLoaded.current = true;
-    setLoading(true);
+     isLoaded.current = true;
+     setLoading(true);
 
   inventoryUnsubscribeRef.current = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const inventoryData = snapshot.docs.map(doc => {
@@ -466,30 +460,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   useEffect(() => {
     loadInventory();
-    const unsub = auth ? onAuthStateChanged(auth, (u) => {
-      if (u) {
-        if (!isLoaded.current) loadInventory();
-      } else {
-        // Signed out: unsubscribe and reset
-        if (inventoryUnsubscribeRef.current) { try { inventoryUnsubscribeRef.current(); } catch {} inventoryUnsubscribeRef.current = null; }
-        if (categoriesUnsubscribeRef.current) { try { categoriesUnsubscribeRef.current(); } catch {} categoriesUnsubscribeRef.current = null; }
-        if (transfersUnsubscribeRef.current) { try { transfersUnsubscribeRef.current(); } catch {} transfersUnsubscribeRef.current = null; }
-        if (auditsUnsubscribeRef.current) { try { auditsUnsubscribeRef.current(); } catch {} auditsUnsubscribeRef.current = null; }
-        isLoaded.current = false;
-        setItems([]);
-        setCategories([]);
-        setTransfers([]);
-        setAudits([]);
-        setLoading(false);
-      }
-    }) : undefined;
     return () => {
       if (inventoryUnsubscribeRef.current) inventoryUnsubscribeRef.current();
       if (categoriesUnsubscribeRef.current) categoriesUnsubscribeRef.current();
       if (transfersUnsubscribeRef.current) transfersUnsubscribeRef.current();
       if (auditsUnsubscribeRef.current) auditsUnsubscribeRef.current();
       isLoaded.current = false;
-      unsub?.();
     };
   }, [loadInventory]);
   

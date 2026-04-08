@@ -16,11 +16,17 @@ import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
+
+function toDate(value: unknown) {
+  if (!value) return new Date(0);
+  if (typeof value === 'string') return new Date(value);
+  if (value instanceof Date) return value;
+  if (typeof (value as any)?.toDate === 'function') return (value as any).toDate();
+  return new Date(String(value));
+}
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
   const { currentUser } = useUsers();
@@ -62,13 +68,12 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   };
 
   const handleLogout = async () => {
-    if (!auth) { router.push('/login'); return; }
     try {
-      await signOut(auth);
-      router.replace('/login');
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     } catch (e) {
       console.error(e);
     }
+    router.replace('/login');
   };
 
   const { locale, toggleLanguage } = useLanguage();
@@ -302,7 +307,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium leading-snug truncate">{notification.title}</p>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{formatDistanceToNow(toDate(notification.createdAt), { addSuffix: true })}</span>
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
                     </div>

@@ -33,6 +33,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# OpenNext / Cloudflare
+.open-next/
+.dev.vars
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -41,6 +45,7 @@ next-env.d.ts
 # Ignore only local env files; allow committed dev/prod envs
 .env.local
 .env.*.local
+.env.cloudflare
 
 # firebase
 firebase-debug.log

@@ -1,0 +1,16 @@
+# Local Wrangler environment variables for Cloudflare/OpenNext development.
+# Copy this file to .dev.vars and fill in your local values.
+
+# Cloudflare account info
+CLOUDFLARE_ACCOUNT_ID=
+CF_API_TOKEN=
+
+# Cloudflare worker bindings
+D1=
+R2_BUCKET=
+
+# Local JWT auth secret for Cloudflare branch
+AUTH_JWT_SECRET=
+
+# Optional generative AI key
+GEMINI_API_KEY=

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useUsers } from "@/context/users-context";
 import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
-import { auth, db } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -24,18 +24,16 @@ import {
 export default function DebugDataPage() {
   const { residences, loading: residencesLoading } = useResidences();
   const { workers, occupants } = useAccommodation();
+  const { currentUser } = useUsers();
   const [authStatus, setAuthStatus] = useState<any>(null);
 
   useEffect(() => {
-    if (auth) {
-      const user = auth.currentUser;
-      setAuthStatus({
-        isAuthenticated: !!user,
-        userId: user?.uid || null,
-        email: user?.email || null,
-      });
-    }
-  }, []);
+    setAuthStatus({
+      isAuthenticated: !!currentUser,
+      userId: currentUser?.id || null,
+      email: currentUser?.email || null,
+    });
+  }, [currentUser]);
 
   // Calculate statistics
   const stats = {
@@ -80,11 +78,11 @@ export default function DebugDataPage() {
   // Check data integrity
   const issues: { type: 'error' | 'warning' | 'info'; message: string }[] = [];
 
-  if (!db) {
-    issues.push({ type: 'error', message: 'Firebase DB غير مهيأ - تحقق من .env.local' });
-  }
-  if (!auth?.currentUser) {
+  if (!currentUser) {
     issues.push({ type: 'warning', message: 'لم يتم تسجيل الدخول - قد لا تظهر البيانات' });
+  }
+  if (!currentUser) {
+    issues.push({ type: 'info', message: 'تستخدم هذه الفروع المصادقة المحلية المستندة إلى جلسات JWT.' });
   }
   if (workers.length === 0) {
     issues.push({ type: 'error', message: 'لا توجد بيانات عمال في النظام' });
@@ -136,17 +134,8 @@ export default function DebugDataPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              {db ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  <span className="text-sm">متصل</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="text-sm">غير متصل</span>
-                </>
-              )}
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <span className="text-sm">Cloudflare auth session active</span>
             </div>
           </CardContent>
         </Card>
@@ -435,7 +424,7 @@ export default function DebugDataPage() {
                 console.log('Occupants:', occupants);
                 console.log('Residences:', residences);
                 console.log('Auth:', authStatus);
-                console.log('Firebase DB:', !!db);
+                console.log('Current user:', currentUser);
                 alert('تم طباعة جميع البيانات في Console (اضغط F12)');
               }}
             >

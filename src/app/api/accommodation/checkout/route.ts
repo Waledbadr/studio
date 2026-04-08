@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getD1Db } from '@/lib/firebase-admin';
 import { 
   validateCheckOutDate, 
   isDateRangeInvoiced,
@@ -8,7 +8,6 @@ import {
   type InvoiceRecord 
 } from '@/lib/accommodation-date-validation';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -44,11 +43,11 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const adminDb = getAdminDb();
+    const adminDb = getD1Db();
     if (!adminDb) {
       return NextResponse.json({ 
         ok: false, 
-        error: 'Firebase Admin not configured',
+        error: 'D1 database not configured',
         errorAr: 'خطأ في إعداد قاعدة البيانات',
         errorEn: 'Database configuration error'
       }, { status: 500 });

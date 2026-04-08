@@ -1,0 +1,954 @@
+{
+  "users": [
+    {
+      "id": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "name": "Mohammed Alabdali",
+      "email": "m.alabdali@sacodeco.net",
+      "role": "Admin",
+      "assignedResidences": [],
+      "themeSettings": {
+        "colorTheme": "blue",
+        "mode": "system"
+      },
+      "createdAt": "2026-04-08T13:27:04.482Z",
+      "passwordHash": "7d97f5cfdc6037c03479d9c7e78c8f160cd8d9e7378744b9cf462a423bfd3ece"
+    }
+  ],
+  "attendanceRecords": [
+    {
+      "id": "51256_2026-04-08",
+      "employeeId": "51256",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:09",
+      "checkOut": "16:37",
+      "totalHours": 8.94,
+      "regularHours": 8,
+      "overtimeHours": 0.94,
+      "punches": [
+        "07:09",
+        "16:37"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "51153_2026-04-08",
+      "employeeId": "51153",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:48",
+      "checkOut": "16:36",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:48",
+        "16:36"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "51068_2026-04-08",
+      "employeeId": "51068",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "07:11",
+      "checkOut": "16:36",
+      "totalHours": 8.94,
+      "regularHours": 8,
+      "overtimeHours": 0.94,
+      "punches": [
+        "07:11",
+        "16:36"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "51098_2026-04-08",
+      "employeeId": "51098",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "07:03",
+      "checkOut": "16:07",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:03",
+        "16:07"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "51255_2026-04-08",
+      "employeeId": "51255",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:03",
+      "checkOut": "16:05",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:03",
+        "16:05"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "51096_2026-04-08",
+      "employeeId": "51096",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "07:00",
+      "checkOut": "16:01",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:00",
+        "16:01"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "50271_2026-04-08",
+      "employeeId": "50271",
+      "firstName": "AAKIB HUSSAIN ANVAR HUSSAIN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-08",
+      "checkIn": "06:52",
+      "checkOut": "16:46",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
+      "punches": [
+        "06:52",
+        "16:46"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "48878_2026-04-08",
+      "employeeId": "48878",
+      "firstName": "ABID HUSSAIN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:58",
+      "checkOut": "16:53",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
+      "punches": [
+        "06:58",
+        "16:53"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "31628_2026-04-08",
+      "employeeId": "31628",
+      "firstName": "Abubakar Bin   Hasan",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:03",
+      "checkOut": "16:11",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
+      "punches": [
+        "07:03",
+        "16:11"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "39988_2026-04-08",
+      "employeeId": "39988",
+      "firstName": "Ahmed Abdullah Alzhrani",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "06:15",
+      "checkOut": "15:06",
+      "totalHours": 8.24,
+      "regularHours": 8,
+      "overtimeHours": 0.24,
+      "punches": [
+        "06:15",
+        "15:06"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "30739_2026-04-08",
+      "employeeId": "30739",
+      "firstName": "Akbar     Ali",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "07:03",
+      "checkOut": "16:29",
+      "totalHours": 8.94,
+      "regularHours": 8,
+      "overtimeHours": 0.94,
+      "punches": [
+        "07:03",
+        "16:29"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "28824_2026-04-08",
+      "employeeId": "28824",
+      "firstName": "ALTAF BISAYATI",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:55",
+      "checkOut": "16:36",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:55",
+        "16:36"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "50210_2026-04-08",
+      "employeeId": "50210",
+      "firstName": "ALTAF MOHAMMED RAFIK",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:59",
+      "checkOut": "16:51",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:59",
+        "16:51"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49237_2026-04-08",
+      "employeeId": "49237",
+      "firstName": "ASLAM ALI",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-08",
+      "checkIn": "06:39",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:39"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "30556_2026-04-08",
+      "employeeId": "30556",
+      "firstName": "Ayyub Ali Kayam   Khani",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:55",
+      "checkOut": "16:39",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:55",
+        "16:39"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "34238_2026-04-08",
+      "employeeId": "34238",
+      "firstName": "Jakir Husain  Rafeek",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-08",
+      "checkIn": "07:25",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:25"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49646_2026-04-08",
+      "employeeId": "49646",
+      "firstName": "Kamran Mehmood Muhammad Ashfaq",
+      "department": "HOUSING",
+      "projectName": "Riyadh105",
+      "checkInDevice": "Riyadh105",
+      "date": "2026-04-08",
+      "checkIn": "06:14",
+      "checkOut": "16:56",
+      "totalHours": 10.12,
+      "regularHours": 8,
+      "overtimeHours": 2.12,
+      "punches": [
+        "06:14",
+        "06:55",
+        "16:56"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "35512_2026-04-08",
+      "employeeId": "35512",
+      "firstName": "KHALED FADHL",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "05:58",
+      "checkOut": "15:46",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "05:58",
+        "15:46"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "40097_2026-04-08",
+      "employeeId": "40097",
+      "firstName": "Mohamed Abdali",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "HeadOffice1",
+      "date": "2026-04-08",
+      "checkIn": "09:13",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "09:13"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "40666_2026-04-08",
+      "employeeId": "40666",
+      "firstName": "Mohamed Mahmoud Abdelha",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-08",
+      "checkIn": "07:12",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:12"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49481_2026-04-08",
+      "employeeId": "49481",
+      "firstName": "MOHAMMAD FARMAN",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "06:59",
+      "checkOut": "16:13",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
+      "punches": [
+        "06:59",
+        "16:13"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "50079_2026-04-08",
+      "employeeId": "50079",
+      "firstName": "Mohammad Shahnawaz Mohammad Maksud Alam",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-08",
+      "checkIn": "07:15",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:15"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "37475_2026-04-08",
+      "employeeId": "37475",
+      "firstName": "Mohammed Altaf Mohammed Jafar",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:19",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:19"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "30807_2026-04-08",
+      "employeeId": "30807",
+      "firstName": "Mohammed Arif     Dayar",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:08",
+      "checkOut": "16:12",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:08",
+        "16:12"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "27990_2026-04-08",
+      "employeeId": "27990",
+      "firstName": "Mohammed Arif Gulam Mustufa Kazi",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-08",
+      "checkIn": "06:58",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:58"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "41099_2026-04-08",
+      "employeeId": "41099",
+      "firstName": "MOHAMMED HASAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "05:59",
+      "checkOut": "15:47",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "05:59",
+        "15:47"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49502_2026-04-08",
+      "employeeId": "49502",
+      "firstName": "MOHAMMED IMRAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-08",
+      "checkIn": "06:56",
+      "checkOut": "16:46",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:56",
+        "16:46"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "50156_2026-04-08",
+      "employeeId": "50156",
+      "firstName": "mohammed imteyaj mohmmad",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "07:12",
+      "checkOut": "16:31",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
+      "punches": [
+        "07:12",
+        "16:31"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "34207_2026-04-08",
+      "employeeId": "34207",
+      "firstName": "MOHAMMED RAFIQUE",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-08",
+      "checkIn": "06:58",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:58"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49499_2026-04-08",
+      "employeeId": "49499",
+      "firstName": "MOHD ASHWAD",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "06:54",
+      "checkOut": "16:51",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
+      "punches": [
+        "06:54",
+        "16:51"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49485_2026-04-08",
+      "employeeId": "49485",
+      "firstName": "MOHD ISRAIL",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "07:05",
+      "checkOut": "16:27",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
+      "punches": [
+        "07:05",
+        "16:27"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "30239_2026-04-08",
+      "employeeId": "30239",
+      "firstName": "Muhammad Bilal Ahmed Hu",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-08",
+      "checkIn": "07:32",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:32"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "29778_2026-04-08",
+      "employeeId": "29778",
+      "firstName": "Muhammad Kamran Fahim Ud Din",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "07:04",
+      "checkOut": "16:04",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:04",
+        "16:04"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "32888_2026-04-08",
+      "employeeId": "32888",
+      "firstName": "MUHSEN MAHDI",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:16",
+      "checkOut": "16:28",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
+      "punches": [
+        "07:16",
+        "16:28"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49916_2026-04-08",
+      "employeeId": "49916",
+      "firstName": "nadeemmansoori",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-08",
+      "checkIn": "06:59",
+      "checkOut": "16:48",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:59",
+        "16:48"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49776_2026-04-08",
+      "employeeId": "49776",
+      "firstName": "Nizam Ali Nishar Ali",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-08",
+      "checkIn": "07:29",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:29"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49490_2026-04-08",
+      "employeeId": "49490",
+      "firstName": "RABBANEE MO JAMIL",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-08",
+      "checkIn": "07:07",
+      "checkOut": "16:05",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:07",
+        "16:05"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49546_2026-04-08",
+      "employeeId": "49546",
+      "firstName": "REHAN KHAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-08",
+      "checkIn": "06:50",
+      "checkOut": "16:46",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
+      "punches": [
+        "06:50",
+        "16:46"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49484_2026-04-08",
+      "employeeId": "49484",
+      "firstName": "SAHANWAJ IRSAD",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "06:58",
+      "checkOut": "16:02",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "06:58",
+        "16:02"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "45914_2026-04-08",
+      "employeeId": "45914",
+      "firstName": "Salem Sultan Salem Alssa",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "07:51",
+      "checkOut": "16:51",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:51",
+        "16:51"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "39710_2026-04-08",
+      "employeeId": "39710",
+      "firstName": "Sharafi Yahya Kashaf",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "06:26",
+      "checkOut": "16:09",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
+      "punches": [
+        "06:26",
+        "16:09"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "31524_2026-04-08",
+      "employeeId": "31524",
+      "firstName": "Shehzad Ahmed Matloob Ahmed",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "07:01",
+      "checkOut": "16:55",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
+      "punches": [
+        "07:01",
+        "16:55"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "48891_2026-04-08",
+      "employeeId": "48891",
+      "firstName": "SHER ALI KHAN",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-08",
+      "checkIn": "07:16",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:16"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "48969_2026-04-08",
+      "employeeId": "48969",
+      "firstName": "ZAHEER ABBAS",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-08",
+      "checkIn": "07:03",
+      "checkOut": "16:04",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:03",
+        "16:04"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    },
+    {
+      "id": "49945_2026-04-08",
+      "employeeId": "49945",
+      "firstName": "Zakir Ullah Fazli Khali",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-08",
+      "checkIn": "05:59",
+      "checkOut": "16:29",
+      "totalHours": 9.88,
+      "regularHours": 8,
+      "overtimeHours": 1.88,
+      "punches": [
+        "05:59",
+        "16:29"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": false,
+      "syncedAt": "2026-04-08T13:57:16.524Z"
+    }
+  ]
+}

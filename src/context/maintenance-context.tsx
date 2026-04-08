@@ -2,9 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, Unsubscribe, addDoc, updateDoc, Timestamp, getDocs, query, where, deleteDoc, runTransaction } from "firebase/firestore";
-import { onAuthStateChanged } from 'firebase/auth';
+import { useUsers } from './users-context';
 
 export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
 export type MaintenancePriority = 'Low' | 'Medium' | 'High';
@@ -93,12 +93,6 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
       isLoaded.current = true;
       return;
     }
-    
-    // Defer until user is signed in to satisfy security rules
-    if (auth && !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
 
     isLoaded.current = true;
     setLoading(true);
@@ -119,29 +113,11 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Automatically load requests when the provider mounts
     loadRequests();
-    // and when auth changes to signed-in
-    let unsubAuth: (() => void) | undefined;
-    if (auth) {
-      unsubAuth = onAuthStateChanged(auth, (u) => {
-        if (u) {
-          if (!isLoaded.current) loadRequests();
-        } else {
-          if (unsubscribeRef.current) {
-            try { unsubscribeRef.current(); } catch {}
-            unsubscribeRef.current = null;
-          }
-          isLoaded.current = false;
-          setRequests([]);
-          setLoading(false);
-        }
-      });
-    }
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         isLoaded.current = false;
       }
-      unsubAuth?.();
     };
   }, [loadRequests]);
 
@@ -187,8 +163,7 @@ export const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
     try {
   const newId = await generateNewRequestId();
   const newRequestRef = doc(db, "maintenanceRequests", newId);
-      // Ensure requester is the actual signed-in Firebase Auth UID to satisfy security rules
-      const authUid = auth?.currentUser?.uid;
+      const authUid = currentUser?.id;
       if (!authUid) {
         toast({ title: "Auth required", description: "You must be signed in to create a request.", variant: "destructive" });
         return null;

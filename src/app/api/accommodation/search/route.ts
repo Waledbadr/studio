@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getD1Db } from '@/lib/firebase-admin';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
@@ -9,18 +8,17 @@ export async function POST(request: Request) {
     const { q } = await request.json();
     console.log('🔍 Search API called with query:', q);
     
-    const adminDb = getAdminDb();
+    const adminDb = getD1Db();
     if (!adminDb) {
-      console.error('❌ Firebase Admin not configured');
+      console.error('❌ D1 database not configured');
       return NextResponse.json({ 
         ok: false, 
-        error: 'Firebase Admin not configured' 
+        error: 'D1 database not configured' 
       }, { status: 500 });
     }
 
     try {
-      // Get all workers from Firestore using Admin SDK
-      console.log('📡 Fetching workers from Firestore using Admin SDK...');
+      console.log('📡 Fetching workers from D1 database...');
       const workersSnapshot = await adminDb.collection('workers').get();
       console.log('📦 Firestore returned', workersSnapshot.docs.length, 'documents');
       

@@ -4,10 +4,11 @@ import React, { createContext, useContext, useState, ReactNode } from "react";
 import { RawPunch, DailyAttendance, TimesheetEvent, EmployeeSchedule } from "@/types/timesheet";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { doc, writeBatch, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 import { processPunches } from "@/utils/timesheet-utils";
 import { useLanguage } from "@/context/language-context";
 import { getDateChunks } from "@/lib/fiscal-month-utils";
+import { listDocuments, updateDocument, deleteDocument as deleteDbDocument } from "@/lib/db-api";
 
 interface TimesheetContextType {
   rawPunches: RawPunch[];
@@ -215,28 +216,13 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     if (processedAttendance.length === 0) return;
 
     try {
-      if (!db) return;
-      const maxBatchSize = 500;
-      let currentBatch = writeBatch(db);
-      let count = 0;
+      const now = new Date().toISOString();
 
       for (const record of processedAttendance) {
-        const ref = doc(db, 'attendanceRecords', record.id);
-        currentBatch.set(ref, {
+        await updateDocument("attendanceRecords", record.id, {
           ...record,
-          syncedAt: new Date().toISOString()
-        }, { merge: true });
-
-        count++;
-        if (count === maxBatchSize) {
-          await currentBatch.commit();
-          currentBatch = writeBatch(db);
-          count = 0;
-        }
-      }
-
-      if (count > 0) {
-        await currentBatch.commit();
+          syncedAt: now,
+        });
       }
 
       setProcessedAttendance(prev => prev.map(p => ({ ...p, isSyncedToFirestore: true })));
@@ -258,31 +244,21 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteAllAttendanceRecords = async () => {
-    if (!db) return;
     try {
-      const snap = await getDocs(collection(db, 'attendanceRecords'));
-      if (snap.empty) {
+      const existing = await listDocuments<any>("attendanceRecords");
+
+      if (!existing.length) {
         toast({ title: isAr ? 'لا توجد سجلات' : 'No records found', variant: 'default' });
         return;
       }
-      const maxBatchSize = 500;
-      let currentBatch = writeBatch(db);
-      let count = 0;
-      for (const docSnap of snap.docs) {
-        currentBatch.delete(docSnap.ref);
-        count++;
-        if (count === maxBatchSize) {
-          await currentBatch.commit();
-          currentBatch = writeBatch(db);
-          count = 0;
-        }
-      }
-      if (count > 0) await currentBatch.commit();
+
+      await Promise.all(existing.map((record) => deleteDbDocument("attendanceRecords", record.id)));
+
       toast({
         title: isAr ? 'تم الحذف' : 'Records Deleted',
         description: isAr
-          ? `تم حذف ${snap.size} سجل بنجاح. يمكنك إعادة الاستيراد الآن.`
-          : `Deleted ${snap.size} records. You can re-import now.`,
+          ? `تم حذف ${existing.length} سجل بنجاح. يمكنك إعادة الاستيراد الآن.`
+          : `Deleted ${existing.length} records. You can re-import now.`,
         variant: 'default',
       });
     } catch (error: any) {

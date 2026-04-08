@@ -4,9 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useResidences } from "@/context/residences-context";
 import { useAccommodation } from "@/context/accommodation-context";
 import { useToast } from "@/hooks/use-toast";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { useUsers } from "@/context/users-context";
 import {
   Building2,
   Users,
@@ -156,30 +154,13 @@ export default function UnifiedManagementPage() {
   }, [workers, occupants, residences, currentUserId, userRole]);
 
   // Get current user
+  const { currentUser } = useUsers();
+
   useEffect(() => {
-    if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUserId(user.uid);
-        try {
-          if (!db) return;
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setUserRole(userData.role || null);
-            setUserName(userData.name || userData.displayName || 'User');
-          }
-        } catch (error) {
-          console.error('Error fetching user:', error);
-        }
-      } else {
-        setCurrentUserId(null);
-        setUserRole(null);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    setCurrentUserId(currentUser?.id || null);
+    setUserRole(currentUser?.role || null);
+    setUserName(currentUser?.name || 'User');
+  }, [currentUser]);
 
   // Filter accessible residences based on role
   const accessibleResidences = useMemo(() => {

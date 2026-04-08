@@ -1,109 +1,144 @@
-import type { Bucket } from '@google-cloud/storage';
+import { createD1Client } from '@/lib/d1-client';
 
-declare const require: any;
-
-let adminApp: any | null = null;
-let adminDb: any | null = null;
-let adminBucket: Bucket | null = null;
-
-function parseServiceAccountFromEnv():
-	| { projectId?: string; clientEmail?: string; privateKey?: string }
-	| null {
-	try {
-		const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
-		if (b64) {
-			const jsonStr = Buffer.from(b64, 'base64').toString('utf8');
-			const svc = JSON.parse(jsonStr);
-			return {
-				projectId: svc.project_id || svc.projectId,
-				clientEmail: svc.client_email || svc.clientEmail,
-				privateKey: svc.private_key || svc.privateKey,
-			};
-		}
-		const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
-		if (svc) {
-			const obj = typeof svc === 'string' ? JSON.parse(svc) : (svc as any);
-			return {
-				projectId: obj.project_id || obj.projectId,
-				clientEmail: obj.client_email || obj.clientEmail,
-				privateKey: obj.private_key || obj.privateKey,
-			};
-		}
-	} catch {
-		// ignore
-	}
-	return null;
+declare global {
+  var D1: any;
 }
 
-function initAdmin() {
-	if (adminApp) return;
+let d1Client: any | null = null;
 
-	const admin = require('firebase-admin');
-	try {
-		require('firebase-admin/storage');
-	} catch (e) {
-		// storage might be already registered or not needed
-	}
+type D1Doc = Record<string, unknown>;
 
-	// Prefer explicit service account inputs
-	const svcParsed = parseServiceAccountFromEnv();
-	let projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || svcParsed?.projectId;
-	let clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL || svcParsed?.clientEmail;
-	let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY || svcParsed?.privateKey;
-	// Allow \n in env to be parsed correctly
-	if (privateKey) privateKey = privateKey.replace(/\\n/g, '\n');
+type WhereFilter = {
+  field: string;
+  op: string;
+  value: unknown;
+};
 
-	if (projectId && clientEmail && privateKey) {
-		adminApp = admin.apps.length
-			? admin.app()
-			: admin.initializeApp({
-					credential: admin.credential.cert({
-						projectId,
-						clientEmail,
-						privateKey,
-					}),
-				});
-		adminDb = admin.firestore();
-		try {
-			const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-			adminBucket = bucketName
-				? (admin.storage().bucket(bucketName) as unknown as Bucket)
-				: (admin.storage().bucket() as unknown as Bucket);
-		} catch {}
-		return;
-	}
+function getRawD1Db(): any | null {
+  const rawDbCandidate =
+    (typeof D1 !== 'undefined' && D1) ? D1 :
+    (globalThis as any).D1 ??
+    (typeof process !== 'undefined' ? (process.env as any).D1 : undefined) ??
+    null;
 
-	// Fallback: Application Default Credentials ONLY if an explicit, existing path is provided
-	const adcPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-	
-	if (adcPath && typeof adcPath === 'string') {
-		try {
-			const fs = require('fs');
-			if (fs.existsSync(adcPath)) {
-				adminApp = admin.apps.length ? admin.app() : admin.initializeApp();
-				adminDb = admin.firestore();
-				try {
-					const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-					adminBucket = bucketName
-						? (admin.storage().bucket(bucketName) as unknown as Bucket)
-						: (admin.storage().bucket() as unknown as Bucket);
-				} catch {}
-			}
-		} catch {
-			// ignore ADC errors in local/dev
-		}
-	}
-	// If still not initialized, leave adminDb null so callers can detect and skip admin-only writes
+  if (!rawDbCandidate || typeof rawDbCandidate === 'string') {
+    return null;
+  }
+
+  return rawDbCandidate;
+}
+
+function normalizeOp(op: string) {
+  if (op === '==') return '=';
+  return op;
+}
+
+function createDocRef(collection: string, id: string, client: ReturnType<typeof createD1Client>) {
+  const ref = {
+    collection,
+    id,
+    async get() {
+      const row = await client.get(collection, id);
+      return {
+        id,
+        exists: Boolean(row),
+        data: () => row ?? {},
+        ref,
+      };
+    },
+    async set(data: D1Doc, options: { merge?: boolean } = {}) {
+      return client.set(collection, id, data, { merge: options.merge });
+    },
+    async update(updates: D1Doc) {
+      return client.update(collection, id, updates);
+    },
+    async delete() {
+      return client.delete(collection, id);
+    },
+  };
+
+  return ref;
+}
+
+function createDocumentSnapshot(collection: string, row: D1Doc, client: ReturnType<typeof createD1Client>) {
+  return {
+    id: String(row.id || ''),
+    exists: Boolean(row),
+    data() {
+      return row ?? {};
+    },
+    ref: createDocRef(collection, String(row.id || ''), client),
+  };
+}
+
+function createQuery(
+  collection: string,
+  client: ReturnType<typeof createD1Client>,
+  filters: WhereFilter[] = []
+) {
+  return {
+    where(field: string, op: '==' | '!=' | '<' | '<=' | '>' | '>=' | 'IN' | 'NOT IN', value: unknown) {
+      return createQuery(collection, client, [...filters, { field, op: normalizeOp(op), value }]);
+    },
+    async get() {
+      const rows = await client.query(collection, { where: filters });
+      return {
+        docs: rows.map((row: any) => createDocumentSnapshot(collection, row, client)),
+      };
+    },
+  };
+}
+
+function createCollectionRef(collection: string, client: ReturnType<typeof createD1Client>) {
+  return {
+    doc(id: string) {
+      return createDocRef(collection, id, client);
+    },
+    async get() {
+      const rows = await client.query(collection);
+      return {
+        docs: rows.map((row: any) => createDocumentSnapshot(collection, row, client)),
+      };
+    },
+    async add(data: D1Doc) {
+      const id =
+        typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+          ? (crypto as any).randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      return client.set(collection, id, data, { merge: false });
+    },
+    where(field: string, op: '==' | '!=' | '<' | '<=' | '>' | '>=' | 'IN' | 'NOT IN', value: unknown) {
+      return createQuery(collection, client, [{ field, op: normalizeOp(op), value }]);
+    },
+  };
+}
+
+function createFirestoreCompat(rawDb: any) {
+  const client = createD1Client(rawDb);
+  return {
+    collection(collection: string) {
+      return createCollectionRef(collection, client);
+    },
+    doc(path: string) {
+      const [collection, id] = path.split('/');
+      if (!collection || !id) {
+        throw new Error(`Invalid document path: ${path}`);
+      }
+      return createDocRef(collection, id, client);
+    },
+  };
+}
+
+export function getD1Db(): any | null {
+  if (d1Client) return d1Client;
+  const rawDb = getRawD1Db();
+  if (!rawDb) return null;
+  d1Client = createFirestoreCompat(rawDb);
+  return d1Client;
 }
 
 export function getAdminDb(): any | null {
-	if (!adminDb) initAdmin();
-	return adminDb;
-}
-
-export function getAdminBucket(): Bucket | null {
-	if (!adminBucket) initAdmin();
-	return adminBucket;
+  return getD1Db();
 }
 
 

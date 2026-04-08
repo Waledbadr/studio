@@ -1,9 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, updateDoc, getDocs, getDoc, query, where, limit, Unsubscribe, writeBatch, getCountFromServer, startAfter, Timestamp } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/context/notifications-context';
 import { useUsers } from '@/context/users-context';
@@ -442,6 +441,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
   const globalNotifications = useNotifications();
+  const { currentUser } = useUsers();
   const workersUnsubRef = useRef<Unsubscribe | null>(null);
   const workersPermissionWarnedRef = useRef(false);
   const historyUnsubRef = useRef<Unsubscribe | null>(null); // NEW
@@ -619,7 +619,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           } catch { }
           workersUnsubRef.current = null;
         }
-        const isAuthed = !!auth?.currentUser;
+        const isAuthed = !!currentUser;
         if (isAuthed) {
           console.warn("Accommodation: Firestore denied access to workers collection. Falling back to local cache.");
           if (!workersPermissionWarnedRef.current) {
@@ -644,7 +644,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
       console.error("Failed to subscribe to workers collection:", err);
     },
-    [auth, loadWorkersFromLocalStorage, toast]
+    [currentUser, loadWorkersFromLocalStorage, toast]
   );
 
   const startWorkersListener = useCallback(async () => {
@@ -727,43 +727,28 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Load residences from Firestore directly to ensure data availability across devices
   useEffect(() => {
-    const _auth = auth;
-    const _db = db;
-
-    if (!_auth || !_db) return;
+    if (!db) return;
 
     let unsubscribeSnapshot: Unsubscribe | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(_auth, (user) => {
-      if (user) {
-        setLoading(true);
-        unsubscribeSnapshot = onSnapshot(collection(_db, "residences"), (snapshot) => {
-          const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Filter out disabled residences
-          const activeDocs = docs.filter((d: any) => !d.disabled);
-          setResidences(activeDocs.map(mapComplexToResidence));
-          setLoading(false);
-        }, (error) => {
-          console.error("Accommodation: failed to load residences from Firestore", error);
-          setLoading(false);
-        });
-      } else {
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-        setResidences([]);
-        setLoading(false);
-      }
+    setLoading(true);
+    unsubscribeSnapshot = onSnapshot(collection(db, "residences"), (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Filter out disabled residences
+      const activeDocs = docs.filter((d: any) => !d.disabled);
+      setResidences(activeDocs.map(mapComplexToResidence));
+      setLoading(false);
+    }, (error) => {
+      console.error("Accommodation: failed to load residences from Firestore", error);
+      setLoading(false);
     });
 
     return () => {
-      unsubscribeAuth();
       if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
       }
     };
-  }, []);
+  }, [db]);
 
   // Provide a safe refresh function that re-runs the load logic when called.
   const refresh = async () => {
@@ -801,32 +786,19 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // This prevents loading 4000+ workers on every page load
   // Workers are loaded only when needed (search, specific queries)
   useEffect(() => {
-    if (!db || !auth) {
+    if (!db) {
       console.log('🔴 [Accommodation Context] Firestore DB not initialized');
       return;
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ [Workers] Auth ready - Workers loaded on demand (not real-time)');
-        // Workers array stays empty until explicitly loaded via search/query
-        // This saves ~4000 reads per page load
-      } else {
-        console.log('🔓 [Workers] User logged out');
-        setWorkers([]);
-      }
-    });
-
-    return () => {
-      unsubscribeAuth();
-    };
-  }, [db, auth]);
+    console.log('✅ [Workers] Cloudflare session active - workers will load on demand.');
+    return undefined;
+  }, [db]);
 
   // Re-enable Firestore listeners for real-time data
   useEffect(() => {
-    if (!db || !auth) return;
+    if (!db) return;
 
-    let unsubscribeAuth: (() => void) | null = null;
     let companiesUnsub: Unsubscribe | null = null;
     let contractsUnsub: Unsubscribe | null = null;
     let invoicesUnsub: Unsubscribe | null = null;
@@ -834,13 +806,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     let historyUnsub: Unsubscribe | null = null;
     let transfersUnsub: Unsubscribe | null = null;
 
-    unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ [Firestore Listeners] Starting real-time listeners...');
+    console.log('✅ [Firestore Listeners] Starting real-time listeners...');
 
-        // Companies listener
-        companiesUnsub = onSnapshot(
-          collection(db!, 'companies'),
+    // Companies listener
+    companiesUnsub = onSnapshot(
+      collection(db, 'companies'),
           (snap) => {
             const list: Company[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
             setCompanies(list);
@@ -898,26 +868,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           (err) => console.error('Transfers snapshot error:', err)
         );
 
-      } else {
-        console.log('🔓 [Firestore Listeners] User logged out, cleaning up...');
-        if (companiesUnsub) companiesUnsub();
-        if (contractsUnsub) contractsUnsub();
-        if (invoicesUnsub) invoicesUnsub();
-        if (occupantsUnsub) occupantsUnsub();
-        if (historyUnsub) (historyUnsub as any)();
-        if (transfersUnsub) transfersUnsub();
-
-        setCompanies([]);
-        setContracts([]);
-        setInvoices([]);
-        setOccupants([]);
-        setAccommodationHistory([]);
-        setTransferRequests([]);
-      }
-    });
-
     return () => {
-      if (unsubscribeAuth) unsubscribeAuth();
       if (companiesUnsub) companiesUnsub();
       if (contractsUnsub) contractsUnsub();
       if (invoicesUnsub) invoicesUnsub();
@@ -925,7 +876,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       if (historyUnsub) (historyUnsub as any)();
       if (transfersUnsub) transfersUnsub();
     };
-  }, [db, auth]);
+  }, [db]);
 
   // Helpers: persist some data to localStorage (optional backup only)
   useEffect(() => {
@@ -1157,7 +1108,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     setTransferRequests((prev) => [tr, ...prev]);
 
     // Add notification to global notifications system
-    if (globalNotifications?.addNotification && auth?.currentUser) {
+    if (globalNotifications?.addNotification && currentUser) {
       globalNotifications.addNotification({
         userId: req.requestedBy,
         type: 'transfer_request',
@@ -1188,7 +1139,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     setTransferRequests((prev) => prev.map((p) => (p.id === id ? updated : p)));
 
     // Add notification to global notifications system
-    if (globalNotifications?.addNotification && tr.requestedBy && auth?.currentUser) {
+    if (globalNotifications?.addNotification && tr.requestedBy && currentUser) {
       globalNotifications.addNotification({
         userId: tr.requestedBy,
         type: approve ? 'order_approved' : 'generic',
@@ -2838,7 +2789,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         };
       }
 
-      const currentUser = auth?.currentUser?.uid || 'system';
+      const actorId = currentUser?.id || 'system';
 
       // Handle different action types
       if (lastAction.actionType === 'CHECK_IN') {
@@ -2926,7 +2877,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           buildingId: lastAction.buildingId,
           floorId: lastAction.floorId,
           since: lastAction.actionDate, // Use original date
-          checkInBy: currentUser,
+          checkInBy: actorId,
         };
 
         await addDoc(collection(db, 'occupants'), occupantData);
@@ -3609,12 +3560,13 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (!db) return { ok: false, error: 'DB not available' };
 
     try {
-      // Check if user is admin (client-side check, server rules still apply)
-      if (auth?.currentUser) {
-        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-        if (userDoc.exists() && userDoc.data().role !== 'Admin') {
+      // Check if user is admin via session user data (client-side check; server rules still apply)
+      if (currentUser) {
+        if (currentUser.role !== 'Admin') {
           return { ok: false, error: 'Permission denied: Only Admins can delete all workers.' };
         }
+      } else {
+        return { ok: false, error: 'Auth required to delete all workers.' };
       }
 
       const q = query(collection(db, 'workers'));

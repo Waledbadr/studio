@@ -17,9 +17,25 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
       setReady(true);
       return;
     }
-    const unsub = onAuthStateChanged(auth, (u) => {
+
+    const setSessionCookie = async (user: User | null) => {
+      const secureCookie = window.location.protocol === 'https:' ? 'secure;' : '';
+      if (!user) {
+        document.cookie = `__session=; path=/; max-age=0; sameSite=lax; ${secureCookie}`;
+        return;
+      }
+      try {
+        const token = await user.getIdToken();
+        document.cookie = `__session=${token}; path=/; max-age=3600; sameSite=lax; ${secureCookie}`;
+      } catch (err) {
+        console.warn('Failed to set session cookie', err);
+      }
+    };
+
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       setReady(true);
+      await setSessionCookie(u);
       if (!u && pathname !== "/login") {
         router.replace("/login");
       }

@@ -4,7 +4,7 @@ import type { PropsWithChildren } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './sidebar';
 import { AppHeader } from './header';
-import RequireAuth from '@/components/auth/require-auth';
+import RequireAuth from '@/components/auth/require-auth-cloudflare';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';

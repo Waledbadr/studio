@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server';
-
-export const runtime = 'nodejs';
+import { getD1Db } from '@/lib/firebase-admin';
+import { getR2Bucket } from '@/lib/r2-client';
 
 /**
  * Diagnostics endpoint to check upload configuration
  * Access at: /api/uploads/diagnostics
  */
+
 export async function GET() {
+  const r2Bucket = getR2Bucket();
+  const d1Configured = Boolean(getD1Db());
   const diagnostics = {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'unknown',
-    runtime: 'nodejs',
+    runtime: 'cloudflare-r2',
     checks: {
-      blobToken: {
-        configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
-        value: process.env.BLOB_READ_WRITE_TOKEN 
-          ? `${process.env.BLOB_READ_WRITE_TOKEN.substring(0, 20)}...` 
-          : 'NOT SET',
-        status: process.env.BLOB_READ_WRITE_TOKEN ? '✅' : '❌',
+      r2Bucket: {
+        configured: Boolean(r2Bucket),
+        status: r2Bucket ? '✅' : '❌',
       },
-      firebaseConfig: {
-        apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'NOT SET',
-        status: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅' : '❌',
+      d1: {
+        configured: Boolean(d1Configured),
+        status: d1Configured ? '✅' : '❌',
       },
       geminiApi: {
         configured: Boolean(process.env.GEMINI_API_KEY),
@@ -38,19 +37,23 @@ export async function GET() {
     recommendations: [] as string[],
   };
 
-  // Add recommendations based on checks
-  if (!diagnostics.checks.blobToken.configured) {
+  if (!diagnostics.checks.r2Bucket.configured) {
     diagnostics.recommendations.push(
-      '❌ أضف BLOB_READ_WRITE_TOKEN في متغيرات البيئة في Render Dashboard',
-      '📖 راجع ملف RENDER_UPLOAD_FIX_AR.md للخطوات الكاملة',
-      '🔑 احصل على Token من: Vercel Dashboard → Storage → Blob → Tokens'
+      '❌ تأكد من أن R2_BUCKET مرتبط بشكل صحيح في wrangler.jsonc',
+      '📖 أضف R2 bucket binding باسم R2_BUCKET ثم انشر من جديد',
+      '🔑 يمكنك استخدام R2 bucket من Cloudflare Dashboard'
     );
   } else {
-    diagnostics.recommendations.push('✅ BLOB_READ_WRITE_TOKEN محدد بشكل صحيح');
+    diagnostics.recommendations.push('✅ R2 bucket مرتبط بشكل صحيح');
   }
 
-  if (!diagnostics.checks.firebaseConfig.apiKey) {
-    diagnostics.recommendations.push('⚠️ Firebase API Key غير محدد');
+  if (!diagnostics.checks.d1.configured) {
+    diagnostics.recommendations.push(
+      '❌ تأكد من أن D1 binding موجود في wrangler.jsonc',
+      '📖 أضف D1 binding باسم D1 ثم أعد نشر المشروع'
+    );
+  } else {
+    diagnostics.recommendations.push('✅ D1 database متاح');
   }
 
   return NextResponse.json(diagnostics, {

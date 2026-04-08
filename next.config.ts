@@ -1,15 +1,17 @@
 import type {NextConfig} from 'next';
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();
 
+if (process.env.NODE_ENV !== 'production') {
+  initOpenNextCloudflareForDev();
+}
+
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: [
-    'firebase-admin',
-    '@google-cloud/storage',
-  ],
+  serverExternalPackages: [],
   typescript: {
     ignoreBuildErrors: true,
   },

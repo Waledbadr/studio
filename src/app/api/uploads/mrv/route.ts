@@ -1,57 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getD1Db } from '@/lib/firebase-admin';
+import { isR2Configured, uploadToR2 } from '@/lib/r2-client';
 
-let cachedPut: null | ((...args: any[]) => Promise<any>) = null;
-
-async function getBlobPut() {
-  if (cachedPut) return cachedPut;
-
-  // Some Node runtimes (e.g., Render) don't provide global File/Blob.
-  // @vercel/blob may access File.prototype during module init.
-  if (typeof (globalThis as any).File === 'undefined') {
-    try {
-      const undici = await import('undici');
-      (globalThis as any).File = (undici as any).File;
-      (globalThis as any).Blob = (undici as any).Blob;
-      (globalThis as any).FormData = (undici as any).FormData;
-    } catch {
-      // ignore
-    }
-  }
-
-  const mod = await import('@vercel/blob');
-  cachedPut = (mod as any).put;
-  return cachedPut;
-}
-
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-  const db = getAdminDb();
-    const blobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    const db = getD1Db();
+    const r2Configured = isR2Configured();
     return NextResponse.json({
       ok: true,
       adminConfigured: Boolean(db),
-      blobConfigured,
-      runtime,
+      r2Configured,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'Unknown error', runtime }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message || 'Unknown error' }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) {
-      console.error('[MRV Upload] BLOB_READ_WRITE_TOKEN not configured in environment');
+    if (!isR2Configured()) {
+      console.error('[MRV Upload] R2 bucket is not configured');
       return NextResponse.json(
         {
-          error: 'تكوين التخزين غير مكتمل - BLOB_READ_WRITE_TOKEN is not configured',
-          hint: 'أضف BLOB_READ_WRITE_TOKEN في Render Environment Variables',
-          solution: 'راجع ملف RENDER_UPLOAD_FIX_AR.md للخطوات الكاملة',
+          error: 'تكوين التخزين غير مكتمل - R2 bucket غير مهيّأ',
+          hint: 'أضف ربط R2_BUCKET في wrangler.jsonc ثم أعد النشر',
         },
         { status: 500 }
       );
@@ -77,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 15MB)' }, { status: 413 });
     }
 
-    const db = getAdminDb();
+    const db = getD1Db();
     const safeName = originalName.replace(/[^\w.\-]+/g, '_');
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
@@ -86,21 +60,17 @@ export async function POST(req: NextRequest) {
     const attachmentRef = `${mrvId}/${safeName}`;
 
     const arrayBuffer = await (fileValue as any).arrayBuffer();
-    const body = Buffer.from(arrayBuffer);
+    const body = new Uint8Array(arrayBuffer);
 
-    const put = await getBlobPut();
+    const putRes = await uploadToR2(blobPath, body, undefined, contentType);
 
-    const putRes = await put(blobPath, body, {
-      access: 'public',
-      contentType,
-      token,
-    } as any);
+    const attachmentUrl = `/api/files/${blobPath}`;
 
     // Update Firestore if Admin is configured (optional).
     let wroteToFirestore = false;
     if (db) {
       await db.collection('mrvs').doc(mrvId).set({
-        attachmentUrl: putRes.url,
+        attachmentUrl,
         attachmentPath: blobPath,
         attachmentRef,
         updatedAt: new Date(),
@@ -108,17 +78,16 @@ export async function POST(req: NextRequest) {
       wroteToFirestore = true;
     }
 
-    return NextResponse.json({ url: putRes.url, path: blobPath, attachmentRef, wroteToFirestore });
+    return NextResponse.json({ url: attachmentUrl, path: blobPath, attachmentRef, wroteToFirestore });
   } catch (e: any) {
     console.error('[MRV Upload Error]', {
       message: e?.message,
       stack: e?.stack,
-      hasToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
     });
     return NextResponse.json({
       error: e?.message || 'فشل رفع المرفق - Upload failed',
-      hint: 'تأكد من إضافة BLOB_READ_WRITE_TOKEN في Render Environment',
-      solution: 'راجع RENDER_UPLOAD_FIX_AR.md للحل الكامل',
+      hint: 'تحقق من أن ربط R2_BUCKET موجود وأنه يعمل',
+      solution: 'راجع إعدادات Cloudflare R2 في wrangler.jsonc',
     }, { status: 500 });
   }
 }

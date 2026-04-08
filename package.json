@@ -12,6 +12,10 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "cf:dev": "npx open-next dev",
+    "cf:build": "npx open-next build",
+    "cf:deploy": "npx open-next deploy",
+    "cf:typegen": "npx open-next typegen",
     "migrate:workers": "node scripts/migrate-local-workers-to-firestore.mjs",
     "import:workers": "node scripts/import-workers-from-desktop.mjs",
     "convert:workers": "node scripts/convert-workers-data.mjs",
@@ -48,7 +52,6 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@simplewebauthn/browser": "^9.0.1",
     "@simplewebauthn/server": "^9.0.1",
-    "@vercel/blob": "^1.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -59,6 +62,7 @@
     "firebase-admin": "^13.4.0",
     "genkit": "^1.14.1",
     "html2canvas": "^1.4.1",
+    "jose": "4.15.9",
     "lucide-react": "^0.475.0",
     "next": "^15.5.9",
     "patch-package": "^8.0.0",
@@ -73,6 +77,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.18.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
@@ -80,9 +85,11 @@
     "eslint": "9.36.0",
     "eslint-config-next": "15.5.3",
     "genkit-cli": "^1.14.1",
+    "open-next": "^3.1.3",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.65.0"
   },
   "engines": {
     "node": ">=18.18.0"
