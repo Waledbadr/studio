@@ -8,7 +8,7 @@ import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/fi
 import { processPunches } from "@/utils/timesheet-utils";
 import { useLanguage } from "@/context/language-context";
 import { getDateChunks } from "@/lib/fiscal-month-utils";
-import { listDocuments, updateDocument, deleteDocument as deleteDbDocument } from "@/lib/db-api";
+import { listDocuments, getDocument, updateDocument, bulkUpdateDocuments, deleteDocument as deleteDbDocument } from "@/lib/db-api";
 
 interface TimesheetContextType {
   rawPunches: RawPunch[];
@@ -47,18 +47,37 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage();
   const isAr = locale === "ar";
   
+  const saveTimesheetSettings = async (data: Record<string, unknown>) => {
+    if (db) {
+      await setDoc(doc(db, "residences", "timesheetSettings"), data, { merge: true });
+      return;
+    }
+
+    await updateDocument("residences", "timesheetSettings", data);
+  };
+
   // Load mappings on mount
   React.useEffect(() => {
     const loadMapping = async () => {
       try {
-        if (!db) return;
-        const snap = await getDoc(doc(db, "residences", "timesheetSettings"));
-        if (snap.exists()) {
-          const data = snap.data();
-          setDeviceToProjectMap(data.deviceToProjectMap || {});
-          setProjectToResidenceMap(data.projectToResidenceMap || {});
-          setTimesheetEvents(data.timesheetEvents || []);
-          setEmployeeSchedules(data.employeeSchedules || []);
+        if (db) {
+          const snap = await getDoc(doc(db, "residences", "timesheetSettings"));
+          if (snap.exists()) {
+            const data = snap.data();
+            setDeviceToProjectMap(data.deviceToProjectMap || {});
+            setProjectToResidenceMap(data.projectToResidenceMap || {});
+            setTimesheetEvents(data.timesheetEvents || []);
+            setEmployeeSchedules(data.employeeSchedules || []);
+          }
+          return;
+        }
+
+        const docData = await getDocument("residences", "timesheetSettings");
+        if (docData) {
+          setDeviceToProjectMap(docData.deviceToProjectMap || {});
+          setProjectToResidenceMap(docData.projectToResidenceMap || {});
+          setTimesheetEvents(docData.timesheetEvents || []);
+          setEmployeeSchedules(docData.employeeSchedules || []);
         }
       } catch (e) {
         console.error("Failed to load timesheet settings", e);
@@ -68,52 +87,45 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateDeviceMapping = async (deviceName: string, projectName: string) => {
-    if (!db) return;
     const newMap = { ...deviceToProjectMap, [deviceName]: projectName };
     setDeviceToProjectMap(newMap);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { deviceToProjectMap: newMap }, { merge: true });
+    await saveTimesheetSettings({ deviceToProjectMap: newMap });
   };
 
   const updateBulkDeviceMappings = async (mappings: Record<string, string>) => {
-    if (!db) return;
     const newMap = { ...deviceToProjectMap, ...mappings };
     setDeviceToProjectMap(newMap);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { deviceToProjectMap: newMap }, { merge: true });
+    await saveTimesheetSettings({ deviceToProjectMap: newMap });
   };
 
   const removeDeviceMapping = async (deviceName: string) => {
-    if (!db) return;
     const newMap = { ...deviceToProjectMap };
     delete newMap[deviceName];
     setDeviceToProjectMap(newMap);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { deviceToProjectMap: newMap }, { merge: true });
+    await saveTimesheetSettings({ deviceToProjectMap: newMap });
   };
 
   const updateProjectMapping = async (biometricProject: string, residenceId: string) => {
-    if (!db) return;
     const newMap = { ...projectToResidenceMap, [biometricProject]: residenceId };
     setProjectToResidenceMap(newMap);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { projectToResidenceMap: newMap }, { merge: true });
+    await saveTimesheetSettings({ projectToResidenceMap: newMap });
   };
 
   const removeProjectMapping = async (biometricProject: string) => {
-    if (!db) return;
     const newMap = { ...projectToResidenceMap };
     delete newMap[biometricProject];
     setProjectToResidenceMap(newMap);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { projectToResidenceMap: newMap }, { merge: true });
+    await saveTimesheetSettings({ projectToResidenceMap: newMap });
   };
 
   const updateEvents = async (events: TimesheetEvent[]) => {
-    if (!db) return;
     setTimesheetEvents(events);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { timesheetEvents: events }, { merge: true });
+    await saveTimesheetSettings({ timesheetEvents: events });
   };
 
   const updateSchedules = async (schedules: EmployeeSchedule[]) => {
-    if (!db) return;
     setEmployeeSchedules(schedules);
-    await setDoc(doc(db, "residences", "timesheetSettings"), { employeeSchedules: schedules }, { merge: true });
+    await saveTimesheetSettings({ employeeSchedules: schedules });
   };
 
   const fetchAndProcessAttendance = async (startDate: string, endDate: string) => {
@@ -217,13 +229,12 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
 
     try {
       const now = new Date().toISOString();
+      const payloads = processedAttendance.map(record => ({
+        ...record,
+        syncedAt: now,
+      }));
 
-      for (const record of processedAttendance) {
-        await updateDocument("attendanceRecords", record.id, {
-          ...record,
-          syncedAt: now,
-        });
-      }
+      await bulkUpdateDocuments('attendanceRecords', payloads, 200);
 
       setProcessedAttendance(prev => prev.map(p => ({ ...p, isSyncedToFirestore: true })));
       

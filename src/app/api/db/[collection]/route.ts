@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
-import { devList } from '@/lib/dev-d1-memory';
+import { devList, devUpsert } from '@/lib/dev-d1-memory';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,9 +65,6 @@ export async function GET(req: Request, context: { params: Promise<{ collection:
 export async function POST(req: Request, context: { params: Promise<{ collection: string }> }) {
   const { collection } = await context.params;
   const d1 = getD1Db();
-  if (!d1) {
-    return NextResponse.json({ error: 'D1 database not configured' }, { status: 500 });
-  }
 
   try {
     const collectionName = collection;
@@ -79,10 +76,19 @@ export async function POST(req: Request, context: { params: Promise<{ collection
         ? (crypto as any).randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    const docRef = d1.collection(collectionName).doc(id);
-    await docRef.set({ ...data, id });
-    const created = await docRef.get();
-    return NextResponse.json({ id, ...(created.data() || {}) });
+    if (d1) {
+      const docRef = d1.collection(collectionName).doc(id);
+      await docRef.set({ ...data, id });
+      const created = await docRef.get();
+      return NextResponse.json({ id, ...(created.data() || {}) });
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const created = devUpsert(collectionName, id, { ...data, id });
+      return NextResponse.json(created);
+    }
+
+    return NextResponse.json({ error: 'D1 database not configured' }, { status: 500 });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
   }

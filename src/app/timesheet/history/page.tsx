@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,7 +11,8 @@ import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
 import { TimesheetProvider, useTimesheet } from '@/context/timesheet-context';
 import { getFiscalMonthPeriod, getFiscalMonthForDate } from '@/lib/fiscal-month-utils';
-import { HousingEmployee, HousingEmployeesProvider } from '@/context/housing-employees-context';
+import { listDocuments } from '@/lib/db-api';
+import { HousingEmployee, HousingEmployeesProvider, useHousingEmployees } from '@/context/housing-employees-context';
 import { EmployeeProfileSheet } from '@/components/timesheet/employees/employee-profile-sheet';
 
 // Custom profession ordering for Monthly Archive (Arabic labels)
@@ -46,6 +45,7 @@ function TimesheetHistoryContent() {
   const { currentUser } = useUsers();
   const { residences, loadResidences } = useResidences();
   const { projectToResidenceMap, timesheetEvents, employeeSchedules } = useTimesheet();
+  const { employees: housingEmployees } = useHousingEmployees();
   const [records, setRecords] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, any>>({});
@@ -57,6 +57,14 @@ function TimesheetHistoryContent() {
   const [selectedEmployee, setSelectedEmployee] = useState<HousingEmployee | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileDefaultDate, setProfileDefaultDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    const map: Record<string, any> = {};
+    housingEmployees.forEach(emp => {
+      if (emp.employeeId) map[emp.employeeId] = emp;
+    });
+    setEmployeesMap(map);
+  }, [housingEmployees]);
 
   const goToNextMonth = () => {
     const currentIndex = availableMonths.indexOf(filterMonth);
@@ -107,36 +115,24 @@ function TimesheetHistoryContent() {
     setLoading(true);
     loadResidences();
 
-    if (!db) {
-      setLoading(false);
-      return;
-    }
-
     const fetchData = async () => {
       try {
-        // Fetch housing employees
-        const empsSnap = await getDocs(collection(db as any, 'housingEmployees'));
-        const emps: Record<string, any> = {};
-        empsSnap.forEach(d => {
-          emps[d.data().employeeId] = { id: d.id, ...d.data() };
-        });
-        if (active) setEmployeesMap(emps);
-
         // Fetch leaves
-        const lq = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
-        const leavesSnap = await getDocs(lq);
-        if (active) setLeaves(leavesSnap.docs.map(d => d.data()));
+        const leavesData = await listDocuments('timesheetLeaves', {
+          orderBy: { field: 'createdAt', direction: 'DESC' },
+          limit: 1000,
+        });
+        if (active) setLeaves(leavesData);
 
         // --- Build dynamic available months from stored records ---
         // Fetch just the dates of all records to determine which months have data
-        const allDatesSnap = await getDocs(query(
-          collection(db as any, 'attendanceRecords'),
-          orderBy('date', 'desc'),
-          limit(10000)
-        ));
+        const allDates = await listDocuments('attendanceRecords', {
+          orderBy: { field: 'date', direction: 'DESC' },
+          limit: 10000,
+        });
         const monthsSet = new Set<string>();
-        allDatesSnap.forEach(d => {
-          const date: string = d.data().date;
+        allDates.forEach((d: any) => {
+          const date: string = d.date;
           if (date) {
             // Convert raw date to fiscal month label
             const [y, m, dd] = date.split('-').map(Number);
@@ -160,16 +156,14 @@ function TimesheetHistoryContent() {
           const dateEndStr = daysArray[daysArray.length - 1];
 
           // Fetch only the records in the selected month interval to prevent limit truncations
-          const q = query(
-            collection(db as any, 'attendanceRecords'),
-            where('date', '>=', dateStartStr),
-            where('date', '<=', dateEndStr),
-            orderBy('date', 'desc'),
-            limit(10000)
-          );
-
-          const recordsSnap = await getDocs(q);
-          const fetchedRecords = recordsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const fetchedRecords = await listDocuments('attendanceRecords', {
+          where: [
+            { field: 'date', op: '>=', value: dateStartStr },
+            { field: 'date', op: '<=', value: dateEndStr },
+          ],
+          orderBy: { field: 'date', direction: 'DESC' },
+          limit: 10000,
+        });
           
           if (active) {
             setRecords(fetchedRecords);

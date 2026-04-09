@@ -89,6 +89,28 @@ export async function updateDocument<T = any>(collection: string, id: string, da
   });
 }
 
+function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+export async function bulkUpdateDocuments<T = any>(collection: string, items: Array<Record<string, unknown>>, chunkSize = 200): Promise<T[]> {
+  const result: T[] = [];
+  const chunks = chunkArray(items, chunkSize);
+  for (const chunk of chunks) {
+    const url = `${BASE_URL}/bulk/${encodeURIComponent(collection)}`;
+    const chunkResult = await fetchJson<T[]>(url, {
+      method: 'POST',
+      body: JSON.stringify(chunk),
+    });
+    result.push(...chunkResult);
+  }
+  return result;
+}
+
 export async function deleteDocument(collection: string, id: string): Promise<void> {
   const url = `${BASE_URL}/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`;
   await fetchJson<void>(url, { method: 'DELETE' });

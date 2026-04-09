@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
-import { X } from "lucide-react"
+import { CheckCircle2, Info, AlertTriangle, XCircle, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -49,6 +49,13 @@ const toastVariants = cva(
     },
   }
 )
+
+const variantIcons: Record<string, React.ReactNode> = {
+  default: <Info className="h-4 w-4" />,
+  success: <CheckCircle2 className="h-4 w-4" />,
+  destructive: <XCircle className="h-4 w-4" />,
+  warning: <AlertTriangle className="h-4 w-4" />,
+}
 
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,

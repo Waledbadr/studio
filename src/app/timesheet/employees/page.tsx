@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { collection, getDocs, doc, setDoc, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Search, UserCircle, Briefcase, Clock, FileText, RefreshCw } from 'lucide-react';
 import { useLanguage } from '@/context/language-context';
 import { useToast } from '@/hooks/use-toast';
+import { createDocument, listDocuments } from '@/lib/db-api';
 import { AddEmployeeDialog } from '@/components/timesheet/employees/add-employee-dialog';
 import { EmployeeProfileSheet } from '@/components/timesheet/employees/employee-profile-sheet';
 import { HousingEmployeesProvider, useHousingEmployees, HousingEmployee } from '@/context/housing-employees-context';
@@ -111,11 +110,12 @@ function TimesheetEmployeesContent() {
     try {
       setSyncing(true);
       // Fetch only the most recent attendance records to significantly reduce read costs
-      const q = query(collection(db as any, 'attendanceRecords'), orderBy('date', 'desc'), limit(1000));
-      const snapshot = await getDocs(q);
+      const attendanceRecords = await listDocuments<any>('attendanceRecords', {
+        orderBy: { field: 'date', direction: 'DESC' },
+        limit: 1000,
+      });
       const uniqueMap = new Map<string, any>();
-      snapshot.forEach(d => {
-        const data = d.data();
+      attendanceRecords.forEach((data) => {
         if (data.employeeId && !uniqueMap.has(data.employeeId)) {
           uniqueMap.set(data.employeeId, {
             employeeId: data.employeeId,
@@ -136,12 +136,12 @@ function TimesheetEmployeesContent() {
       for (const [empId, empData] of uniqueMap.entries()) {
         const existing = employees.find(e => e.employeeId === empId);
         if (!existing) {
-          const docRef = doc(collection(db as any, 'housingEmployees'));
-          await setDoc(docRef, {
-            id: docRef.id,
+          const now = new Date().toISOString();
+          await createDocument('housingEmployees', {
+            id: `${empId}-${now}`,
             ...empData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdAt: now,
+            updatedAt: now,
           });
           addedCount++;
         }
