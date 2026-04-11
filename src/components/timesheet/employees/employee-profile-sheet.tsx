@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { createDocument, listDocuments, updateDocument } from '@/lib/db-api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HousingEmployee, useHousingEmployees } from '@/context/housing-employees-context';
@@ -67,31 +66,30 @@ export function EmployeeProfileSheet({ open, onOpenChange, employee, defaultDate
       } else {
         setLeaveData({ type: 'Annual', startDate: '', endDate: '', reason: '' });
       }
-      
-      // Fetch Leaves
-      const qLeaves = query(
-        collection(db, 'timesheetLeaves'),
-        where('employeeId', '==', employee.id),
-        orderBy('createdAt', 'desc')
-      );
-      const unsubLeaves = onSnapshot(qLeaves, (snap) => {
-        setLeaves(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      });
 
-      // Fetch Transfers
-      const qTransfers = query(
-        collection(db, 'timesheetTransfers'),
-        where('employeeId', '==', employee.id),
-        orderBy('createdAt', 'desc')
-      );
-      const unsubTransfers = onSnapshot(qTransfers, (snap) => {
-        setTransfers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      });
+      const fetchRecords = async () => {
+        try {
+          const fetchedLeaves = await listDocuments('timesheetLeaves', {
+            where: [{ field: 'employeeDocId', op: '=', value: employee.id }],
+            orderBy: { field: 'createdAt', direction: 'DESC' },
+            limit: 1000,
+          });
+          setLeaves(fetchedLeaves || []);
 
-      return () => {
-        unsubLeaves();
-        unsubTransfers();
+          const fetchedTransfers = await listDocuments('timesheetTransfers', {
+            where: [{ field: 'employeeDocId', op: '=', value: employee.id }],
+            orderBy: { field: 'createdAt', direction: 'DESC' },
+            limit: 1000,
+          });
+          setTransfers(fetchedTransfers || []);
+        } catch (error) {
+          console.error('Error loading employee records:', error);
+          setLeaves([]);
+          setTransfers([]);
+        }
       };
+
+      fetchRecords();
     }
   }, [employee, defaultDate]);
 
@@ -125,15 +123,17 @@ export function EmployeeProfileSheet({ open, onOpenChange, employee, defaultDate
     }
     try {
       setLoading(true);
-      await addDoc(collection(db, 'timesheetLeaves'), {
-        employeeId: employee.id,
-        badgeId: employee.employeeId,
-        name: employee.name,
-        nameAr: employee.nameAr,
+      await createDocument('timesheetLeaves', {
+        employeeDocId: employee.id,
+        employeeId: employee.employeeId || '',
+        badgeId: employee.employeeId || '',
+        name: employee.name || '',
+        nameAr: employee.nameAr || employee.name || '',
         ...leaveData,
-        createdAt: serverTimestamp()
+        status: 'Pending',
+        createdAt: new Date().toISOString(),
       });
-      // Optionally update employee status
+
       if (new Date() >= new Date(leaveData.startDate) && new Date() <= new Date(leaveData.endDate)) {
         await updateEmployee(employee.id, { status: 'On Leave' });
       }
@@ -156,17 +156,17 @@ export function EmployeeProfileSheet({ open, onOpenChange, employee, defaultDate
     }
     try {
       setLoading(true);
-      await addDoc(collection(db, 'timesheetTransfers'), {
-        employeeId: employee.id,
-        badgeId: employee.employeeId,
-        name: employee.name,
-        nameAr: employee.nameAr,
+      await createDocument('timesheetTransfers', {
+        employeeDocId: employee.id,
+        employeeId: employee.employeeId || '',
+        badgeId: employee.employeeId || '',
+        name: employee.name || '',
+        nameAr: employee.nameAr || employee.name || '',
         ...transferData,
-        createdAt: serverTimestamp()
+        createdAt: new Date().toISOString(),
       });
       
-      // Update employee location status
-      await updateEmployee(employee.id, { 
+      await updateEmployee(employee.id, {
         residenceStatus: transferData.type === 'Move In' ? 'Inside' : 'Outside',
         residenceLocation: transferData.location || employee.residenceLocation || '',
         status: transferData.type === 'Move Out' ? 'Transferred' : 'Active'

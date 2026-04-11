@@ -69099,7 +69099,9 @@
       "monthlySalary": 0,
       "status": "Active",
       "createdAt": "2026-04-09T10:29:33.880Z",
-      "updatedAt": "2026-04-09T10:29:33.880Z"
+      "updatedAt": "2026-04-11T11:10:27.978Z",
+      "residenceStatus": "Inside",
+      "residenceLocation": ""
     },
     {
       "id": "50874-2026-04-09T10:29:34.373Z",
@@ -70645,6 +70647,21 @@
       "status": "Active",
       "createdAt": "2026-04-09T10:43:47.968Z",
       "updatedAt": "2026-04-09T10:43:47.968Z"
+    }
+  ],
+  "timesheetTransfers": [
+    {
+      "employeeDocId": "49945-2026-04-09T10:29:33.880Z",
+      "employeeId": "49945",
+      "badgeId": "49945",
+      "name": "Zakir Ullah Fazli Khali",
+      "nameAr": "Zakir Ullah Fazli Khali",
+      "type": "Move In",
+      "date": "2026-04-07",
+      "location": "",
+      "reason": "تحويل الى السكن من قسم الحركة",
+      "createdAt": "2026-04-11T11:10:27.118Z",
+      "id": "f261e7d2-5564-41cb-819a-5362cb5fa6ac"
     }
   ]
 }
