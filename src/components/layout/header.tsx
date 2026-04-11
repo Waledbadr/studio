@@ -14,7 +14,6 @@ import { useState, useEffect } from 'react';
 import { useNotifications } from '@/context/notifications-context';
 import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import dynamic from 'next/dynamic';
 
@@ -36,7 +35,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
   const atAccommodation = pathname?.startsWith('/accommodation');
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
 
   const toggleApp = () => {
     if (atAccommodation) router.push('/');
@@ -51,8 +50,10 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   // Auto-close the mobile sidebar whenever the route changes
   useEffect(() => {
-    if (isMobile) setOpenMobile(false);
-  }, [pathname, isMobile, setOpenMobile]);
+    if (isMobile && openMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, openMobile, setOpenMobile]);
 
   const handleThemeSettingsClick = () => {
     router.push('/setup#themes');
@@ -143,77 +144,56 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
       {/* Quick Actions */}
       <div className="flex items-center gap-1 mr-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50">
-                <Link href="/inventory/new-order">
-                  <PlusCircle className="h-5 w-5" />
-                  <span className="sr-only">{dict.quickActions?.addNewOrder || 'Add New Order'}</span>
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{dict.quickActions?.addNewOrder || 'Add New Order'}</p>
-            </TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/50">
-                <Link href="/inventory/receive/new-approval">
-                  <Download className="h-5 w-5" />
-                  <span className="sr-only">{dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}</span>
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}</p>
-            </TooltipContent>
-          </Tooltip>
+        <button
+          type="button"
+          title={dict.quickActions?.addNewOrder || 'Add New Order'}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+          onClick={() => router.push('/inventory/new-order')}
+        >
+          <PlusCircle className="h-5 w-5" />
+          <span className="sr-only">{dict.quickActions?.addNewOrder || 'Add New Order'}</span>
+        </button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/50">
-                <Link href="/inventory/issue">
-                  <Truck className="h-5 w-5" />
-                  <span className="sr-only">{dict.quickActions?.issueMaterials || 'Issue Materials'}</span>
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{dict.quickActions?.issueMaterials || 'Issue Materials'}</p>
-            </TooltipContent>
-          </Tooltip>
+        <button
+          type="button"
+          title={dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/50"
+          onClick={() => router.push('/inventory/receive/new-approval')}
+        >
+          <Download className="h-5 w-5" />
+          <span className="sr-only">{dict.quickActions?.addMaterialReceipt || 'Add Material Receipt'}</span>
+        </button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-fuchsia-600 hover:text-fuchsia-700 hover:bg-fuchsia-50 dark:text-fuchsia-400 dark:hover:bg-fuchsia-950/50">
-                <Link href="/inventory/service-orders/new">
-                  <ClipboardList className="h-5 w-5" />
-                  <span className="sr-only">{dict.quickActions?.serviceOrder || 'Service Order'}</span>
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{dict.quickActions?.serviceOrder || 'Service Order'}</p>
-            </TooltipContent>
-          </Tooltip>
+        <button
+          type="button"
+          title={dict.quickActions?.issueMaterials || 'Issue Materials'}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/50"
+          onClick={() => router.push('/inventory/issue')}
+        >
+          <Truck className="h-5 w-5" />
+          <span className="sr-only">{dict.quickActions?.issueMaterials || 'Issue Materials'}</span>
+        </button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50">
-                <Link href="/maintenance/new">
-                  <Wrench className="h-5 w-5" />
-                  <span className="sr-only">{dict.quickActions?.maintenanceRequest || 'Maintenance Request'}</span>
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{dict.quickActions?.maintenanceRequest || 'Maintenance Request'}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <button
+          type="button"
+          title={dict.quickActions?.serviceOrder || 'Service Order'}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-fuchsia-600 hover:text-fuchsia-700 hover:bg-fuchsia-50 dark:text-fuchsia-400 dark:hover:bg-fuchsia-950/50"
+          onClick={() => router.push('/inventory/service-orders/new')}
+        >
+          <ClipboardList className="h-5 w-5" />
+          <span className="sr-only">{dict.quickActions?.serviceOrder || 'Service Order'}</span>
+        </button>
+
+        <button
+          type="button"
+          title={dict.quickActions?.maintenanceRequest || 'Maintenance Request'}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
+          onClick={() => router.push('/maintenance/new')}
+        >
+          <Wrench className="h-5 w-5" />
+          <span className="sr-only">{dict.quickActions?.maintenanceRequest || 'Maintenance Request'}</span>
+        </button>
+
         <div className="h-6 w-px bg-border mx-1" />
       </div>
 

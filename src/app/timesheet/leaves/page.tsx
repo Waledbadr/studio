@@ -215,7 +215,7 @@ function LeavesManagementContent() {
     return (
       <div className="space-y-8">
         <div>
-          <h3 className="text-lg flex items-center gap-2 font-semibold mb-4 text-indigo-700 dark:text-indigo-400 font-medium">
+          <h3 className="text-lg flex items-center gap-2 font-semibold mb-4 text-indigo-700 dark:text-indigo-400">
             {isAr ? 'الإجازات الحالية والقادمة' : 'Active & Upcoming Leaves'}
             <span className="text-xs font-bold leading-none bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-1 rounded-full">{activeOrFuture.length}</span>
           </h3>
@@ -224,7 +224,7 @@ function LeavesManagementContent() {
         
         {ended.length > 0 && (
           <div className="border-t dark:border-gray-800 pt-8 mt-8">
-            <h3 className="text-lg flex items-center gap-2 font-semibold mb-4 text-gray-500 dark:text-gray-400 font-medium">
+            <h3 className="text-lg flex items-center gap-2 font-semibold mb-4 text-gray-500 dark:text-gray-400">
               {isAr ? 'الإجازات المنتهية / المباشرون' : 'Ended Leaves / Resumed'}
               <span className="text-xs font-bold leading-none bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 px-2 py-1 rounded-full">{ended.length}</span>
             </h3>
@@ -361,21 +361,19 @@ function LeavesManagementContent() {
         </Tabs>
       )}
 
-      {addDialogOpen && (
-        <AddLeaveDialog 
-          open={addDialogOpen} 
-          onOpenChange={setAddDialogOpen} 
-          defaultType={
-            activeTab === 'annual' ? 'Annual' : 
-            activeTab === 'sick' ? 'Sick' : 
-            activeTab === 'permissions' ? 'Permission' : 
-            'Resumption'
-          } 
-          mode={selectedLeave ? 'edit' : 'add'}
-          initialData={selectedLeave}
-          onSuccess={fetchData}
-        />
-      )}
+      <AddLeaveDialog 
+        open={addDialogOpen} 
+        onOpenChange={setAddDialogOpen} 
+        defaultType={
+          activeTab === 'annual' ? 'Annual' : 
+          activeTab === 'sick' ? 'Sick' : 
+          activeTab === 'permissions' ? 'Permission' : 
+          'Resumption'
+        } 
+        mode={selectedLeave ? 'edit' : 'add'}
+        initialData={selectedLeave}
+        onSuccess={fetchData}
+      />
     </div>
   );
 }

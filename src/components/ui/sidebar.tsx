@@ -574,7 +574,7 @@ const SidebarMenuButton = React.forwardRef<
       />
     )
 
-    if (!tooltip) {
+    if (!tooltip || asChild) {
       return button
     }
 

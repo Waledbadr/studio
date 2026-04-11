@@ -98,12 +98,12 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
 
   const load = useCallback(() => {
     if (isLoaded.current) return;
+    isLoaded.current = true;
     if (!db) {
       setLoading(false);
-      toast({ title: "Config error", description: "Firebase not configured.", variant: "destructive" });
+      console.warn("Firebase not configured, loading mock service orders");
       return;
     }
-    isLoaded.current = true;
     setLoading(true);
   const fdb = db as Firestore;
   const qRef = query(collection(fdb, "serviceOrders"), orderBy("dateCreated", "desc"));

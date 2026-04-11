@@ -100,10 +100,13 @@ function TimesheetEmployeesContent() {
   const [selectedEmployee, setSelectedEmployee] = useState<HousingEmployee | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    emp.nameAr?.includes(searchTerm) ||
-    emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
+  // إزالة التكرار بناءً على رقم الموظف (employeeId)
+  const uniqueEmployees = Array.from(new Map(employees.map(emp => [emp.employeeId, emp])).values());
+
+  const filteredEmployees = uniqueEmployees.filter(emp => 
+    (emp.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
+    (emp.nameAr || '').includes(searchTerm) ||
+    (emp.employeeId?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   const handleSyncFromRecords = async () => {

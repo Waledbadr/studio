@@ -18,7 +18,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { useState, useEffect } from 'react';
-import { useSidebar } from '@/components/ui/sidebar';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -26,17 +25,11 @@ export function AppSidebar() {
   const { dict } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   // const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
-  const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     setIsMounted(true);
   // setGitInfo(getFormattedGitInfo());
   }, []);
-
-  // Close the mobile sidebar immediately after a navigation item is clicked
-  const handleNavigate = () => {
-    if (isMobile) setOpenMobile(false);
-  };
 
   // Prevent hydration mismatches by rendering only after mount
   if (!isMounted) {
@@ -62,7 +55,7 @@ export function AppSidebar() {
           </div>
           <div className="px-2 pb-2">
             <SidebarMenuButton asChild tooltip={'العودة للرئيسية'} className="bg-muted/50 border border-border mt-2 w-full justify-start">
-              <Link href="/" onClick={handleNavigate}>
+              <Link href="/">
                 <Home className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden text-sm ml-2 mr-2">
                   {'العودة للرئيسية'}
@@ -79,7 +72,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet'} tooltip="Dashboard">
-                  <Link href="/timesheet" onClick={handleNavigate}>
+                  <Link href="/timesheet">
                     <ClipboardList />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Records'}
@@ -96,7 +89,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/employees'} tooltip="Employees">
-                  <Link href="/timesheet/employees" onClick={handleNavigate}>
+                  <Link href="/timesheet/employees">
                     <Users />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Employees'}
@@ -106,7 +99,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/history'} tooltip="Monthly Archive">
-                  <Link href="/timesheet/history" onClick={handleNavigate}>
+                  <Link href="/timesheet/history">
                     <History />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Monthly Archive'}
@@ -116,7 +109,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/requests'} tooltip="Requests">
-                  <Link href="/timesheet/requests" onClick={handleNavigate}>
+                  <Link href="/timesheet/requests">
                     <ClipboardList />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Requests'}
@@ -126,7 +119,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/settings'} tooltip="Settings">
-                  <Link href="/timesheet/settings" onClick={handleNavigate}>
+                  <Link href="/timesheet/settings">
                     <Settings />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Settings'}
@@ -144,7 +137,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/leaves'} tooltip="Leaves Management">
-                  <Link href="/timesheet/leaves" onClick={handleNavigate}>
+                  <Link href="/timesheet/leaves">
                     <Calendar />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Leaves Management'}
@@ -154,7 +147,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/timesheet/events'} tooltip="Leaves & Events">
-                  <Link href="/timesheet/events" onClick={handleNavigate}>
+                  <Link href="/timesheet/events">
                     <AlertTriangle />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Exceptions (Events)'}
@@ -210,7 +203,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/income-expenses'} tooltip="Dashboard">
-                  <Link href="/income-expenses" onClick={handleNavigate}>
+                  <Link href="/income-expenses">
                     <Home />
                     <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
                   </Link>
@@ -256,7 +249,7 @@ export function AppSidebar() {
           </div>
           <div className="px-2 pb-2">
             <SidebarMenuButton asChild tooltip={true ? 'العودة للرئيسية' : 'Back to Main'} className="bg-muted/50 border border-border mt-2 w-full justify-start">
-              <Link href="/" onClick={handleNavigate}>
+              <Link href="/">
                 <Home className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden text-sm ml-2 mr-2">
                   {true ? 'العودة للرئيسية' : 'Back to Main'}
@@ -274,7 +267,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/overview'} tooltip="Overview">
-                  <Link href="/accommodation/overview" onClick={handleNavigate}>
+                  <Link href="/accommodation/overview">
                     <Home />
                     <span className="group-data-[collapsible=icon]:hidden">Overview</span>
                   </Link>
@@ -290,7 +283,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/residences'} tooltip="Residences">
-                  <Link href="/accommodation/residences" onClick={handleNavigate}>
+                  <Link href="/accommodation/residences">
                     <Building />
                     <span className="group-data-[collapsible=icon]:hidden">Residences</span>
                   </Link>
@@ -298,7 +291,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/workers'} tooltip="Workers">
-                  <Link href="/accommodation/workers" onClick={handleNavigate}>
+                  <Link href="/accommodation/workers">
                     <Users />
                     <span className="group-data-[collapsible=icon]:hidden">Workers</span>
                   </Link>
@@ -306,7 +299,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/assign'} tooltip="Assign Workers">
-                  <Link href="/accommodation/assign" onClick={handleNavigate}>
+                  <Link href="/accommodation/assign">
                     <Move />
                     <span className="group-data-[collapsible=icon]:hidden">Assign Workers</span>
                   </Link>
@@ -314,7 +307,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/transfers'} tooltip="Transfers">
-                  <Link href="/accommodation/transfers" onClick={handleNavigate}>
+                  <Link href="/accommodation/transfers">
                     <GitBranch />
                     <span className="group-data-[collapsible=icon]:hidden">Transfers</span>
                   </Link>
@@ -322,7 +315,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/pending-transfers'} tooltip="Pending Transfers">
-                  <Link href="/accommodation/pending-transfers" onClick={handleNavigate}>
+                  <Link href="/accommodation/pending-transfers">
                     <Truck />
                     <span className="group-data-[collapsible=icon]:hidden">Pending Transfers</span>
                   </Link>
@@ -338,7 +331,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/companies'} tooltip="Companies">
-                  <Link href="/accommodation/companies" onClick={handleNavigate}>
+                  <Link href="/accommodation/companies">
                     <Building />
                     <span className="group-data-[collapsible=icon]:hidden">Companies</span>
                   </Link>
@@ -346,7 +339,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/contracts'} tooltip="Contracts">
-                  <Link href="/accommodation/contracts" onClick={handleNavigate}>
+                  <Link href="/accommodation/contracts">
                     <FileCheck />
                     <span className="group-data-[collapsible=icon]:hidden">Contracts</span>
                   </Link>
@@ -354,7 +347,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/invoices'} tooltip="Invoices">
-                  <Link href="/accommodation/invoices" onClick={handleNavigate}>
+                  <Link href="/accommodation/invoices">
                     <ClipboardList />
                     <span className="group-data-[collapsible=icon]:hidden">Invoices</span>
                   </Link>
@@ -370,7 +363,7 @@ export function AppSidebar() {
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/reports'} tooltip="Reports">
-                  <Link href="/accommodation/reports" onClick={handleNavigate}>
+                  <Link href="/accommodation/reports">
                     <AreaChart />
                     <span className="group-data-[collapsible=icon]:hidden">Reports</span>
                   </Link>
@@ -378,7 +371,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/analytics'} tooltip={dict.accommodationAnalytics || 'Accommodation Analytics'}>
-                  <Link href="/accommodation/analytics" onClick={handleNavigate}>
+                  <Link href="/accommodation/analytics">
                     <TrendingUp />
                     <span className="group-data-[collapsible=icon]:hidden">{dict.accommodationAnalytics || 'Accommodation Analytics'}</span>
                   </Link>
@@ -386,7 +379,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/accommodation/worker-certificate'} tooltip="Worker Certificate">
-                  <Link href="/accommodation/worker-certificate" onClick={handleNavigate}>
+                  <Link href="/accommodation/worker-certificate">
                     <FileText />
                     <span className="group-data-[collapsible=icon]:hidden">Worker Certificate</span>
                   </Link>
@@ -546,12 +539,12 @@ export function AppSidebar() {
                     tooltip={item.label}
                   >
                     {item.external ? (
-                      <a href={item.href} target="_blank" rel="noopener noreferrer" onClick={handleNavigate}>
+                      <a href={item.href} target="_blank" rel="noopener noreferrer">
                         <item.icon />
                         <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
                       </a>
                     ) : (
-                      <Link href={item.href} onClick={handleNavigate}>
+                      <Link href={item.href}>
                         <item.icon />
                         <span className="group-data-[collapsible=icon]:hidden">{item.label}{item.abbreviation || ''}</span>
                       </Link>
@@ -564,7 +557,7 @@ export function AppSidebar() {
                       {section.subItems.map(subItem => (
                         <SidebarMenuSubItem key={subItem.href}>
                           <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
-                            <Link href={subItem.href} onClick={handleNavigate}>
+                            <Link href={subItem.href}>
                               <subItem.icon />
                               <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
                             </Link>
@@ -609,3 +602,4 @@ export function AppSidebar() {
     </>
   );
 }
+

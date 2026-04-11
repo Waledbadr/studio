@@ -175,6 +175,20 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Fetch existing records for this period (so we don't overwrite manual edits or lost data)
+      let existingRecords: DailyAttendance[] = [];
+      try {
+        existingRecords = await listDocuments<DailyAttendance>('attendanceRecords', {
+          where: [
+            { field: 'date', op: '>=', value: startDate },
+            { field: 'date', op: '<=', value: endDate },
+          ],
+          limit: 10000,
+        });
+      } catch (e) {
+        console.warn("Failed to fetch existing attendance records for merging", e);
+      }
+
       setRawPunches(allPunches);
       setIsFetching(false);
       
@@ -191,7 +205,32 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         employeesData,
         transfersData // Pass transfers
       );
-      setProcessedAttendance(processed);
+
+      // Smart Merge: Protect existing valid data from being overwritten by empty/incomplete sync payloads
+      const existingMap = new Map<string, DailyAttendance>();
+      existingRecords.forEach(r => existingMap.set(r.id, r));
+
+      const mergedAttendance = processed.map(newRec => {
+        const oldRec = existingMap.get(newRec.id);
+        if (oldRec) {
+          const oldHasBoth = !!(oldRec.checkIn && oldRec.checkOut);
+          const oldHasOne = !!(oldRec.checkIn || oldRec.checkOut);
+          const newHasBoth = !!(newRec.checkIn && newRec.checkOut);
+          const newHasOne = !!(newRec.checkIn || newRec.checkOut);
+
+          // Rule 1: If old record is perfectly complete, and new one isn't -> Keep old
+          if (oldHasBoth && !newHasBoth) {
+            return { ...oldRec, isSyncedToFirestore: true };
+          }
+          // Rule 2: If old record has at least one punch, and new one is completely empty -> Keep old
+          if (oldHasOne && !newHasOne) {
+            return { ...oldRec, isSyncedToFirestore: true };
+          }
+        }
+        return newRec;
+      });
+
+      setProcessedAttendance(mergedAttendance);
       setIsProcessing(false);
       
       toast({

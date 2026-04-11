@@ -225,7 +225,7 @@ export function AddLeaveDialog({ open, onOpenChange, defaultType = 'Annual', ini
                 {openEmployeeList && (
                   <div className="absolute top-full mt-2 w-full bg-popover text-popover-foreground border shadow-md rounded-md z-[9999]" dir={isAr ? 'rtl' : 'ltr'}>
                     <Command className="w-full">
-                      <CommandInput autoFocus placeholder={isAr ? 'ابحث عن موظف بالاسم أو الرقم...' : 'Search employee by name or ID...'} dir="rtl" />
+                      <CommandInput placeholder={isAr ? 'ابحث عن موظف بالاسم أو الرقم...' : 'Search employee by name or ID...'} dir="rtl" />
                       <CommandList className="max-h-[250px] overflow-y-auto">
                         <CommandEmpty>{isAr ? 'لم يتم العثور على موظف.' : 'No employee found.'}</CommandEmpty>
                         <CommandGroup>
