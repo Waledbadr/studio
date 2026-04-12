@@ -23,7 +23,7 @@ import { doc, onSnapshot, getDoc, collection, query as fbQuery, where, getDocs, 
 export default function OrderDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { updateOrderStatus, loading: ordersLoading } = useOrders();
+    const { updateOrderStatus, loading: ordersLoading, orders } = useOrders();
     const { getStockForResidence, items: allItems } = useInventory();
     const { currentUser, users, loading: usersLoading, getUserById } = useUsers();
     const { residences } = useResidences();
@@ -118,6 +118,15 @@ export default function OrderDetailPage() {
         }
         return [];
     };
+
+    // Local fallback for orders when Firebase is unavailable
+    useEffect(() => {
+        if (db || typeof id !== 'string') return;
+        setLoading(true);
+        const localOrder = orders.find((o) => o.id === id) || null;
+        setOrder(localOrder);
+        setLoading(false);
+    }, [db, id, orders]);
 
     // Real-time subscription to keep page in sync without hard refresh
     useEffect(() => {

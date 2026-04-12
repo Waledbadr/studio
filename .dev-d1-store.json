@@ -5,7 +5,22 @@
       "name": "Mohammed Alabdali",
       "email": "m.alabdali@sacodeco.net",
       "role": "Admin",
-      "assignedResidences": [],
+      "assignedResidences": [
+        "3C1ZgRS2sr2VFMYGdzIN",
+        "4znleAk6l3E1eb1kAEXK",
+        "6w8r1vh1h8xjpOsVULV5",
+        "Axbap5tRt6FJZjVpTjCJ",
+        "C8LpwaPOdkBDpzYvxDmA",
+        "DkivDvDBirmX4HIHU3cW",
+        "GR3i7DOtAFLazN46D7cB",
+        "KA43UwlETuLC7bWffony",
+        "L3wLRKW34H2dM2tQaBfI",
+        "SMTiuEOKEPoBpAzxEikd",
+        "gpKfg1LK8UBxPIhHiuPa",
+        "rMRf9xOfBZqUw8GKPMMM",
+        "complex-1775982825823",
+        "L4oapIYo87lkQANWsgiD"
+      ],
       "themeSettings": {
         "colorTheme": "blue",
         "mode": "system"
@@ -67022,16 +67037,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:34",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:59",
+      "totalHours": 9.88,
+      "regularHours": 8,
+      "overtimeHours": 1.88,
       "punches": [
-        "07:34"
+        "07:34",
+        "17:59"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51537_2026-04-11",
@@ -67050,8 +67066,8 @@
         "07:05"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50874_2026-04-11",
@@ -67070,8 +67086,8 @@
         "07:08"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51256_2026-04-11",
@@ -67082,16 +67098,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "07:08",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:24",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
       "punches": [
-        "07:08"
+        "07:08",
+        "16:24"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51255_2026-04-11",
@@ -67102,16 +67119,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "07:05",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:09",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:05"
+        "07:05",
+        "16:09"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51121_2026-04-11",
@@ -67122,16 +67140,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:04",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:01",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:04"
+        "07:04",
+        "16:01"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51155_2026-04-11",
@@ -67142,16 +67161,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:02",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:00",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:02"
+        "07:02",
+        "16:00"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51096_2026-04-11",
@@ -67162,16 +67182,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "07:02",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:05",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:02"
+        "07:02",
+        "16:05"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51098_2026-04-11",
@@ -67182,16 +67203,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "07:02",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:06",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:02"
+        "07:02",
+        "16:06"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51068_2026-04-11",
@@ -67202,16 +67224,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:58",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:41",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:58"
+        "06:58",
+        "16:41"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51183_2026-04-11",
@@ -67230,8 +67253,8 @@
         "06:58"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51499_2026-04-11",
@@ -67250,8 +67273,8 @@
         "06:56"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50675_2026-04-11",
@@ -67270,8 +67293,8 @@
         "06:52"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51101_2026-04-11",
@@ -67290,8 +67313,8 @@
         "06:51"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51120_2026-04-11",
@@ -67310,8 +67333,8 @@
         "06:51"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51153_2026-04-11",
@@ -67322,16 +67345,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:50",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:40",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:50"
+        "06:50",
+        "16:40"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50674_2026-04-11",
@@ -67350,8 +67374,8 @@
         "06:34"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "51254_2026-04-11",
@@ -67370,8 +67394,8 @@
         "06:23"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50271_2026-04-11",
@@ -67382,16 +67406,17 @@
       "checkInDevice": "Aljuhami Camp",
       "date": "2026-04-11",
       "checkIn": "06:52",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:46",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "06:52"
+        "06:52",
+        "16:46"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "32886_2026-04-11",
@@ -67410,8 +67435,8 @@
         "07:07"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "48878_2026-04-11",
@@ -67422,16 +67447,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "07:02",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:52",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "07:02"
+        "07:02",
+        "16:52"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "31628_2026-04-11",
@@ -67442,16 +67468,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "06:54",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:08",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
       "punches": [
-        "06:54"
+        "06:54",
+        "16:08"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "39988_2026-04-11",
@@ -67462,16 +67489,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "06:11",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "15:01",
+      "totalHours": 8.24,
+      "regularHours": 8,
+      "overtimeHours": 0.24,
       "punches": [
-        "06:11"
+        "06:11",
+        "15:01"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "30739_2026-04-11",
@@ -67482,16 +67510,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:56",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:37",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:56"
+        "06:56",
+        "16:37"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "28824_2026-04-11",
@@ -67502,16 +67531,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "07:03",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:50",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "07:03"
+        "07:03",
+        "16:50"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50210_2026-04-11",
@@ -67522,16 +67552,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:56",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:07",
+      "totalHours": 9.65,
+      "regularHours": 8,
+      "overtimeHours": 1.65,
       "punches": [
-        "06:56"
+        "06:56",
+        "17:07"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "33412_2026-04-11",
@@ -67550,8 +67581,8 @@
         "06:46"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49237_2026-04-11",
@@ -67562,16 +67593,17 @@
       "checkInDevice": "Malaz-01",
       "date": "2026-04-11",
       "checkIn": "06:26",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:04",
+      "totalHours": 10.12,
+      "regularHours": 8,
+      "overtimeHours": 2.12,
       "punches": [
-        "06:26"
+        "06:26",
+        "17:04"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "30556_2026-04-11",
@@ -67582,16 +67614,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:12",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:31",
+      "totalHours": 9.65,
+      "regularHours": 8,
+      "overtimeHours": 1.65,
       "punches": [
-        "06:12"
+        "06:12",
+        "16:31"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "34187_2026-04-11",
@@ -67602,16 +67635,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "06:33",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:02",
+      "totalHours": 8.94,
+      "regularHours": 8,
+      "overtimeHours": 0.94,
       "punches": [
-        "06:33"
+        "06:33",
+        "16:02"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "45768_2026-04-11",
@@ -67622,16 +67656,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:57",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:46",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "07:57"
+        "07:57",
+        "17:46"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "34238_2026-04-11",
@@ -67642,16 +67677,17 @@
       "checkInDevice": "ALTHOMAMA HOUSING CAMP",
       "date": "2026-04-11",
       "checkIn": "06:58",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:46",
+      "totalHours": 10.12,
+      "regularHours": 8,
+      "overtimeHours": 2.12,
       "punches": [
-        "06:58"
+        "06:58",
+        "17:46"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49646_2026-04-11",
@@ -67662,16 +67698,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "07:00",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:50",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "07:00"
+        "07:00",
+        "16:50"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "35512_2026-04-11",
@@ -67682,16 +67719,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "05:53",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "15:40",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "05:53"
+        "05:53",
+        "15:40"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "40097_2026-04-11",
@@ -67702,16 +67740,17 @@
       "checkInDevice": "HeadOffice1",
       "date": "2026-04-11",
       "checkIn": "10:52",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
+      "checkOut": "18:29",
+      "totalHours": 7.06,
+      "regularHours": 7.06,
       "overtimeHours": 0,
       "punches": [
-        "10:52"
+        "10:52",
+        "18:29"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "40666_2026-04-11",
@@ -67722,16 +67761,17 @@
       "checkInDevice": "Malaz-01",
       "date": "2026-04-11",
       "checkIn": "07:14",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "18:09",
+      "totalHours": 10.35,
+      "regularHours": 8,
+      "overtimeHours": 2.35,
       "punches": [
-        "07:14"
+        "07:14",
+        "18:09"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49481_2026-04-11",
@@ -67742,16 +67782,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "06:58",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:04",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "06:58"
+        "06:58",
+        "16:04"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50079_2026-04-11",
@@ -67762,16 +67803,17 @@
       "checkInDevice": "Malaz-01",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:04",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "06:59"
+        "06:59",
+        "17:04"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49545_2026-04-11",
@@ -67782,16 +67824,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:04",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "06:59"
+        "06:59",
+        "16:04"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "37475_2026-04-11",
@@ -67802,16 +67845,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:44",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:59"
+        "06:59",
+        "16:44"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "30807_2026-04-11",
@@ -67822,16 +67866,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "07:12",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:18",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:12"
+        "07:12",
+        "16:18"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "27990_2026-04-11",
@@ -67842,16 +67887,17 @@
       "checkInDevice": "Malaz-01",
       "date": "2026-04-11",
       "checkIn": "07:02",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:05",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "07:02"
+        "07:02",
+        "17:05"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49112_2026-04-11",
@@ -67862,16 +67908,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "06:58",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:21",
+      "totalHours": 8.94,
+      "regularHours": 8,
+      "overtimeHours": 0.94,
       "punches": [
-        "06:58"
+        "06:58",
+        "16:21"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "41099_2026-04-11",
@@ -67882,16 +67929,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "05:53",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "15:42",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "05:53"
+        "05:53",
+        "15:42"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49502_2026-04-11",
@@ -67902,16 +67950,17 @@
       "checkInDevice": "Aljuhami Camp",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:45",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:59"
+        "06:59",
+        "16:45"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "50156_2026-04-11",
@@ -67922,16 +67971,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:36",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:31",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "06:36"
+        "06:36",
+        "16:31"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49498_2026-04-11",
@@ -67942,16 +67992,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:08",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:01",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:08"
+        "07:08",
+        "16:01"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "34207_2026-04-11",
@@ -67962,16 +68013,17 @@
       "checkInDevice": "Malaz-01",
       "date": "2026-04-11",
       "checkIn": "06:46",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:03",
+      "totalHours": 9.65,
+      "regularHours": 8,
+      "overtimeHours": 1.65,
       "punches": [
-        "06:46"
+        "06:46",
+        "17:03"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49499_2026-04-11",
@@ -67982,16 +68034,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:53",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:54",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "06:53"
+        "06:53",
+        "16:54"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49485_2026-04-11",
@@ -68002,16 +68055,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "07:01",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:05",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:01"
+        "07:01",
+        "16:05"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "30239_2026-04-11",
@@ -68022,16 +68076,17 @@
       "checkInDevice": "ALTHOMAMA HOUSING CAMP",
       "date": "2026-04-11",
       "checkIn": "06:58",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:08",
+      "totalHours": 9.65,
+      "regularHours": 8,
+      "overtimeHours": 1.65,
       "punches": [
-        "06:58"
+        "06:58",
+        "17:08"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "29778_2026-04-11",
@@ -68042,16 +68097,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:03",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "06:59"
+        "06:59",
+        "16:03"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "32888_2026-04-11",
@@ -68062,16 +68118,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "07:21",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:24",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:21"
+        "07:21",
+        "16:24"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49916_2026-04-11",
@@ -68082,16 +68139,17 @@
       "checkInDevice": "Aljuhami Camp",
       "date": "2026-04-11",
       "checkIn": "07:00",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:47",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "07:00"
+        "07:00",
+        "16:47"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49776_2026-04-11",
@@ -68102,16 +68160,17 @@
       "checkInDevice": "ALTHOMAMA HOUSING CAMP",
       "date": "2026-04-11",
       "checkIn": "07:46",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "17:48",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "07:46"
+        "07:46",
+        "17:48"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49490_2026-04-11",
@@ -68122,16 +68181,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "07:09",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:04",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:09"
+        "07:09",
+        "16:04"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49546_2026-04-11",
@@ -68142,16 +68202,17 @@
       "checkInDevice": "Aljuhami Camp",
       "date": "2026-04-11",
       "checkIn": "06:48",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:46",
+      "totalHours": 9.41,
+      "regularHours": 8,
+      "overtimeHours": 1.41,
       "punches": [
-        "06:48"
+        "06:48",
+        "16:46"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "28590_2026-04-11",
@@ -68162,16 +68223,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "18:25",
+      "totalHours": 9.88,
+      "regularHours": 8,
+      "overtimeHours": 1.88,
       "punches": [
-        "07:59"
+        "07:59",
+        "18:25"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49484_2026-04-11",
@@ -68182,16 +68244,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "06:54",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:11",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
       "punches": [
-        "06:54"
+        "06:54",
+        "16:11"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "14192_2026-04-11",
@@ -68210,8 +68273,8 @@
         "06:51"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "45914_2026-04-11",
@@ -68222,16 +68285,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "07:57",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:54",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "07:57"
+        "07:57",
+        "16:54"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49491_2026-04-11",
@@ -68242,16 +68306,17 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:21",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:10",
+      "totalHours": 8.24,
+      "regularHours": 8,
+      "overtimeHours": 0.24,
       "punches": [
-        "07:21"
+        "07:21",
+        "16:10"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "39710_2026-04-11",
@@ -68262,16 +68327,17 @@
       "checkInDevice": "H-Aziziyamakkah1",
       "date": "2026-04-11",
       "checkIn": "09:54",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "19:11",
+      "totalHours": 8.71,
+      "regularHours": 8,
+      "overtimeHours": 0.71,
       "punches": [
-        "09:54"
+        "09:54",
+        "19:11"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "31524_2026-04-11",
@@ -68282,16 +68348,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:59",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:51",
+      "totalHours": 9.18,
+      "regularHours": 8,
+      "overtimeHours": 1.18,
       "punches": [
-        "06:59"
+        "06:59",
+        "16:51"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "48891_2026-04-11",
@@ -68302,16 +68369,17 @@
       "checkInDevice": "ALTHOMAMA HOUSING CAMP",
       "date": "2026-04-11",
       "checkIn": "06:23",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:53",
+      "totalHours": 9.88,
+      "regularHours": 8,
+      "overtimeHours": 1.88,
       "punches": [
-        "06:23"
+        "06:23",
+        "16:53"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49975_2026-04-11",
@@ -68330,8 +68398,8 @@
         "07:02"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "48969_2026-04-11",
@@ -68342,16 +68410,17 @@
       "checkInDevice": "H-A.Khayatcamp-2",
       "date": "2026-04-11",
       "checkIn": "06:56",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:02",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
       "punches": [
-        "06:56"
+        "06:56",
+        "16:02"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49945_2026-04-11",
@@ -68362,16 +68431,17 @@
       "checkInDevice": "H-Umsalam-B2",
       "date": "2026-04-11",
       "checkIn": "06:12",
-      "checkOut": null,
-      "totalHours": 0,
-      "regularHours": 1,
-      "overtimeHours": 0,
+      "checkOut": "16:52",
+      "totalHours": 10.12,
+      "regularHours": 8,
+      "overtimeHours": 2.12,
       "punches": [
-        "06:12"
+        "06:12",
+        "16:52"
       ],
-      "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     },
     {
       "id": "49902_2026-04-11",
@@ -68382,16 +68452,1137 @@
       "checkInDevice": "SECURITY-oldwoodcamp",
       "date": "2026-04-11",
       "checkIn": "07:13",
+      "checkOut": "16:11",
+      "totalHours": 8.47,
+      "regularHours": 8,
+      "overtimeHours": 0.47,
+      "punches": [
+        "07:13",
+        "16:11"
+      ],
+      "status": "Present",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "50541_2026-04-12",
+      "employeeId": "50541",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:45",
       "checkOut": null,
       "totalHours": 0,
       "regularHours": 1,
       "overtimeHours": 0,
       "punches": [
-        "07:13"
+        "07:45"
       ],
       "status": "Incomplete",
-      "isSyncedToFirestore": false,
-      "syncedAt": "2026-04-11T10:35:43.443Z"
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51121_2026-04-12",
+      "employeeId": "51121",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:17",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:17"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51155_2026-04-12",
+      "employeeId": "51155",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:16",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:16"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51096_2026-04-12",
+      "employeeId": "51096",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "07:07",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:07"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51098_2026-04-12",
+      "employeeId": "51098",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "07:06",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:06"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51255_2026-04-12",
+      "employeeId": "51255",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:01",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:01"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51068_2026-04-12",
+      "employeeId": "51068",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "07:01",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:01"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51256_2026-04-12",
+      "employeeId": "51256",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "ALAZIZIAH HOUSING",
+      "date": "2026-04-12",
+      "checkIn": "07:01",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:01"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "51153_2026-04-12",
+      "employeeId": "51153",
+      "firstName": "",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:46",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:46"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "50271_2026-04-12",
+      "employeeId": "50271",
+      "firstName": "AAKIB HUSSAIN ANVAR HUSSAIN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-12",
+      "checkIn": "06:54",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:54"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "48878_2026-04-12",
+      "employeeId": "48878",
+      "firstName": "ABID HUSSAIN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:58",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:58"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "31628_2026-04-12",
+      "employeeId": "31628",
+      "firstName": "Abubakar Bin   Hasan",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:08",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:08"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "39988_2026-04-12",
+      "employeeId": "39988",
+      "firstName": "Ahmed Abdullah Alzhrani",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "06:06",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:06"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "30739_2026-04-12",
+      "employeeId": "30739",
+      "firstName": "Akbar     Ali",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:56",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:56"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "28824_2026-04-12",
+      "employeeId": "28824",
+      "firstName": "ALTAF BISAYATI",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:44",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:44"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "50210_2026-04-12",
+      "employeeId": "50210",
+      "firstName": "ALTAF MOHAMMED RAFIK",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:57",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:57"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49237_2026-04-12",
+      "employeeId": "49237",
+      "firstName": "ASLAM ALI",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-12",
+      "checkIn": "06:20",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:20"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "30556_2026-04-12",
+      "employeeId": "30556",
+      "firstName": "Ayyub Ali Kayam   Khani",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:53",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:53"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "34187_2026-04-12",
+      "employeeId": "34187",
+      "firstName": "Bilal Kazi  Aehmad Kazi",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "06:40",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:40"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "45768_2026-04-12",
+      "employeeId": "45768",
+      "firstName": "gemantoro ben saleem sarbeen",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "08:09",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "08:09"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "34238_2026-04-12",
+      "employeeId": "34238",
+      "firstName": "Jakir Husain  Rafeek",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-12",
+      "checkIn": "07:05",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:05"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49646_2026-04-12",
+      "employeeId": "49646",
+      "firstName": "Kamran Mehmood Muhammad Ashfaq",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "07:00",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:00"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "35512_2026-04-12",
+      "employeeId": "35512",
+      "firstName": "KHALED FADHL",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "05:53",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "05:53"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "40097_2026-04-12",
+      "employeeId": "40097",
+      "firstName": "Mohamed Abdali",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "HeadOffice1",
+      "date": "2026-04-12",
+      "checkIn": "08:28",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "08:28"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "40666_2026-04-12",
+      "employeeId": "40666",
+      "firstName": "Mohamed Mahmoud Abdelha",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-12",
+      "checkIn": "07:06",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:06"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49481_2026-04-12",
+      "employeeId": "49481",
+      "firstName": "MOHAMMAD FARMAN",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "06:58",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:58"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "50079_2026-04-12",
+      "employeeId": "50079",
+      "firstName": "Mohammad Shahnawaz Mohammad Maksud Alam",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-12",
+      "checkIn": "06:58",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:58"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49545_2026-04-12",
+      "employeeId": "49545",
+      "firstName": "MOHAMMAD YUNUS",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:16",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:16"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "37475_2026-04-12",
+      "employeeId": "37475",
+      "firstName": "Mohammed Altaf Mohammed Jafar",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:16",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:16"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "30807_2026-04-12",
+      "employeeId": "30807",
+      "firstName": "Mohammed Arif     Dayar",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:07",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:07"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "27990_2026-04-12",
+      "employeeId": "27990",
+      "firstName": "Mohammed Arif Gulam Mustufa Kazi",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-12",
+      "checkIn": "06:57",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:57"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49112_2026-04-12",
+      "employeeId": "49112",
+      "firstName": "Mohammed Ayub",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "06:57",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:57"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "41099_2026-04-12",
+      "employeeId": "41099",
+      "firstName": "MOHAMMED HASAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "05:53",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "05:53"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49502_2026-04-12",
+      "employeeId": "49502",
+      "firstName": "MOHAMMED IMRAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-12",
+      "checkIn": "06:53",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:53"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "50156_2026-04-12",
+      "employeeId": "50156",
+      "firstName": "mohammed imteyaj mohmmad",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:57",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:57"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49498_2026-04-12",
+      "employeeId": "49498",
+      "firstName": "MOHAMMED MUBARIK",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:23",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:23"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "34207_2026-04-12",
+      "employeeId": "34207",
+      "firstName": "MOHAMMED RAFIQUE",
+      "department": "HOUSING",
+      "projectName": "Riyadh Housing Camp",
+      "checkInDevice": "Malaz-01",
+      "date": "2026-04-12",
+      "checkIn": "06:51",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:51"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49499_2026-04-12",
+      "employeeId": "49499",
+      "firstName": "MOHD ASHWAD",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:55",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:55"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49485_2026-04-12",
+      "employeeId": "49485",
+      "firstName": "MOHD ISRAIL",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "07:01",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:01"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "30239_2026-04-12",
+      "employeeId": "30239",
+      "firstName": "Muhammad Bilal Ahmed Hu",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-12",
+      "checkIn": "06:39",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:39"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "29778_2026-04-12",
+      "employeeId": "29778",
+      "firstName": "Muhammad Kamran Fahim Ud Din",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "06:59",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:59"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "32888_2026-04-12",
+      "employeeId": "32888",
+      "firstName": "MUHSEN MAHDI",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:20",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:20"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49916_2026-04-12",
+      "employeeId": "49916",
+      "firstName": "nadeemmansoori",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-12",
+      "checkIn": "07:02",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:02"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49776_2026-04-12",
+      "employeeId": "49776",
+      "firstName": "Nizam Ali Nishar Ali",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-12",
+      "checkIn": "07:32",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:32"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49490_2026-04-12",
+      "employeeId": "49490",
+      "firstName": "RABBANEE MO JAMIL",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:07",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:07"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49546_2026-04-12",
+      "employeeId": "49546",
+      "firstName": "REHAN KHAN",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (Industerial Complex)",
+      "checkInDevice": "Aljuhami Camp",
+      "date": "2026-04-12",
+      "checkIn": "06:44",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:44"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "28590_2026-04-12",
+      "employeeId": "28590",
+      "firstName": "Sadrudin     Quresh",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "08:33",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "08:33"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49484_2026-04-12",
+      "employeeId": "49484",
+      "firstName": "SAHANWAJ IRSAD",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "06:56",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:56"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "45914_2026-04-12",
+      "employeeId": "45914",
+      "firstName": "Salem Sultan Salem Alssa",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "07:15",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:15"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49491_2026-04-12",
+      "employeeId": "49491",
+      "firstName": "SALMAN KHAN",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:25",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:25"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "39710_2026-04-12",
+      "employeeId": "39710",
+      "firstName": "Sharafi Yahya Kashaf",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp",
+      "checkInDevice": "H-Aziziyamakkah1",
+      "date": "2026-04-12",
+      "checkIn": "07:20",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:20"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "31524_2026-04-12",
+      "employeeId": "31524",
+      "firstName": "Shehzad Ahmed Matloob Ahmed",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:55",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:55"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "48891_2026-04-12",
+      "employeeId": "48891",
+      "firstName": "SHER ALI KHAN",
+      "department": "HOUSING",
+      "projectName": "Riyadh Remaal Housing Camp",
+      "checkInDevice": "ALTHOMAMA HOUSING CAMP",
+      "date": "2026-04-12",
+      "checkIn": "07:17",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:17"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "48969_2026-04-12",
+      "employeeId": "48969",
+      "firstName": "ZAHEER ABBAS",
+      "department": "HOUSING",
+      "projectName": "Makkah Housing Camp (Zahir)",
+      "checkInDevice": "H-A.Khayatcamp-2",
+      "date": "2026-04-12",
+      "checkIn": "07:09",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:09"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49945_2026-04-12",
+      "employeeId": "49945",
+      "firstName": "Zakir Ullah Fazli Khali",
+      "department": "HOUSING",
+      "projectName": "Bahra Housing Camp (King Abdul Aziz Hospital)",
+      "checkInDevice": "H-Umsalam-B2",
+      "date": "2026-04-12",
+      "checkIn": "06:17",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "06:17"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
+    },
+    {
+      "id": "49902_2026-04-12",
+      "employeeId": "49902",
+      "firstName": "Zubail Chand  Mohammed",
+      "department": "HOUSING",
+      "projectName": "Jeddah Housing Camp-Hamdaniah-(Old Gypsum Factory)",
+      "checkInDevice": "SECURITY-oldwoodcamp",
+      "date": "2026-04-12",
+      "checkIn": "07:11",
+      "checkOut": null,
+      "totalHours": 0,
+      "regularHours": 1,
+      "overtimeHours": 0,
+      "punches": [
+        "07:11"
+      ],
+      "status": "Incomplete",
+      "isSyncedToFirestore": true,
+      "syncedAt": "2026-04-12T08:15:14.873Z"
     }
   ],
   "residences": [
@@ -68423,6 +69614,62 @@
         }
       ],
       "id": "timesheetSettings"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "3C1ZgRS2sr2VFMYGdzIN"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "4znleAk6l3E1eb1kAEXK"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "6w8r1vh1h8xjpOsVULV5"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "Axbap5tRt6FJZjVpTjCJ"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "C8LpwaPOdkBDpzYvxDmA"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "DkivDvDBirmX4HIHU3cW"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "GR3i7DOtAFLazN46D7cB"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "KA43UwlETuLC7bWffony"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "L3wLRKW34H2dM2tQaBfI"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "SMTiuEOKEPoBpAzxEikd"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "gpKfg1LK8UBxPIhHiuPa"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "rMRf9xOfBZqUw8GKPMMM"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "complex-1775982825823"
+    },
+    {
+      "managerId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "id": "L4oapIYo87lkQANWsgiD"
     }
   ],
   "housingEmployees": [
@@ -70662,6 +71909,44 @@
       "reason": "تحويل الى السكن من قسم الحركة",
       "createdAt": "2026-04-11T11:10:27.118Z",
       "id": "f261e7d2-5564-41cb-819a-5362cb5fa6ac"
+    }
+  ],
+  "notifications": [
+    {
+      "userId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "title": "New Material Request",
+      "message": "Request #MR-local-1775989017493-52a304 • Test Complex",
+      "type": "new_order",
+      "href": "/inventory/orders/MR-local-1775989017493-52a304",
+      "referenceId": "MR-local-1775989017493-52a304",
+      "isRead": false,
+      "createdAt": "2026-04-12T10:17:02.944Z",
+      "userEmail": "m.alabdali@sacodeco.net",
+      "id": "0611adc9-1a56-4959-a39f-4d9b8d47372e"
+    },
+    {
+      "userId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "title": "New Material Request",
+      "message": "Request #MR-local-1775990528770-sste8t • Test Complex",
+      "type": "new_order",
+      "href": "/inventory/orders/MR-local-1775990528770-sste8t",
+      "referenceId": "MR-local-1775990528770-sste8t",
+      "isRead": false,
+      "createdAt": "2026-04-12T10:42:12.305Z",
+      "userEmail": "m.alabdali@sacodeco.net",
+      "id": "93b41567-6d48-4ddd-8b02-28e83239df0c"
+    },
+    {
+      "userId": "81a2194f-7d22-48ab-b6ab-82bd0f45935b",
+      "title": "New Material Request",
+      "message": "Request #MR-26401 • Test Complex",
+      "type": "new_order",
+      "href": "/inventory/orders/MR-26401",
+      "referenceId": "MR-26401",
+      "isRead": false,
+      "createdAt": "2026-04-12T10:51:49.303Z",
+      "userEmail": "m.alabdali@sacodeco.net",
+      "id": "329a9f0c-5118-475c-a8f2-a6d27fe42b5d"
     }
   ]
 }

@@ -32,14 +32,16 @@ const isFirebaseConfigured = requiredKeys.every((k) => {
   return v && typeof v === 'string' && v.trim().length > 0 && !v.includes('your_') && v !== 'your_api_key_here';
 });
 
-// In the cloudflare branch we never want to talk to Firebase
-// even if Firebase env vars are present for other branches.
-const disableFirebase = true;
+// In the cloudflare branch we generally avoid talking to Firebase by default.
+// This can be overridden in local development via NEXT_PUBLIC_DISABLE_FIREBASE=false
+const disableFirebase = String(process.env.NEXT_PUBLIC_DISABLE_FIREBASE || 'true').toLowerCase() !== 'false';
+
+export const firebaseEnabled = isFirebaseConfigured && !disableFirebase;
 
 // A promise that resolves when auth state is ready (client-only)
 let authReady: Promise<void> = Promise.resolve();
 
-if (isFirebaseConfigured && !disableFirebase) {
+if (firebaseEnabled) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 

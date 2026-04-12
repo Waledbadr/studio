@@ -363,6 +363,141 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
+const INVENTORY_LOCAL_STORAGE_KEY = 'estatecare_inventory_items';
+const INVENTORY_CATEGORIES_KEY = 'estatecare_inventory_categories';
+
+const loadInventoryFromLocalStorage = (): InventoryItem[] => {
+  try {
+    const raw = localStorage.getItem(INVENTORY_LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as InventoryItem[];
+    return parsed.map((item) => ({
+      ...item,
+      stock: Number(item.stock || 0),
+      stockByResidence: item.stockByResidence || {},
+      variants: item.variants || [],
+      lifespanDays: item.lifespanDays ? Number(item.lifespanDays) : 0,
+    }));
+  } catch (error) {
+    console.error('Failed to load inventory from localStorage', error);
+    return [];
+  }
+};
+
+const saveInventoryToLocalStorage = (items: InventoryItem[]) => {
+  try {
+    localStorage.setItem(INVENTORY_LOCAL_STORAGE_KEY, JSON.stringify(items));
+  } catch (error) {
+    console.error('Failed to save inventory to localStorage', error);
+  }
+};
+
+const loadCategoriesFromLocalStorage = (): string[] => {
+  try {
+    const raw = localStorage.getItem(INVENTORY_CATEGORIES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch (error) {
+    console.error('Failed to load inventory categories from localStorage', error);
+    return [];
+  }
+};
+
+const saveCategoriesToLocalStorage = (categories: string[]) => {
+  try {
+    localStorage.setItem(INVENTORY_CATEGORIES_KEY, JSON.stringify(categories));
+  } catch (error) {
+    console.error('Failed to save inventory categories to localStorage', error);
+  }
+};
+
+const MIV_DETAILS_LOCAL_STORAGE_KEY = 'estatecare_miv_details';
+const MRV_DETAILS_LOCAL_STORAGE_KEY = 'estatecare_mrv_details';
+
+const normalizeLocalTimestamp = (input: any): Timestamp => {
+  if (!input) return Timestamp.now();
+  if (input instanceof Timestamp) return input;
+  if (typeof input === 'string') return Timestamp.fromDate(new Date(input));
+  if (typeof input === 'number') return Timestamp.fromMillis(input);
+  if (typeof input === 'object' && input !== null && 'seconds' in input) {
+    return Timestamp.fromMillis(Number((input as any).seconds) * 1000);
+  }
+  return Timestamp.now();
+};
+
+const loadMIVDetailsFromLocalStorage = (): MIVDetails[] => {
+  try {
+    const raw = localStorage.getItem(MIV_DETAILS_LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as any[];
+    return parsed.map((miv) => ({
+      ...miv,
+      date: normalizeLocalTimestamp(miv.date),
+    })) as MIVDetails[];
+  } catch (error) {
+    console.error('Failed to load MIVs from localStorage', error);
+    return [];
+  }
+};
+
+const saveMIVDetailsToLocalStorage = (mivs: MIVDetails[]) => {
+  try {
+    localStorage.setItem(MIV_DETAILS_LOCAL_STORAGE_KEY, JSON.stringify(mivs.map(miv => ({ ...miv, date: miv.date.toDate().toISOString() }))));
+  } catch (error) {
+    console.error('Failed to save MIVs to localStorage', error);
+  }
+};
+
+const loadMRVDetailsFromLocalStorage = (): MRVDetails[] => {
+  try {
+    const raw = localStorage.getItem(MRV_DETAILS_LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as any[];
+    return parsed.map((mrv) => ({
+      ...mrv,
+      date: normalizeLocalTimestamp(mrv.date),
+    })) as MRVDetails[];
+  } catch (error) {
+    console.error('Failed to load MRVs from localStorage', error);
+    return [];
+  }
+};
+
+const saveMRVDetailsToLocalStorage = (mrvs: MRVDetails[]) => {
+  try {
+    localStorage.setItem(MRV_DETAILS_LOCAL_STORAGE_KEY, JSON.stringify(mrvs.map(mrv => ({ ...mrv, date: mrv.date.toDate().toISOString() }))));
+  } catch (error) {
+    console.error('Failed to save MRVs to localStorage', error);
+  }
+};
+
+const generateLocalId = (prefix: 'MIV' | 'MRV'): string => {
+  const now = new Date();
+  const yy = now.getFullYear().toString().slice(-2);
+  const mmNoPad = (now.getMonth() + 1).toString();
+  const counterKey = `estatecare_${prefix.toLowerCase()}_counter_${yy}-${mmNoPad}`;
+  let nextSeq = 1;
+  try {
+    const raw = localStorage.getItem(counterKey);
+    const current = raw ? parseInt(raw, 10) : 0;
+    nextSeq = Number.isFinite(current) && current > 0 ? current + 1 : 1;
+  } catch (error) {
+    console.warn(`Failed to read local ${prefix} counter:`, error);
+  }
+  try {
+    localStorage.setItem(counterKey, String(nextSeq));
+  } catch (error) {
+    console.warn(`Failed to persist local ${prefix} counter:`, error);
+  }
+  return `${prefix}-${yy}${mmNoPad}${String(nextSeq).padStart(2, '0')}`;
+};
+
+const generateLocalInventoryId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `local-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
+};
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -384,10 +519,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const loadInventory = useCallback(() => {
       if (isLoaded.current) return;
       if (!db) {
-        // In the cloudflare/D1 branch Firebase is intentionally disabled.
-        // Treat missing db as "inventory not available" instead of a hard error.
-        console.warn("InventoryContext: Firebase db is null; skipping Firestore inventory listeners in this environment.");
+        console.warn("InventoryContext: Firebase db is null; loading local inventory fallback.");
+        setItems(loadInventoryFromLocalStorage());
+        setCategories(loadCategoriesFromLocalStorage());
         setLoading(false);
+        isLoaded.current = true;
         return;
      }
 
@@ -476,17 +612,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const addCategory = async (newCategory: string) => {
-    if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-      return;
-    }
-    const trimmedCategory = newCategory.trim().toLowerCase();
-    if (categories.map(c => c.toLowerCase()).includes(trimmedCategory)) {
+    const trimmed = newCategory.trim();
+    if (categories.map(c => c.toLowerCase()).includes(trimmed.toLowerCase())) {
        toast({ title: "Error", description: "This category already exists.", variant: "destructive" });
        return;
     }
+    const updatedCategories = [...categories, trimmed];
+    setCategories(updatedCategories);
+    saveCategoriesToLocalStorage(updatedCategories);
+
+    if (!db) {
+      toast({ title: "Success", description: "Category added locally." });
+      return;
+    }
     try {
-      const updatedCategories = [...categories, newCategory.trim()];
       const categoriesDocRef = doc(db!, "inventory-categories", "all-categories");
       await setDoc(categoriesDocRef, { names: updatedCategories }, { merge: true });
       toast({ title: "Success", description: "Category added." });
@@ -531,19 +670,40 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addItem = async (newItem: Omit<InventoryItem, 'id' | 'stock'>): Promise<InventoryItem | void> => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
     const isDuplicate = items.some(item => item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || item.nameAr === newItem.nameAr);
     if (isDuplicate) {
       toast({ title: "Error", description: "An item with this name already exists.", variant: "destructive" });
       return;
     }
+
+    const itemWithId: InventoryItem = {
+      ...newItem,
+      id: db ? doc(collection(db, "inventory")).id : generateLocalInventoryId(),
+      stock: 0,
+      stockByResidence: {},
+      lifespanDays: newItem.lifespanDays || 0,
+      variants: newItem.variants || [],
+    };
+
+    if (!db) {
+      const nextItems = [...items, itemWithId];
+      setItems(nextItems);
+      saveInventoryToLocalStorage(nextItems);
+
+      if (!categories.map(c => c.toLowerCase()).includes(newItem.category.toLowerCase())) {
+        const nextCategories = [...categories, newItem.category.trim()];
+        setCategories(nextCategories);
+        saveCategoriesToLocalStorage(nextCategories);
+      }
+
+      toast({ title: "Success", description: "New item added locally." });
+      return itemWithId;
+    }
+
     try {
       const docRef = doc(collection(db, "inventory"));
-      const itemWithId = { ...newItem, id: docRef.id, stock: 0, stockByResidence: {}, lifespanDays: newItem.lifespanDays || 0, variants: newItem.variants || [] };
-      await setDoc(docRef, itemWithId);
+      const itemWithIdOnDb = { ...itemWithId, id: docRef.id };
+      await setDoc(docRef, itemWithIdOnDb);
       
       const newCategory = newItem.category.toLowerCase();
       if (!categories.map(c => c.toLowerCase()).includes(newCategory)) {
@@ -551,7 +711,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       toast({ title: "Success", description: "New item added to inventory." });
-      return itemWithId;
+      return itemWithIdOnDb;
     } catch (error) {
        toast({ title: "Error", description: "Failed to add item.", variant: "destructive" });
        console.error("Error adding item:", error);
@@ -560,7 +720,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const updateItem = async (itemToUpdate: InventoryItem) => {
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+      const nextItems = items.map((item) => (item.id === itemToUpdate.id ? itemToUpdate : item));
+      setItems(nextItems);
+      saveInventoryToLocalStorage(nextItems);
+      toast({ title: "Success", description: "Item updated locally." });
       return;
     }
     try {
@@ -575,9 +738,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteItem = async (id: string) => {
+    if (!currentUser || currentUser.role !== 'Admin') {
+      toast({ title: "Forbidden", description: "Only admins can delete items.", variant: "destructive" });
+      return;
+    }
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
+      const nextItems = items.filter((item) => item.id !== id);
+      setItems(nextItems);
+      saveInventoryToLocalStorage(nextItems);
+      toast({ title: "Success", description: "Item deleted locally." });
+      return;
     }
     // Enforce admin-only deletion in the client as a first line of defense
     if (!currentUser || currentUser.role !== 'Admin') {
@@ -678,7 +848,68 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const issueItemsFromStock = async (residenceId: string, voucherLocations: LocationWithItems<{id: string, issueQuantity: number, nameEn?: string, nameAr?: string, overrideReason?: string | null}>[]) => {
     if (!db) {
-        throw new Error(firebaseErrorMessage);
+      const localItems = [...items];
+      const itemMap = new Map(localItems.map(item => [item.id, item]));
+      const allIssuedItems = voucherLocations.flatMap(loc => loc.items.filter(i => i.issueQuantity > 0));
+      const totalsByItem = new Map<string, number>();
+      for (const line of allIssuedItems) {
+        totalsByItem.set(line.id, (totalsByItem.get(line.id) || 0) + Number(line.issueQuantity || 0));
+      }
+
+      for (const [itemId, totalToIssue] of totalsByItem.entries()) {
+        const item = itemMap.get(itemId);
+        if (!item) {
+          throw new Error(`Item with ID ${itemId} not found.`);
+        }
+        const currentStock = Math.max(0, Number(item.stockByResidence?.[residenceId] || 0));
+        if (currentStock < totalToIssue) {
+          const nameEn = item.nameEn || item.name || itemId;
+          throw new Error(`Not enough stock for ${nameEn}. Available: ${currentStock}, Required: ${totalToIssue}`);
+        }
+      }
+
+      const updatedItems = localItems.map((item) => {
+        const totalToIssue = totalsByItem.get(item.id) || 0;
+        if (totalToIssue === 0) return item;
+        const sbr = { ...(item.stockByResidence || {}) };
+        const currentQty = Math.max(0, Number(sbr[residenceId] || 0));
+        const nextQty = Math.max(0, currentQty - totalToIssue);
+        sbr[residenceId] = nextQty;
+        const newTotal = Object.values(sbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        return { ...item, stockByResidence: sbr, stock: newTotal };
+      });
+
+      setItems(updatedItems);
+      saveInventoryToLocalStorage(updatedItems);
+
+      const mivId = generateLocalId('MIV');
+      const now = Timestamp.now();
+      const locations: MIVDetails['locations'] = {};
+      for (const location of voucherLocations) {
+        const locItems = location.items.filter(i => i.issueQuantity > 0).map((issuedItem) => ({
+          itemId: issuedItem.id,
+          itemNameEn: issuedItem.nameEn || '',
+          itemNameAr: issuedItem.nameAr || '',
+          quantity: issuedItem.issueQuantity,
+        }));
+        if (locItems.length > 0) {
+          locations[location.locationName || 'Unknown'] = locItems;
+        }
+      }
+
+      const mivDetail: MIVDetails = {
+        id: mivId,
+        date: now,
+        residenceId,
+        locations,
+      };
+      const existing = loadMIVDetailsFromLocalStorage();
+      saveMIVDetailsToLocalStorage([mivDetail, ...existing]);
+      toast({ title: "Success", description: "Voucher submitted successfully." });
+      return;
     }
 
     try {
@@ -794,8 +1025,67 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const createMRV = async (payload: { residenceId: string; items: { id: string; nameEn: string; nameAr: string; quantity: number }[]; meta?: { supplierName?: string; invoiceNo?: string; notes?: string; attachmentUrl?: string | null; attachmentPath?: string | null; mrvId?: string; mrvShort?: string; orderId?: string } }): Promise<string> => {
     // Note: If meta.mrvId is not provided, we reserve an MRV id using monthly counters (reserveNewMrvId)
     if (!db) {
-      toast({ title: "Error", description: firebaseErrorMessage, variant: "Destructive" as any });
-      throw new Error(firebaseErrorMessage);
+      if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
+        toast({ title: 'Insufficient permissions', description: 'Only Admins or Supervisors can post MRVs.', variant: 'destructive' });
+        throw new Error('Forbidden');
+      }
+      const validItems = (payload.items || []).filter(i => i.quantity && i.quantity > 0);
+      if (!payload.residenceId || validItems.length === 0) {
+        throw new Error('Residence and at least one item with quantity > 0 are required.');
+      }
+
+      const totalsByItem = new Map<string, number>();
+      for (const line of validItems) {
+        totalsByItem.set(line.id, (totalsByItem.get(line.id) || 0) + Number(line.quantity || 0));
+      }
+
+      const localItems = [...items];
+      const itemMap = new Map(localItems.map(item => [item.id, item]));
+
+      for (const [itemId, totalQty] of totalsByItem.entries()) {
+        const item = itemMap.get(itemId);
+        if (!item) {
+          throw new Error(`Item not found (ID: ${itemId})`);
+        }
+        const currentQty = Math.max(0, Number(item.stockByResidence?.[payload.residenceId] || 0));
+        const nextQty = currentQty + totalQty;
+        const sbr = { ...(item.stockByResidence || {}), [payload.residenceId]: nextQty };
+        const newTotal = Object.values(sbr).reduce((sum, v: any) => {
+          const n = Number(v);
+          return sum + (isNaN(n) ? 0 : Math.max(0, n));
+        }, 0);
+        itemMap.set(itemId, { ...item, stockByResidence: sbr, stock: newTotal });
+      }
+
+      const updatedItems = localItems.map(item => itemMap.get(item.id) || item);
+      setItems(updatedItems);
+      saveInventoryToLocalStorage(updatedItems);
+
+      const mrvId = payload.meta?.mrvId || generateLocalId('MRV');
+      const now = Timestamp.now();
+      const mrvDetail: MRVDetails = {
+        id: mrvId,
+        date: now,
+        residenceId: payload.residenceId,
+        items: validItems.map(line => ({
+          itemId: line.id,
+          itemNameEn: line.nameEn,
+          itemNameAr: line.nameAr,
+          quantity: line.quantity,
+        })),
+        supplierName: payload.meta?.supplierName || undefined,
+        invoiceNo: payload.meta?.invoiceNo || undefined,
+        attachmentUrl: payload.meta?.attachmentUrl || null,
+        attachmentPath: payload.meta?.attachmentPath || null,
+        codeShort: payload.meta?.mrvShort || mrvId,
+        orderId: payload.meta?.orderId || null,
+        receivedBy: currentUser?.id,
+        receivedByName: currentUser?.name,
+      };
+      const existingMRVs = loadMRVDetailsFromLocalStorage();
+      saveMRVDetailsToLocalStorage([mrvDetail, ...existingMRVs]);
+      toast({ title: 'Success', description: 'Materials received and added to stock.' });
+      return mrvId;
     }
     // Client-side guard: only Admin or Supervisor can post MRVs
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Supervisor')) {
@@ -1197,9 +1487,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return rows.sort((a, b) => (a.itemNameEn || '').localeCompare(b.itemNameEn || ''));
   };
 
- const getAllInventoryTransactions = async (): Promise<InventoryTransaction[]> => {
+ const getAllInventoryTransactions = useCallback(async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        console.warn('Firebase disabled: getAllInventoryTransactions fallback to empty list');
         return [];
     }
 
@@ -1214,7 +1504,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Error", description: "Failed to fetch all transactions.", variant: "destructive" });
         return [];
     }
-  };
+  }, [toast]);
 
   // Helper: last issue date for an item at a specific location
   const getLastIssueDateForItemAtLocation = async (itemId: string, locationId: string): Promise<Timestamp | null> => {
@@ -1270,10 +1560,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // List recent MIVs
-  const getMIVs = async (): Promise<MIV[]> => {
+  const getMIVs = useCallback(async (): Promise<MIV[]> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
-      return [];
+      const localMivs = loadMIVDetailsFromLocalStorage();
+      return localMivs
+        .sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0))
+        .map((miv) => ({
+          id: miv.id,
+          date: miv.date,
+          residenceId: miv.residenceId,
+          itemCount: Object.values(miv.locations).flat().length,
+          locationName: Object.keys(miv.locations)[0] || 'Multiple',
+        }));
     }
     try {
       const qRef = query(collection(db, 'mivs'), orderBy('date', 'desc'), limit(20));
@@ -1284,13 +1582,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Error', description: 'Failed to fetch MIVs.', variant: 'destructive' });
       return [];
     }
-  };
+  }, [toast]);
 
   // Get MIV details by ID
   const getMIVById = async (mivId: string): Promise<MIVDetails | null> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
-      return null;
+      const localMivs = loadMIVDetailsFromLocalStorage();
+      return localMivs.find((miv) => miv.id === mivId) || null;
     }
     try {
       const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mivId));
@@ -1325,10 +1623,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // List recent MRVs
-  const getMRVs = async (): Promise<MRV[]> => {
+  const getMRVs = useCallback(async (): Promise<MRV[]> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
-      return [];
+      const localMrvs = loadMRVDetailsFromLocalStorage();
+      return localMrvs.sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
     }
     try {
       const qRef = query(collection(db, 'mrvs'), orderBy('date', 'desc'), limit(20));
@@ -1339,13 +1637,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: 'Error', description: 'Failed to fetch MRVs.', variant: 'destructive' });
       return [];
     }
-  };
+  }, [toast]);
 
   // Get MRV details by ID
   const getMRVById = async (mrvId: string): Promise<MRVDetails | null> => {
     if (!db) {
-      toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
-      return null;
+      const localMrvs = loadMRVDetailsFromLocalStorage();
+      return localMrvs.find((mrv) => mrv.id === mrvId) || null;
     }
     try {
       const txQ = query(collection(db, 'inventoryTransactions'), where('referenceDocId', '==', mrvId));
@@ -2377,9 +2675,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       return { fixedCount, affectedItems: affected };
     };
 
-    const getAllReconciliations = async (): Promise<StockReconciliation[]> => {
+    const getAllReconciliations = useCallback(async (): Promise<StockReconciliation[]> => {
       if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
+        console.warn('Firebase disabled: getAllReconciliations fallback to empty list');
         return [];
       }
       try {
@@ -2392,7 +2690,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: 'Error', description: 'Failed to fetch all reconciliations.', variant: 'destructive' });
         return [];
       }
-    };
+    }, [toast]);
 
    
 
@@ -2438,9 +2736,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     // Reconciliation approval workflow implementations
-  const getReconciliationRequests = async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
+  const getReconciliationRequests = useCallback(async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
       if (!db) {
-        toast({ title: 'Error', description: firebaseErrorMessage, variant: 'destructive' });
+        console.warn('Firebase disabled: getReconciliationRequests fallback to empty list');
         return [];
       }
       try {
@@ -2460,7 +2758,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: 'Error', description: 'Failed to fetch reconciliation requests.', variant: 'destructive' });
         return [];
       }
-    };
+    }, [toast]);
 
     const createReconciliationRequest = async (resId: string, adjustments: { itemId: string; newStock: number; reason?: string }[], requestedById: string): Promise<string> => {
       if (!db) throw new Error(firebaseErrorMessage);

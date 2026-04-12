@@ -42,7 +42,7 @@ interface ReceivedItem extends OrderItem {
 export default function ReceiveOrderPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { receiveOrderItems, loading: ordersLoading } = useOrders();
+    const { receiveOrderItems, loading: ordersLoading, getOrderById } = useOrders();
     const [order, setOrder] = useState<Order | null>(null);
     const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -71,55 +71,63 @@ export default function ReceiveOrderPage() {
     }, [locale]);
 
     const fetchOrderForPage = useCallback(async (orderId: string) => {
-        if (!db) return;
         setLoading(true);
-        const orderRef = doc(db, "orders", orderId);
-        const orderSnap = await getDoc(orderRef);
-
-        if (orderSnap.exists()) {
-             const fetchedOrder = { id: orderSnap.id, ...orderSnap.data() } as Order;
-             const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
-             
-             if (!receivableStatuses.includes(fetchedOrder.status)) {
-                toast({
-                    title: dict.invalidStatusTitle,
-                    description: dict.invalidStatusCannotBeReceived.replace('{status}', fetchedOrder.status),
-                    variant: "destructive"
-                });
-                router.push('/inventory/receive');
-                return;
-            }
-
-            setOrder(fetchedOrder);
-            // Only include:
-            // - items without overrideReason (normal flow)
-            // - items with overrideReason AND justificationDecision === 'approved' (use approvedQuantity)
-            const filteredItems = (Array.isArray(fetchedOrder.items) ? fetchedOrder.items : []).map((item) => {
-                const needsReview = !!(item as any).overrideReason;
-                if (!needsReview) return item;
-                if ((item as any).justificationDecision === 'approved') {
-                    const q = typeof (item as any).approvedQuantity === 'number' ? (item as any).approvedQuantity : 0;
-                    return { ...item, quantity: q } as any;
-                }
-                return null as any; // pending or rejected: not receivable yet
-            }).filter(Boolean) as OrderItem[];
-
-            const initialReceivedItems = filteredItems.map((item, idx) => {
-                const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
-                const remainingToReceive = Math.max(0, (item.quantity || 0) - alreadyReceived);
-                const uniqueKey = `${item.id}::${(item.notes || '').trim()}`;
-                return {
-                    ...item,
-                    quantityReceived: remainingToReceive,
-                    alreadyReceived: alreadyReceived,
-                    uniqueKey,
-                }
-            });
-            setReceivedItems(initialReceivedItems);
+        let fetchedOrder: Order | null = null;
+        if (!db) {
+            fetchedOrder = await getOrderById(orderId);
         } else {
-             toast({ title: dict.invalidStatusTitle, description: dict.orderNotFoundDescription, variant: "destructive" });
-             router.push('/inventory/receive');
+            const orderRef = doc(db, "orders", orderId);
+            const orderSnap = await getDoc(orderRef);
+            if (orderSnap.exists()) {
+                fetchedOrder = { id: orderSnap.id, ...orderSnap.data() } as Order;
+            }
         }
+
+        if (!fetchedOrder) {
+            toast({ title: dict.invalidStatusTitle, description: dict.orderNotFoundDescription, variant: "destructive" });
+            setLoading(false);
+            router.push('/inventory/receive');
+            return;
+        }
+
+        const receivableStatuses: Array<Order['status']> = ['Approved', 'Partially Delivered'];
+        if (!receivableStatuses.includes(fetchedOrder.status)) {
+            toast({
+                title: dict.invalidStatusTitle,
+                description: dict.invalidStatusCannotBeReceived.replace('{status}', fetchedOrder.status),
+                variant: "destructive"
+            });
+            setLoading(false);
+            router.push('/inventory/receive');
+            return;
+        }
+
+        setOrder(fetchedOrder);
+        // Only include:
+        // - items without overrideReason (normal flow)
+        // - items with overrideReason AND justificationDecision === 'approved' (use approvedQuantity)
+        const filteredItems = (Array.isArray(fetchedOrder.items) ? fetchedOrder.items : []).map((item) => {
+            const needsReview = !!(item as any).overrideReason;
+            if (!needsReview) return item;
+            if ((item as any).justificationDecision === 'approved') {
+                const q = typeof (item as any).approvedQuantity === 'number' ? (item as any).approvedQuantity : 0;
+                return { ...item, quantity: q } as any;
+            }
+            return null as any; // pending or rejected: not receivable yet
+        }).filter(Boolean) as OrderItem[];
+
+        const initialReceivedItems = filteredItems.map((item, idx) => {
+            const alreadyReceived = fetchedOrder.itemsReceived?.find(ri => ri.id === item.id)?.quantityReceived || 0;
+            const remainingToReceive = Math.max(0, (item.quantity || 0) - alreadyReceived);
+            const uniqueKey = `${item.id}::${(item.notes || '').trim()}`;
+            return {
+                ...item,
+                quantityReceived: remainingToReceive,
+                alreadyReceived: alreadyReceived,
+                uniqueKey,
+            }
+        });
+        setReceivedItems(initialReceivedItems);
         setLoading(false);
     }, [router, toast]);
 

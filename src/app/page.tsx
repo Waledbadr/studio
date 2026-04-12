@@ -73,7 +73,7 @@ export default function DashboardPage() {
             setPendingRecons([]);
             setPendingReconsLoading(false);
         }
-    }, [currentUser, isAdmin, loadRequests, loadOrders, getMIVs, getReconciliationRequests, getAllReconciliations]);
+    }, [currentUser?.id, isAdmin, loadRequests, loadOrders, getMIVs, getMRVs, getReconciliationRequests, getAllInventoryTransactions, getAllReconciliations]);
   
   const filteredMaintenance = useMemo(() => {
     if (!currentUser || isAdmin) return requests;

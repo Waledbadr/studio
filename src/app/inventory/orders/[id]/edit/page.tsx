@@ -158,7 +158,7 @@ function AddItemButton({
 export default function EditOrderPage() {
     const { dict } = useLanguage();
     const { items: allItems, loading: inventoryLoading, loadInventory, addItem, categories, updateItem, checkItemLifespanAtLocation, getStockForResidence } = useInventory();
-    const { getOrderById, updateOrder, loading: ordersLoading } = useOrders();
+    const { getOrderById, updateOrder, loading: ordersLoading, orders } = useOrders();
     const { currentUser } = useUsers();
     // Add residences context to resolve/display residence name properly
     const { residences } = useResidences();
@@ -331,7 +331,23 @@ export default function EditOrderPage() {
         let unsub: (() => void) | null = null;
         let isMounted = true;
         (async () => {
-            if (!db || typeof id !== 'string') { setPageLoading(false); return; }
+            if (!db || typeof id !== 'string') {
+                const localOrder = orders.find((o) => o.id === id) || null;
+                if (isMounted) {
+                    setOrder(localOrder);
+                    if (localOrder) {
+                        setOrderItems(localOrder.items || []);
+                        setResidenceName(localOrder.residence || '');
+                        setResidenceId(localOrder.residenceId || '');
+                        if (!isDraftDirtyRef.current && !(hasMeaningfulDraftRef.current && (generalNotesRef.current?.trim().length > 0))) {
+                            setGeneralNotes(localOrder.notes || '');
+                        }
+                        setStatus(localOrder.status);
+                    }
+                    setPageLoading(false);
+                }
+                return;
+            }
             try {
                 // Immediate fetch to populate without hard refresh
                 const first = await getOrderById(id as string);
@@ -381,7 +397,7 @@ export default function EditOrderPage() {
             });
         })();
         return () => { isMounted = false; if (unsub) unsub(); };
-    }, [id, getOrderById]);
+    }, [id, getOrderById, orders]);
 
     // Autosave draft in edit page: debounce + interval + visibility change
     useEffect(() => {

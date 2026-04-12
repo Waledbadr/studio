@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
 import { verifySession, getUserByEmail } from '@/lib/auth-server';
+import { devFindByField, devUpsert } from '@/lib/dev-d1-memory';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,14 +26,18 @@ export async function POST(req: NextRequest) {
     }
     const requesterUid = session.uid;
 
-    // Ensure requester is Admin using D1-backed user records
+    // Ensure requester is Admin using D1-backed user records when available.
     const d1Db = getD1Db();
-    if (!d1Db) {
+    let requesterDoc: any = null;
+    if (d1Db) {
+      requesterDoc = await d1Db.collection('users').doc(requesterUid).get();
+    } else if (process.env.NODE_ENV !== 'production') {
+      requesterDoc = devFindByField('users', 'id', requesterUid);
+    } else {
       return NextResponse.json({ error: 'D1 database not configured' }, { status: 500 });
     }
 
-    const requesterDoc = await d1Db.collection('users').doc(requesterUid).get();
-    if (!requesterDoc.exists || (requesterDoc.data() as any)?.role !== 'Admin') {
+    if (!requesterDoc || !(requesterDoc.exists || requesterDoc.id) || (requesterDoc.data ? (requesterDoc.data() as any)?.role : requesterDoc.role) !== 'Admin') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
@@ -56,7 +61,11 @@ export async function POST(req: NextRequest) {
     };
     if (themeSettings && typeof themeSettings === 'object') payload.themeSettings = themeSettings;
 
-    await d1Db.collection('users').doc(uid).set(payload, { merge: true });
+    if (d1Db) {
+      await d1Db.collection('users').doc(uid).set(payload, { merge: true });
+    } else {
+      devUpsert('users', uid, payload);
+    }
 
     return NextResponse.json({ uid, email: emailKey, user: payload });
   } catch (e: any) {

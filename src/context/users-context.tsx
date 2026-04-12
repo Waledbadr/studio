@@ -41,6 +41,28 @@ const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
 const firebaseErrorMessage = "Error: Firebase is not configured. Please add your credentials to the .env file and ensure they are correct.";
 
+const USERS_LOCAL_STORAGE_KEY = 'estatecare_users';
+
+const loadUsersFromLocalStorage = (): User[] => {
+  try {
+    const raw = localStorage.getItem(USERS_LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as User[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Failed to load users from localStorage', error);
+    return [];
+  }
+};
+
+const saveUsersToLocalStorage = (users: User[]) => {
+  try {
+    localStorage.setItem(USERS_LOCAL_STORAGE_KEY, JSON.stringify(users));
+  } catch (error) {
+    console.error('Failed to save users to localStorage', error);
+  }
+};
+
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -67,12 +89,21 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
     const fetchUsers = async () => {
       try {
-        const [usersData, sessionRes] = await Promise.all([
-          listDocuments<User>('users', { orderBy: { field: 'name', direction: 'ASC' } }),
-          fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' }).catch(() => null),
-        ]);
+        let usersList: User[] = [];
+        try {
+          const usersData = await listDocuments<User>('users', { orderBy: { field: 'name', direction: 'ASC' } });
+          usersList = usersData || [];
+        } catch (error) {
+          const message = (error as any)?.message || String(error);
+          if (message.includes('D1 database not configured') || message.includes('database not configured')) {
+            console.warn('UsersContext: D1 database not configured; loading users from localStorage.');
+            usersList = loadUsersFromLocalStorage();
+          } else {
+            throw error;
+          }
+        }
 
-        const usersList = usersData || [];
+        const sessionRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' }).catch(() => null);
         setUsers(usersList);
 
         let activeUser = null as User | null;
@@ -138,7 +169,19 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         nextAssigned.forEach(rid => { if (!prevAssigned.has(rid)) added.push(rid); });
         prevAssigned.forEach(rid => { if (!nextAssigned.has(rid)) removed.push(rid); });
 
-        await updateDocument('users', id, { ...payload });
+        try {
+          await updateDocument('users', id, { ...payload });
+        } catch (error) {
+          const message = (error as any)?.message || String(error);
+          if (message.includes('D1 database not configured') || message.includes('database not configured')) {
+            const nextUsers = users.map((u) => (u.id === id ? { ...u, ...payload } : u));
+            setUsers(nextUsers);
+            saveUsersToLocalStorage(nextUsers);
+            toast({ title: 'Success', description: 'User updated locally.' });
+          } else {
+            throw error;
+          }
+        }
 
         try {
           for (const rid of added) {
@@ -174,7 +217,23 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
         if (!res.ok) {
           const txt = await res.text();
-          throw new Error(txt || 'Failed to create user');
+          const errorText = txt || 'Failed to create user';
+          if (errorText.includes('D1 database not configured') || errorText.includes('database not configured')) {
+            const newUser: User = {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              name: payload.name,
+              email: emailKey,
+              role: payload.role,
+              assignedResidences: payload.assignedResidences || [],
+              themeSettings: payload.themeSettings,
+            };
+            const nextUsers = [...users, newUser];
+            setUsers(nextUsers);
+            saveUsersToLocalStorage(nextUsers);
+            toast({ title: 'Success', description: 'User created locally.' });
+            return;
+          }
+          throw new Error(errorText);
         }
 
         toast({ title: 'Success', description: 'User created successfully.' });
@@ -189,9 +248,19 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const deleteUser = async (id: string) => {
     try {
       await deleteDocument('users', id);
-      setUsers((current) => current.filter((u) => u.id !== id));
+      const nextUsers = users.filter((u) => u.id !== id);
+      setUsers(nextUsers);
+      saveUsersToLocalStorage(nextUsers);
       toast({ title: 'Success', description: 'User deleted successfully.' });
     } catch (error) {
+      const message = (error as any)?.message || String(error);
+      if (message.includes('D1 database not configured') || message.includes('database not configured')) {
+        const nextUsers = users.filter((u) => u.id !== id);
+        setUsers(nextUsers);
+        saveUsersToLocalStorage(nextUsers);
+        toast({ title: 'Success', description: 'User deleted locally.' });
+        return;
+      }
       console.error('Error deleting user:', error);
       toast({ title: 'Error', description: 'Failed to delete user.', variant: 'destructive' });
     }
