@@ -45,7 +45,7 @@ export default function UsersPage() {
         setIsUserDialogOpen(true);
     };
 
-    const handleSaveUser = async (userToSave: User) => {
+    const handleSaveUser = async (userToSave: any) => {
         setIsSaving(true);
         try {
             await saveUser(userToSave);

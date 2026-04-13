@@ -93,8 +93,8 @@ export function AccommodationManager() {
     // Filter out disabled residences
     const activeResidences = residences.filter(r => !r.disabled);
     if (currentUser.role === 'Admin') return activeResidences;
-    // Filter by assignedResidences array
-    return activeResidences.filter(r => currentUser.assignedResidences?.includes(r.id));
+    const assignedIds = currentUser.assignedResidences || [];
+    return activeResidences.filter(r => assignedIds.includes(r.id) || r.managerId === currentUser.id);
   }, [residences, currentUser]);
 
   // Global State

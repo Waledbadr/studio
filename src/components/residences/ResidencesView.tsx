@@ -796,7 +796,10 @@ export default function ResidencesView({ showFacilities = true, showCapacity = t
 
   const userVisibleResidences = useMemo(() => {
     if (!currentUser) return [];
-    const visible = isAdmin ? residences : residences.filter(r => currentUser.assignedResidences.includes(r.id));
+    const assignedIds = currentUser.assignedResidences || [];
+    const visible = isAdmin
+      ? residences
+      : residences.filter(r => assignedIds.includes(r.id) || r.managerId === currentUser.id);
     return visible;
   }, [currentUser, residences, isAdmin]);
 

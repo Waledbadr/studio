@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAccommodation } from '@/context/accommodation-context';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowRightLeft, Plus, Edit2, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Plus, Edit2, Trash2, Search, Filter as FilterIcon } from 'lucide-react';
 import { CreateTransferDialog } from '@/components/accommodation/create-transfer-dialog';
 import { 
   Dialog, 
@@ -30,6 +30,10 @@ export default function WorkersPage() {
   const [form, setForm] = useState({ id: '', name: '', employeeId: '', idNumber: '', nationaliy: '', company: '', role: 'Worker' });
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [selectedWorkersForTransfer, setSelectedWorkersForTransfer] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'All' | 'Worker' | 'Supervisor' | 'Engineer'>('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   useEffect(() => { if (!editing) setForm({ id: '', name: '', employeeId: '', idNumber: '', nationaliy: '', company: '', role: 'Worker' }); }, [editing]);
 
@@ -93,6 +97,36 @@ export default function WorkersPage() {
     setTransferDialogOpen(true);
   };
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredWorkers = useMemo(() => {
+    return workers.filter((w: any) => {
+      const matchesRole = roleFilter === 'All' || w.role === roleFilter;
+      if (!matchesRole) return false;
+
+      if (!normalizedQuery) return true;
+      const searchFields = [
+        w.name,
+        w.employeeId,
+        w.idNumber,
+        w.nationaliy,
+        w.company,
+        w.role,
+        w.id,
+      ].filter(Boolean).map((value: string) => String(value).toLowerCase());
+      return searchFields.some((value: string) => value.includes(normalizedQuery));
+    });
+  }, [workers, normalizedQuery, roleFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredWorkers.length / pageSize));
+  const pagedWorkers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredWorkers.slice(start, start + pageSize);
+  }, [filteredWorkers, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [normalizedQuery, roleFilter]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -100,11 +134,37 @@ export default function WorkersPage() {
           <h1 className="text-2xl font-semibold">Workers • العمال</h1>
           <p className="text-sm text-muted-foreground mt-1">إدارة بيانات العمال</p>
         </div>
-        <div className="flex gap-2">
-          <Link 
-            href="/accommodation/workers/import"
-            className="rounded-md bg-green-600 text-white px-4 py-2 hover:bg-green-700 flex items-center gap-2"
-          >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
+          <div className="grid gap-2 sm:flex sm:items-center sm:gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="بحث باسم العامل، رقم الموظف، الهوية، الجنسية أو الشركة"
+                className="pl-10 pr-3 w-full sm:w-[320px]"
+              />
+            </div>
+            <div className="relative">
+              <FilterIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
+                className="h-10 w-full sm:w-[180px] rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="All">الكل / All roles</option>
+                <option value="Worker">عامل / Worker</option>
+                <option value="Supervisor">مشرف / Supervisor</option>
+                <option value="Engineer">مهندس / Engineer</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Link 
+              href="/accommodation/workers/import"
+              className="rounded-md bg-green-600 text-white px-4 py-2 hover:bg-green-700 flex items-center gap-2"
+            >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
@@ -129,6 +189,7 @@ export default function WorkersPage() {
           }} variant="outline">Migrate local → Firestore</Button>
         </div>
       </div>
+    </div>
       
       <CreateTransferDialog 
         isOpen={transferDialogOpen} 
@@ -204,6 +265,16 @@ export default function WorkersPage() {
       </Dialog>
 
       <div className="rounded-md border border-border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">إجمالي العمال: {workers.length} / المعروض: {filteredWorkers.length}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{roleFilter === 'All' ? 'الكل' : roleFilter}</span>
+            <span>•</span>
+            <span>عدد الصفحات: {pageCount}</span>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -218,7 +289,7 @@ export default function WorkersPage() {
               </tr>
             </thead>
             <tbody>
-              {workers.length ? workers.map((w: any) => (
+              {pagedWorkers.length ? pagedWorkers.map((w: any) => (
                 <tr key={w.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                   <td className="p-3 text-sm text-foreground">{w.employeeId || '-'}</td>
                   <td className="p-3 text-sm font-medium text-foreground">{w.name}</td>
@@ -250,6 +321,25 @@ export default function WorkersPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 py-3 px-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          عرض {pagedWorkers.length} من أصل {filteredWorkers.length} عامل
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >السابق</button>
+          <span>الصفحة {currentPage} من {pageCount}</span>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pageCount))}
+            disabled={currentPage === pageCount}
+            className="rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >التالي</button>
         </div>
       </div>
     </div>

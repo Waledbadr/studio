@@ -105,7 +105,8 @@ export default function AccommodationResidencesView() {
   const userResidences = useMemo(() => {
     if (!currentUser) return residences;
     if (currentUser.role === 'Admin') return residences;
-    return residences.filter(r => currentUser.assignedResidences.includes(r.id));
+    const assignedIds = currentUser.assignedResidences || [];
+    return residences.filter(r => assignedIds.includes(r.id) || r.managerId === currentUser.id);
   }, [currentUser, residences]);
 
   // Separate active and disabled residences

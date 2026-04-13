@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, getDocs, deleteDoc, doc, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { listDocuments, deleteDocument } from '@/lib/db-api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -29,12 +28,18 @@ function LeavesManagementContent() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // By using getDocs with a limit, we save significantly on Database reads
-      const qL = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
-      const snap = await getDocs(qL);
-      setAllData(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
+      const docs = await listDocuments('timesheetLeaves', {
+        orderBy: { field: 'createdAt', direction: 'DESC' },
+        limit: 1000,
+      });
+      setAllData(docs.map(d => ({ docId: (d as any).id, ...d })));
     } catch (e) {
       console.error(e);
+      toast({
+        title: isAr ? 'خطأ في التحميل' : 'Loading Error',
+        description: isAr ? 'تعذر تحميل سجلات الإجازات.' : 'Failed to load leave records.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -53,7 +58,7 @@ function LeavesManagementContent() {
   const handleDelete = async (id: string) => {
     if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا السجل؟' : 'Are you sure you want to delete this record?')) return;
     try {
-      await deleteDoc(doc(db as any, 'timesheetLeaves', id));
+      await deleteDocument('timesheetLeaves', id);
       setAllData(prev => prev.filter(item => item.docId !== id));
       toast({
         title: isAr ? 'تم الحذف' : 'Deleted',

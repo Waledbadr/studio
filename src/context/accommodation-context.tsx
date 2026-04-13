@@ -66,7 +66,8 @@ export type Worker = {
   name: string; // اسم العامل
   employeeId?: string; // رقم الموظف (مثل: 40097) - يمكن تكراره في شركات مختلفة
   idNumber?: string; // رقم الهوية الوطنية (مثل: 2059537999) - فريد لكل شخص
-  nationaliy?: string; // الجنسية
+  nationality?: string; // الجنسية
+  nationaliy?: string; // legacy spelling compatibility
   company?: string; // الشركة - لتمييز العمال بنفس الرقم الوظيفي
   role?: "Worker" | "Supervisor" | "Engineer";
   status?: "Active" | "Transferring" | "Vacation" | "Exit"; // NEW
@@ -446,6 +447,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   const workersPermissionWarnedRef = useRef(false);
   const historyUnsubRef = useRef<Unsubscribe | null>(null); // NEW
   const workersFirestoreDisabledRef = useRef(false);
+  const workersApiLoadedRef = useRef(false);
   const companiesUnsubRef = useRef<Unsubscribe | null>(null);
   const contractsUnsubRef = useRef<Unsubscribe | null>(null);
   const invoicesUnsubRef = useRef<Unsubscribe | null>(null);
@@ -505,6 +507,42 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       });
     } catch (err) {
       console.error("❌ [Emergency Mode] Failed to load from localStorage:", err);
+    }
+  }, []);
+
+  const fetchWorkersFromDbApi = useCallback(async () => {
+    if (typeof window === 'undefined') return [];
+    if (workersApiLoadedRef.current) return workersRef.current;
+
+    try {
+      const response = await fetch('/api/db/workers');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load workers from API');
+      }
+      const list: Worker[] = Array.isArray(data)
+        ? data.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.employeeName || '',
+            employeeId: item.employeeId || item.C_Number || '',
+            idNumber: item.idNumber || item.Iqama_No || '',
+            nationaliy: item.nationaliy || item.nationality || '',
+            company: item.company || '',
+            role: item.role || 'Worker',
+          }))
+        : [];
+
+      setWorkers(list);
+      workersApiLoadedRef.current = true;
+      try {
+        localStorage.setItem('ac_workers', JSON.stringify(list));
+      } catch (e) {
+        console.warn('Accommodation: failed to cache workers locally', e);
+      }
+      return list;
+    } catch (err) {
+      console.error('Accommodation: failed to load workers from API', err);
+      return [];
     }
   }, []);
 
@@ -704,10 +742,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   }, [handleWorkersSnapshotError]);
 
   function mapComplexToResidence(complex: any): Residence {
+    const name = complex.name || complex.title || complex.nameEn || complex.nameAr || complex.complexName || complex.residenceName || complex.address || "Unnamed";
+    const city = complex.city || complex.address || complex.locationString || "";
     return {
       id: complex.id,
-      name: complex.name || complex.title || "Unnamed",
-      city: complex.city || "",
+      name,
+      city,
       address: complex.city || complex.address || "",
       location: complex.location || null,
       managerId: complex.managerId,
@@ -725,9 +765,49 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     };
   }
 
+  async function loadResidencesFromApi() {
+    if (typeof window === 'undefined') return;
+    try {
+      const response = await fetch('/api/db/residences');
+      if (!response.ok) {
+        throw new Error(`Failed to load residences: ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error('Unexpected residences response');
+      }
+      const activeDocs = data.filter((d: any) => !d.disabled);
+      const mapped = activeDocs.map(mapComplexToResidence);
+      setResidences(mapped);
+      try {
+        localStorage.setItem('estatecare_residences', JSON.stringify(data));
+      } catch (error) {
+        console.warn('Accommodation: failed to cache residences locally', error);
+      }
+      return;
+    } catch (error) {
+      console.warn('Accommodation: failed to load residences from API fallback', error);
+      try {
+        const stored = localStorage.getItem('estatecare_residences');
+        if (stored) {
+          const parsed = JSON.parse(stored || '[]');
+          if (Array.isArray(parsed)) {
+            const activeDocs = parsed.filter((d: any) => !d.disabled);
+            setResidences(activeDocs.map(mapComplexToResidence));
+          }
+        }
+      } catch (e) {
+        console.error('Accommodation: failed to load residences from cache', e);
+      }
+    }
+  }
+
   // Load residences from Firestore directly to ensure data availability across devices
   useEffect(() => {
-    if (!db) return;
+    if (!db) {
+      loadResidencesFromApi();
+      return;
+    }
 
     let unsubscribeSnapshot: Unsubscribe | null = null;
 
@@ -738,9 +818,10 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       const activeDocs = docs.filter((d: any) => !d.disabled);
       setResidences(activeDocs.map(mapComplexToResidence));
       setLoading(false);
-    }, (error) => {
+    }, async (error) => {
       console.error("Accommodation: failed to load residences from Firestore", error);
       setLoading(false);
+      await loadResidencesFromApi();
     });
 
     return () => {
@@ -784,16 +865,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // ⚡ OPTIMIZED: Workers - Load on demand instead of real-time listener
   // This prevents loading 4000+ workers on every page load
-  // Workers are loaded only when needed (search, specific queries)
+  // When Firestore is not available, load workers from the D1 /api/db fallback.
   useEffect(() => {
     if (!db) {
-      console.log('🔴 [Accommodation Context] Firestore DB not initialized');
+      console.log('🔴 [Accommodation Context] Firestore DB not initialized, loading workers from API fallback');
+      fetchWorkersFromDbApi();
       return;
     }
 
     console.log('✅ [Workers] Cloudflare session active - workers will load on demand.');
     return undefined;
-  }, [db]);
+  }, [db, fetchWorkersFromDbApi]);
 
   // Re-enable Firestore listeners for real-time data
   useEffect(() => {
@@ -1223,9 +1305,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // ⚡ Optimized Async Operations - Fast Search
   const findWorkerAsync = useCallback(async (queryStr: string) => {
-    if (!db || !queryStr.trim()) return [];
+    if (!queryStr.trim()) return [];
     const term = queryStr.trim();
     const termLower = term.toLowerCase();
+
+    if (!db) {
+      await fetchWorkersFromDbApi();
+      return workersRef.current.filter((w) => {
+        const fields = [w.name, w.nameAr, w.nameEn, w.fullName, w.idNumber, w.employeeId, w.nationaliy, w.company].filter(Boolean) as string[];
+        return fields.some((value) => value.toLowerCase().includes(termLower));
+      }).slice(0, 20);
+    }
 
     console.log('🔍 [Search] Looking for:', term);
     const startTime = Date.now();
@@ -1322,7 +1412,12 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Fetch multiple workers by ID (for display)
   const getWorkersByIds = useCallback(async (ids: string[]) => {
-    if (!db || ids.length === 0) return [];
+    if (!db) {
+      if (ids.length === 0) return [];
+      await fetchWorkersFromDbApi();
+      return workersRef.current.filter(w => ids.includes(w.id));
+    }
+    if (ids.length === 0) return [];
 
     // Filter out IDs we already have in state
     const missingIds = ids.filter(id => !workersRef.current.find(w => w.id === id));
@@ -3515,7 +3610,22 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Batch import workers
   async function importWorkersBatch(workersList: Worker[]) {
-    if (!db) return { ok: false, error: 'DB not available' };
+    const saveChunkViaApi = async (chunk: Worker[]) => {
+      const response = await fetch('/api/db/bulk/workers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chunk.map(worker => ({
+          ...worker,
+          nationaliy: worker.nationaliy || worker.nationality || '',
+        }))),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Bulk worker import failed');
+      }
+      return Array.isArray(result) ? result.length : 0;
+    };
 
     try {
       const batchSize = 450; // Firestore limit is 500
@@ -3526,7 +3636,21 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       }
 
       let totalSuccess = 0;
-      let totalErrors = 0;
+
+      if (!db) {
+        for (const chunk of chunks) {
+          totalSuccess += await saveChunkViaApi(chunk);
+        }
+        const merged = [...workersRef.current];
+        for (const worker of workersList) {
+          if (!merged.some((existing) => existing.id === worker.id)) {
+            merged.push(worker);
+          }
+        }
+        setWorkers(merged);
+        try { localStorage.setItem('ac_workers', JSON.stringify(merged)); } catch { }
+        return { ok: true, count: totalSuccess };
+      }
 
       for (const chunk of chunks) {
         const batch = writeBatch(db);
@@ -3538,7 +3662,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
             name: worker.name,
             employeeId: worker.employeeId || '',
             idNumber: worker.idNumber || '',
-            nationaliy: worker.nationaliy || '',
+            nationaliy: worker.nationaliy || worker.nationality || '',
             company: worker.company || '',
             role: worker.role || 'Worker'
           }, { merge: true });
@@ -3547,6 +3671,15 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         await batch.commit();
         totalSuccess += chunk.length;
       }
+
+      const merged = [...workersRef.current];
+      for (const worker of workersList) {
+        if (!merged.some((existing) => existing.id === worker.id)) {
+          merged.push(worker);
+        }
+      }
+      setWorkers(merged);
+      try { localStorage.setItem('ac_workers', JSON.stringify(merged)); } catch { }
 
       return { ok: true, count: totalSuccess };
     } catch (e: any) {
@@ -3557,16 +3690,38 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
   // Delete All Workers (Danger Zone)
   async function deleteAllWorkers() {
-    if (!db) return { ok: false, error: 'DB not available' };
+    // Check if user is admin via session user data (client-side check; server rules still apply)
+    if (currentUser) {
+      if (currentUser.role !== 'Admin') {
+        return { ok: false, error: 'Permission denied: Only Admins can delete all workers.' };
+      }
+    } else {
+      return { ok: false, error: 'Auth required to delete all workers.' };
+    }
 
     try {
-      // Check if user is admin via session user data (client-side check; server rules still apply)
-      if (currentUser) {
-        if (currentUser.role !== 'Admin') {
-          return { ok: false, error: 'Permission denied: Only Admins can delete all workers.' };
+      if (!db) {
+        const docsResponse = await fetch('/api/db/workers');
+        const docs = await docsResponse.json();
+        if (!docsResponse.ok) {
+          throw new Error(docs?.error || 'Failed to fetch workers');
         }
-      } else {
-        return { ok: false, error: 'Auth required to delete all workers.' };
+
+        const ids = Array.isArray(docs) ? docs.map((item: any) => item.id).filter(Boolean) : [];
+        let deletedCount = 0;
+
+        for (const id of ids) {
+          const deleteResponse = await fetch(`/api/db/workers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const deleteResult = await deleteResponse.json();
+          if (!deleteResponse.ok) {
+            console.warn('Failed to delete worker', id, deleteResult);
+            continue;
+          }
+          deletedCount += 1;
+        }
+
+        setWorkers([]);
+        return { ok: true, count: deletedCount };
       }
 
       const q = query(collection(db, 'workers'));
@@ -3593,7 +3748,6 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         deletedCount += chunk.length;
       }
 
-      // Clear local state
       setWorkers([]);
 
       return { ok: true, count: deletedCount };

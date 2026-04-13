@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
-import { verifySession, getUserByEmail } from '@/lib/auth-server';
+import { verifySession, getUserByEmail, hashPassword } from '@/lib/auth-server';
 import { devFindByField, devUpsert } from '@/lib/dev-d1-memory';
 
 export const dynamic = 'force-dynamic';
@@ -42,15 +42,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, role, assignedResidences, themeSettings } = body || {};
+    const { id, name, email, role, assignedResidences, themeSettings, password } = body || {};
     const emailKey = String(email || '').trim().toLowerCase();
     if (!emailKey) return NextResponse.json({ error: 'email required' }, { status: 400 });
 
     let user = await getUserByEmail(emailKey);
-    const uid = user?.id || user?.uid ||
-      (typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+    const uid = String(id || user?.id || user?.uid ||
+      ((typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function')
         ? (crypto as any).randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`));
 
     const payload: Record<string, any> = {
       id: uid,
@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
       assignedResidences: Array.isArray(assignedResidences) ? assignedResidences : user?.assignedResidences || [],
     };
     if (themeSettings && typeof themeSettings === 'object') payload.themeSettings = themeSettings;
+    if (typeof password === 'string' && password.trim()) {
+      payload.passwordHash = await hashPassword(password.trim());
+    }
 
     if (d1Db) {
       await d1Db.collection('users').doc(uid).set(payload, { merge: true });

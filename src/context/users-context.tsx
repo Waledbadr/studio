@@ -26,12 +26,16 @@ export interface User {
   company?: string;
 }
 
+interface SaveableUser extends User {
+  password?: string;
+}
+
 interface UsersContextType {
   users: User[];
   currentUser: User | null;
   loading: boolean;
   loadUsers: () => void;
-  saveUser: (user: Omit<User, 'id'> | User) => Promise<void>;
+  saveUser: (user: Omit<User, 'id'> | SaveableUser) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   switchUser: (user: User) => void;
   getUserById: (id: string) => User | null;
@@ -157,10 +161,17 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadUsers]);
 
-  const saveUser = async (user: Omit<User, 'id'> | User) => {
+  const normalizePassword = (value?: string) => {
+    if (!value) return undefined;
+    return value.replace(/[^\u0000-\u007F]/g, '').trim();
+  };
+
+  const saveUser = async (user: Omit<User, 'id'> | SaveableUser) => {
+    const password = 'password' in user && typeof user.password === 'string' ? normalizePassword(user.password) : undefined;
+
     try {
       if ('id' in user && user.id) {
-        const { id, ...payload } = user as User;
+        const { id, password: _pass, ...payload } = user as SaveableUser;
         const prevUser = users.find(u => u.id === id) || null;
         const prevAssigned = new Set(prevUser?.assignedResidences || []);
         const nextAssigned = new Set(payload.assignedResidences || []);
@@ -170,7 +181,30 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         prevAssigned.forEach(rid => { if (!nextAssigned.has(rid)) removed.push(rid); });
 
         try {
-          await updateDocument('users', id, { ...payload });
+          if (password) {
+            const res = await fetch('/api/admin/users/ensure', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                id,
+                name: payload.name,
+                email: payload.email,
+                role: payload.role,
+                assignedResidences: payload.assignedResidences,
+                themeSettings: payload.themeSettings,
+                password,
+              }),
+            });
+            if (!res.ok) {
+              const txt = await res.text();
+              throw new Error(txt || 'Failed to update user password');
+            }
+          } else {
+            await updateDocument('users', id, { ...payload });
+          }
         } catch (error) {
           const message = (error as any)?.message || String(error);
           if (message.includes('D1 database not configured') || message.includes('database not configured')) {
@@ -212,6 +246,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
             role: payload.role,
             assignedResidences: payload.assignedResidences,
             themeSettings: payload.themeSettings,
+            password,
           }),
         });
 

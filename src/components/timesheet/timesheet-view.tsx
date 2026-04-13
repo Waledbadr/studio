@@ -195,8 +195,17 @@ export function TimesheetView() {
               className="gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
               disabled={isProcessing}
             >
-              <Database className="w-4 h-4" />
-              {isAr ? "حفظ السجلات" : "Save Records"}
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {isAr ? "جاري الحفظ..." : "Saving..."}
+                </>
+              ) : (
+                <>
+                  <Database className="w-4 h-4" />
+                  {isAr ? "حفظ السجلات" : "Save Records"}
+                </>
+              )}
             </Button>
           )}
           <AlertDialog>

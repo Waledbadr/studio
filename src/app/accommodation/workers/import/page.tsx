@@ -109,12 +109,14 @@ export default function ImportWorkersPage() {
           workerId = `w_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
 
+        const nationalityValue = row.Nationality?.trim();
         workersToImport.push({
           id: workerId,
           name: row['Employee Name']?.trim(),
           employeeId: empId,
           idNumber: iqama,
-          nationaliy: row.Nationality?.trim(),
+          nationality: nationalityValue,
+          nationaliy: nationalityValue,
           company: company,
           role: row['W Type'] === 'Supervisor' ? 'Supervisor' : row['W Type'] === 'Engineer' ? 'Engineer' : 'Worker'
         });

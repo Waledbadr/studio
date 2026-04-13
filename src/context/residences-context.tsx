@@ -181,6 +181,29 @@ const saveToLocalStorage = (residences: Complex[]) => {
   }
 };
 
+function normalizeResidence(raw: any): Complex {
+  const name = raw.name || raw.title || raw.nameEn || raw.nameAr || raw.complexName || raw.residenceName || raw.complexTitle || raw.roomName || raw.address || 'Unnamed residence';
+  const city = raw.city || raw.address || raw.locationString || raw.region || '';
+
+  return {
+    id: raw.id || raw.uid || raw._id || '',
+    name,
+    nameAr: raw.nameAr,
+    nameEn: raw.nameEn,
+    title: raw.title,
+    city,
+    managerId: raw.managerId || raw.manager || '',
+    buildings: Array.isArray(raw.buildings) ? raw.buildings : [],
+    rooms: Array.isArray(raw.rooms) ? raw.rooms : undefined,
+    facilities: Array.isArray(raw.facilities) ? raw.facilities : undefined,
+    disabled: !!raw.disabled,
+    isEmergencyMode: !!raw.isEmergencyMode,
+    address: raw.address,
+    location: raw.location,
+    locationString: raw.locationString,
+  } as Complex;
+}
+
 export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   const [residences, setResidences] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,7 +220,8 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         // Load from localStorage
         try {
             const storedResidences = localStorage.getItem('estatecare_residences');
-            const residencesData = storedResidences ? JSON.parse(storedResidences) : [];
+            const residuesRaw = storedResidences ? JSON.parse(storedResidences) : [];
+            const residencesData = Array.isArray(residuesRaw) ? residuesRaw.map(normalizeResidence) : [];
             setResidences(residencesData);
         } catch (error) {
             console.error("Error loading from localStorage:", error);
@@ -216,7 +240,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
     // Use safeOnSnapshot to provide clearer logs and a single retry on transient watch closures
   unsubscribeRef.current = safeOnSnapshot(residencesCollection, (snapshot) => {
-    const residencesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Complex));
+    const residencesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => normalizeResidence({ id: doc.id, ...doc.data() }));
     setResidences(residencesData);
     setLoading(false);
   }, (error) => {
@@ -1071,30 +1095,58 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const addFloor = async (complexId: string, buildingId: string, name: string) => {
-     if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
+    const trimmedName = name.trim();
+    const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
+
+    if (!db) {
+      try {
+        const updatedResidences = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: c.buildings.map(b => {
+              if (b.id !== buildingId) return b;
+              const floors = Array.isArray(b.floors) ? b.floors : [];
+              if (floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+                throw new Error("A floor with this name already exists in this building.");
+              }
+              return { ...b, floors: [...floors, newFloor] };
+            }),
+          };
+        });
+
+        setResidences(updatedResidences);
+        saveToLocalStorage(updatedResidences);
+        toast({ title: "Success", description: "New floor added to the building (locally)." });
+      } catch (error) {
+        console.error("Error adding floor locally:", error);
+        toast({ title: "Error", description: (error as Error).message || "Failed to add floor locally.", variant: "destructive" });
+      }
+      return;
     }
+
     try {
-        const trimmedName = name.trim();
         const complexDocRef = doc(db, "residences", complexId);
         const complexDoc = await getDoc(complexDocRef);
 
         if (!complexDoc.exists()) throw new Error("Complex not found");
 
         const complexData = complexDoc.data() as Complex;
-        const targetBuilding = complexData.buildings.find(b => b.id === buildingId);
+        const targetBuilding = (complexData.buildings || []).find(b => b.id === buildingId);
+        if (!targetBuilding) {
+          toast({ title: "Error", description: "Building not found.", variant: "destructive" });
+          return;
+        }
 
-        if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+        const existingFloors = Array.isArray(targetBuilding.floors) ? targetBuilding.floors : [];
+        if (existingFloors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
             toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
             return;
         }
 
-        const newFloor: Floor = { id: `floor-${Date.now()}`, name: trimmedName, rooms: [], facilities: [] };
-
         const updatedBuildings = complexData.buildings.map(b => 
             b.id === buildingId 
-            ? {...b, floors: [...b.floors, newFloor]} 
+            ? { ...b, floors: [...(Array.isArray(b.floors) ? b.floors : []), newFloor] } 
             : b
         );
 
@@ -1108,29 +1160,9 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addRoom = async (complexId: string, buildingId: string, floorId: string, name: string, length?: number, width?: number, area?: number) => {
-    if (!db) {
-        toast({ title: "Error", description: firebaseErrorMessage, variant: "destructive" });
-        return;
-    }
-    try {
-        const trimmedName = name.trim();
-        const complexDocRef = doc(db, "residences", complexId);
-        const complexDoc = await getDoc(complexDocRef);
-
-        if (!complexDoc.exists()) throw new Error("Complex not found");
-        
-        const complexData = complexDoc.data() as Complex;
-        
-        const building = complexData.buildings.find(b => b.id === buildingId);
-        const floor = building?.floors.find(f => f.id === floorId);
-
-        if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
-            toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
-            return;
-        }
-
+    const trimmedName = name.trim();
     const newRoom: Room = { id: `room-${Date.now()}`, name: trimmedName };
-    // prefer explicit length/width, else accept area
+
     if (typeof length === 'number' && typeof width === 'number' && !isNaN(length) && !isNaN(width)) {
       const computedArea = length * width;
       newRoom.length = length;
@@ -1141,12 +1173,73 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
       newRoom.area = area;
       newRoom.capacity = Math.max(1, Math.floor(area / 4));
     }
+
+    if (!db) {
+      try {
+        const updatedResidences = residences.map(c => {
+          if (c.id !== complexId) return c;
+          return {
+            ...c,
+            buildings: (c.buildings || []).map(b => {
+              if (b.id !== buildingId) return b;
+              const floors = Array.isArray(b.floors) ? b.floors : [];
+              const targetFloor = floors.find(f => f.id === floorId);
+              if (!targetFloor) throw new Error("Floor not found.");
+              const existingRooms = Array.isArray(targetFloor.rooms) ? targetFloor.rooms : [];
+              if (existingRooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+                throw new Error("A room with this name already exists on this floor.");
+              }
+              return {
+                ...b,
+                floors: floors.map(f =>
+                  f.id === floorId ? { ...f, rooms: [...existingRooms, newRoom] } : f
+                ),
+              };
+            }),
+          };
+        });
+
+        setResidences(updatedResidences);
+        saveToLocalStorage(updatedResidences);
+        toast({ title: "Success", description: "New room added to the floor (locally)." });
+      } catch (error) {
+        console.error("Error adding room locally:", error);
+        toast({ title: "Error", description: (error as Error).message || "Failed to add room locally.", variant: "destructive" });
+      }
+      return;
+    }
+
+    try {
+        const complexDocRef = doc(db, "residences", complexId);
+        const complexDoc = await getDoc(complexDocRef);
+
+        if (!complexDoc.exists()) throw new Error("Complex not found");
         
+        const complexData = complexDoc.data() as Complex;
+        const building = (complexData.buildings || []).find(b => b.id === buildingId);
+        const floor = building ? (Array.isArray(building.floors) ? building.floors.find(f => f.id === floorId) : undefined) : undefined;
+
+        if (!building) {
+          toast({ title: "Error", description: "Building not found.", variant: "destructive" });
+          return;
+        }
+
+        if (!floor) {
+          toast({ title: "Error", description: "Floor not found.", variant: "destructive" });
+          return;
+        }
+
+        const existingRooms = Array.isArray(floor.rooms) ? floor.rooms : [];
+        if (existingRooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+            toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
+            return;
+        }
+
         const updatedBuildings = complexData.buildings.map(b => 
             b.id === buildingId ? {
                 ...b,
-                floors: b.floors.map(f => 
-                    f.id === floorId ? {...f, rooms: [...f.rooms, newRoom]} : f
+                floors: (Array.isArray(b.floors) ? b.floors : []).map(f => 
+                    f.id === floorId ? { ...f, rooms: [...(Array.isArray(f.rooms) ? f.rooms : []), newRoom] } : f
                 )
             } : b
         );

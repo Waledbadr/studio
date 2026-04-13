@@ -266,6 +266,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const syncProcessedDataToFirestore = async () => {
     if (processedAttendance.length === 0) return;
 
+    setIsProcessing(true);
     try {
       const now = new Date().toISOString();
       const payloads = processedAttendance.map(record => ({
@@ -290,6 +291,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         description: isAr ? "حدث خطأ أثناء محاولة حفظ السجلات." : "An error occurred while saving the records.",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 

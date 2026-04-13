@@ -37,6 +37,8 @@ const formSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Invalid email address."),
+  password: z.string().min(8, "Password must be at least 8 characters.").optional(),
+  confirmPassword: z.string().optional(),
   role: z.enum(["Admin", "Supervisor", "Technician"]),
   assignedResidences: z.array(z.string()).refine(value => value.some(item => item), {
     message: "You have to select at least one residence.",
@@ -45,6 +47,22 @@ const formSchema = z.object({
       colorTheme: z.string(),
       mode: z.enum(['light', 'dark', 'system']),
   }).optional(),
+}).superRefine((data, ctx) => {
+  const password = data.password?.trim();
+  if (!data.id && !password) {
+    ctx.addIssue({
+      path: ['password'],
+      code: z.ZodIssueCode.custom,
+      message: 'Password is required for new users.',
+    });
+  }
+  if (password && data.password !== data.confirmPassword) {
+    ctx.addIssue({
+      path: ['confirmPassword'],
+      code: z.ZodIssueCode.custom,
+      message: 'Passwords do not match.',
+    });
+  }
 });
 
 type UserFormData = z.infer<typeof formSchema>;
@@ -52,9 +70,13 @@ type UserFormData = z.infer<typeof formSchema>;
 interface UserFormDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSave: (data: User) => void;
+  onSave: (data: UserFormData) => void;
   user?: User | null;
   isLoading: boolean;
+}
+
+function toASCII(value: string) {
+  return value.replace(/[^\u0000-\u007F]/g, '');
 }
 
 export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }: UserFormDialogProps) {
@@ -67,6 +89,8 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
       id: undefined,
       name: "",
       email: "",
+      password: "",
+      confirmPassword: "",
       role: "Technician",
       assignedResidences: [],
       themeSettings: {
@@ -89,6 +113,8 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
           id: user.id,
           name: user.name,
           email: user.email,
+          password: "",
+          confirmPassword: "",
           role: (user.role === 'Admin' || user.role === 'Supervisor' || user.role === 'Technician') ? user.role : 'Technician',
           assignedResidences: user.assignedResidences || [],
           themeSettings: user.themeSettings || { colorTheme: 'blue', mode: 'system' },
@@ -107,7 +133,9 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
   }, [user, form, isOpen]);
 
   function onSubmit(data: UserFormData) {
-    const userToSave: User = {
+    const passwordValue = data.password?.trim();
+    const sanitizedPassword = passwordValue ? toASCII(passwordValue) : undefined;
+    const userToSave: any = {
         id: user?.id || '',
         name: data.name,
         email: data.email,
@@ -115,6 +143,11 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
         assignedResidences: data.assignedResidences,
         themeSettings: data.themeSettings as UserThemeSettings,
     };
+
+    if (sanitizedPassword) {
+      userToSave.password = sanitizedPassword;
+    }
+
     onSave(userToSave);
   }
 
@@ -173,6 +206,47 @@ export function UserFormDialog({ isOpen, onOpenChange, onSave, user, isLoading }
                       <SelectItem value="Technician">Technician</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{user ? 'New Password (optional)' : 'Password'}</FormLabel>
+                  <FormDescription>
+                    {user
+                      ? 'Leave empty to keep the current password.'
+                      : 'Choose a password for the new user.'}
+                  </FormDescription>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete={user ? 'new-password' : 'new-password'}
+                      placeholder={user ? '••••••••' : '••••••••'}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete={user ? 'new-password' : 'new-password'}
+                      placeholder="••••••••"
+                      {...field}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
