@@ -11,7 +11,15 @@ if (process.env.NODE_ENV !== 'production') {
 
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: [],
+  serverExternalPackages: [
+    'firebase-admin',
+    'firebase',
+    'genkit',
+    '@genkit-ai/googleai',
+    '@genkit-ai/next',
+    'xlsx',
+    '@simplewebauthn/server',
+  ],
   typescript: {
     ignoreBuildErrors: true,
   },
