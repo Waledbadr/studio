@@ -1,0 +1,20 @@
+{
+  "name": "estatecare-cloudflare",
+  "compatibility_date": "2024-12-18",
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "estatecare"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "estatecare-storage"
+    }
+  ],
+  "vars": {
+    "AUTH_JWT_SECRET": "5001167718d7a9205a91b8bca75bf7c632f906bc78b23e37c433310738c3d239",
+    "GEMINI_API_KEY": "AIzaSyCX2G3GQEkpK3f-xcQNT3C5wpZv7fnvFUE"
+  }
+}

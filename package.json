@@ -16,6 +16,7 @@
     "cf:dev": "npx open-next dev",
     "cf:build": "npx open-next build",
     "cf:deploy": "npx open-next deploy",
+    "cf:build-deploy": "npm run cf:build && npm run cf:deploy",
     "cf:typegen": "npx open-next typegen",
     "migrate:workers": "node scripts/migrate-local-workers-to-firestore.mjs",
     "import:workers": "node scripts/import-workers-from-desktop.mjs",

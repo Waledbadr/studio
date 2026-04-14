@@ -46,6 +46,30 @@ npm run cf:build
 npm run cf:deploy
 ```
 
+- Build and deploy in one command:
+
+```bash
+npm run cf:build-deploy
+```
+
+### Cloudflare Pages / Worker build configuration
+
+If you are using Cloudflare Pages or a custom Cloudflare build pipeline, do not use `wrangler deploy .open-next/worker.js`.
+Use one of these instead:
+
+```bash
+npm run cf:build
+npm run cf:deploy
+```
+
+or:
+
+```bash
+npm run cf:build-deploy
+```
+
+This repository uses OpenNext v3, which does not generate `.open-next/worker.js` directly during the build step.
+
 ## Automatic Cloudflare resource creation
 
 The repository includes a helper script to create the Cloudflare resources:
