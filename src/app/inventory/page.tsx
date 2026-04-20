@@ -21,7 +21,8 @@ import { useResidences } from '@/context/residences-context';
 import { useLanguage } from '@/context/language-context';
 import { normalizeText, includesNormalized } from '@/lib/utils';
 import { AR_SYNONYMS, buildNormalizedSynonyms } from '@/lib/aliases';
-import * as XLSX from 'xlsx';
+// Use dynamic import for XLSX to avoid huge edge bundle
+
 
 export default function InventoryPage() {
   const { dict } = useLanguage();
@@ -236,8 +237,9 @@ export default function InventoryPage() {
   };
 
   // Export inventory items to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!items || items.length === 0) return;
+    const XLSX = await import('xlsx');
     const data = items.map(item => ({
       'Arabic Name': item.nameAr,
       'English Name': item.nameEn,

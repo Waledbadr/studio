@@ -26,8 +26,22 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Disable source maps in production to avoid fetch errors
   productionBrowserSourceMaps: false,
+  webpack: (config, { isServer }) => {
+    if (process.env.NEXT_PUBLIC_DISABLE_FIREBASE === 'true') {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'firebase/app': false,
+        'firebase/firestore': false,
+        'firebase/storage': false,
+        'firebase/auth': false,
+        'firebase/app-check': false,
+        'firebase-admin': false,
+        'firebase': false,
+      };
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       {

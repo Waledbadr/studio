@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FileText, Download, DollarSign, AlertCircle, CheckCircle2, Clock, Calendar as CalendarIcon, Plus, Printer, RefreshCw, Edit2, Trash2, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getFiscalMonthPeriod, formatFiscalDate, FISCAL_START_DAY } from '@/lib/fiscal-month-utils';
+import { getFiscalMonthPeriod, formatFiscalDate } from '@/lib/fiscal-month-utils';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
@@ -40,7 +40,7 @@ export default function InvoicesPage() {
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [fiscalStartDay, setFiscalStartDay] = useState(FISCAL_START_DAY);
+  const [fiscalStartDay, setFiscalStartDay] = useState(18);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
