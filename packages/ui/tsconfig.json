@@ -1,0 +1,14 @@
+{
+  "extends": "../../apps/accommodation/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@estatecare/ui/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

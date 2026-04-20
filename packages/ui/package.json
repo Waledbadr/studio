@@ -1,0 +1,19 @@
+{
+  "name": "@estatecare/ui",
+  "version": "0.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    "./*": "./src/components/ui/*.tsx",
+    "./lib/*": "./src/lib/*.ts"
+  },
+  "dependencies": {
+    "clsx": "latest",
+    "tailwind-merge": "latest"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0",
+    "next": "^14.0.0 || ^15.0.0"
+  }
+}

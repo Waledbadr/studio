@@ -1,0 +1,246 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent flash of incorrect theme */
+html {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 240 10% 99%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 255 100% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 255 100% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 240 5% 90%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 217 91% 60%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 240 10% 99%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 240 5% 90%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-border: 240 6% 90%;
+    --sidebar-ring: 217 91% 60%;
+  }
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    --card: 224 71% 4%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 224 71% 4%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Print overrides: force light background and keep layout intact */
+@media print {
+  /* Always print on a white page regardless of dark mode */
+  :root,
+  html,
+  body {
+    color-scheme: light !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Nudge theme variables to light so Tailwind var-based backgrounds render light */
+  :root {
+    --background: 0 0% 100% !important; /* white */
+    --card: 0 0% 100% !important;       /* white */
+    --popover: 0 0% 100% !important;    /* white */
+    --muted: 0 0% 98% !important;       /* very light gray for subtle rows */
+    --sidebar-background: 0 0% 100% !important;
+  }
+
+  /* Neutralize common app container backgrounds/shadows */
+  main,
+  #__next,
+  .bg-background,
+  .dark .bg-background,
+  .printable-area {
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide elements explicitly marked as non-printable */
+  .no-print { display: none !important; }
+  
+  /* Hide sidebar and header in print */
+  aside,
+  nav,
+  header,
+  [data-sidebar],
+  .sidebar-trigger {
+    display: none !important;
+  }
+
+  /* Make the certificate take full width */
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+
+  /* Force colors in print */
+  .text-green-600, .text-green-800 {
+    color: #16a34a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .text-red-600, .text-red-800 {
+    color: #dc2626 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .text-blue-600, .text-blue-800 {
+    color: #2563eb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .text-purple-600, .text-purple-800 {
+    color: #9333ea !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .text-orange-600, .text-orange-800 {
+    color: #ea580c !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Background colors for stats */
+  .bg-green-50 {
+    background-color: #f0fdf4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bg-red-50 {
+    background-color: #fef2f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bg-blue-50 {
+    background-color: #eff6ff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bg-purple-50 {
+    background-color: #faf5ff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bg-orange-50 {
+    background-color: #fff7ed !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure borders show in print */
+  .border, .border-2 {
+    border-style: solid !important;
+  }
+}
+
+/* Elegant custom scrollbar for dialogs */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary)) hsl(var(--muted));
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  border-radius: 8px;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.15);
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 8px;
+}
+
