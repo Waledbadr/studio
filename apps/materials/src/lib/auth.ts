@@ -6,7 +6,7 @@ export type AuthUser = {
 };
 
 export async function login(email: string, password: string) {
-  const response = await fetch('/api/auth/login', {
+  const response = await fetch('/materials/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -22,7 +22,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function register(name: string, email: string, password: string) {
-  const response = await fetch('/api/auth/register', {
+  const response = await fetch('/materials/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -38,11 +38,11 @@ export async function register(name: string, email: string, password: string) {
 }
 
 export async function logout() {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  await fetch('/materials/api/auth/logout', { method: 'POST', credentials: 'include' });
 }
 
 export async function getCurrentUser() {
-  const response = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+  const response = await fetch('/materials/api/auth/me', { credentials: 'include', cache: 'no-store' });
   if (!response.ok) return null;
   return response.json() as Promise<AuthUser>;
 }
