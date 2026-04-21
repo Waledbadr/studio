@@ -17,7 +17,7 @@
     "cf:build": "npx opennextjs-cloudflare build",
     "cf:deploy": "npx opennextjs-cloudflare deploy",
     "cf:deploy-worker": "npx opennextjs-cloudflare deploy",
-    "cf:deploy-pages": "npm run cf:build && node -e \"require('fs').copyFileSync('.open-next/worker.js', '.open-next/assets/_worker.js')\" && npx wrangler pages deploy .open-next/assets --project-name=studio",
+    "cf:deploy-pages": "npm run cf:build && node -e \"require('fs').copyFileSync('.open-next/worker.js', '.open-next/assets/_worker.js')\" && npx wrangler pages deploy .open-next/assets --project-name=estatecare-accommodation",
     "cf:typegen": "npx open-next typegen",
     "migrate:workers": "node scripts/migrate-local-workers-to-firestore.mjs",
     "import:workers": "node scripts/import-workers-from-desktop.mjs",

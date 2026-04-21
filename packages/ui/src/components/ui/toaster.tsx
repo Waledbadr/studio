@@ -8,7 +8,7 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-} from "@/components/ui/toast"
+} from "./toast"
 import { CheckCircle2, Info, AlertTriangle, XCircle } from "lucide-react"
 
 export function Toaster() {

@@ -25,6 +25,12 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@estatecare/ui/*": [
+        "../../packages/ui/src/components/ui/*"
+      ],
+      "@estatecare/ui/lib/*": [
+        "../../packages/ui/src/lib/*"
       ]
     }
   },

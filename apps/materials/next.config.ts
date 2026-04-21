@@ -1,5 +1,6 @@
 import type {NextConfig} from 'next';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+import path from 'path';
 
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
@@ -10,6 +11,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const nextConfig: NextConfig = {
+  basePath: '/materials',
   transpilePackages: ['@estatecare/ui'],
   /* config options here */
   serverExternalPackages: [
@@ -29,6 +31,12 @@ const nextConfig: NextConfig = {
   },
   productionBrowserSourceMaps: false,
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@estatecare/ui': path.resolve(__dirname, '../../packages/ui/src/components/ui'),
+      '@estatecare/ui/lib': path.resolve(__dirname, '../../packages/ui/src/lib'),
+    };
+
     if (process.env.NEXT_PUBLIC_DISABLE_FIREBASE === 'true') {
       config.resolve.alias = {
         ...config.resolve.alias,
@@ -52,6 +60,14 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/materials/api/:path*',
+      },
+    ];
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
