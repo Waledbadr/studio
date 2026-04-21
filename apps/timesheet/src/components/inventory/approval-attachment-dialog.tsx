@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@estatecare/ui/alert';
 import { FileUploadArea } from '@estatecare/ui/file-upload-area';
+import { apiPath } from '@/lib/api-path';
 
 interface ApprovalAttachmentDialogProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function ApprovalAttachmentDialog({
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/uploads/order-approval', {
+        const response = await fetch(apiPath('/api/uploads/order-approval'), {
           method: 'POST',
           body: formData,
         });

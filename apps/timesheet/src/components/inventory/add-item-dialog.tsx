@@ -11,6 +11,7 @@ import { useUsers } from "@/context/users-context";
 import { Loader2, Plus, X, Languages, ChevronDown, ChevronRight, Package, Settings2, Image, Tags, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@estatecare/ui/select';
 import { cn } from "@/lib/utils";
+import { apiPath } from '@/lib/api-path';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@estatecare/ui/collapsible";
 import { Badge } from "@estatecare/ui/badge";
 
@@ -229,7 +230,7 @@ export function AddItemDialog({
 
     // Helper to call translation API with graceful handling
     const translateName = async (source: string) => {
-        const res = await fetch('/api/translate-item', {
+        const res = await fetch(apiPath('/api/translate-item'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: source }),

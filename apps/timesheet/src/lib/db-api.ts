@@ -1,3 +1,5 @@
+import { apiPath } from '@/lib/api-path';
+
 export type DbWhereClause = {
   field: string;
   op: '=' | '!=' | '<' | '<=' | '>' | '>=' | 'IN' | 'NOT IN';
@@ -16,7 +18,7 @@ export type DbQueryOptions = {
   offset?: number;
 };
 
-const BASE_URL = '/api/db';
+const BASE_URL = apiPath('/api/db');
 
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {

@@ -8,6 +8,7 @@ import { useNotifications } from '@/context/notifications-context';
 import { useUsers } from '@/context/users-context';
 import { getFiscalMonthPeriod } from '@/lib/fiscal-month-utils';
 import { differenceInDays, isWithinInterval, max, min, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { apiPath } from '@/lib/api-path';
 import { 
   validateCheckInDate,
   validateCheckOutDate, 
@@ -515,7 +516,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     if (workersApiLoadedRef.current) return workersRef.current;
 
     try {
-      const response = await fetch('/api/db/workers');
+      const response = await fetch(apiPath('/api/db/workers'));
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.error || 'Failed to load workers from API');
@@ -768,7 +769,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   async function loadResidencesFromApi() {
     if (typeof window === 'undefined') return;
     try {
-      const response = await fetch('/api/db/residences');
+      const response = await fetch(apiPath('/api/db/residences'));
       if (!response.ok) {
         throw new Error(`Failed to load residences: ${response.statusText}`);
       }
@@ -3611,7 +3612,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // Batch import workers
   async function importWorkersBatch(workersList: Worker[]) {
     const saveChunkViaApi = async (chunk: Worker[]) => {
-      const response = await fetch('/api/db/bulk/workers', {
+      const response = await fetch(apiPath('/api/db/bulk/workers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chunk.map(worker => ({
@@ -3701,7 +3702,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
 
     try {
       if (!db) {
-        const docsResponse = await fetch('/api/db/workers');
+        const docsResponse = await fetch(apiPath('/api/db/workers'));
         const docs = await docsResponse.json();
         if (!docsResponse.ok) {
           throw new Error(docs?.error || 'Failed to fetch workers');
@@ -3711,7 +3712,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         let deletedCount = 0;
 
         for (const id of ids) {
-          const deleteResponse = await fetch(`/api/db/workers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const deleteResponse = await fetch(apiPath(`/api/db/workers/${encodeURIComponent(id)}`), { method: 'DELETE' });
           const deleteResult = await deleteResponse.json();
           if (!deleteResponse.ok) {
             console.warn('Failed to delete worker', id, deleteResult);

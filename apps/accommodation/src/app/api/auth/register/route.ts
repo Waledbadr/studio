@@ -27,21 +27,24 @@ export async function POST(req: Request) {
       ? (crypto as any).randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    const nowIso = new Date().toISOString();
+
     const payload = {
       id,
       name,
       email,
       role: 'Technician',
-      assigned_residences: JSON.stringify([]),
-      theme_settings: JSON.stringify({ colorTheme: 'blue', mode: 'system' }),
-      created_at: new Date().toISOString(),
-      password_hash: passwordHash,
+      assignedResidences: [],
+      themeSettings: { colorTheme: 'blue', mode: 'system' },
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      passwordHash,
     } as Record<string, unknown>;
 
     if (d1Db) {
       await d1Db.collection('users').doc(id).set(payload, { merge: true });
       if (existing && !existing.passwordHash) {
-        await d1Db.collection('users').doc(String(existing.id || existing.uid)).set({ password_hash: passwordHash }, { merge: true });
+        await d1Db.collection('users').doc(String(existing.id || existing.uid)).set({ passwordHash }, { merge: true });
       }
     } else if (process.env.NODE_ENV !== 'production') {
       // Dev fallback: store in memory so local next dev can work without D1

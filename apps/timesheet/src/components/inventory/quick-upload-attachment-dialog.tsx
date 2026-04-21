@@ -17,6 +17,7 @@ import { updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useUsers } from '@/context/users-context';
 import { FileUploadArea } from '@estatecare/ui/file-upload-area';
+import { apiPath } from '@/lib/api-path';
 
 interface QuickUploadAttachmentDialogProps {
   open: boolean;
@@ -46,7 +47,7 @@ export function QuickUploadAttachmentDialog({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/uploads/order-approval', {
+      const response = await fetch(apiPath('/api/uploads/order-approval'), {
         method: 'POST',
         body: formData,
       });

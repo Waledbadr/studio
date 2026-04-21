@@ -5,13 +5,14 @@ import path from 'path';
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();
+const BASE_PATH = '/timesheet';
 
 if (process.env.NODE_ENV !== 'production') {
   initOpenNextCloudflareForDev();
 }
 
 const nextConfig: NextConfig = {
-  basePath: '/timesheet',
+  basePath: BASE_PATH,
   transpilePackages: ['@estatecare/ui'],
   /* config options here */
   serverExternalPackages: [
@@ -86,6 +87,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_GIT_BRANCH: process.env.NEXT_PUBLIC_GIT_BRANCH ?? RENDER_GIT_BRANCH ?? 'production',
     NEXT_PUBLIC_LAST_COMMIT_HASH: process.env.NEXT_PUBLIC_LAST_COMMIT_HASH ?? RENDER_GIT_COMMIT ?? '',
     NEXT_PUBLIC_LAST_COMMIT_DATE: process.env.NEXT_PUBLIC_LAST_COMMIT_DATE ?? BUILD_TIME_ISO,
+    NEXT_PUBLIC_BASE_PATH: process.env.NEXT_PUBLIC_BASE_PATH ?? BASE_PATH,
   },
 };
 

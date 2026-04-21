@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@estatecare/ui/card';
 import { Badge } from '@estatecare/ui/badge';
 import { getFormattedGitInfo } from '@/lib/git-info';
+import { apiPath } from '@/lib/api-path';
 
 interface Health {
   ok: boolean;
@@ -22,7 +23,7 @@ export default function StatusPage() {
     let isMounted = true;
     (async () => {
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' });
+        const res = await fetch(apiPath('/api/health'), { cache: 'no-store' });
         const json = await res.json().catch(() => ({}));
         if (isMounted) setHealth({ ok: res.ok, status: res.status, uptime: json?.uptime, timestamp: json?.timestamp });
       } catch (e: any) {

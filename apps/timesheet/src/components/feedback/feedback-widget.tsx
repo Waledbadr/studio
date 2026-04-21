@@ -14,6 +14,7 @@ import { useErrorCapture } from '@/hooks/use-error-capture';
 import { db } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { gitInfo } from '@/lib/git-info';
+import { apiPath } from '@/lib/api-path';
 
 interface Props {
   className?: string;
@@ -136,7 +137,7 @@ export default function FeedbackWidget({ className }: Props) {
 
       let screenshotUrl: string | undefined;
       if (includeScreenshot && screenshotDataUrl) {
-        const res = await fetch('/api/uploads/feedback', {
+        const res = await fetch(apiPath('/api/uploads/feedback'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataUrl: screenshotDataUrl }),

@@ -5,6 +5,7 @@ import { Button } from '@estatecare/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@estatecare/ui/card';
 import { Alert, AlertDescription } from '@estatecare/ui/alert';
 import { useToast } from '@/hooks/use-toast';
+import { apiPath } from '@/lib/api-path';
 import { Upload, FileJson, CheckCircle, XCircle, AlertCircle, Loader2, FileText, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Badge } from '@estatecare/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@estatecare/ui/select';
@@ -326,7 +327,7 @@ export default function ImportWorkersPage() {
         company: w.company || defaultCompany || ''
       }));
 
-      const response = await fetch('/api/workers/import', {
+      const response = await fetch(apiPath('/api/workers/import'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
