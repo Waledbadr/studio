@@ -7,6 +7,18 @@ const PASSWORD_SECRET = process.env.AUTH_PASSWORD_SECRET || process.env.AUTH_JWT
 
 const encoder = new TextEncoder();
 
+function normalizeUserRecord(user: any) {
+  if (!user || typeof user !== 'object') return user;
+  return {
+    ...user,
+    passwordHash: user.passwordHash ?? user.password_hash ?? null,
+    assignedResidences: user.assignedResidences ?? user.assigned_residences ?? [],
+    themeSettings: user.themeSettings ?? user.theme_settings ?? {},
+    createdAt: user.createdAt ?? user.created_at ?? null,
+    updatedAt: user.updatedAt ?? user.updated_at ?? null,
+  };
+}
+
 function toHex(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   return Array.from(bytes)
@@ -92,7 +104,7 @@ export async function getUserByEmail(email: string) {
   const d1Db = getD1Db();
   if (d1Db) {
     const rows = await d1Db.collection('users').where('email', '==', email).get();
-    return rows.docs[0] ? rows.docs[0].data() as any : null;
+    return rows.docs[0] ? normalizeUserRecord(rows.docs[0].data() as any) : null;
   }
 
   // Dev fallback: use in-memory store when D1 is not available (next dev)
@@ -107,7 +119,7 @@ export async function getUserById(id: string) {
   const d1Db = getD1Db();
   if (d1Db) {
     const userDoc = await d1Db.collection('users').doc(id).get();
-    return userDoc.exists ? userDoc.data() as any : null;
+    return userDoc.exists ? normalizeUserRecord(userDoc.data() as any) : null;
   }
 
   if (process.env.NODE_ENV !== 'production') {

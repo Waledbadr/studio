@@ -61,14 +61,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: '/accommodation/api/:path*',
-      },
-    ];
-  },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
     const baseHeaders = [

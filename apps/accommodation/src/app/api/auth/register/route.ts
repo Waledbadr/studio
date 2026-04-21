@@ -32,16 +32,16 @@ export async function POST(req: Request) {
       name,
       email,
       role: 'Technician',
-      assignedResidences: [],
-      themeSettings: { colorTheme: 'blue', mode: 'system' },
-      createdAt: new Date().toISOString(),
-      passwordHash,
+      assigned_residences: JSON.stringify([]),
+      theme_settings: JSON.stringify({ colorTheme: 'blue', mode: 'system' }),
+      created_at: new Date().toISOString(),
+      password_hash: passwordHash,
     } as Record<string, unknown>;
 
     if (d1Db) {
       await d1Db.collection('users').doc(id).set(payload, { merge: true });
       if (existing && !existing.passwordHash) {
-        await d1Db.collection('users').doc(String(existing.id || existing.uid)).set({ passwordHash }, { merge: true });
+        await d1Db.collection('users').doc(String(existing.id || existing.uid)).set({ password_hash: passwordHash }, { merge: true });
       }
     } else if (process.env.NODE_ENV !== 'production') {
       // Dev fallback: store in memory so local next dev can work without D1
