@@ -12,6 +12,7 @@
     "clean": "turbo run clean"
   },
   "devDependencies": {
+    "cloudflare": "^4.4.1",
     "turbo": "latest"
   }
 }

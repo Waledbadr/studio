@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { apiPath } from "@/lib/api-path";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
     async function checkSession() {
       try {
-        const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+        const res = await fetch(apiPath('/api/auth/me'), { credentials: 'include', cache: 'no-store' });
         if (!isMounted) return;
         if (!res.ok) {
           setAuthenticated(false);

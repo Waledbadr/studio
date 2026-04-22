@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { deleteDocument, listDocuments, updateDocument } from '@/lib/db-api';
+import { apiPath } from '@/lib/api-path';
 
 export interface UserThemeSettings {
   colorTheme: string; // theme ID (blue, emerald, purple, etc.)
@@ -107,7 +108,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        const sessionRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' }).catch(() => null);
+        const sessionRes = await fetch(apiPath('/api/auth/me'), { credentials: 'include', cache: 'no-store' }).catch(() => null);
         setUsers(usersList);
 
         let activeUser = null as User | null;
@@ -182,7 +183,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
         try {
           if (password) {
-            const res = await fetch('/api/admin/users/ensure', {
+            const res = await fetch(apiPath('/api/admin/users/ensure'), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -234,7 +235,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
         const emailKey = String(payload.email || '').trim().toLowerCase();
         if (!emailKey) throw new Error('Email is required');
 
-        const res = await fetch('/api/admin/users/ensure', {
+        const res = await fetch(apiPath('/api/admin/users/ensure'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

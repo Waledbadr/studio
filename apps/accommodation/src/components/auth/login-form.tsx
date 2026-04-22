@@ -28,6 +28,7 @@ import { Separator } from "@estatecare/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mail, Lock, Eye, EyeOff, KeyRound, Link2, Shield, User } from "lucide-react";
+import { apiPath } from "@/lib/api-path";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -318,7 +319,7 @@ export default function LoginForm() {
       const user = auth.currentUser;
       if (!user) return setError('Sign in once, then register a passkey.');
 
-      const challengeRes = await fetch('/api/auth/webauthn-challenge', {
+      const challengeRes = await fetch(apiPath('/api/auth/webauthn-challenge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.uid, name: user.displayName || 'User', email: user.email || '' } })
@@ -326,7 +327,7 @@ export default function LoginForm() {
       const options = await challengeRes.json();
       const attResp = await startRegistration(options);
 
-      await fetch('/api/auth/webauthn-verify', {
+      await fetch(apiPath('/api/auth/webauthn-verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'register', user: { id: user.uid, name: user.displayName || 'User', email: user.email || '' }, response: attResp })
@@ -344,7 +345,7 @@ export default function LoginForm() {
     if (!auth) return setError('Authentication is not configured.');
     try {
       const provisionalUserId = auth.currentUser?.uid || email || 'anonymous';
-      const challengeRes = await fetch('/api/auth/webauthn-challenge', {
+      const challengeRes = await fetch(apiPath('/api/auth/webauthn-challenge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'authenticate', user: { id: provisionalUserId, name: '', email } })
@@ -352,7 +353,7 @@ export default function LoginForm() {
       const options = await challengeRes.json();
       const assertion = await startAuthentication(options);
 
-      const verifyRes = await fetch('/api/auth/webauthn-verify', {
+      const verifyRes = await fetch(apiPath('/api/auth/webauthn-verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'authenticate', user: { id: provisionalUserId, name: '', email }, response: assertion })

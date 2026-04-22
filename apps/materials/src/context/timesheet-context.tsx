@@ -9,6 +9,7 @@ import { processPunches } from "@/utils/timesheet-utils";
 import { useLanguage } from "@/context/language-context";
 import { getDateChunks } from "@/lib/fiscal-month-utils";
 import { listDocuments, getDocument, updateDocument, bulkUpdateDocuments, deleteDocument as deleteDbDocument } from "@/lib/db-api";
+import { apiPath } from "@/lib/api-path";
 
 interface TimesheetContextType {
   rawPunches: RawPunch[];
@@ -159,7 +160,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
 
       // 3. Serial fetching of chunks to keep biometric server load manageable
       for (const chunk of chunks) {
-        const res = await fetch(`/api/timesheet/fetch-attendance?start_date=${chunk.start}&end_date=${chunk.end}`);
+        const res = await fetch(apiPath(`/api/timesheet/fetch-attendance?start_date=${chunk.start}&end_date=${chunk.end}`));
         if (!res.ok) {
           let errorMsg = res.statusText;
           try {

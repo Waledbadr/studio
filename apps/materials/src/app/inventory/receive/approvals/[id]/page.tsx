@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { FileUploadArea, type UploadedFile } from '@estatecare/ui/file-upload-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@estatecare/ui/dialog';
 import { useLanguage } from '@/context/language-context';
+import { apiPath } from '@/lib/api-path';
 
 export default function MRVApprovalDetailPage() {
   const params = useParams();
@@ -122,7 +123,7 @@ export default function MRVApprovalDetailPage() {
     for (const file of files) {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch('/api/uploads/mrv-invoice', { method: 'POST', body: fd });
+      const res = await fetch(apiPath('/api/uploads/mrv-invoice'), { method: 'POST', body: fd });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Upload failed for ${file.name}`);

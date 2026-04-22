@@ -6,6 +6,7 @@ import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2
 import { Avatar, AvatarFallback, AvatarImage } from '@estatecare/ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
+import { apiPath } from '@/lib/api-path';
 import type { HTMLAttributes } from 'react';
 import { useUsers } from '@/context/users-context';
 import { useRouter, usePathname } from 'next/navigation';
@@ -70,7 +71,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(apiPath('/api/auth/logout'), { method: 'POST', credentials: 'include' });
     } catch (e) {
       console.error(e);
     }

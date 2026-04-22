@@ -14,6 +14,7 @@ import { useResidences } from '@/context/residences-context';
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@estatecare/ui/collapsible";
 import { Badge } from "@estatecare/ui/badge";
+import { apiPath } from '@/lib/api-path';
 
 type LifespanUnit = 'days' | 'months' | 'years';
 
@@ -223,7 +224,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 		}
 		setIsTranslating(true);
 		try {
-			const res = await fetch('/api/translate-item', {
+			const res = await fetch(apiPath('/api/translate-item'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: source }),
@@ -287,7 +288,7 @@ export function EditItemDialog({ isOpen, onOpenChange, onItemUpdated, item }: Ed
 				let finalNameAr = nameAr.trim();
 				let finalNameEn = nameEn.trim();
 				if (!finalNameAr || !finalNameEn) {
-					const res = await fetch('/api/translate-item', {
+					const res = await fetch(apiPath('/api/translate-item'), {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ name: (finalNameAr || finalNameEn) }),

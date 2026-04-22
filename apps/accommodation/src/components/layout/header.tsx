@@ -16,6 +16,7 @@ import { useTheme } from '@/components/theme-provider';
 import { Badge } from '@estatecare/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import dynamic from 'next/dynamic';
+import { apiPath } from '@/lib/api-path';
 
 const FeedbackWidget = dynamic(() => import('@/components/feedback/feedback-widget'), { ssr: false });
 
@@ -70,7 +71,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(apiPath('/api/auth/logout'), { method: 'POST', credentials: 'include' });
     } catch (e) {
       console.error(e);
     }

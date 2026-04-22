@@ -16,7 +16,9 @@ export type DbQueryOptions = {
   offset?: number;
 };
 
-const BASE_URL = '/api/db';
+import { apiPath } from '@/lib/api-path';
+
+const BASE_URL = apiPath('/api/db');
 
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {

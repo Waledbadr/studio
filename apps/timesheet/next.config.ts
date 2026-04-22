@@ -14,6 +14,9 @@ if (process.env.NODE_ENV !== 'production') {
 const nextConfig: NextConfig = {
   basePath: BASE_PATH,
   transpilePackages: ['@estatecare/ui'],
+  experimental: {
+    optimizePackageImports: [],
+  },
   /* config options here */
   serverExternalPackages: [
     'firebase-admin',

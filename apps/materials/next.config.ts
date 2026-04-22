@@ -2,6 +2,8 @@ import type {NextConfig} from 'next';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import path from 'path';
 
+const BASE_PATH = '/materials';
+
 const RENDER_GIT_BRANCH = process.env.RENDER_GIT_BRANCH;
 const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT;
 const BUILD_TIME_ISO = new Date().toISOString();
@@ -11,7 +13,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const nextConfig: NextConfig = {
-  basePath: '/materials',
+  basePath: BASE_PATH,
   transpilePackages: ['@estatecare/ui'],
   /* config options here */
   serverExternalPackages: [
@@ -23,6 +25,9 @@ const nextConfig: NextConfig = {
     'xlsx',
     '@simplewebauthn/server',
   ],
+  experimental: {
+    optimizePackageImports: [],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -83,6 +88,7 @@ const nextConfig: NextConfig = {
   },
   // Expose git info to client at build time (Render provides RENDER_GIT_*)
   env: {
+    NEXT_PUBLIC_BASE_PATH: BASE_PATH,
     NEXT_PUBLIC_GIT_BRANCH: process.env.NEXT_PUBLIC_GIT_BRANCH ?? RENDER_GIT_BRANCH ?? 'production',
     NEXT_PUBLIC_LAST_COMMIT_HASH: process.env.NEXT_PUBLIC_LAST_COMMIT_HASH ?? RENDER_GIT_COMMIT ?? '',
     NEXT_PUBLIC_LAST_COMMIT_DATE: process.env.NEXT_PUBLIC_LAST_COMMIT_DATE ?? BUILD_TIME_ISO,

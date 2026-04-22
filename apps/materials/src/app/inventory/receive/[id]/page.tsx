@@ -18,6 +18,7 @@ import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { FileUploadArea } from '@estatecare/ui/file-upload-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@estatecare/ui/dialog';
+import { apiPath } from '@/lib/api-path';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -197,7 +198,7 @@ export default function ReceiveOrderPage() {
                         const form = new FormData();
                         form.append('mrvId', mrvId);
                         form.append('file', file);
-                        const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+                        const res = await fetch(apiPath('/api/uploads/mrv'), { method: 'POST', body: form });
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
                             throw new Error(err.error || `Upload failed (${res.status})`);

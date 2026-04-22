@@ -17,6 +17,7 @@ import { Label } from '@estatecare/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { FileUploadArea, type UploadedFile } from '@estatecare/ui/file-upload-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@estatecare/ui/dialog';
+import { apiPath } from '@/lib/api-path';
 
 export default function MRVDetailsPage() {
   const { getMRVById, items: inventoryItems } = useInventory();
@@ -134,7 +135,7 @@ export default function MRVDetailsPage() {
         const form = new FormData();
         form.append('mrvId', mrvId);
         form.append('file', file);
-        const res = await fetch('/api/uploads/mrv', { method: 'POST', body: form });
+        const res = await fetch(apiPath('/api/uploads/mrv'), { method: 'POST', body: form });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `Upload failed (${res.status})`);
