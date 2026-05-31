@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
-import { hashPassword, generateSession, getUserByEmail } from '@/lib/auth-server';
+import { hashPassword, generateSession, getUserByEmail, toD1UserRecord, fromD1UserRecord } from '@/lib/auth-server';
 import { devUpsert } from '@/lib/dev-d1-memory';
 
 export const dynamic = 'force-dynamic';
@@ -23,9 +23,11 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password);
-    const id = typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
-      ? (crypto as any).randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = String(existing?.id || existing?.uid || (
+      typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+        ? (crypto as any).randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    ));
 
     const nowIso = new Date().toISOString();
 
@@ -42,10 +44,7 @@ export async function POST(req: Request) {
     } as Record<string, unknown>;
 
     if (d1Db) {
-      await d1Db.collection('users').doc(id).set(payload, { merge: true });
-      if (existing && !existing.passwordHash) {
-        await d1Db.collection('users').doc(String(existing.id || existing.uid)).set({ passwordHash }, { merge: true });
-      }
+      await d1Db.collection('users').doc(id).set(toD1UserRecord(payload), { merge: true });
     } else if (process.env.NODE_ENV !== 'production') {
       // Dev fallback: store in memory so local next dev can work without D1
       devUpsert('users', id, payload);
@@ -53,7 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'D1 database is not configured.' }, { status: 500 });
     }
 
-    const token = await generateSession(payload);
+    const token = await generateSession(fromD1UserRecord(payload));
     const res = NextResponse.json({
       id,
       name,

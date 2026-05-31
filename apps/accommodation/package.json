@@ -6,6 +6,9 @@
     "dev:base": "next dev --turbopack -p 9002",
     "dev": "npm run dev:base",
     "dev:prod": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
+    "d1:local:migrate": "wrangler d1 execute estatecare --local --file ../../migrations/001_create_d1_tables.sql && wrangler d1 execute estatecare --local --file ../../migrations/002_users_snake_case_compat.sql",
+    "d1:remote:migrate": "wrangler d1 execute estatecare --remote --file ../../migrations/001_create_d1_tables.sql && wrangler d1 execute estatecare --remote --file ../../migrations/002_users_snake_case_compat.sql",
+    "d1:local:reset": "node -e \"const fs=require('fs'); const p='.local-d1'; if(fs.existsSync(p)) fs.rmSync(p,{recursive:true,force:true}); console.log('Removed', p);\"",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -29,6 +32,7 @@
     "update:room-areas": "node --env-file=.env.local scripts/update-rooms-default-area.mjs"
   },
   "dependencies": {
+    "@estatecare/ui": "*",
     "@genkit-ai/googleai": "^1.14.1",
     "@genkit-ai/next": "^1.14.1",
     "@hookform/resolvers": "^4.1.3",
@@ -55,6 +59,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@simplewebauthn/browser": "^9.0.1",
     "@simplewebauthn/server": "^9.0.1",
+    "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -77,8 +82,7 @@
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "xlsx": "^0.18.5",
-    "zod": "^3.24.2",
-    "@estatecare/ui": "*"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.18.0",

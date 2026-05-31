@@ -482,7 +482,7 @@ export function AppSidebar() {
       title: 'Apps & Modules',
       items: [
         { href: '/accommodation', label: 'Accommodation', icon: Building },
-        { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock },
+        { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock, external: true },
         { href: '#income-expenses', label: 'Income & Expenses (قريباً)', icon: Wallet },
       ]
     },

@@ -101,7 +101,9 @@ export const ServiceOrdersProvider = ({ children }: { children: React.ReactNode 
     isLoaded.current = true;
     if (!db) {
       setLoading(false);
-      console.warn("Firebase not configured, loading mock service orders");
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn("Firebase not configured, loading mock service orders");
+      }
       return;
     }
     setLoading(true);

@@ -130,9 +130,13 @@ if (firebaseEnabled) {
   }
 } else {
   if (disableFirebase) {
-    console.warn("Firebase explicitly disabled via NEXT_PUBLIC_DISABLE_FIREBASE. Cloudflare/D1 branch will not use Firestore.");
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn("Firebase explicitly disabled via NEXT_PUBLIC_DISABLE_FIREBASE. Cloudflare/D1 branch will not use Firestore.");
+    }
   } else {
-    console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn("Firebase not configured. Using local storage fallback. Please configure Firebase in .env.local for full functionality.");
+    }
   }
 }
 

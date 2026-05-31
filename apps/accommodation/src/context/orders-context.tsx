@@ -212,7 +212,9 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     }
     
     if (!db) {
-      console.warn("Firebase not configured, loading orders from localStorage");
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn("Firebase not configured, loading orders from localStorage");
+      }
       setOrders(loadOrdersFromLocalStorage());
       setLoading(false);
       return;

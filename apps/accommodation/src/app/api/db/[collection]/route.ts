@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
 import { devList, devUpsert } from '@/lib/dev-d1-memory';
+import { fromD1UserRecord, toD1UserRecord } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,16 @@ function parseJsonParam<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function normalizeDocForRead(collection: string, doc: any) {
+  if (collection !== 'users' || !doc || typeof doc !== 'object') return doc;
+  return fromD1UserRecord(doc);
+}
+
+function normalizeDocForWrite(collection: string, doc: any) {
+  if (collection !== 'users' || !doc || typeof doc !== 'object') return doc;
+  return toD1UserRecord(doc);
 }
 
 export async function GET(req: Request, context: { params: Promise<{ collection: string }> }) {
@@ -56,7 +67,7 @@ export async function GET(req: Request, context: { params: Promise<{ collection:
       return NextResponse.json({ error: 'D1 database not configured' }, { status: 500 });
     }
 
-    return NextResponse.json(docs);
+    return NextResponse.json((docs || []).map((doc) => normalizeDocForRead(collectionName, doc)));
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
   }
@@ -78,9 +89,9 @@ export async function POST(req: Request, context: { params: Promise<{ collection
 
     if (d1) {
       const docRef = d1.collection(collectionName).doc(id);
-      await docRef.set({ ...data, id });
+      await docRef.set(normalizeDocForWrite(collectionName, { ...data, id }));
       const created = await docRef.get();
-      return NextResponse.json({ id, ...(created.data() || {}) });
+      return NextResponse.json(normalizeDocForRead(collectionName, { id, ...(created.data() || {}) }));
     }
 
     if (process.env.NODE_ENV !== 'production') {

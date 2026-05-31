@@ -519,7 +519,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const loadInventory = useCallback(() => {
       if (isLoaded.current) return;
       if (!db) {
-        console.warn("InventoryContext: Firebase db is null; loading local inventory fallback.");
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn("InventoryContext: Firebase db is null; loading local inventory fallback.");
+          }
         setItems(loadInventoryFromLocalStorage());
         setCategories(loadCategoriesFromLocalStorage());
         setLoading(false);
@@ -1489,7 +1491,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
  const getAllInventoryTransactions = useCallback(async (): Promise<InventoryTransaction[]> => {
     if (!db) {
-        console.warn('Firebase disabled: getAllInventoryTransactions fallback to empty list');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Firebase disabled: getAllInventoryTransactions fallback to empty list');
+        }
         return [];
     }
 
@@ -2677,7 +2681,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const getAllReconciliations = useCallback(async (): Promise<StockReconciliation[]> => {
       if (!db) {
-        console.warn('Firebase disabled: getAllReconciliations fallback to empty list');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Firebase disabled: getAllReconciliations fallback to empty list');
+        }
         return [];
       }
       try {
@@ -2738,7 +2744,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // Reconciliation approval workflow implementations
   const getReconciliationRequests = useCallback(async (resId?: string, status?: ReconciliationRequest['status']): Promise<ReconciliationRequest[]> => {
       if (!db) {
-        console.warn('Firebase disabled: getReconciliationRequests fallback to empty list');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Firebase disabled: getReconciliationRequests fallback to empty list');
+        }
         return [];
       }
       try {

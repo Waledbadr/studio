@@ -869,12 +869,16 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
   // When Firestore is not available, load workers from the D1 /api/db fallback.
   useEffect(() => {
     if (!db) {
-      console.log('🔴 [Accommodation Context] Firestore DB not initialized, loading workers from API fallback');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔴 [Accommodation Context] Firestore DB not initialized, loading workers from API fallback');
+      }
       fetchWorkersFromDbApi();
       return;
     }
 
-    console.log('✅ [Workers] Cloudflare session active - workers will load on demand.');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [Workers] Cloudflare session active - workers will load on demand.');
+    }
     return undefined;
   }, [db, fetchWorkersFromDbApi]);
 
@@ -4321,7 +4325,9 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     }
 
     if (!db) {
-      console.warn('⚠️ [Dashboard] DB not available');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ [Dashboard] DB not available');
+      }
       return DEFAULT_STATS;
     }
 

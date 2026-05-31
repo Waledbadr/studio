@@ -121,7 +121,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
         >
           {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
         </Link>
-        <Link
+        <a
           href="/timesheet"
           className={cn(
             "hidden sm:inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
@@ -129,7 +129,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
           )}
         >
           Timesheet <span className="ml-1 text-xs opacity-75">(قريباً)</span>
-        </Link>
+        </a>
         <Link
           href="/income-expenses"
           className={cn(

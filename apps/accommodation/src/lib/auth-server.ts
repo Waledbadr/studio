@@ -19,6 +19,43 @@ function normalizeUserRecord(user: any) {
   };
 }
 
+export function toD1UserRecord(user: Record<string, unknown>) {
+  const {
+    assignedResidences,
+    themeSettings,
+    createdAt,
+    updatedAt,
+    passwordHash,
+    updated_at,
+    ...rest
+  } = user as any;
+
+  const assignedResidencesValue = Array.isArray(assignedResidences)
+    ? assignedResidences
+    : Array.isArray(rest.assigned_residences)
+      ? rest.assigned_residences
+      : [];
+
+  const themeSettingsValue = themeSettings ?? rest.theme_settings ?? { colorTheme: 'blue', mode: 'system' };
+  const createdAtValue = createdAt ?? rest.created_at ?? null;
+  const d1Record: Record<string, unknown> = {
+    ...rest,
+    assigned_residences: assignedResidencesValue,
+    theme_settings: themeSettingsValue,
+    created_at: createdAtValue,
+  };
+
+  if (passwordHash !== undefined || rest.password_hash !== undefined) {
+    d1Record.password_hash = passwordHash ?? rest.password_hash ?? null;
+  }
+
+  return d1Record;
+}
+
+export function fromD1UserRecord(user: Record<string, unknown>) {
+  return normalizeUserRecord(user);
+}
+
 function toHex(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   return Array.from(bytes)

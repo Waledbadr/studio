@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getD1Db } from '@/lib/firebase-admin';
-import { verifySession, getUserByEmail, hashPassword } from '@/lib/auth-server';
+import { verifySession, getUserByEmail, hashPassword, toD1UserRecord } from '@/lib/auth-server';
 import { devFindByField, devUpsert } from '@/lib/dev-d1-memory';
 
 export const dynamic = 'force-dynamic';
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (d1Db) {
-      await d1Db.collection('users').doc(uid).set(payload, { merge: true });
+      await d1Db.collection('users').doc(uid).set(toD1UserRecord(payload), { merge: true });
     } else {
       devUpsert('users', uid, payload);
     }

@@ -47,6 +47,10 @@ export default function LoginFormCloudflare() {
     }
     const choice = fallbackChoice || appChoice;
     const target = choice === 'materials' ? '/inventory' : choice === 'timesheet' ? '/timesheet' : choice === 'finance' ? '/income-expenses' : '/accommodation';
+    if (choice === 'timesheet') {
+      window.location.assign(target);
+      return;
+    }
     router.replace(target);
   };
 

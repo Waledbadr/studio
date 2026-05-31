@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:base": "next dev --turbopack -p 9002",
+    "dev:base": "next dev --turbopack -p 9004",
     "dev": "npm run dev:base",
     "dev:prod": "concurrently -k -n next,keep \"npm run dev:base\" \"npm run keep-alive\"",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
