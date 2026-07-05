@@ -8,6 +8,8 @@ import safeOnSnapshot from '@/lib/firestore-utils';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from "@/hooks/use-toast";
 
+const normalizeText = (value?: string | null) => (value ?? '').trim().toLowerCase();
+
 // Define types for our data structure
 export interface Room {
   id: string;
@@ -265,7 +267,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
 
   const addComplex = async (name: string, city: string, managerId: string) => {
     const trimmedName = name.trim();
-    if (residences.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
+    if (residences.some(c => normalizeText(c.name) === normalizeText(trimmedName))) {
         toast({ title: "Error", description: "A complex with this name already exists.", variant: "destructive" });
         return;
     }
@@ -1052,7 +1054,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     
-    if (targetComplex.buildings.some(b => b.name.toLowerCase() === trimmedName.toLowerCase())) {
+    if (targetComplex.buildings.some(b => normalizeText(b.name) === normalizeText(trimmedName))) {
         toast({ title: "Error", description: "A building with this name already exists in this complex.", variant: "destructive" });
         return;
     }
@@ -1110,7 +1112,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const complexData = complexDoc.data() as Complex;
         const targetBuilding = complexData.buildings.find(b => b.id === buildingId);
 
-        if (targetBuilding?.floors.some(f => f.name.toLowerCase() === trimmedName.toLowerCase())) {
+        if (targetBuilding?.floors.some(f => normalizeText(f.name) === normalizeText(trimmedName))) {
             toast({ title: "Error", description: "A floor with this name already exists in this building.", variant: "destructive" });
             return;
         }
@@ -1149,7 +1151,7 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
         const building = complexData.buildings.find(b => b.id === buildingId);
         const floor = building?.floors.find(f => f.id === floorId);
 
-        if(floor?.rooms.some(r => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+        if(floor?.rooms.some(r => normalizeText(r.name) === normalizeText(trimmedName))) {
             toast({ title: "Error", description: "A room with this name already exists on this floor.", variant: "destructive" });
             return;
         }
@@ -1206,12 +1208,12 @@ export const ResidencesProvider = ({ children }: { children: ReactNode }) => {
              return;
         }
 
-        const existingRoomNames = new Set(floor.rooms.map(r => r.name.toLowerCase()));
+        const existingRoomNames = new Set(floor.rooms.map(r => normalizeText(r.name)));
         
     const newRooms: Room[] = roomNames
             .map(name => name.trim())
             .filter(name => name)
-            .filter(name => !existingRoomNames.has(name.toLowerCase()))
+            .filter(name => !existingRoomNames.has(normalizeText(name)))
       .map(name => {
         const room: Room = { id: `room-${Date.now()}-${Math.random()}`, name };
         // support creating rooms with optional area or dimensions specified in the name using syntax

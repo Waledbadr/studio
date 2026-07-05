@@ -1,0 +1,5 @@
+{
+  "/api/db/[collection]/route": "app/api/db/[collection]/route.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/login/page": "app/login/page.js"
+}

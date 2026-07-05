@@ -202,13 +202,13 @@ const Sidebar = React.forwardRef<
             className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
             style={
               {
-                "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+                '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
               } as React.CSSProperties
             }
             side={side}
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain">{children}</div>
           </SheetContent>
         </Sheet>
       )

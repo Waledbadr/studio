@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "functions": {
+    "/api/timesheet/fetch-attendance": {
+      "maxDuration": 60
+    },
+    "/api/uploads/feedback": {}
+  }
+}

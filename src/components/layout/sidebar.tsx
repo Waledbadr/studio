@@ -47,6 +47,7 @@ export function AppSidebar() {
   const isAccommodation = pathname?.startsWith('/accommodation');
   const isTimesheet = pathname?.startsWith('/timesheet');
   const isIncomeExpenses = pathname?.startsWith('/income-expenses');
+  const isTimesheetDailyExport = pathname?.startsWith('/timesheet/export');
 
   if (isTimesheet) {
     return (
@@ -110,6 +111,16 @@ export function AppSidebar() {
                     <History />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {'Monthly Archive'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isTimesheetDailyExport} tooltip="Daily Excel Export">
+                  <Link href="/timesheet/export" onClick={handleNavigate}>
+                    <FileText />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {'Daily Excel Export'}
                     </span>
                   </Link>
                 </SidebarMenuButton>

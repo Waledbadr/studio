@@ -1,0 +1,1 @@
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[9245],{56146:(e,s,n)=>{"use strict";n.r(s),n.d(s,{default:()=>u});var t=n(7620);function u(){return(0,t.useEffect)(()=>{window.location.assign("/timesheet")},[]),null}},88794:(e,s,n)=>{Promise.resolve().then(n.bind(n,56146))}},e=>{e.O(0,[587,18,7358],()=>e(e.s=88794)),_N_E=e.O()}]);

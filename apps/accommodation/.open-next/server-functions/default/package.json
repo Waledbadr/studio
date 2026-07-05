@@ -1,0 +1,18 @@
+{
+  "name": "estatecare-workspace",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "cloudflare": "^4.4.1",
+    "turbo": "latest"
+  }
+}

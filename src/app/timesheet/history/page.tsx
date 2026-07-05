@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Download, MapPin, CalendarDays, User, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import * as XLSX from 'xlsx';
 import { useLanguage } from '@/context/language-context';
 import { useUsers } from '@/context/users-context';
 import { useResidences } from '@/context/residences-context';
@@ -34,6 +35,78 @@ const PROFESSION_ORDER: Record<string, number> = {
   'عامل نظافة': 14,
 };
 
+const AVAILABLE_MONTHS_CACHE_KEY = 'timesheet_history_available_months';
+const AVAILABLE_MONTHS_CACHE_TS_KEY = 'timesheet_history_available_months_ts';
+const AVAILABLE_MONTHS_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+const TIMESHEET_EXPORT_HEADERS = [
+  'C_number',
+  'Name',
+  'Department',
+  'Project',
+  'R_Hours',
+  'OT_Hours',
+  'CostDscrp',
+  'Ppm_PrNam',
+  'Ppm_PrNo',
+  'Task_Nam',
+  'Task_No',
+  'Date',
+  'Remarks',
+];
+
+const TIMESHEET_EXPORT_COLS = [
+  { wch: 8 },
+  { wch: 34 },
+  { wch: 14 },
+  { wch: 48 },
+  { wch: 8 },
+  { wch: 8 },
+  { wch: 12 },
+  { wch: 8 },
+  { wch: 8 },
+  { wch: 8 },
+  { wch: 8 },
+  { wch: 24 },
+  { wch: 12 },
+];
+
+function toExportDateTime(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).toISOString();
+}
+
+function formatExportHours(value?: number | null) {
+  if (value === undefined || value === null || value === 0) return '';
+  return Number.isInteger(value) ? value : Number(value.toFixed(2));
+}
+
+function readCachedMonths() {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const ts = localStorage.getItem(AVAILABLE_MONTHS_CACHE_TS_KEY);
+    const data = localStorage.getItem(AVAILABLE_MONTHS_CACHE_KEY);
+    if (!ts || !data) return [];
+
+    if (Date.now() - Number(ts) > AVAILABLE_MONTHS_CACHE_TTL) return [];
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed.filter((month): month is string => typeof month === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedMonths(months: string[]) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem(AVAILABLE_MONTHS_CACHE_KEY, JSON.stringify(months));
+    localStorage.setItem(AVAILABLE_MONTHS_CACHE_TS_KEY, String(Date.now()));
+  } catch {
+    // Ignore cache write failures.
+  }
+}
+
 const getProfessionRank = (profession?: string) => {
   if (!profession) return 999;
   const key = profession.trim();
@@ -49,9 +122,10 @@ function TimesheetHistoryContent() {
   const [records, setRecords] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, any>>({});
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [availableMonths, setAvailableMonths] = useState<string[]>(() => readCachedMonths());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   // Employee profile sheet state (for quick Add Leave / Permission)
   const [selectedEmployee, setSelectedEmployee] = useState<HousingEmployee | null>(null);
@@ -114,70 +188,71 @@ function TimesheetHistoryContent() {
 
     const fetchData = async () => {
       try {
-        // Fetch housing employees
-        const empsSnap = await getDocs(collection(db as any, 'housingEmployees'));
+        const dateStartStr = daysArray[0];
+        const dateEndStr = daysArray[daysArray.length - 1];
+        const hasCachedMonths = availableMonths.length > 0;
+
+        const employeesPromise = getDocs(collection(db as any, 'housingEmployees'));
+        const leavesPromise = getDocs(query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000)));
+        const monthsPromise = hasCachedMonths
+          ? Promise.resolve(null)
+          : getDocs(query(collection(db as any, 'attendanceRecords'), orderBy('date', 'desc'), limit(10000)));
+        const recordsPromise = daysArray.length > 0
+          ? getDocs(query(
+              collection(db as any, 'attendanceRecords'),
+              where('date', '>=', dateStartStr),
+              where('date', '<=', dateEndStr),
+              orderBy('date', 'desc'),
+              limit(10000)
+            ))
+          : Promise.resolve(null);
+
+        const [empsSnap, leavesSnap, allDatesSnap, recordsSnap] = await Promise.all([
+          employeesPromise,
+          leavesPromise,
+          monthsPromise,
+          recordsPromise,
+        ]);
+
+        if (!active) return;
+
         const emps: Record<string, any> = {};
         empsSnap.forEach(d => {
           emps[d.data().employeeId] = { id: d.id, ...d.data() };
         });
-        if (active) setEmployeesMap(emps);
+        setEmployeesMap(emps);
+        setLeaves(leavesSnap.docs.map(d => d.data()));
 
-        // Fetch leaves
-        const lq = query(collection(db as any, 'timesheetLeaves'), orderBy('createdAt', 'desc'), limit(1000));
-        const leavesSnap = await getDocs(lq);
-        if (active) setLeaves(leavesSnap.docs.map(d => d.data()));
-
-        // --- Build dynamic available months from stored records ---
-        // Fetch just the dates of all records to determine which months have data
-        const allDatesSnap = await getDocs(query(
-          collection(db as any, 'attendanceRecords'),
-          orderBy('date', 'desc'),
-          limit(10000)
-        ));
-        const monthsSet = new Set<string>();
-        allDatesSnap.forEach(d => {
-          const date: string = d.data().date;
-          if (date) {
-            // Convert raw date to fiscal month label
-            const [y, m, dd] = date.split('-').map(Number);
-            const dayNum = dd;
-            // Fiscal month: if day >= 20, belongs to NEXT calendar month
-            let fiscalYear = y, fiscalMonth = m;
-            if (dayNum >= 20) {
-              fiscalMonth += 1;
-              if (fiscalMonth > 12) { fiscalMonth = 1; fiscalYear += 1; }
+        if (allDatesSnap) {
+          const monthsSet = new Set<string>();
+          allDatesSnap.forEach(d => {
+            const date: string = d.data().date;
+            if (date) {
+              const [y, m, dd] = date.split('-').map(Number);
+              let fiscalYear = y;
+              let fiscalMonth = m;
+              if (dd >= 20) {
+                fiscalMonth += 1;
+                if (fiscalMonth > 12) {
+                  fiscalMonth = 1;
+                  fiscalYear += 1;
+                }
+              }
+              monthsSet.add(`${fiscalYear}-${String(fiscalMonth).padStart(2, '0')}`);
             }
-            monthsSet.add(`${fiscalYear}-${String(fiscalMonth).padStart(2, '0')}`);
-          }
-        });
-        const dynamicMonths = Array.from(monthsSet).sort().reverse();
-        if (!dynamicMonths.includes(defaultMonth)) dynamicMonths.unshift(defaultMonth);
-        if (active) setAvailableMonths(dynamicMonths);
+          });
 
-        // Fetch attendance records for selected month
-        if (daysArray.length > 0) {
-          const dateStartStr = daysArray[0];
-          const dateEndStr = daysArray[daysArray.length - 1];
-
-          // Fetch only the records in the selected month interval to prevent limit truncations
-          const q = query(
-            collection(db as any, 'attendanceRecords'),
-            where('date', '>=', dateStartStr),
-            where('date', '<=', dateEndStr),
-            orderBy('date', 'desc'),
-            limit(10000)
-          );
-
-          const recordsSnap = await getDocs(q);
-          const fetchedRecords = recordsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          
-          if (active) {
-            setRecords(fetchedRecords);
-            setLoading(false);
-          }
-        } else {
-          if (active) setLoading(false);
+          const dynamicMonths = Array.from(monthsSet).sort().reverse();
+          if (!dynamicMonths.includes(defaultMonth)) dynamicMonths.unshift(defaultMonth);
+          setAvailableMonths(dynamicMonths);
+          saveCachedMonths(dynamicMonths);
         }
+
+        if (recordsSnap) {
+          setRecords(recordsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching history data:', error);
         if (active) setLoading(false);
@@ -189,7 +264,7 @@ function TimesheetHistoryContent() {
     return () => {
       active = false;
     };
-  }, [daysArray]);
+  }, [daysArray, defaultMonth, loadResidences]);
 
   // Group data by Residence (projectName) -> Employee
   const groupedData = useMemo(() => {
@@ -220,8 +295,8 @@ function TimesheetHistoryContent() {
       if (!record.date) return;
       if (!daysArray.includes(record.date)) return;
 
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
+      if (deferredSearchTerm) {
+        const searchLower = deferredSearchTerm.toLowerCase();
         const matchesSearch =
           record.firstName?.toLowerCase().includes(searchLower) ||
           record.employeeId?.toLowerCase().includes(searchLower);
@@ -330,8 +405,8 @@ function TimesheetHistoryContent() {
       if (!l.badgeId || !l.startDate || !l.endDate) return;
       const badge = l.badgeId;
 
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
+      if (deferredSearchTerm) {
+        const searchLower = deferredSearchTerm.toLowerCase();
         if (!(l.name?.toLowerCase().includes(searchLower) || l.nameAr?.toLowerCase().includes(searchLower) || badge.toLowerCase().includes(searchLower))) return;
       }
 
@@ -613,7 +688,69 @@ function TimesheetHistoryContent() {
     });
 
     return grouped;
-  }, [records, leaves, filterMonth, searchTerm, currentUser, residences, employeesMap, projectToResidenceMap, daysArray, timesheetEvents, employeeSchedules]);
+  }, [records, leaves, filterMonth, deferredSearchTerm, currentUser, residences, employeesMap, projectToResidenceMap, daysArray, timesheetEvents, employeeSchedules]);
+
+  const handleExportMonthlySheet = () => {
+    const rows: Array<(string | number)[]> = [];
+
+    Object.entries(groupedData)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([project, employees]) => {
+        Object.entries(employees)
+          .sort(([, a], [, b]) => {
+            const rankA = getProfessionRank(a.profession);
+            const rankB = getProfessionRank(b.profession);
+            if (rankA !== rankB) return rankA - rankB;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+          })
+          .forEach(([empId, empData]) => {
+            daysArray.forEach((dateStr) => {
+              const record = empData.daily?.[dateStr];
+              if (!record) return;
+
+              const hasExportableHours =
+                (record.regularHours || 0) > 0 ||
+                (record.overtimeHours || 0) > 0 ||
+                (record.totalHours || 0) > 0 ||
+                record.status === 'Present' ||
+                record.status === 'Weekend' ||
+                record.status === 'Holiday';
+
+              if (!hasExportableHours) return;
+              if (record.isTransfer || record.status === 'Transferred' || record.status === 'Absent' || record.status === 'Elsewhere') return;
+
+              rows.push([
+                String(record.employeeId || empId || ''),
+                String(record.firstName || empData.name || ''),
+                String(record.department || empData.department || 'HOUSING'),
+                String(project || record.projectName || 'Unassigned / Outside'),
+                formatExportHours(record.regularHours ?? record.totalHours),
+                formatExportHours(record.overtimeHours),
+                String(record.costDescription || 'Housing'),
+                '',
+                '',
+                '',
+                '',
+                toExportDateTime(dateStr),
+                String(record.reason || record.leaveType || ''),
+              ]);
+            });
+          });
+      });
+
+    if (rows.length === 0) return;
+
+    const worksheet = XLSX.utils.aoa_to_sheet([TIMESHEET_EXPORT_HEADERS, ...rows]);
+    worksheet['!cols'] = TIMESHEET_EXPORT_COLS;
+    worksheet['!autofilter'] = { ref: `A1:M${rows.length + 1}` };
+    worksheet['!rows'] = [{ hpt: 31.5 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+    const fileName = `timesheet-${filterMonth}.xlsx`;
+    XLSX.writeFile(workbook, fileName, { bookType: 'xlsx', cellStyles: true, type: 'array', compression: true });
+  };
 
   const handleCellDoubleClick = (empId: string, dateStr: string) => {
     const emp = employeesMap[empId];
@@ -746,7 +883,7 @@ function TimesheetHistoryContent() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportMonthlySheet} disabled={Object.keys(groupedData).length === 0}>
             <Download className="mr-2 h-4 w-4" />
             Export Monthly Sheet
           </Button>

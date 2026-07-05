@@ -1,0 +1,46 @@
+{
+  "..\\..\\..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
+    "id": 27655,
+    "files": [
+      "static/chunks/7655.ab77175f0ba71705.js"
+    ]
+  },
+  "..\\..\\..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_error": {
+    "id": 43826,
+    "files": [
+      "static/chunks/3826.1e73c87af964d137.js"
+    ]
+  },
+  "components\\feedback\\feedback-widget.tsx -> @/lib/feedback": {
+    "id": 53265,
+    "files": [
+      "static/chunks/3265.59feb2b6cc4392ce.js"
+    ]
+  },
+  "components\\feedback\\feedback-widget.tsx -> html2canvas": {
+    "id": 21525,
+    "files": [
+      "static/chunks/da458701.07cdf7daa41ac903.js"
+    ]
+  },
+  "components\\layout\\app-layout.tsx -> @/components/feedback/feedback-widget": {
+    "id": 18391,
+    "files": [
+      "static/chunks/4071-da181b0ef08b2f3d.js",
+      "static/chunks/8391.6a955235be43f30a.js"
+    ]
+  },
+  "components\\layout\\header.tsx -> @/components/feedback/feedback-widget": {
+    "id": 18391,
+    "files": [
+      "static/chunks/4071-da181b0ef08b2f3d.js",
+      "static/chunks/8391.6a955235be43f30a.js"
+    ]
+  },
+  "lib\\messaging.ts -> firebase/messaging": {
+    "id": 847,
+    "files": [
+      "static/chunks/847.1c803468c97da208.js"
+    ]
+  }
+}

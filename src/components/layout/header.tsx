@@ -102,7 +102,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
 
   return (
     <header className={headerClass} {...props}>
-      <SidebarTrigger className="md:hidden" />
+      <SidebarTrigger className="h-10 w-10 md:hidden" />
       <div className="ml-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <Link
           href={atAccommodation ? '/' : '/accommodation'}

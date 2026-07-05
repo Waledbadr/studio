@@ -1,0 +1,596 @@
+{
+  "version": 3,
+  "pages404": true,
+  "caseSensitive": false,
+  "basePath": "/materials",
+  "redirects": [
+    {
+      "source": "/materials/",
+      "destination": "/materials",
+      "basePath": false,
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^/materials/$"
+    },
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/materials/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "clipboard-read=(self), clipboard-write=(self)"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ],
+      "regex": "^/materials(?:/(.*))(?:/)?$"
+    }
+  ],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/db/bulk/[collection]",
+      "regex": "^/api/db/bulk/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcollection": "nxtPcollection"
+      },
+      "namedRegex": "^/api/db/bulk/(?<nxtPcollection>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/db/[collection]",
+      "regex": "^/api/db/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcollection": "nxtPcollection"
+      },
+      "namedRegex": "^/api/db/(?<nxtPcollection>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/db/[collection]/[id]",
+      "regex": "^/api/db/([^/]+?)/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcollection": "nxtPcollection",
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/db/(?<nxtPcollection>[^/]+?)/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/feedback/[id]",
+      "regex": "^/api/feedback/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/feedback/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/files/[...key]",
+      "regex": "^/api/files/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPkey": "nxtPkey"
+      },
+      "namedRegex": "^/api/files/(?<nxtPkey>.+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/[id]",
+      "regex": "^/inventory/inventory\\-audit/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/inventory\\-audit/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/[id]/complete",
+      "regex": "^/inventory/inventory\\-audit/([^/]+?)/complete(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/inventory\\-audit/(?<nxtPid>[^/]+?)/complete(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/[id]/execute",
+      "regex": "^/inventory/inventory\\-audit/([^/]+?)/execute(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/inventory\\-audit/(?<nxtPid>[^/]+?)/execute(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/[id]/reconcile",
+      "regex": "^/inventory/inventory\\-audit/([^/]+?)/reconcile(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/inventory\\-audit/(?<nxtPid>[^/]+?)/reconcile(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/[id]/review",
+      "regex": "^/inventory/inventory\\-audit/([^/]+?)/review(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/inventory\\-audit/(?<nxtPid>[^/]+?)/review(?:/)?$"
+    },
+    {
+      "page": "/inventory/issue-history/[id]",
+      "regex": "^/inventory/issue\\-history/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/issue\\-history/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/issue-history/[id]/edit",
+      "regex": "^/inventory/issue\\-history/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/issue\\-history/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/[id]",
+      "regex": "^/inventory/orders/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/orders/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/[id]/edit",
+      "regex": "^/inventory/orders/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/orders/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/[id]/edit-plan",
+      "regex": "^/inventory/orders/([^/]+?)/edit\\-plan(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/orders/(?<nxtPid>[^/]+?)/edit\\-plan(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/approvals/[id]",
+      "regex": "^/inventory/receive/approvals/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/receive/approvals/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/receipts/[id]",
+      "regex": "^/inventory/receive/receipts/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/receive/receipts/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/receipts/[id]/edit",
+      "regex": "^/inventory/receive/receipts/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/receive/receipts/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/[id]",
+      "regex": "^/inventory/receive/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/receive/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/reconciliations/[id]",
+      "regex": "^/inventory/reports/reconciliations/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/reports/reconciliations/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/inventory/service-orders/[id]",
+      "regex": "^/inventory/service\\-orders/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/inventory/service\\-orders/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/activity",
+      "regex": "^/activity(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/activity(?:/)?$"
+    },
+    {
+      "page": "/add-component",
+      "regex": "^/add\\-component(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/add\\-component(?:/)?$"
+    },
+    {
+      "page": "/admin/feedback",
+      "regex": "^/admin/feedback(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/feedback(?:/)?$"
+    },
+    {
+      "page": "/admin/feedback/stats",
+      "regex": "^/admin/feedback/stats(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/feedback/stats(?:/)?$"
+    },
+    {
+      "page": "/admin/import-workers",
+      "regex": "^/admin/import\\-workers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/import\\-workers(?:/)?$"
+    },
+    {
+      "page": "/admin/reset-accommodation",
+      "regex": "^/admin/reset\\-accommodation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/reset\\-accommodation(?:/)?$"
+    },
+    {
+      "page": "/admin/tools/backfill-requesters",
+      "regex": "^/admin/tools/backfill\\-requesters(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/tools/backfill\\-requesters(?:/)?$"
+    },
+    {
+      "page": "/admin/tools/facility-components-test",
+      "regex": "^/admin/tools/facility\\-components\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/tools/facility\\-components\\-test(?:/)?$"
+    },
+    {
+      "page": "/component-test",
+      "regex": "^/component\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/component\\-test(?:/)?$"
+    },
+    {
+      "page": "/debug",
+      "regex": "^/debug(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/debug(?:/)?$"
+    },
+    {
+      "page": "/diagnostic",
+      "regex": "^/diagnostic(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/diagnostic(?:/)?$"
+    },
+    {
+      "page": "/elegant",
+      "regex": "^/elegant(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/elegant(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/feedback",
+      "regex": "^/feedback(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/feedback(?:/)?$"
+    },
+    {
+      "page": "/function-test",
+      "regex": "^/function\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/function\\-test(?:/)?$"
+    },
+    {
+      "page": "/income-expenses",
+      "regex": "^/income\\-expenses(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/income\\-expenses(?:/)?$"
+    },
+    {
+      "page": "/inventory",
+      "regex": "^/inventory(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory(?:/)?$"
+    },
+    {
+      "page": "/inventory/depreciation",
+      "regex": "^/inventory/depreciation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/depreciation(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit",
+      "regex": "^/inventory/inventory\\-audit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/inventory\\-audit(?:/)?$"
+    },
+    {
+      "page": "/inventory/inventory-audit/new",
+      "regex": "^/inventory/inventory\\-audit/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/inventory\\-audit/new(?:/)?$"
+    },
+    {
+      "page": "/inventory/issue",
+      "regex": "^/inventory/issue(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/issue(?:/)?$"
+    },
+    {
+      "page": "/inventory/issue-history",
+      "regex": "^/inventory/issue\\-history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/issue\\-history(?:/)?$"
+    },
+    {
+      "page": "/inventory/new-order",
+      "regex": "^/inventory/new\\-order(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/new\\-order(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders",
+      "regex": "^/inventory/orders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/orders(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/analytics",
+      "regex": "^/inventory/orders/analytics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/orders/analytics(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/consolidated-report",
+      "regex": "^/inventory/orders/consolidated\\-report(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/orders/consolidated\\-report(?:/)?$"
+    },
+    {
+      "page": "/inventory/orders/consolidated-report-mr",
+      "regex": "^/inventory/orders/consolidated\\-report\\-mr(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/orders/consolidated\\-report\\-mr(?:/)?$"
+    },
+    {
+      "page": "/inventory/precheck",
+      "regex": "^/inventory/precheck(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/precheck(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive",
+      "regex": "^/inventory/receive(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/receive(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/approvals",
+      "regex": "^/inventory/receive/approvals(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/receive/approvals(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/new",
+      "regex": "^/inventory/receive/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/receive/new(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/new-approval",
+      "regex": "^/inventory/receive/new\\-approval(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/receive/new\\-approval(?:/)?$"
+    },
+    {
+      "page": "/inventory/receive/receipts",
+      "regex": "^/inventory/receive/receipts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/receive/receipts(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/consumption-by-residence",
+      "regex": "^/inventory/reports/consumption\\-by\\-residence(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/consumption\\-by\\-residence(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/item-movement",
+      "regex": "^/inventory/reports/item\\-movement(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/item\\-movement(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/lifespan",
+      "regex": "^/inventory/reports/lifespan(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/lifespan(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/reconciliations",
+      "regex": "^/inventory/reports/reconciliations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/reconciliations(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/slow-moving",
+      "regex": "^/inventory/reports/slow\\-moving(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/slow\\-moving(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/stock-matrix",
+      "regex": "^/inventory/reports/stock\\-matrix(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/stock\\-matrix(?:/)?$"
+    },
+    {
+      "page": "/inventory/reports/stock-movement",
+      "regex": "^/inventory/reports/stock\\-movement(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/reports/stock\\-movement(?:/)?$"
+    },
+    {
+      "page": "/inventory/request-issue",
+      "regex": "^/inventory/request\\-issue(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/request\\-issue(?:/)?$"
+    },
+    {
+      "page": "/inventory/service-orders",
+      "regex": "^/inventory/service\\-orders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/service\\-orders(?:/)?$"
+    },
+    {
+      "page": "/inventory/service-orders/new",
+      "regex": "^/inventory/service\\-orders/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/service\\-orders/new(?:/)?$"
+    },
+    {
+      "page": "/inventory/transfer",
+      "regex": "^/inventory/transfer(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/transfer(?:/)?$"
+    },
+    {
+      "page": "/inventory/transfer/new",
+      "regex": "^/inventory/transfer/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/transfer/new(?:/)?$"
+    },
+    {
+      "page": "/inventory/transfer-audit",
+      "regex": "^/inventory/transfer\\-audit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/inventory/transfer\\-audit(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/miv-test",
+      "regex": "^/miv\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/miv\\-test(?:/)?$"
+    },
+    {
+      "page": "/practical-test",
+      "regex": "^/practical\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/practical\\-test(?:/)?$"
+    },
+    {
+      "page": "/profile",
+      "regex": "^/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/profile(?:/)?$"
+    },
+    {
+      "page": "/reports",
+      "regex": "^/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports(?:/)?$"
+    },
+    {
+      "page": "/setup",
+      "regex": "^/setup(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/setup(?:/)?$"
+    },
+    {
+      "page": "/simple-test",
+      "regex": "^/simple\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/simple\\-test(?:/)?$"
+    },
+    {
+      "page": "/status",
+      "regex": "^/status(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/status(?:/)?$"
+    },
+    {
+      "page": "/storage-check",
+      "regex": "^/storage\\-check(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/storage\\-check(?:/)?$"
+    },
+    {
+      "page": "/tools",
+      "regex": "^/tools(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools(?:/)?$"
+    },
+    {
+      "page": "/users",
+      "regex": "^/users(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/users(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSuffix": ".prefetch.rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments"
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}
