@@ -145,6 +145,7 @@ export type TransferRequest = {
   workerIds: string[]; // one or many
   requestedBy: string; // user id
   requestedAt: string;
+  transferDate?: string;
   status: "Pending" | "Approved" | "Rejected" | "Cancelled";
   reviewedBy?: string;
   reviewedAt?: string;
@@ -402,7 +403,7 @@ type AccommodationContextValue = {
     id: string,
     approve: boolean,
     reviewerId: string
-  ) => { ok: boolean; error?: string };
+  ) => Promise<{ ok: boolean; error?: string }>;
   getDailyReport: (dateISO?: string) => Record<string, Record<string, number>>; // residenceId -> nationality -> count
   getMonthlyReport: (
     year: number,
@@ -1180,7 +1181,7 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
     return tr;
   }
 
-  function reviewTransferRequest(id: string, approve: boolean, reviewerId: string) {
+  async function reviewTransferRequest(id: string, approve: boolean, reviewerId: string) {
     const tr = transferRequests.find((t) => t.id === id);
     if (!tr) return { ok: false, error: "not-found" };
     if (tr.status !== "Pending") return { ok: false, error: "already-reviewed" };
@@ -1199,35 +1200,122 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
       }).catch(err => console.error('Failed to add notification:', err));
     }
 
-    // if approved, perform automatic allocation where possible
     if (approve) {
       const targetRoomId = tr.to.roomId;
       if (targetRoomId) {
+        const targetRoom = findRoom(tr.to.residenceId, targetRoomId);
+        const plannedRoomWorkers: string[] = [];
+
         for (const wid of tr.workerIds) {
-          assignWorkerToRoom(wid, tr.to.residenceId, targetRoomId);
+          const w = workers.find((x) => x.id === wid);
+          if (!w || !targetRoom) continue;
+
+          const existingOccupants = occupants.filter((o) => o.roomId === targetRoomId && o.residenceId === tr.to.residenceId && !o.until);
+          const occupantCount = existingOccupants.length + plannedRoomWorkers.length;
+          const capacity = calcCapacityFromSpace(targetRoom.spaceSqm || 16, targetRoom.roomType || 'Worker');
+          if (occupantCount >= capacity) continue;
+
+          const existingNationalities = existingOccupants
+            .map((o) => workers.find((x) => x.id === o.workerId)?.nationaliy)
+            .filter(Boolean);
+          const plannedNationalities = plannedRoomWorkers
+            .map((workerId) => workers.find((x) => x.id === workerId)?.nationaliy)
+            .filter(Boolean);
+          const roomNationalities = [...existingNationalities, ...plannedNationalities];
+          const nationalityOk = roomNationalities.length === 0 || !w.nationaliy || roomNationalities.includes(w.nationaliy);
+          if (!nationalityOk) continue;
+
+          const incomingRole = w.role || 'Worker';
+          const existingRoles = existingOccupants
+            .map((o) => workers.find((x) => x.id === o.workerId)?.role || 'Worker')
+            .filter(Boolean);
+          const plannedRoles = plannedRoomWorkers
+            .map((workerId) => workers.find((x) => x.id === workerId)?.role || 'Worker')
+            .filter(Boolean);
+          const roomRoles = [...existingRoles, ...plannedRoles];
+          if (roomRoles.length > 0 && !roomRoles.includes(incomingRole)) continue;
+
+          await transferWorker({
+            workerId: wid,
+            toResidenceId: tr.to.residenceId,
+            toRoomId: targetRoomId,
+            transferDate: tr.transferDate,
+            reason: tr.reason || 'Transfer request approved',
+            performedBy: reviewerId,
+          });
+          plannedRoomWorkers.push(wid);
         }
       } else {
         const candidateRes = residences.find((r) => r.id === tr.to.residenceId);
         if (candidateRes) {
-          const roomList: Room[] = [];
-          if (candidateRes.rooms) roomList.push(...candidateRes.rooms);
-          if (candidateRes.buildings) {
-            for (const b of candidateRes.buildings)
-              if (b.floors)
-                for (const f of b.floors) if (f.rooms) roomList.push(...(f.rooms as Room[]));
+          const roomList: Array<{ room: Room; buildingId?: string; floorId?: string }> = [];
+          if (candidateRes.rooms) {
+            roomList.push(...candidateRes.rooms.map((room) => ({ room })));
           }
+          if (candidateRes.buildings) {
+            for (const b of candidateRes.buildings) {
+              if (b.floors)
+                for (const f of b.floors) {
+                  if (f.rooms) {
+                    roomList.push(...(f.rooms as Room[]).map((room) => ({ room, buildingId: b.id, floorId: f.id })));
+                  }
+                }
+            }
+          }
+
+          const plannedRoomWorkers = new Map<string, string[]>();
+
           for (const wid of tr.workerIds) {
             const w = workers.find((x) => x.id === wid);
             if (!w) continue;
-            const found = roomList.find(
-              (r) =>
-                r.spaceSqm &&
-                r.roomType &&
-                occupants.filter((o) => o.roomId === r.id && o.residenceId === tr.to.residenceId).length < calcCapacityFromSpace(r.spaceSqm, r.roomType) &&
-                (occupants.filter((o) => o.roomId === r.id && o.residenceId === tr.to.residenceId).length === 0 ||
-                  workers.find((x) => x.id === occupants.find((o) => o.roomId === r.id && o.residenceId === tr.to.residenceId)!.workerId)?.nationaliy === w.nationaliy)
-            );
-            if (found) assignWorkerToRoom(wid, tr.to.residenceId, found.id);
+
+            const found = roomList.find(({ room }) => {
+              const existingOccupants = occupants.filter((o) => o.roomId === room.id && o.residenceId === tr.to.residenceId && !o.until);
+              const plannedWorkers = plannedRoomWorkers.get(room.id) || [];
+              const occupantCount = existingOccupants.length + plannedWorkers.length;
+              const capacity = calcCapacityFromSpace(room.spaceSqm || 16, room.roomType || 'Worker');
+              if (occupantCount >= capacity) return false;
+
+              const existingNationalities = existingOccupants
+                .map((o) => workers.find((x) => x.id === o.workerId)?.nationaliy)
+                .filter(Boolean);
+              const plannedNationalities = plannedWorkers
+                .map((workerId) => workers.find((x) => x.id === workerId)?.nationaliy)
+                .filter(Boolean);
+              const roomNationalities = [...existingNationalities, ...plannedNationalities];
+              const nationalityOk = roomNationalities.length === 0 || !w.nationaliy || roomNationalities.includes(w.nationaliy);
+              if (!nationalityOk) return false;
+
+              const incomingRole = w.role || 'Worker';
+              const existingRoles = existingOccupants
+                .map((o) => workers.find((x) => x.id === o.workerId)?.role || 'Worker')
+                .filter(Boolean);
+              const plannedRoles = plannedWorkers
+                .map((workerId) => workers.find((x) => x.id === workerId)?.role || 'Worker')
+                .filter(Boolean);
+              const roomRoles = [...existingRoles, ...plannedRoles];
+              return roomRoles.length === 0 || roomRoles.includes(incomingRole);
+            });
+
+            if (found) {
+              const result = await transferWorker({
+                workerId: wid,
+                toResidenceId: tr.to.residenceId,
+                toRoomId: found.room.id,
+                toBuildingId: found.buildingId,
+                toFloorId: found.floorId,
+                transferDate: tr.transferDate,
+                reason: tr.reason || 'Transfer request approved',
+                performedBy: reviewerId,
+              });
+
+              if (result.ok) {
+                plannedRoomWorkers.set(
+                  found.room.id,
+                  [...(plannedRoomWorkers.get(found.room.id) || []), wid]
+                );
+              }
+            }
           }
         }
       }
@@ -3270,7 +3358,17 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
         historyRecords
       );
 
-      if (!conflictValidation.isValid) {
+      const currentSince = currentOccupant.since ? new Date(currentOccupant.since) : null;
+      if (currentSince && startOfDay(new Date(transferDate)) < startOfDay(currentSince)) {
+        toast({
+          title: 'تعارض في تاريخ النقل',
+          description: 'لا يمكن أن يكون تاريخ النقل قبل تاريخ دخول العامل الحالي',
+          variant: 'destructive'
+        });
+        return { ok: false, error: 'TRANSFER_BEFORE_CURRENT_CHECK_IN' };
+      }
+
+      if (!conflictValidation.isValid && conflictValidation.errorCode !== 'WORKER_STILL_CHECKED_IN') {
         const errorMsg = getValidationErrorMessage(conflictValidation, 'ar');
         const lastCheckout = workerHistory.find(h => h.actionType === 'CHECK_OUT');
         const detailedError = lastCheckout 
@@ -3310,6 +3408,11 @@ export function AccommodationProvider({ children }: { children: React.ReactNode 
           const firstWorker = workers.find(x => x.id === targetRoomOccupants[0].workerId);
           if (firstWorker && firstWorker.nationaliy && w.nationaliy && firstWorker.nationaliy !== w.nationaliy) {
             return { ok: false, error: "nationality-mismatch" };
+          }
+          const targetRoomRole = firstWorker?.role || 'Worker';
+          const incomingWorkerRole = w.role || 'Worker';
+          if (targetRoomRole !== incomingWorkerRole) {
+            return { ok: false, error: "role-mismatch" };
           }
         }
 
