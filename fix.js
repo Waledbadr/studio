@@ -1,1 +1,0 @@
-const fs = require('fs'); let b = fs.readFileSync('src/components/layout/sidebar.tsx', 'utf8'); b = b.replace(/title: dict\.sidebar\?\.apps \|\| 'Apps & Modules',/g, 'title: \'Apps & Modules\','); fs.writeFileSync('src/components/layout/sidebar.tsx', b);

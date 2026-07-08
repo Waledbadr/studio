@@ -23,7 +23,6 @@
 - **قواعد العمل**: تطبيق السعة حسب الدور (4م²/عامل، 8م²/مشرف، 16م²/مهندس)
 - **قاعدة الجنسية الواحدة**: منع خلط الجنسيات في نفس الغرفة
 
-📖 **دليل البدء السريع**: `/ACCOMMODATION_QUICK_START.md`  
 📋 **وثائق كاملة**: `/src/app/accommodation/README.md`
 
 ### 🔧 نظام الصيانة
@@ -114,9 +113,6 @@ EstateCare/
 │   ├── lib/                    # مكتبات مساعدة
 │   └── ai/                     # تكامل الذكاء الاصطناعي
 ├── docs/                       # الوثائق التقنية
-├── ACCOMMODATION_QUICK_START.md      # دليل البدء السريع ✨ NEW
-├── ACCOMMODATION_IMPLEMENTATION_SUMMARY.md  # ملخص التنفيذ ✨ NEW
-├── firestore-rules-accommodation.txt # قواعد Firestore للإسكان ✨ NEW
 ├── firebase.json               # إعدادات Firebase
 ├── firestore.rules             # قواعد أمان Firestore
 └── package.json                # تبعيات المشروع
@@ -255,7 +251,6 @@ BLOB_READ_WRITE_TOKEN=vercel_blob_rw_token_here
 1. **احصل على Token من Vercel**: Vercel Dashboard → Storage → Blob → Tokens → Create Read-Write Token
 2. **أضف في Render**: Dashboard → Your Service → Environment → Add Variable (`BLOB_READ_WRITE_TOKEN`)
 3. **تشخيص**: افتح `/api/uploads/diagnostics` للتحقق من الإعداد
-4. **دليل كامل**: راجع [`RENDER_UPLOAD_FIX_AR.md`](./RENDER_UPLOAD_FIX_AR.md)
 
 ملاحظات:
 
