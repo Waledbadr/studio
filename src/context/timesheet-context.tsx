@@ -20,6 +20,7 @@ interface TimesheetContextType {
   isProcessing: boolean;
   fetchAndProcessAttendance: (startDate: string, endDate: string) => Promise<void>;
   syncProcessedDataToFirestore: () => Promise<void>;
+  clearProcessedAttendance: () => void;
   deleteAllAttendanceRecords: () => Promise<void>;
   updateAttendanceRecord: (id: string, updates: Partial<DailyAttendance>) => void;
   updateDeviceMapping: (deviceName: string, projectName: string) => Promise<void>;
@@ -239,7 +240,9 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         await currentBatch.commit();
       }
 
-      setProcessedAttendance(prev => prev.map(p => ({ ...p, isSyncedToFirestore: true })));
+      // Clear in-memory data to signal that the save was successful
+      setRawPunches([]);
+      setProcessedAttendance([]);
       
       toast({
         title: isAr ? "تم الحفظ بنجاح" : "Save Successful",
@@ -255,6 +258,11 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     }
+  };
+
+  const clearProcessedAttendance = () => {
+    setRawPunches([]);
+    setProcessedAttendance([]);
   };
 
   const deleteAllAttendanceRecords = async () => {
@@ -307,6 +315,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         isProcessing,
         fetchAndProcessAttendance,
         syncProcessedDataToFirestore,
+        clearProcessedAttendance,
         deleteAllAttendanceRecords,
         updateAttendanceRecord,
         updateProjectMapping,

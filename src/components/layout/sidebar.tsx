@@ -209,7 +209,7 @@ export function AppSidebar() {
           <div className="flex flex-col gap-1 p-2">
             <div className="flex items-center gap-2">
               <Wallet className="h-8 w-8 text-green-600" />
-              <span className="text-xl font-semibold text-green-600 group-data-[collapsible=icon]:hidden">Income & Exp</span>
+              <span className="text-xl font-semibold text-green-600 group-data-[collapsible=icon]:hidden">{'الدخل والمصروفات'}</span>
             </div>
           </div>
         </SidebarHeader>
@@ -224,6 +224,30 @@ export function AppSidebar() {
                   <Link href="/income-expenses" onClick={handleNavigate}>
                     <Home />
                     <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === '/income-expenses/transactions'}
+                  tooltip={isIncomeExpenses ? 'Transactions' : 'Transactions'}
+                >
+                  <Link href="/income-expenses/transactions" onClick={handleNavigate}>
+                    <ListOrdered />
+                    <span className="group-data-[collapsible=icon]:hidden">{'الحركات'}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === '/income-expenses/report'}
+                  tooltip={isIncomeExpenses ? 'Report' : 'Report'}
+                >
+                  <Link href="/income-expenses/report" onClick={handleNavigate}>
+                    <AreaChart />
+                    <span className="group-data-[collapsible=icon]:hidden">{'التقرير'}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -501,7 +525,7 @@ export function AppSidebar() {
       items: [
         { href: '/accommodation', label: 'Accommodation', icon: Building },
         { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock },
-        { href: '#income-expenses', label: 'Income & Expenses (قريباً)', icon: Wallet },
+        { href: '/income-expenses/transactions', label: 'Income & Expenses', icon: Wallet },
       ]
     },
     // Settings Section

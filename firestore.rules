@@ -295,6 +295,16 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Monthly Financials (Income & Expenses)
+    match /monthlyFinancials/{financialId} {
+      // Any signed-in user can view monthly income/expenses
+      allow read: if isSignedIn();
+      // Only Admin/Supervisor can create/update records
+      allow create, update: if isAdmin() || isSupervisor();
+      // Only Admin can delete records
+      allow delete: if isAdmin();
+    }
+
     // Stock reconciliation summaries (reference documents)
     match /stockReconciliations/{refId} {
       allow read: if isSignedIn();
