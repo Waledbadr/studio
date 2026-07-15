@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, AlertTriangle, AlertCircle, Users, Building2, FileText, Download } from 'lucide-react';
+import { TrendingUp, AlertTriangle, AlertCircle, Users, Building2, FileText, Download, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ReportsPage() {
@@ -198,6 +198,16 @@ export default function ReportsPage() {
 
       {/* Printable Reports Quick Access */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Link href="/accommodation/reports/daily-housing">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <LayoutDashboard className="h-4 w-4 text-emerald-600" />
+                Daily Housing Report
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
         <Link href="/accommodation/reports/vacancy">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
             <CardHeader className="p-4">

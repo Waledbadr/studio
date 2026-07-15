@@ -694,24 +694,45 @@ function TimesheetHistoryContent() {
             // (via timesheet-utils.ts processPunches → calculateAttendanceStats) and stored correctly.
         });
 
-        // 3. Transfer marker 'T': mark days before/after employee's transfer date
-        // Transfer data is stored on the employee record in employeesMap
+        // 3. Transfer marker 'T': mark days after employee's transfer/out date
+        // Transfer data may be stored in different fields (status/transferDate or timesheetTransfers).
         const empRecord = employeesMap[empKey];
-        const transferDate: string | undefined = empRecord?.transferDate; // e.g. '2026-04-02'
-        if (transferDate && empRecord?.status === 'Transferred') {
+
+        const getTransferDateFromTimesheetTransfers = (record: any): string | undefined => {
+          const transfers = record?.timesheetTransfers;
+          if (!Array.isArray(transfers)) return undefined;
+
+          // We assume "Move Out" means leaving the accommodation.
+          // Pick the latest Move Out date (if multiple exist) to be safe.
+          const moveOutDates = transfers
+            .filter((t) => String(t?.type || '').toLowerCase().trim() === 'move out')
+            .map((t) => t?.date)
+            .filter((d) => typeof d === 'string' && d.includes('-')) as string[];
+
+          if (moveOutDates.length === 0) return undefined;
+          moveOutDates.sort((a, b) => b.localeCompare(a));
+          return moveOutDates[0];
+        };
+
+        const transferDate: string | undefined =
+          empRecord?.transferDate || getTransferDateFromTimesheetTransfers(empRecord);
+
+        if (transferDate) {
           const [ty, tm] = transferDate.split('-').map(Number);
+
           daysArray.forEach((dateStr) => {
             const [dy, dm] = dateStr.split('-').map(Number);
             const sameMonth = dy === ty && dm === tm; // only within the transfer month
 
             if (sameMonth) {
-              // Days BEFORE transfer date in same month → mark T (employee was elsewhere)
+              // Days BEFORE transfer date in same month
               if (dateStr < transferDate) {
                 if (!empData.daily[dateStr] || empData.daily[dateStr].status === 'Absent') {
                   empData.daily[dateStr] = { status: 'Transferred', date: dateStr, isTransfer: true };
                 }
               }
-              // Days AFTER (or equal to) transfer date, if no punch → mark T
+
+              // Days AFTER (or equal) transfer date, if no punch -> mark T
               if (dateStr >= transferDate) {
                 if (!empData.daily[dateStr] || empData.daily[dateStr].status === 'Absent') {
                   empData.daily[dateStr] = { status: 'Transferred', date: dateStr, isTransfer: true };
@@ -724,10 +745,11 @@ function TimesheetHistoryContent() {
               }
             }
           });
-          // Mark employee-level as transferred so we can filter later
+
           empData.isTransferred = true;
           empData.transferDate = transferDate;
         }
+
 
         // 2. Accumulate Totals across all processed days
         Object.values(empData.daily).forEach((record: any) => {

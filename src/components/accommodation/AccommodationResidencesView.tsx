@@ -126,22 +126,31 @@ export default function AccommodationResidencesView() {
     
     const searchLower = deferredSearch.toLowerCase();
     return filtered.filter(complex => {
+      const complexName = complex.name?.toLowerCase() ?? '';
+      const complexCity = complex.city?.toLowerCase() ?? '';
+
       // Search in complex name or city
-      if (complex.name.toLowerCase().includes(searchLower)) return true;
-      if (complex.city?.toLowerCase().includes(searchLower)) return true;
-      
+      if (complexName.includes(searchLower)) return true;
+      if (complexCity.includes(searchLower)) return true;
+
       // Search in flat rooms
-      if (complex.rooms?.some(room => room.name.toLowerCase().includes(searchLower))) return true;
-      
+      if (complex.rooms?.some(room => (room.name?.toLowerCase() ?? '').includes(searchLower))) return true;
+
       // Search in nested rooms
-      if (complex.buildings?.some(building => 
-        building.name.toLowerCase().includes(searchLower) ||
-        building.floors?.some(floor => 
-          floor.name.toLowerCase().includes(searchLower) ||
-          floor.rooms?.some(room => room.name.toLowerCase().includes(searchLower))
-        )
-      )) return true;
-      
+      if (complex.buildings?.some(building => {
+        const buildingName = building.name?.toLowerCase() ?? '';
+        return (
+          buildingName.includes(searchLower) ||
+          building.floors?.some(floor => {
+            const floorName = floor.name?.toLowerCase() ?? '';
+            return (
+              floorName.includes(searchLower) ||
+              floor.rooms?.some(room => (room.name?.toLowerCase() ?? '').includes(searchLower))
+            );
+          })
+        );
+      })) return true;
+
       return false;
     });
   }, [activeResidences, deferredSearch, cityFilter]);

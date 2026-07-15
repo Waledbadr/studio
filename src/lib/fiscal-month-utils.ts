@@ -15,6 +15,11 @@ import { arSA, enUS } from "date-fns/locale";
 const REF_MONTH_STR = "2026-03";
 const REF_START_DATE = new Date(Date.UTC(2026, 1, 18, 0, 0, 0, 0)); // 18/02/2026
 
+// Exported constant used by invoice pages as a default fiscal period start day.
+// Matches the reference start date day in the chain-link rule: 18/02/2026.
+export const FISCAL_START_DAY = 18;
+
+
 export interface FiscalPeriod {
   startDate: Date;
   endDate: Date;
