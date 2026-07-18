@@ -57,9 +57,11 @@ function generateMonthList(): string[] {
 function NumInput({
   value,
   onChange,
+  disabled = false,
 }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
+  disabled?: boolean;
 }) {
   const [raw, setRaw] = useState(value !== undefined && value !== 0 ? String(value) : '');
 
@@ -71,6 +73,7 @@ function NumInput({
     <Input
       type="number"
       min={0}
+      disabled={disabled}
       value={raw}
       onChange={e => {
         setRaw(e.target.value);
@@ -90,6 +93,7 @@ function IncomeExpensesContent() {
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { financials, loading, fetchByMonth, saveFinancial, getOrCreate } = useFinancials();
+  const isAdmin = currentUser?.role === 'Admin';
 
   const months = useMemo(() => generateMonthList(), []);
   const [fiscalMonth, setFiscalMonth] = useState(months[0] ?? '');
@@ -128,6 +132,8 @@ function IncomeExpensesContent() {
   // Current editable record
   const currentResidence = activeResidences.find(r => r.id === residenceId);
   const [draft, setDraft] = useState<MonthlyFinancial | null>(null);
+  const isExistingRecord = !!draft && financials.some((financial) => financial.id === draft.id);
+  const canEdit = isAdmin || !isExistingRecord;
 
   useEffect(() => {
     if (!residenceId || !fiscalMonth || !currentResidence) return;
@@ -135,12 +141,12 @@ function IncomeExpensesContent() {
   }, [residenceId, fiscalMonth, financials, currentResidence, getOrCreate]);
 
   const setIncome = (key: IncomeKey, v: number | undefined) => {
-    if (!draft) return;
+    if (!draft || !canEdit) return;
     setDraft({ ...draft, income: { ...draft.income, [key]: v } });
   };
 
   const setExpense = (key: ExpenseCategoryKey, v: number | undefined) => {
-    if (!draft) return;
+    if (!draft || !canEdit) return;
     setDraft({ ...draft, expenses: { ...draft.expenses, [key]: v } });
   };
 
@@ -201,7 +207,7 @@ function IncomeExpensesContent() {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!draft || loading}
+            disabled={!draft || loading || !canEdit}
             className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Save className="w-4 h-4" />
@@ -320,6 +326,7 @@ function IncomeExpensesContent() {
                         <NumInput
                           value={draft.income[cat.key as IncomeKey]}
                           onChange={v => setIncome(cat.key as IncomeKey, v)}
+                          disabled={!canEdit}
                         />
                       </td>
                     </tr>
@@ -374,6 +381,7 @@ function IncomeExpensesContent() {
                             <NumInput
                               value={draft.expenses[cat.key as ExpenseCategoryKey]}
                               onChange={v => setExpense(cat.key as ExpenseCategoryKey, v)}
+                              disabled={!canEdit}
                             />
                           </td>
                         </tr>
@@ -400,7 +408,7 @@ function IncomeExpensesContent() {
         <div className="flex justify-end">
           <Button
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || !canEdit}
             size="lg"
             className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-8"
           >

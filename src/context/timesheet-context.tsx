@@ -5,7 +5,7 @@ import { RawPunch, DailyAttendance, TimesheetEvent, EmployeeSchedule } from "@/t
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { doc, writeBatch, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
-import { processPunches } from "@/utils/timesheet-utils";
+import { mergeAttendanceRecord, processPunches } from "@/utils/timesheet-utils";
 import { useLanguage } from "@/context/language-context";
 import { getDateChunks } from "@/lib/fiscal-month-utils";
 
@@ -18,6 +18,7 @@ interface TimesheetContextType {
   employeeSchedules: EmployeeSchedule[];
   isFetching: boolean;
   isProcessing: boolean;
+  isSaving: boolean;
   fetchAndProcessAttendance: (startDate: string, endDate: string) => Promise<void>;
   syncProcessedDataToFirestore: () => Promise<void>;
   clearProcessedAttendance: () => void;
@@ -41,8 +42,12 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const [projectToResidenceMap, setProjectToResidenceMap] = useState<Record<string, string>>({});
   const [timesheetEvents, setTimesheetEvents] = useState<TimesheetEvent[]>([]);
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedule[]>([]);
+  // Kept only for the current import so a merged day is recalculated with the
+  // same leave/transfer rules used when it was first previewed.
+  const [importContext, setImportContext] = useState<{ leaves: any[]; transfers: any[] }>({ leaves: [], transfers: [] });
   const [isFetching, setIsFetching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const { locale } = useLanguage();
   const isAr = locale === "ar";
@@ -179,6 +184,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         employeesData,
         transfersData // Pass transfers
       );
+      setImportContext({ leaves: leavesData, transfers: transfersData });
       setProcessedAttendance(processed);
       setIsProcessing(false);
       
@@ -215,24 +221,68 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const syncProcessedDataToFirestore = async () => {
     if (processedAttendance.length === 0) return;
 
+    setIsSaving(true);
     try {
       if (!db) return;
       const maxBatchSize = 500;
       let currentBatch = writeBatch(db);
       let count = 0;
+      let created = 0;
+      let updated = 0;
+      let preserved = 0;
+      const syncedAt = new Date().toISOString();
 
-      for (const record of processedAttendance) {
-        const ref = doc(db, 'attendanceRecords', record.id);
-        currentBatch.set(ref, {
-          ...record,
-          syncedAt: new Date().toISOString()
-        }, { merge: true });
+      // Firestore does not provide a client-side upsert that can conditionally
+      // merge arrays. Read the matching archived days first, then write only
+      // the safe merged version. Chunks keep the browser connection bounded.
+      for (let offset = 0; offset < processedAttendance.length; offset += 100) {
+        const recordsChunk = processedAttendance.slice(offset, offset + 100);
+        const existingSnapshots = await Promise.all(
+          recordsChunk.map(record => getDoc(doc(db, 'attendanceRecords', record.id)))
+        );
 
-        count++;
-        if (count === maxBatchSize) {
-          await currentBatch.commit();
-          currentBatch = writeBatch(db);
-          count = 0;
+        for (let index = 0; index < recordsChunk.length; index++) {
+          const incoming = recordsChunk[index];
+          const existingSnapshot = existingSnapshots[index];
+          const ref = doc(db, 'attendanceRecords', incoming.id);
+          let recordToSave: DailyAttendance;
+
+          if (!existingSnapshot.exists()) {
+            recordToSave = incoming;
+            created++;
+          } else {
+            const existing = existingSnapshot.data() as DailyAttendance;
+
+            // A generated absent-day record contains no source punch. It must
+            // never overwrite an archived day that already has real data.
+            if (!incoming.punches?.length) {
+              preserved++;
+              continue;
+            }
+
+            recordToSave = mergeAttendanceRecord(
+              existing,
+              incoming,
+              timesheetEvents,
+              employeeSchedules,
+              importContext.leaves,
+              importContext.transfers
+            );
+            updated++;
+          }
+
+          currentBatch.set(ref, {
+            ...recordToSave,
+            syncedAt,
+            lastSourceSyncAt: syncedAt,
+          }, { merge: true });
+
+          count++;
+          if (count === maxBatchSize) {
+            await currentBatch.commit();
+            currentBatch = writeBatch(db);
+            count = 0;
+          }
         }
       }
 
@@ -243,10 +293,13 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
       // Clear in-memory data to signal that the save was successful
       setRawPunches([]);
       setProcessedAttendance([]);
+      setImportContext({ leaves: [], transfers: [] });
       
       toast({
         title: isAr ? "تم الحفظ بنجاح" : "Save Successful",
-        description: isAr ? "تم أرشفة وحفظ سجلات الحضور بقاعدة البيانات." : "Attendance records archived and saved in Database.",
+        description: isAr
+          ? `تم حفظ ${created} سجل جديد، ودمج ${updated} سجل، والحفاظ على ${preserved} سجل قائم.`
+          : `Created ${created}, merged ${updated}, and preserved ${preserved} existing records.`,
         variant: "default",
       });
 
@@ -257,6 +310,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         description: isAr ? "حدث خطأ أثناء محاولة حفظ السجلات." : "An error occurred while saving the records.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -313,6 +368,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         employeeSchedules,
         isFetching,
         isProcessing,
+        isSaving,
         fetchAndProcessAttendance,
         syncProcessedDataToFirestore,
         clearProcessedAttendance,

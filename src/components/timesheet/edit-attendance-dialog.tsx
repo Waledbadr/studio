@@ -42,7 +42,7 @@ export function EditAttendanceDialog({ record, open, onOpenChange }: EditAttenda
     const outTime = checkOut.trim() || null;
 
     // 2. Re-calculate metrics based on new inputs
-    const stats = calculateAttendanceStats(inTime, outTime);
+    const stats = calculateAttendanceStats(inTime, outTime, record.date, record.employeeId);
 
     // 3. Update the global context
     updateAttendanceRecord(record.id, {
@@ -52,6 +52,7 @@ export function EditAttendanceDialog({ record, open, onOpenChange }: EditAttenda
       regularHours: stats.regularHours,
       overtimeHours: stats.overtimeHours,
       status: stats.status,
+      isManualOverride: true,
     });
 
     onOpenChange(false);

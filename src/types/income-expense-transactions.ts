@@ -659,6 +659,7 @@ export interface FinanceTransaction {
   transactionDate: string; // YYYY-MM-DD
   amount: number;
   details: Record<string, any>;
+  createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
 }

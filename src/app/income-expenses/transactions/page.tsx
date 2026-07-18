@@ -93,6 +93,7 @@ function IncomeExpenseTransactionsContent() {
   const { residences } = useResidences();
   const { currentUser } = useUsers();
   const { transactions, loading, fetchByMonth, addTransaction, updateTransaction, deleteTransaction } = useIncomeExpenseTransactions();
+  const isAdmin = currentUser?.role === 'Admin';
 
   const months = useMemo(() => generateMonthList(), []);
   const [fiscalMonth, setFiscalMonth] = useState(months[0] ?? '');
@@ -212,6 +213,7 @@ function IncomeExpenseTransactionsContent() {
   };
 
   const handleSubmit = async () => {
+    if (editingId && !isAdmin) return;
     const err = validate();
     if (err) {
       alert(err);
@@ -254,6 +256,7 @@ function IncomeExpenseTransactionsContent() {
   }, [transactions, kind]);
 
   const handleEdit = (tx: FinanceTransaction) => {
+    if (!isAdmin) return;
     setEditingId(tx.id);
     setKind(tx.kind);
     setTypeKey(tx.typeKey);
@@ -269,6 +272,7 @@ function IncomeExpenseTransactionsContent() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!isAdmin) return;
     if (!confirm(isAr ? 'هل تريد حذف هذه الحركة؟' : 'Delete this transaction?')) return;
     await deleteTransaction(id);
   };
@@ -632,7 +636,7 @@ function IncomeExpenseTransactionsContent() {
                         {formatMoneySAr(tx.amount)} SAR
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        {isAdmin && <div className="flex justify-end gap-2">
                           <Button variant="outline" size="icon" onClick={() => handleEdit(tx)} aria-label="Edit">
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -645,7 +649,7 @@ function IncomeExpenseTransactionsContent() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
-                        </div>
+                        </div>}
                       </TableCell>
                     </TableRow>
                   );

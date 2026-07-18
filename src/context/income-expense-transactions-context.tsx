@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { FinanceTransaction, FinanceTransactionKind, FinanceTransactionTypeKey } from '@/types/income-expense-transactions';
@@ -11,7 +11,7 @@ interface FinanceTransactionsContextType {
   loading: boolean;
 
   fetchByMonth: (residenceId: string, fiscalMonth: string) => Promise<void>;
-  addTransaction: (payload: Omit<FinanceTransaction, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addTransaction: (payload: Omit<FinanceTransaction, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Omit<FinanceTransaction, 'id'>>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
@@ -86,10 +86,16 @@ export function IncomeExpenseTransactionsProvider({ children }: { children: Reac
   }, []);
 
   const addTransaction = useCallback(
-    async (payload: Omit<FinanceTransaction, 'id' | 'createdAt' | 'updatedAt'>) => {
+    async (payload: Omit<FinanceTransaction, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
       const id = makeId(payload.residenceId, payload.fiscalMonth);
-      const t: FinanceTransaction = { ...payload, id, createdAt: now, updatedAt: now };
+      const t: FinanceTransaction = {
+        ...payload,
+        id,
+        createdBy: auth?.currentUser?.uid,
+        createdAt: now,
+        updatedAt: now,
+      };
 
       if (!db) {
         upsertLocalOnly(t);

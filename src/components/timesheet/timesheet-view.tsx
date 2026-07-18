@@ -53,6 +53,7 @@ export function TimesheetView() {
     projectToResidenceMap,
     isFetching,
     isProcessing,
+    isSaving,
     fetchAndProcessAttendance,
     syncProcessedDataToFirestore,
     deleteAllAttendanceRecords,
@@ -180,6 +181,19 @@ export function TimesheetView() {
 
   return (
     <div className="space-y-6" dir={isAr ? "rtl" : "ltr"}>
+      {isSaving && (
+        <div
+          className="fixed top-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-5 py-3 text-emerald-900 shadow-lg dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"
+          role="status"
+          aria-live="assertive"
+        >
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <div>
+            <p className="font-semibold">{isAr ? "جاري الحفظ في قاعدة البيانات" : "Saving to database"}</p>
+            <p className="text-xs opacity-80">{isAr ? "يتم دمج السجلات وحماية البيانات الموجودة…" : "Merging records and preserving existing data…"}</p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{isAr ? "سجل الدوام" : "Timesheet"}</h1>
@@ -193,10 +207,12 @@ export function TimesheetView() {
               onClick={syncProcessedDataToFirestore}
               variant="outline"
               className="gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              disabled={isProcessing}
+              disabled={isFetching || isProcessing || isSaving}
             >
-              <Database className="w-4 h-4" />
-              {isAr ? "حفظ السجلات" : "Save Records"}
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              {isSaving
+                ? (isAr ? "جاري الحفظ والدمج..." : "Saving & merging...")
+                : (isAr ? "حفظ السجلات" : "Save Records")}
             </Button>
           )}
           <AlertDialog>
@@ -295,13 +311,15 @@ export function TimesheetView() {
             </div>
             <Button 
               onClick={handleFetch} 
-              disabled={isFetching || !startDate || !endDate}
+              disabled={isFetching || isProcessing || isSaving || !startDate || !endDate}
               className="w-full md:w-auto"
             >
-              {isFetching ? (
+              {isFetching || isProcessing ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {isAr ? "جاري التحديث..." : "Updating..."}
+                  {isFetching
+                    ? (isAr ? "جاري جلب البصمات..." : "Fetching punches...")
+                    : (isAr ? "جاري معالجة السجلات..." : "Processing records...")}
                 </>
               ) : (
                 <>
@@ -311,6 +329,20 @@ export function TimesheetView() {
               )}
             </Button>
           </div>
+          {(isFetching || isProcessing || isSaving) && (
+            <div
+              className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {isSaving
+                ? (isAr ? "يتم حفظ ودمج البيانات في قاعدة البيانات. يمكنك الانتظار هنا." : "Saving and merging records in the database. Please wait.")
+                : isFetching
+                  ? (isAr ? "يتم الاتصال بخادم البصمة وجلب البيانات." : "Connecting to the biometric server and fetching data.")
+                  : (isAr ? "يتم تحويل البصمات إلى سجلات حضور يومية." : "Converting punches into daily attendance records.")}
+            </div>
+          )}
         </CardContent>
       </Card>
 

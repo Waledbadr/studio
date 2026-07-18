@@ -180,6 +180,74 @@ export const calculateAttendanceStats = (
   };
 };
 
+/**
+ * Merges a newly imported day into an existing archived day without losing
+ * punches that the biometric server no longer returns.  The source is often
+ * eventually consistent, so a later import can contain only one punch.
+ */
+export const mergeAttendanceRecord = (
+  existing: DailyAttendance,
+  incoming: DailyAttendance,
+  events: TimesheetEvent[] = [],
+  schedules: EmployeeSchedule[] = [],
+  leaves: any[] = [],
+  transfers: any[] = []
+): DailyAttendance => {
+  const existingPunches = Array.isArray(existing.punches) ? existing.punches : [];
+  const incomingPunches = Array.isArray(incoming.punches) ? incoming.punches : [];
+  const punches = Array.from(new Set([...existingPunches, ...incomingPunches])).sort((a, b) => a.localeCompare(b));
+
+  // A deliberate edit remains the displayed record. We still retain newly
+  // received source punches for audit and future review.
+  if (existing.isManualOverride) {
+    return {
+      ...existing,
+      punches,
+      isSyncedToFirestore: false,
+    };
+  }
+
+  let checkIn = existing.checkIn || incoming.checkIn;
+  let checkOut = existing.checkOut || incoming.checkOut;
+
+  if (punches.length >= 2) {
+    checkIn = punches[0];
+    checkOut = punches[punches.length - 1];
+  } else if (punches.length === 1) {
+    // Keep the previously known direction of a single punch. If this is the
+    // first import, processPunches has already applied its afternoon heuristic.
+    checkIn = existing.checkIn || incoming.checkIn;
+    checkOut = existing.checkOut || incoming.checkOut;
+  }
+
+  const employeeTransfers = transfers.filter(t => t.employeeId === incoming.employeeId || t.badgeId === incoming.employeeId);
+  const stats = calculateAttendanceStats(
+    checkIn,
+    checkOut,
+    incoming.date,
+    incoming.employeeId,
+    events,
+    schedules,
+    leaves,
+    employeeTransfers
+  );
+
+  return {
+    ...existing,
+    ...incoming,
+    // Do not replace known profile values with blanks from an incomplete export.
+    firstName: incoming.firstName || existing.firstName,
+    department: incoming.department || existing.department,
+    projectName: incoming.projectName || existing.projectName,
+    checkInDevice: incoming.checkInDevice || existing.checkInDevice,
+    checkIn,
+    checkOut,
+    punches,
+    ...stats,
+    isSyncedToFirestore: false,
+  };
+};
+
 export const processPunches = (
   punches: RawPunch[],
   deviceToProjectMap: Record<string, string> = {},
@@ -238,7 +306,7 @@ export const processPunches = (
       }
     });
 
-    let checkIn = uniqueTimes[0];
+    let checkIn: string | null = uniqueTimes[0] || null;
     let checkOut = uniqueTimes.length > 1 ? uniqueTimes[uniqueTimes.length - 1] : null;
 
     // Smart heuristic: If there is ONLY ONE punch and it's late (>= 12:00 PM), it's likely a check-out

@@ -23,6 +23,10 @@ export interface DailyAttendance {
   punches: string[]; // array of all punch times sorted
   status: 'Present' | 'Absent' | 'Incomplete' | 'On Leave' | 'Permission' | 'Sick Leave' | 'Holiday' | 'Reduced Hours' | 'Weekend' | 'Transferred' | 'Future';
   isSyncedToFirestore: boolean;
+  // A manual correction is authoritative and must never be overwritten by a
+  // later import from the biometric source.
+  isManualOverride?: boolean;
+  lastSourceSyncAt?: string;
 }
 
 export type TimesheetEventType = 'holiday' | 'reduced_hours';

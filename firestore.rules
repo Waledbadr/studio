@@ -182,6 +182,30 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Timesheet records are written in batches with merge enabled. A record
+    // may therefore be created or updated during a single upload.
+    match /attendanceRecords/{attendanceId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // These collections are used while importing and displaying timesheets.
+    match /timesheetLeaves/{leaveId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /timesheetTransfers/{transferId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Employee profiles are joined with attendance data on the history page.
+    match /housingEmployees/{employeeId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     // Maintenance Requests
     match /maintenanceRequests/{requestId} {
       allow read: if isSignedIn();
