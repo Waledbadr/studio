@@ -1,0 +1,20 @@
+import { FlatCompat } from '@eslint/eslintrc';
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals.js';
+import nextTypescript from 'eslint-config-next/typescript.js';
+
+const compat = new FlatCompat({
+  baseDirectory: import.meta.dirname,
+});
+
+export default [
+  // Convert classic extends from next into flat configs
+  ...compat.extend([nextCoreWebVitals, nextTypescript]),
+  {
+    ignores: ['node_modules/**', '.next/**', 'dist/**', 'build/**', 'out/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'react/no-unescaped-entities': 'off',
+    },
+  },
+];
+

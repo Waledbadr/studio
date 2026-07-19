@@ -1,0 +1,13 @@
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals.js";
+import nextTypescript from "eslint-config-next/typescript.js";
+
+export default [
+  { extends: nextCoreWebVitals.extends },
+  { extends: nextTypescript.extends },
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "react/no-unescaped-entities": "off",
+    },
+  },
+];
