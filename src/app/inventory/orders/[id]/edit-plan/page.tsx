@@ -535,9 +535,9 @@ export default function EditPlanPage() {
                           if (fac) (parts as any).push(fac.name);
                           (parts as any).push(c.name);
                           const name = (parts as any).filter(Boolean).join(' -> ') || c.name;
-                          setSelectedTargets(prev => {
+setSelectedTargets(prev => {
                             // Remove base facility if selecting a component
-                            let next = prev.filter(t => t.id !== facilityId);
+                            const next = prev.filter(t => t.id !== facilityId);
                             const exists = next.some(t => t.id === id);
                             return exists ? next.filter(t => t.id !== id) : [...next, { id, name, isFacility: true }];
                           });

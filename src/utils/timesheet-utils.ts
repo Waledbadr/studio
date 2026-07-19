@@ -170,7 +170,7 @@ export const calculateAttendanceStats = (
   // Round
   regularHours = Number(regularHours.toFixed(2));
   overtimeHours = Number(overtimeHours.toFixed(2));
-  let totalNum = Number(totalHoursNum.toFixed(2));
+const totalNum = Number(totalHoursNum.toFixed(2));
   
   return {
     totalHours: totalNum,

@@ -78,7 +78,7 @@ export default function AccommodationOverviewPage() {
     let pendingTransfersCount = 0;
     let unpaidInvoicesCount = 0;
     let overdueInvoicesCount = 0;
-    let occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
+const occupancyByResidence: Record<string, { occupied: number; capacity: number; rooms: number }> = {};
 
     if (hasFullData) {
         totalWorkers = workers.length;

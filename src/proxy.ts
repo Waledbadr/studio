@@ -15,7 +15,7 @@ export function proxy(req: NextRequest) {
   // Simple rate limit for feedback endpoints (anti-spam)
   const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
   const RATE_LIMIT_MAX = 10; // per IP per window
-  // @ts-ignore ephemeral global for edge runtime
+// @ts-expect-error ephemeral global for edge runtime
   const g: any = globalThis as any;
   g.__rateBucket = g.__rateBucket || new Map<string, { count: number; resetAt: number }>();
   const isFeedbackApi = req.nextUrl.pathname.startsWith('/api/feedback') || req.nextUrl.pathname.startsWith('/api/uploads/feedback');

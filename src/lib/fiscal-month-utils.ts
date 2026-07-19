@@ -65,7 +65,8 @@ export function getFiscalMonthPeriod(monthStr: string): FiscalPeriod {
   const targetVal = year * 12 + (month - 1);
   const refVal = refY * 12 + (refM - 1);
 
-  let startDate = new Date(REF_START_DATE.getTime());
+  const startDate = new Date(REF_START_DATE.getTime());
+
 
   if (targetVal > refVal) {
     // Go Forward: add calendar days of each intermediate month
@@ -163,21 +164,22 @@ export function getDateChunks(startDate: string, endDate: string, daysPerChunk =
   const end = new Date(endDate);
   const chunks = [];
   
-  let currentStart = new Date(start);
-  while (currentStart <= end) {
-    let currentEnd = new Date(currentStart);
+let current = new Date(start);
+  while (current <= end) {
+    let currentEnd = new Date(current);
     currentEnd.setDate(currentEnd.getDate() + daysPerChunk - 1);
     
     if (currentEnd > end) {
       currentEnd = new Date(end);
     }
     
-    chunks.push({
-      start: currentStart.toISOString().split('T')[0],
+chunks.push({
+      start: current.toISOString().split('T')[0],
       end: currentEnd.toISOString().split('T')[0]
     });
     
-    currentStart.setDate(currentStart.getDate() + daysPerChunk);
+    current = new Date(current.getTime());
+    current.setDate(current.getDate() + daysPerChunk);
   }
   
   return chunks;

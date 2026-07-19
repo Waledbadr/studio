@@ -373,7 +373,7 @@ export default function WorkerCertificatePage() {
 
   function getCheckoutLabel(checkoutType?: string | null) {
     if (!checkoutType) return null;
-    let label = checkoutType;
+    const label = checkoutType;
     if (checkoutType === 'Transfer' || checkoutType === 'Swap') {
       return t.transfer;
     }
@@ -988,7 +988,7 @@ export default function WorkerCertificatePage() {
                       const midPos = (startPos + endPos) / 2;
 
                       // Collision avoidance: if midPos is too close to last label on the same side, switch side
-                      let config = offsetConfig[offsetIdx % offsetConfig.length];
+                      const config = offsetConfig[offsetIdx % offsetConfig.length];
 
                       // If this is top and too close to last top, OR bottom and too close to last bottom
                       // We prefer alternating, but if the space is very tight, we might need more logic

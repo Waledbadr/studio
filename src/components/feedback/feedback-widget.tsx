@@ -46,8 +46,7 @@ async function captureScreenshot(): Promise<string | undefined> {
     if (typeof window !== 'undefined') {
       await new Promise((resolve) => {
         if ('requestIdleCallback' in window) {
-          // @ts-ignore
-          requestIdleCallback(() => resolve(undefined));
+requestIdleCallback(() => resolve(undefined));
         } else {
           setTimeout(resolve, 50);
         }

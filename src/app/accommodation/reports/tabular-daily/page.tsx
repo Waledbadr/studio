@@ -88,7 +88,7 @@ export default function TabularDailyReport() {
         residences.forEach(res => {
             let capacity = 0;
             let totalRooms = 0;
-            let occupiedRooms = new Set<string>();
+            const occupiedRooms = new Set<string>();
 
             const processRooms = (rooms: any[]) => {
                 rooms?.forEach(r => {

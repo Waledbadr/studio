@@ -559,34 +559,44 @@ function TimesheetHistoryContent() {
               const allowanceWinner = getAllowanceWinner(dateStr);
               if (proj !== allowanceWinner) return; // Only the winner gets the Friday rest allowance
 
-              let fridayRecord = empData.daily[dateStr];
+              const fridayRecord = empData.daily[dateStr];
               
               if (!fridayRecord) {
                 // They didn't work Friday, but get 8 hrs rest allowance
                 empData.daily[dateStr] = {
                   status: 'Weekend',
-                  isVirtualWeekend: true, 
+                  isVirtualWeekend: true,
                   regularHours: 8,
                   overtimeHours: 0,
                   totalHours: 8,
-                  date: dateStr
+                  date: dateStr,
                 };
               } else if (fridayRecord.status !== 'Leave') {
                 // They worked on Friday AND get the 8 hrs rest
                 // OT = actual hours worked (from checkIn/checkOut to avoid double-counting)
-                let actualWorked = 0;
                 const ci = fridayRecord.checkIn;
                 const co = fridayRecord.checkOut;
-                if (ci && co && ci !== co) {
-                  const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-                  let inMins = toMins(ci);
-                  let outMins = toMins(co);
-                  if (outMins < inMins) outMins += 24 * 60;
-                  actualWorked = Number((Math.round((outMins - inMins) / 15) * 15 / 60).toFixed(2));
-                } else if (fridayRecord.status === 'Weekend' && (fridayRecord.totalHours || 0) > 8) {
-                  // Already-processed: OT ≈ totalHours - 8
-                  actualWorked = Number(((fridayRecord.totalHours || 0) - 8).toFixed(2));
-                }
+
+                const actualWorked = (() => {
+                  if (ci && co && ci !== co) {
+                    const toMins = (t: string) => {
+                      const [h, m] = t.split(':').map(Number);
+                      return h * 60 + m;
+                    };
+                    const inMins = toMins(ci);
+                    let outMins = toMins(co);
+                    if (outMins < inMins) outMins += 24 * 60;
+                    return Number((Math.round((outMins - inMins) / 15) * 15 / 60).toFixed(2));
+                  }
+
+                  if (fridayRecord.status === 'Weekend' && (fridayRecord.totalHours || 0) > 8) {
+                    // Already-processed: OT ≈ totalHours - 8
+                    return Number(((fridayRecord.totalHours || 0) - 8).toFixed(2));
+                  }
+
+                  return 0;
+                })();
+
                 fridayRecord.regularHours = 8;
                 fridayRecord.overtimeHours = actualWorked;
                 fridayRecord.totalHours = Number((8 + actualWorked).toFixed(2));
@@ -617,7 +627,7 @@ function TimesheetHistoryContent() {
 
             if (activeEvent && activeEvent.type === 'holiday') {
                 const allowanceWinner = getAllowanceWinner(dateStr);
-                let holidayRecord = empData.daily[dateStr];
+                const holidayRecord = empData.daily[dateStr];
 
                 // Holidays grant 8 hrs allowance ONLY to the priority project
                 if (proj === allowanceWinner) {
@@ -638,7 +648,7 @@ function TimesheetHistoryContent() {
                         const co = holidayRecord.checkOut;
                         if (ci && co && ci !== co) {
                             const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-                            let inMins = toMins(ci);
+                            const inMins = toMins(ci);
                             let outMins = toMins(co);
                             if (outMins < inMins) outMins += 24 * 60;
                             actualWorked = Number((Math.round((outMins - inMins) / 15) * 15 / 60).toFixed(2));
@@ -655,7 +665,7 @@ function TimesheetHistoryContent() {
                 } else if (holidayRecord) {
                     // This is NOT the winner project, but they have a record here.
                     // If they worked, it's 100% OT (since allowance is in another project)
-                    let actualWorked = holidayRecord.totalHours || 0;
+                    const actualWorked = holidayRecord.totalHours || 0;
                     if (actualWorked > 0) {
                         holidayRecord.regularHours = 0;
                         holidayRecord.overtimeHours = actualWorked;
@@ -669,7 +679,7 @@ function TimesheetHistoryContent() {
             // Add cross-residence indicator logic
             const allDayProjs = employeeDailyProjects[empKey]?.[dateStr] || [];
             if (allDayProjs.length > 0) {
-                let record = empData.daily[dateStr];
+                const record = empData.daily[dateStr];
                 
                 // If they have no record here BUT have records in other residences -> create a "ghost" record
                 const hasWorkElsewhere = allDayProjs.some((p: string) => p !== proj);

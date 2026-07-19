@@ -47,8 +47,8 @@ function initAdmin() {
 
 	// Prefer explicit service account inputs
 	const svcParsed = parseServiceAccountFromEnv();
-	let projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || svcParsed?.projectId;
-	let clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL || svcParsed?.clientEmail;
+const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || svcParsed?.projectId;
+	const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL || svcParsed?.clientEmail;
 	let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY || svcParsed?.privateKey;
 	// Allow \n in env to be parsed correctly
 	if (privateKey) privateKey = privateKey.replace(/\\n/g, '\n');

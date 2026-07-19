@@ -21,30 +21,36 @@ type QuantityStepperProps = {
  * - Forwards ref to the input so parent can focus/select it.
  */
 export const QuantityStepper = React.forwardRef<HTMLInputElement, QuantityStepperProps>(
-  ({ value, onValueChange, min = 1, max, step = 1, disabled, className, disallowedValues, ...rest }, ref) => {
+  (
+    { value, onValueChange, min = 1, max, step = 1, disabled, className, disallowedValues, ...rest },
+    ref
+  ) => {
     const blocked = React.useMemo(() => new Set(disallowedValues ?? []), [disallowedValues]);
+
     const clamp = (n: number) => {
-      let v = Number.isFinite(n) ? n : min;
-      if (min !== undefined) v = Math.max(min, v);
-      if (max !== undefined) v = Math.min(max, v);
-      if (v < 1) v = 1; // safety for legacy callers
-      return v;
+      const initial = Number.isFinite(n) ? n : min;
+      const withMin = min !== undefined ? Math.max(min, initial) : initial;
+      const withMax = max !== undefined ? Math.min(max, withMin) : withMin;
+      return withMax < 1 ? 1 : withMax; // safety for legacy callers
     };
 
     // Resolve to nearest allowed number if current is blocked.
     const resolveAllowed = (n: number, preferUp = true) => {
-      let v = clamp(n);
+      const v = clamp(n);
       if (!blocked.size || !blocked.has(v)) return v;
+
       // Try stepping away in the preferred direction, then opposite.
       const tryDir = (dir: 1 | -1) => {
         let cur = v;
-        for (let i = 0; i < 100; i++) { // safety cap
+        for (let i = 0; i < 100; i++) {
+          // safety cap
           cur = clamp(cur + dir * (step || 1));
           if (cur === v) break; // cannot move
           if (!blocked.has(cur)) return cur;
         }
         return v; // fallback
       };
+
       let next = preferUp ? tryDir(1) : tryDir(-1);
       if (next === v) {
         // try opposite direction once
@@ -107,6 +113,7 @@ export const QuantityStepper = React.forwardRef<HTMLInputElement, QuantitySteppe
         >
           <Minus className="h-4 w-4" />
         </button>
+
         <input
           ref={ref}
           type="number"
@@ -118,6 +125,7 @@ export const QuantityStepper = React.forwardRef<HTMLInputElement, QuantitySteppe
           className="h-9 w-16 border-0 bg-transparent px-2 text-center outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           aria-live="polite"
         />
+
         <button
           type="button"
           onClick={inc}

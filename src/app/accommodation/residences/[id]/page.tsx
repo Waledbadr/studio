@@ -60,6 +60,25 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     return () => { mounted = false; };
   }, [id, residences, loadResidences, currentUser]);
 
+  // assign form state (MUST be before any early return to satisfy rules-of-hooks)
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  const [tenantName, setTenantName] = useState('');
+
+  useEffect(() => {
+    if (!residence) return;
+
+    const initialSelectedRoom =
+      (residence.rooms && residence.rooms.length && residence.rooms[0].id) ||
+      (residence as any).buildings?.[0]?.floors?.[0]?.rooms?.[0]?.id ||
+      null;
+
+    setSelectedRoom(initialSelectedRoom);
+  }, [residence]);
+  const [submitting, setSubmitting] = useState(false);
+  const [occupants, setOccupants] = useState<any[]>([]);
+  const [workersMap, setWorkersMap] = useState<Record<string, any>>({});
+  const [transfers, setTransfers] = useState<any[]>([]);
+
   // load occupants and workers from localStorage for display
   useEffect(() => {
     try {
@@ -79,21 +98,9 @@ export default function ResidenceDetailPage({ params }: { params: { id: string }
     }
   }, [id]);
 
-
   if (loading) return <div>{dict.loading || 'Loading...'}</div>;
   if (error) return <div className="text-red-600">{error}</div>;
   if (!residence) return <div>{dict.noResidenceData || 'No residence data.'}</div>;
-  // assign form state
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(
-    (residence && residence.rooms && residence.rooms.length && residence.rooms[0].id) ||
-      (residence && (residence as any).buildings && (residence as any).buildings[0]?.floors && (residence as any).buildings[0].floors[0]?.rooms && (residence as any).buildings[0].floors[0].rooms[0]?.id) ||
-      null
-  );
-  const [tenantName, setTenantName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [occupants, setOccupants] = useState<any[]>([]);
-  const [workersMap, setWorkersMap] = useState<Record<string, any>>({});
-  const [transfers, setTransfers] = useState<any[]>([]);
 
   const handleAssign = async () => {
     if (!selectedRoom || !tenantName) return alert('Select a room and enter tenant name');
