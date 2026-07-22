@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
-import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText, Clock, Wallet, Calendar } from 'lucide-react';
+import { Building, Home, Wrench, Settings, Users, ClipboardList, Move, ListOrdered, ClipboardMinus, AreaChart, History, PackageCheck, TrendingUp, TrendingDown, AlertTriangle, FileCheck, GitBranch, LifeBuoy, Truck, FileText, Clock, Wallet, Calendar, Check, RefreshCw } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -23,7 +23,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, loading } = useUsers();
-  const { dict } = useLanguage();
+  const { dict, locale } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   // const [gitInfo, setGitInfo] = useState<ReturnType<typeof getFormattedGitInfo> | null>(null);
   const { isMobile, setOpenMobile } = useSidebar();
@@ -46,6 +46,7 @@ export function AppSidebar() {
   // When inside the accommodation app, render accommodation sidebar
   const isAccommodation = pathname?.startsWith('/accommodation');
   const isTimesheet = pathname?.startsWith('/timesheet');
+  const isContracts = pathname?.startsWith('/contracts');
   const isIncomeExpenses = pathname?.startsWith('/income-expenses');
   const isTimesheetDailyExport = pathname?.startsWith('/timesheet/export');
 
@@ -248,6 +249,174 @@ export function AppSidebar() {
                   <Link href="/income-expenses/report" onClick={handleNavigate}>
                     <AreaChart />
                     <span className="group-data-[collapsible=icon]:hidden">{'التقرير'}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </div>
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="p-2">
+            <div className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto p-2 border rounded-md">
+              <div className="flex items-center gap-2">
+                <Avatar className="size-8">
+                  {currentUser ? (
+                    <>
+                      <AvatarFallback>{currentUser.name?.charAt(0) || 'U'}</AvatarFallback>
+                    </>
+                  ) : (
+                    <AvatarFallback />
+                  )}
+                </Avatar>
+                <div className="group-data-[collapsible=icon]:hidden text-left">
+                  <p className="font-semibold text-sm">{loading ? 'Loading...' : currentUser?.name}</p>
+                  <p className="text-xs text-muted-foreground">{loading ? '' : currentUser?.role}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SidebarFooter>
+      </>
+    );
+  }
+
+  if (isContracts) {
+    const isAr = locale === 'ar';
+    const tab = pathname === '/contracts' ? 'overview' : pathname.replace('/contracts/', '');
+    const cs = (dict as any).contracts?.sidebar || {};
+    const cc = (dict as any).contracts || {};
+    return (
+      <>
+        <SidebarHeader>
+          <div className="flex flex-col gap-1 p-2">
+            <div className="flex items-center gap-2">
+              <FileCheck className="h-8 w-8 text-indigo-600" />
+              <span className="text-xl font-semibold text-indigo-600 group-data-[collapsible=icon]:hidden">
+                {cc.title || 'Contracts'}
+              </span>
+            </div>
+          </div>
+          <div className="px-2 pb-2">
+            <SidebarMenuButton asChild tooltip={isAr ? 'العودة للرئيسية' : 'Back to Main'} className="bg-muted/50 border border-border mt-2 w-full justify-start">
+              <Link href="/" onClick={handleNavigate}>
+                <Home className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden text-sm ml-2 mr-2">
+                  {isAr ? 'العودة للرئيسية' : 'Back to Main'}
+                </span>
+              </Link>
+            </SidebarMenuButton>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            {/* Main */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                {(dict as any).sidebar?.main || 'Main'}
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/contracts' && tab === 'overview'} tooltip={cs.overview || 'Overview'}>
+                  <Link href="/contracts" onClick={handleNavigate}>
+                    <Home />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cs.overview || cc.overview || 'Overview'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/contracts' && tab === 'invoices'} tooltip={cs.invoices || 'Invoices'}>
+                  <Link href="/contracts?tab=invoices" onClick={handleNavigate}>
+                    <FileText />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cs.invoices || cc.invoices || 'Invoices'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/contracts' && tab === 'reports'} tooltip={cs.reports || 'Reports'}>
+                  <Link href="/contracts?tab=reports" onClick={handleNavigate}>
+                    <AreaChart />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cs.reports || cc.reports || 'Reports'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Quick Filter */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                {isAr ? 'فلترة سريعة' : 'Quick Filter'}
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={isAr ? 'إيرادات فقط' : 'Revenue Only'}>
+                  <Link href="/contracts?category=revenue" onClick={handleNavigate}>
+                    <TrendingUp className="text-emerald-500" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.revenue || 'Revenue'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={isAr ? 'مصروفات فقط' : 'Expense Only'}>
+                  <Link href="/contracts?category=expense" onClick={handleNavigate}>
+                    <TrendingDown className="text-rose-500" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.expense || 'Expense'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={isAr ? 'العقود النشطة' : 'Active Contracts'}>
+                  <Link href="/contracts?status=Active" onClick={handleNavigate}>
+                    <Check className="text-green-500" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.active || 'Active'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={isAr ? 'العقود المنتهية' : 'Expired Contracts'}>
+                  <Link href="/contracts?status=Expired" onClick={handleNavigate}>
+                    <AlertTriangle className="text-red-500" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.expired || 'Expired'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <div className="h-2"></div>
+            </div>
+
+            {/* Quick Actions */}
+            <div>
+              <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                {isAr ? 'إجراءات' : 'Actions'}
+              </div>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={cc.generateMonthlyInvoices || 'Generate Monthly Invoices'}>
+                  <Link href="/contracts?action=generate-invoices" onClick={handleNavigate}>
+                    <RefreshCw />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.generateMonthlyInvoices || 'Generate Monthly Invoices'}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={false} tooltip={cc.checkAlerts || 'Check Alerts'}>
+                  <Link href="/contracts?action=check-alerts" onClick={handleNavigate}>
+                    <AlertTriangle />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {cc.checkAlerts || 'Check Alerts'}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -524,6 +693,7 @@ export function AppSidebar() {
       title: 'Apps & Modules',
       items: [
         { href: '/accommodation', label: 'Accommodation', icon: Building },
+        { href: '/contracts', label: 'Contracts (العقود)', icon: FileText },
         { href: '/timesheet', label: 'Timesheet (سجل الدوام)', icon: Clock },
         { href: '/income-expenses/transactions', label: 'Income & Expenses', icon: Wallet },
       ]

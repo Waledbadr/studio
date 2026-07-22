@@ -104,6 +104,27 @@ service cloud.firestore {
       allow delete: if isAdmin() || isSupervisor();
     }
 
+    // Contracts V2 (New comprehensive contract management)
+    match /contractsV2/{contractId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    // Contract Invoices V2
+    match /contractInvoices/{invoiceId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin() || isSupervisor();
+    }
+
+    // Contract Alerts
+    match /contractAlerts/{alertId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
     // Accommodation Occupants (worker assignments to rooms)
     match /occupants/{occupantId} {
       allow read: if isSignedIn();

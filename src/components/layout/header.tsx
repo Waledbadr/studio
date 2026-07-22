@@ -2,7 +2,7 @@
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, MessageSquare, Info, PackageCheck, BellRing, PlusCircle, Download, Truck, ClipboardList, Wrench } from 'lucide-react';
+import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, Languages, MessageSquare, Info, PackageCheck, BellRing, PlusCircle, Download, Truck, ClipboardList, Wrench } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
@@ -104,33 +104,59 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
     <header className={headerClass} {...props}>
       <SidebarTrigger className="h-10 w-10 md:hidden" />
       <div className="ml-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        {/* Materials App */}
         <Link
-          href={atAccommodation ? '/' : '/accommodation'}
+          href={atAccommodation ? '/' : '/'}
           className={cn(
             "inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            atAccommodation && "bg-muted"
+            !pathname?.startsWith('/accommodation') &&
+            !pathname?.startsWith('/timesheet') &&
+            !pathname?.startsWith('/income-expenses') &&
+            !pathname?.startsWith('/contracts') &&
+            "bg-muted"
           )}
-          title={atAccommodation ? `تطبيق ${dict.ui.materialsApp}` : `تطبيق ${dict.ui.accommodationApp}`}
         >
-          {atAccommodation ? dict.ui.materialsApp : dict.ui.accommodationApp}
+          {dict.ui.materialsApp || 'Materials'}
         </Link>
+        {/* Accommodation App */}
+        <Link
+          href="/accommodation"
+          className={cn(
+            "hidden sm:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
+            pathname?.startsWith('/accommodation') && "bg-muted"
+          )}
+        >
+          {dict.ui.accommodationApp || 'Accommodation'}
+        </Link>
+        {/* Timesheet App */}
         <Link
           href="/timesheet"
           className={cn(
-            "hidden sm:inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
+            "hidden sm:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
             pathname?.startsWith('/timesheet') && "bg-muted"
           )}
         >
-          Timesheet <span className="ml-1 text-xs opacity-75">(قريباً)</span>
+          Timesheet
         </Link>
+        {/* Income & Expenses App */}
         <Link
           href="/income-expenses"
           className={cn(
-            "hidden md:inline-flex items-center justify-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
+            "hidden md:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
             pathname?.startsWith('/income-expenses') && "bg-muted"
           )}
         >
-          Income & Expenses <span className="ml-1 text-xs opacity-75">(قريباً)</span>
+          Income & Expenses
+        </Link>
+        {/* Contracts App */}
+        <Link
+          href="/contracts"
+          className={cn(
+            "hidden md:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
+            pathname?.startsWith('/contracts') && "bg-muted"
+          )}
+        >
+          Contracts
         </Link>
       </div>
 
@@ -251,7 +277,7 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
-            <ArrowLeftRight className="h-5 w-5" />
+          <Languages className="h-5 w-5" />
             <span className="sr-only">Change language</span>
           </Button>
         </DropdownMenuTrigger>
