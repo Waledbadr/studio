@@ -84,13 +84,30 @@ interface ContractsContextType {
 const ContractsContext = createContext<ContractsContextType | null>(null);
 
 // ---- دوال مساعدة لتحويل التواريخ ----
-function fromTimestamp(ts: Timestamp | null | undefined): string {
+function fromTimestamp(ts: any): string {
   if (!ts) return '';
-  return ts.toDate().toISOString().split('T')[0];
+  if (typeof ts === 'string') return ts.split('T')[0];
+  if (typeof ts.toDate === 'function') {
+    try {
+      return ts.toDate().toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  }
+  if (ts instanceof Date) {
+    return ts.toISOString().split('T')[0];
+  }
+  if (typeof ts === 'object' && 'seconds' in ts && typeof ts.seconds === 'number') {
+    return new Date(ts.seconds * 1000).toISOString().split('T')[0];
+  }
+  return String(ts).split('T')[0];
 }
 
 function toTimestamp(dateStr: string): Timestamp {
-  return Timestamp.fromDate(new Date(dateStr));
+  if (!dateStr) return Timestamp.now();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return Timestamp.now();
+  return Timestamp.fromDate(d);
 }
 
 export function ContractsProvider({ children }: { children: React.ReactNode }) {
