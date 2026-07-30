@@ -2,7 +2,7 @@
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, Languages, MessageSquare, Info, PackageCheck, BellRing, PlusCircle, Download, Truck, ClipboardList, Wrench } from 'lucide-react';
+import { Bell, Sun, Moon, Check, Monitor, Palette, LogOut, Package, CheckCircle2, ArrowLeftRight, Languages, MessageSquare, Info, PackageCheck, BellRing, PlusCircle, Download, Truck, ClipboardList, Wrench, Building, Clock, Wallet, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLanguage } from '@/context/language-context';
 import { cn } from '@/lib/utils';
@@ -103,61 +103,103 @@ export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) 
   return (
     <header className={headerClass} {...props}>
       <SidebarTrigger className="h-10 w-10 md:hidden" />
-      <div className="ml-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
-        {/* Materials App */}
-        <Link
-          href={atAccommodation ? '/' : '/'}
-          className={cn(
-            "inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            !pathname?.startsWith('/accommodation') &&
-            !pathname?.startsWith('/timesheet') &&
-            !pathname?.startsWith('/income-expenses') &&
-            !pathname?.startsWith('/contracts') &&
-            "bg-muted"
-          )}
-        >
-          {dict.ui.materialsApp || 'Materials'}
-        </Link>
-        {/* Accommodation App */}
-        <Link
-          href="/accommodation"
-          className={cn(
-            "hidden sm:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            pathname?.startsWith('/accommodation') && "bg-muted"
-          )}
-        >
-          {dict.ui.accommodationApp || 'Accommodation'}
-        </Link>
-        {/* Timesheet App */}
-        <Link
-          href="/timesheet"
-          className={cn(
-            "hidden sm:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            pathname?.startsWith('/timesheet') && "bg-muted"
-          )}
-        >
-          Timesheet
-        </Link>
-        {/* Income & Expenses App */}
-        <Link
-          href="/income-expenses"
-          className={cn(
-            "hidden md:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            pathname?.startsWith('/income-expenses') && "bg-muted"
-          )}
-        >
-          Income & Expenses
-        </Link>
-        {/* Contracts App */}
-        <Link
-          href="/contracts"
-          className={cn(
-            "hidden md:inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium hover:bg-muted whitespace-nowrap",
-            pathname?.startsWith('/contracts') && "bg-muted"
-          )}
-        >
-          Contracts
-        </Link>
+      <div className="ml-3 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <TooltipProvider>
+          {/* Materials App */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href={atAccommodation ? '/' : '/'}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-md border p-2 hover:bg-muted",
+                  !pathname?.startsWith('/accommodation') &&
+                  !pathname?.startsWith('/timesheet') &&
+                  !pathname?.startsWith('/income-expenses') &&
+                  !pathname?.startsWith('/contracts') &&
+                  "bg-muted"
+                )}
+              >
+                <Package className="h-6 w-6 shrink-0" />
+                <span className="sr-only">{dict.ui.materialsApp || 'Materials'}</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{dict.ui.materialsApp || 'Materials'}</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Accommodation App */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/accommodation"
+                className={cn(
+                  "hidden sm:inline-flex items-center justify-center rounded-md border p-2 hover:bg-muted",
+                  pathname?.startsWith('/accommodation') && "bg-muted"
+                )}
+              >
+                <Building className="h-6 w-6 shrink-0" />
+                <span className="sr-only">{dict.ui.accommodationApp || 'Accommodation'}</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{dict.ui.accommodationApp || 'Accommodation'}</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Timesheet App */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/timesheet"
+                className={cn(
+                  "hidden sm:inline-flex items-center justify-center rounded-md border p-2 hover:bg-muted",
+                  pathname?.startsWith('/timesheet') && "bg-muted"
+                )}
+              >
+                <Clock className="h-6 w-6 shrink-0" />
+                <span className="sr-only">Timesheet</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Timesheet</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Income & Expenses App */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/income-expenses"
+                className={cn(
+                  "hidden md:inline-flex items-center justify-center rounded-md border p-2 hover:bg-muted",
+                  pathname?.startsWith('/income-expenses') && "bg-muted"
+                )}
+              >
+                <Wallet className="h-6 w-6 shrink-0" />
+                <span className="sr-only">Income & Expenses</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Income & Expenses</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Contracts App */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/contracts"
+                className={cn(
+                  "hidden md:inline-flex items-center justify-center rounded-md border p-2 hover:bg-muted",
+                  pathname?.startsWith('/contracts') && "bg-muted"
+                )}
+              >
+                <FileText className="h-6 w-6 shrink-0" />
+                <span className="sr-only">Contracts</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Contracts</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       <div className="flex-1" />

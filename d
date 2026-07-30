@@ -44,7 +44,8 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeSchedule[]>([]);
   // Kept only for the current import so a merged day is recalculated with the
   // same leave/transfer rules used when it was first previewed.
-  const [importContext, setImportContext] = useState<{ leaves: any[]; transfers: any[] }>({ leaves: [], transfers: [] });
+  // mergedSchedules includes dailyHours from HousingEmployees for consistent recalculation.
+  const [importContext, setImportContext] = useState<{ leaves: any[]; transfers: any[]; mergedSchedules: EmployeeSchedule[] }>({ leaves: [], transfers: [], mergedSchedules: [] });
   const [isFetching, setIsFetching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -121,26 +122,6 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
     await setDoc(doc(db, "residences", "timesheetSettings"), { employeeSchedules: schedules }, { merge: true });
   };
 
-  const mergeHousingSchedules = (employeesData: any[]): EmployeeSchedule[] => {
-    const merged: EmployeeSchedule[] = [...employeeSchedules];
-    if (employeesData && employeesData.length > 0) {
-      employeesData.forEach((emp: any) => {
-        const empId = emp.employeeId || emp.badgeId || emp.id;
-        if (!empId || !emp.dailyHours) return;
-        const exists = merged.some(s => s.employeeId === empId);
-        if (!exists) {
-          merged.push({
-            employeeId: empId,
-            name: emp.name || emp.nameAr || emp.nameEn || empId,
-            dailyHours: emp.dailyHours,
-            thursdayHours: emp.dailyHours,
-          });
-        }
-      });
-    }
-    return merged;
-  };
-
   const fetchAndProcessAttendance = async (startDate: string, endDate: string) => {
     setIsFetching(true);
     setRawPunches([]);
@@ -170,8 +151,23 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         console.warn("Failed to fetch leaves/transfers/employees for processing", e);
       }
 
-      // Build merged schedules including dailyHours from HousingEmployees
-      const mergedSchedules = mergeHousingSchedules(employeesData);
+      // Build mergedSchedules from employeeSchedules + dailyHours from HousingEmployees
+      const mergedSchedules: EmployeeSchedule[] = [...employeeSchedules];
+      if (employeesData && employeesData.length > 0) {
+        employeesData.forEach((emp: any) => {
+          const empId = emp.employeeId || emp.badgeId || emp.id;
+          if (!empId || !emp.dailyHours) return;
+          const exists = mergedSchedules.some(s => s.employeeId === empId);
+          if (!exists) {
+            mergedSchedules.push({
+              employeeId: empId,
+              name: emp.name || emp.nameAr || emp.nameEn || empId,
+              dailyHours: emp.dailyHours,
+              thursdayHours: emp.dailyHours,
+            });
+          }
+        });
+      }
 
       // 3. Serial fetching of chunks to keep biometric server load manageable
       for (const chunk of chunks) {
@@ -195,20 +191,20 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
       setIsFetching(false);
       
       setIsProcessing(true);
-      // Process data grouping by emp_id and date - pass mergedSchedules
+      // Process data grouping by emp_id and date
       const processed = processPunches(
         allPunches, 
         deviceToProjectMap, 
         timesheetEvents, 
-        mergedSchedules, // Use merged schedules with dailyHours
+        mergedSchedules, // Pass merged schedules with dailyHours
         leavesData,
         startDate,
         endDate,
         employeesData,
         transfersData
       );
-      // Store mergedSchedules in importContext for consistent recalculation during save
-      setImportContext({ leaves: leavesData, transfers: transfersData, mergedSchedules: mergedSchedules } as any);
+      // Store mergedSchedules in importContext for use during Firestore save
+      setImportContext({ leaves: leavesData, transfers: transfersData, mergedSchedules });
       setProcessedAttendance(processed);
       setIsProcessing(false);
       
@@ -256,15 +252,9 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
       let preserved = 0;
       const syncedAt = new Date().toISOString();
 
-      // Use mergedSchedules from importContext if available, otherwise fallback to employeeSchedules
-      const schedulesToUse: EmployeeSchedule[] = 
-        (importContext as any).mergedSchedules?.length > 0 
-          ? (importContext as any).mergedSchedules 
-          : employeeSchedules;
+      // Use the mergedSchedules saved in importContext so recalculation uses dailyHours from HousingEmployees
+      const schedulesToUse = importContext.mergedSchedules.length > 0 ? importContext.mergedSchedules : employeeSchedules;
 
-      // Firestore does not provide a client-side upsert that can conditionally
-      // merge arrays. Read the matching archived days first, then write only
-      // the safe merged version. Chunks keep the browser connection bounded.
       for (let offset = 0; offset < processedAttendance.length; offset += 100) {
         const recordsChunk = processedAttendance.slice(offset, offset + 100);
         const existingSnapshots = await Promise.all(
@@ -283,8 +273,6 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
           } else {
             const existing = existingSnapshot.data() as DailyAttendance;
 
-            // A generated absent-day record contains no source punch. It must
-            // never overwrite an archived day that already has real data.
             if (!incoming.punches?.length) {
               preserved++;
               continue;
@@ -294,7 +282,7 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
               existing,
               incoming,
               timesheetEvents,
-              schedulesToUse, // Use merged schedules with dailyHours
+              schedulesToUse, // Use mergedSchedules including dailyHours
               importContext.leaves,
               importContext.transfers
             );
@@ -320,10 +308,9 @@ export function TimesheetProvider({ children }: { children: ReactNode }) {
         await currentBatch.commit();
       }
 
-      // Clear in-memory data to signal that the save was successful
       setRawPunches([]);
       setProcessedAttendance([]);
-      setImportContext({ leaves: [], transfers: [] });
+      setImportContext({ leaves: [], transfers: [], mergedSchedules: [] });
       
       toast({
         title: isAr ? "تم الحفظ بنجاح" : "Save Successful",

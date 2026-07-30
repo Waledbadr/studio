@@ -256,9 +256,29 @@ export const processPunches = (
   leaves: any[] = [],
   startDateStr?: string,
   endDateStr?: string,
-  allEmployees: any[] = [], // Used to generate missing records
+  allEmployees: any[] = [], // Used to generate missing records + dailyHours fallback
   transfers: any[] = []
 ): DailyAttendance[] => {
+  // 0. Merge dailyHours from HousingEmployees into schedules as a fallback.
+  //    If an employee does NOT have a custom schedule in timesheetSettings,
+  //    use the dailyHours from their HousingEmployee profile.
+  const mergedSchedules: EmployeeSchedule[] = [...schedules];
+  if (allEmployees && allEmployees.length > 0) {
+    allEmployees.forEach((emp) => {
+      const empId = emp.employeeId || emp.badgeId || emp.id;
+      if (!empId || !emp.dailyHours) return;
+      const exists = mergedSchedules.some(s => s.employeeId === empId);
+      if (!exists) {
+        mergedSchedules.push({
+          employeeId: empId,
+          name: emp.name || emp.nameAr || emp.nameEn || empId,
+          dailyHours: emp.dailyHours,
+          thursdayHours: emp.dailyHours, // Use same value for Thursday by default
+        });
+      }
+    });
+  }
+
   // Pre-process leaves: cut off leaves from the day the employee has a fingerprint
   const effectiveLeaves = leaves.map(leave => ({...leave}));
   const sortedRawPunches = [...punches].sort((a, b) => a.date.localeCompare(b.date));
@@ -320,7 +340,7 @@ export const processPunches = (
 
     const { employeeId, date } = sorted[0];
     const empTransfers = transfers.filter(t => t.employeeId === employeeId || t.badgeId === employeeId);
-    const stats = calculateAttendanceStats(checkIn, checkOut, date, employeeId, events, schedules, effectiveLeaves, empTransfers);
+    const stats = calculateAttendanceStats(checkIn, checkOut, date, employeeId, events, mergedSchedules, effectiveLeaves, empTransfers);
 
     const checkInDevice = checkInDeviceRecord.deviceName || "Unknown";
     const mappedProjectName = deviceToProjectMap[checkInDevice] || getProjectFromDevice(checkInDevice);
@@ -374,7 +394,7 @@ export const processPunches = (
                  const key = `${empId}_${dateStr}`;
                  if (!parsed.find(p => p.id === key)) {
                      // No punch logic -> completely empty day!
-                     const stats = calculateAttendanceStats(null, null, dateStr, empId, events, schedules, effectiveLeaves, empTransfers);
+                     const stats = calculateAttendanceStats(null, null, dateStr, empId, events, mergedSchedules, effectiveLeaves, empTransfers);
                      
                      // If it's a completely normal day (Absent) and they didn't work, we insert it.
                      // This fulfills the "generate full dummy records" requirement explicitly.
